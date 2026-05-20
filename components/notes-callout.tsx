@@ -82,7 +82,12 @@ function getCalloutIcon(type: NotesCalloutProps['type']): ReactNode {
   }
 }
 
-export function NotesCallout({ className, icon, type = 'info', ...props }: NotesCalloutProps) {
+export function NotesCallout({
+  className,
+  icon,
+  type = 'info',
+  ...props
+}: NotesCalloutProps) {
   const calloutColor = getCalloutColor(type);
   const calloutBackground = getCalloutBackground(type);
   const calloutTitleColor = getCalloutTitleColor(type);
@@ -100,7 +105,7 @@ export function NotesCallout({ className, icon, type = 'info', ...props }: Notes
       type={type}
       icon={icon ?? getCalloutIcon(type)}
       className={cn(
-        'border-[color:var(--notes-callout-color)] bg-[var(--notes-callout-background)] ps-3 shadow-sm [&>svg]:text-[color:var(--notes-callout-color)] [&>svg]:after:hidden [&>[role=none]]:hidden [&>svg+div]:border-s-2 [&>svg+div]:border-[color:color-mix(in_oklab,var(--notes-callout-color)_calc(var(--color-callout-separator-alpha)*100%),transparent)] [&>svg+div]:ps-3 [&>svg+div>div]:text-[color:color-mix(in_oklab,var(--color-fd-foreground)_78%,var(--notes-callout-color))] [&>svg+div>p:first-child]:text-[color:var(--notes-callout-title-color)]',
+        'border-[color:var(--notes-callout-color)] bg-[var(--notes-callout-background)] ps-3 shadow-sm [&>svg]:text-[color:var(--notes-callout-color)] [&>svg]:after:hidden [&>[role=none]]:hidden [&>svg+div]:border-s-2 [&>svg+div]:border-[color:color-mix(in_oklab,var(--notes-callout-color)_calc(var(--color-callout-separator-alpha)*100%),transparent)] [&>svg+div]:ps-3 [&>svg+div]:text-[0.8125rem] [&>svg+div]:leading-6 [&>svg+div>div]:text-[color:color-mix(in_oklab,var(--color-fd-foreground)_78%,var(--notes-callout-color))] [&>svg+div>p:first-child]:text-[color:var(--notes-callout-title-color)]',
         className,
       )}
       style={style}

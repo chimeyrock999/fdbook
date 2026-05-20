@@ -48,7 +48,10 @@ export function Keyword({
 			id={id}
 			data-graph-id={id}
 			data-graph-display-name={displayName}
-			className={className}
+			className={cn(
+				"font-medium text-[var(--color-graph-primary)] underline decoration-dotted underline-offset-4",
+				className,
+			)}
 			{...props}
 		>
 			{children}
@@ -69,7 +72,7 @@ export function Tag({
 			id={id}
 			displayName={displayName}
 			className={cn(
-				"not-prose inline-flex items-center rounded-full border border-fd-border bg-fd-card px-2.5 py-1 text-[0.75rem] font-medium text-fd-secondary-foreground",
+				"not-prose inline-flex items-center rounded-full border border-[var(--color-graph-primary-muted)] bg-[color-mix(in_oklab,var(--color-graph-primary-muted)_30%,transparent)] px-2.5 py-1 text-[0.75rem] font-medium text-[var(--color-graph-primary)] underline decoration-dotted underline-offset-4",
 				className,
 			)}
 			{...props}
