@@ -84,10 +84,17 @@ function getCalloutIcon(type: NotesCalloutProps['type']): ReactNode {
 
 export function NotesCallout({
   className,
+  displayName: _displayName,
+  graphKind: _graphKind,
+  graphType: _graphType,
   icon,
   type = 'info',
   ...props
-}: NotesCalloutProps) {
+}: NotesCalloutProps & {
+  displayName?: string;
+  graphKind?: 'section' | 'keyword';
+  graphType?: 'section' | 'keyword';
+}) {
   const calloutColor = getCalloutColor(type);
   const calloutBackground = getCalloutBackground(type);
   const calloutTitleColor = getCalloutTitleColor(type);
