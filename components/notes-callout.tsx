@@ -3,29 +3,81 @@ import {
   BadgeCheck,
   CircleAlert,
   Info,
+  Lightbulb,
+  NotebookText,
   OctagonX,
-  Notebook,
+  TriangleAlert,
 } from 'lucide-react';
 import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
-type NotesCalloutProps = ComponentProps<typeof BaseCallout>;
+type BaseCalloutProps = ComponentProps<typeof BaseCallout>;
+type NotesCalloutType = NonNullable<BaseCalloutProps['type']> | 'caution' | 'danger' | 'important' | 'note' | 'tip';
+type BaseCalloutType = NonNullable<BaseCalloutProps['type']>;
+type SemanticCalloutType = 'caution' | 'danger' | 'idea' | 'info' | 'note' | 'success' | 'warning';
+type NotesCalloutProps = Omit<BaseCalloutProps, 'type'> & {
+  type?: NotesCalloutType;
+};
 
 const iconClassName = 'mt-0.5 size-5 shrink-0 text-[var(--color-graph-primary)]';
 
-function getCalloutType(type: NotesCalloutProps['type']) {
-  if (type === 'warn') return 'warning';
-  return type ?? 'info';
+function getCalloutType(type: NotesCalloutType | undefined): BaseCalloutType {
+  switch (type) {
+    case 'tip':
+      return 'idea';
+    case 'caution':
+    case 'important':
+    case 'warn':
+    case 'warning':
+      return 'warning';
+    case 'danger':
+      return 'error';
+    case 'error':
+    case 'idea':
+    case 'info':
+    case 'success':
+      return type;
+    case 'note':
+    default:
+      return 'info';
+  }
 }
 
-function getCalloutColor(type: NotesCalloutProps['type']) {
-  switch (getCalloutType(type)) {
+function getSemanticCalloutType(type: NotesCalloutType | undefined): SemanticCalloutType {
+  switch (type) {
+    case 'tip':
+      return 'idea';
+    case 'caution':
+    case 'important':
+      return 'caution';
+    case 'warn':
+    case 'warning':
+      return 'warning';
+    case 'danger':
+    case 'error':
+      return 'danger';
+    case 'idea':
+    case 'info':
+    case 'note':
+    case 'success':
+      return type;
+    default:
+      return 'info';
+  }
+}
+
+function getCalloutColor(type: SemanticCalloutType) {
+  switch (type) {
+    case 'caution':
+      return 'var(--color-callout-caution)';
+    case 'danger':
+      return 'var(--color-callout-danger)';
     case 'idea':
       return 'var(--color-callout-idea)';
+    case 'note':
+      return 'var(--color-callout-note)';
     case 'warning':
       return 'var(--color-callout-warning)';
-    case 'error':
-      return 'var(--color-callout-error)';
     case 'success':
       return 'var(--color-callout-success)';
     case 'info':
@@ -34,14 +86,18 @@ function getCalloutColor(type: NotesCalloutProps['type']) {
   }
 }
 
-function getCalloutBackground(type: NotesCalloutProps['type']) {
-  switch (getCalloutType(type)) {
+function getCalloutBackground(type: SemanticCalloutType) {
+  switch (type) {
+    case 'caution':
+      return 'var(--color-callout-caution-bg)';
+    case 'danger':
+      return 'var(--color-callout-danger-bg)';
     case 'idea':
       return 'var(--color-callout-idea-bg)';
+    case 'note':
+      return 'var(--color-callout-note-bg)';
     case 'warning':
       return 'var(--color-callout-warning-bg)';
-    case 'error':
-      return 'var(--color-callout-error-bg)';
     case 'success':
       return 'var(--color-callout-success-bg)';
     case 'info':
@@ -50,14 +106,18 @@ function getCalloutBackground(type: NotesCalloutProps['type']) {
   }
 }
 
-function getCalloutTitleColor(type: NotesCalloutProps['type']) {
-  switch (getCalloutType(type)) {
+function getCalloutTitleColor(type: SemanticCalloutType) {
+  switch (type) {
+    case 'caution':
+      return 'var(--color-callout-caution-title)';
+    case 'danger':
+      return 'var(--color-callout-danger-title)';
     case 'idea':
       return 'var(--color-callout-idea-title)';
+    case 'note':
+      return 'var(--color-callout-note-title)';
     case 'warning':
       return 'var(--color-callout-warning-title)';
-    case 'error':
-      return 'var(--color-callout-error-title)';
     case 'success':
       return 'var(--color-callout-success-title)';
     case 'info':
@@ -66,14 +126,18 @@ function getCalloutTitleColor(type: NotesCalloutProps['type']) {
   }
 }
 
-function getCalloutIcon(type: NotesCalloutProps['type']): ReactNode {
-  switch (getCalloutType(type)) {
-    case 'idea':
-      return <Notebook className={iconClassName} />;
-    case 'warning':
+function getCalloutIcon(type: SemanticCalloutType): ReactNode {
+  switch (type) {
+    case 'caution':
       return <CircleAlert className={iconClassName} />;
-    case 'error':
+    case 'danger':
       return <OctagonX className={iconClassName} />;
+    case 'idea':
+      return <Lightbulb className={iconClassName} />;
+    case 'note':
+      return <NotebookText className={iconClassName} />;
+    case 'warning':
+      return <TriangleAlert className={iconClassName} />;
     case 'success':
       return <BadgeCheck className={iconClassName} />;
     case 'info':
@@ -95,9 +159,11 @@ export function NotesCallout({
   graphKind?: 'section' | 'keyword';
   graphType?: 'section' | 'keyword';
 }) {
-  const calloutColor = getCalloutColor(type);
-  const calloutBackground = getCalloutBackground(type);
-  const calloutTitleColor = getCalloutTitleColor(type);
+  const calloutType = getCalloutType(type);
+  const semanticType = getSemanticCalloutType(type);
+  const calloutColor = getCalloutColor(semanticType);
+  const calloutBackground = getCalloutBackground(semanticType);
+  const calloutTitleColor = getCalloutTitleColor(semanticType);
   const style = {
     '--callout-color': calloutColor,
     '--notes-callout-background': calloutBackground,
@@ -109,8 +175,8 @@ export function NotesCallout({
   return (
     <BaseCallout
       {...props}
-      type={type}
-      icon={icon ?? getCalloutIcon(type)}
+      type={calloutType}
+      icon={icon ?? getCalloutIcon(semanticType)}
       className={cn(
         'border-[color:var(--notes-callout-color)] bg-[var(--notes-callout-background)] ps-3 shadow-sm [&>svg]:text-[color:var(--notes-callout-color)] [&>svg]:after:hidden [&>[role=none]]:hidden [&>svg+div]:border-s-2 [&>svg+div]:border-[color:color-mix(in_oklab,var(--notes-callout-color)_calc(var(--color-callout-separator-alpha)*100%),transparent)] [&>svg+div]:ps-3 [&>svg+div]:text-[0.8125rem] [&>svg+div]:leading-6 [&>svg+div>div]:text-[color:color-mix(in_oklab,var(--color-fd-foreground)_78%,var(--notes-callout-color))] [&>svg+div>p:first-child]:text-[color:var(--notes-callout-title-color)]',
         className,
