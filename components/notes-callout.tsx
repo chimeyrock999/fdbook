@@ -5,6 +5,7 @@ import {
   Info,
   Lightbulb,
   NotebookText,
+  SquarePlay,
   OctagonX,
   TriangleAlert,
 } from 'lucide-react';
@@ -12,9 +13,9 @@ import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
 type BaseCalloutProps = ComponentProps<typeof BaseCallout>;
-type NotesCalloutType = NonNullable<BaseCalloutProps['type']> | 'caution' | 'danger' | 'important' | 'note' | 'tip';
+type NotesCalloutType = NonNullable<BaseCalloutProps['type']> | 'caution' | 'danger' | 'example' | 'important' | 'note' | 'tip';
 type BaseCalloutType = NonNullable<BaseCalloutProps['type']>;
-type SemanticCalloutType = 'caution' | 'danger' | 'idea' | 'info' | 'note' | 'success' | 'warning';
+type SemanticCalloutType = 'caution' | 'danger' | 'example' | 'idea' | 'info' | 'note' | 'success' | 'warning';
 type NotesCalloutProps = Omit<BaseCalloutProps, 'type'> & {
   type?: NotesCalloutType;
 };
@@ -37,6 +38,8 @@ function getCalloutType(type: NotesCalloutType | undefined): BaseCalloutType {
     case 'info':
     case 'success':
       return type;
+    case 'example':
+      return 'info';
     case 'note':
     default:
       return 'info';
@@ -56,6 +59,8 @@ function getSemanticCalloutType(type: NotesCalloutType | undefined): SemanticCal
     case 'danger':
     case 'error':
       return 'danger';
+    case 'example':
+      return 'example';
     case 'idea':
     case 'info':
     case 'note':
@@ -72,6 +77,8 @@ function getCalloutColor(type: SemanticCalloutType) {
       return 'var(--color-callout-caution)';
     case 'danger':
       return 'var(--color-callout-danger)';
+    case 'example':
+      return 'var(--color-callout-example)';
     case 'idea':
       return 'var(--color-callout-idea)';
     case 'note':
@@ -92,6 +99,8 @@ function getCalloutBackground(type: SemanticCalloutType) {
       return 'var(--color-callout-caution-bg)';
     case 'danger':
       return 'var(--color-callout-danger-bg)';
+    case 'example':
+      return 'var(--color-callout-example-bg)';
     case 'idea':
       return 'var(--color-callout-idea-bg)';
     case 'note':
@@ -112,6 +121,8 @@ function getCalloutTitleColor(type: SemanticCalloutType) {
       return 'var(--color-callout-caution-title)';
     case 'danger':
       return 'var(--color-callout-danger-title)';
+    case 'example':
+      return 'var(--color-callout-example-title)';
     case 'idea':
       return 'var(--color-callout-idea-title)';
     case 'note':
@@ -132,6 +143,8 @@ function getCalloutIcon(type: SemanticCalloutType): ReactNode {
       return <CircleAlert className={iconClassName} />;
     case 'danger':
       return <OctagonX className={iconClassName} />;
+    case 'example':
+      return <SquarePlay className={iconClassName} />;
     case 'idea':
       return <Lightbulb className={iconClassName} />;
     case 'note':
