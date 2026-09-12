@@ -1,50 +1,39 @@
-import { Callout as BaseCallout } from 'fumadocs-ui/components/callout';
-import {
-  BadgeCheck,
-  CircleAlert,
-  Info,
-  Lightbulb,
-  NotebookText,
-  SquarePlay,
-  OctagonX,
-  TriangleAlert,
-} from 'lucide-react';
+import { Bird, Bug, Droplet, Flower2, Leaf, Rat, Snail, Sprout } from 'lucide-react';
 import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
-type BaseCalloutProps = ComponentProps<typeof BaseCallout>;
-type NotesCalloutType = NonNullable<BaseCalloutProps['type']> | 'caution' | 'danger' | 'example' | 'important' | 'note' | 'tip';
-type BaseCalloutType = NonNullable<BaseCalloutProps['type']>;
-type SemanticCalloutType = 'caution' | 'danger' | 'example' | 'idea' | 'info' | 'note' | 'success' | 'warning';
-type NotesCalloutProps = Omit<BaseCalloutProps, 'type'> & {
+type NotesCalloutType =
+  | 'caution'
+  | 'danger'
+  | 'error'
+  | 'example'
+  | 'idea'
+  | 'important'
+  | 'info'
+  | 'note'
+  | 'success'
+  | 'tip'
+  | 'warn'
+  | 'warning';
+type SemanticCalloutType =
+  | 'caution'
+  | 'danger'
+  | 'example'
+  | 'idea'
+  | 'info'
+  | 'note'
+  | 'success'
+  | 'warning';
+
+type NotesCalloutProps = Omit<ComponentProps<'div'>, 'title'> & {
   type?: NotesCalloutType;
+  title?: ReactNode;
+  icon?: ReactNode;
+  /** ignored — kept for MDX/graph compatibility */
+  displayName?: string;
+  graphKind?: 'section' | 'keyword';
+  graphType?: 'section' | 'keyword';
 };
-
-const iconClassName = 'mt-0.5 size-5 shrink-0 text-[var(--color-graph-primary)]';
-
-function getCalloutType(type: NotesCalloutType | undefined): BaseCalloutType {
-  switch (type) {
-    case 'tip':
-      return 'idea';
-    case 'caution':
-    case 'important':
-    case 'warn':
-    case 'warning':
-      return 'warning';
-    case 'danger':
-      return 'error';
-    case 'error':
-    case 'idea':
-    case 'info':
-    case 'success':
-      return type;
-    case 'example':
-      return 'info';
-    case 'note':
-    default:
-      return 'info';
-  }
-}
 
 function getSemanticCalloutType(type: NotesCalloutType | undefined): SemanticCalloutType {
   switch (type) {
@@ -60,7 +49,6 @@ function getSemanticCalloutType(type: NotesCalloutType | undefined): SemanticCal
     case 'error':
       return 'danger';
     case 'example':
-      return 'example';
     case 'idea':
     case 'info':
     case 'note':
@@ -71,92 +59,46 @@ function getSemanticCalloutType(type: NotesCalloutType | undefined): SemanticCal
   }
 }
 
+const LABELS: Record<SemanticCalloutType, string> = {
+  caution: 'Caution',
+  danger: 'Danger',
+  example: 'Example',
+  idea: 'Tip',
+  info: 'Info',
+  note: 'Note',
+  success: 'Success',
+  warning: 'Warning',
+};
+
 function getCalloutColor(type: SemanticCalloutType) {
-  switch (type) {
-    case 'caution':
-      return 'var(--color-callout-caution)';
-    case 'danger':
-      return 'var(--color-callout-danger)';
-    case 'example':
-      return 'var(--color-callout-example)';
-    case 'idea':
-      return 'var(--color-callout-idea)';
-    case 'note':
-      return 'var(--color-callout-note)';
-    case 'warning':
-      return 'var(--color-callout-warning)';
-    case 'success':
-      return 'var(--color-callout-success)';
-    case 'info':
-    default:
-      return 'var(--color-callout-info)';
-  }
+  return `var(--color-callout-${type})`;
 }
 
 function getCalloutBackground(type: SemanticCalloutType) {
-  switch (type) {
-    case 'caution':
-      return 'var(--color-callout-caution-bg)';
-    case 'danger':
-      return 'var(--color-callout-danger-bg)';
-    case 'example':
-      return 'var(--color-callout-example-bg)';
-    case 'idea':
-      return 'var(--color-callout-idea-bg)';
-    case 'note':
-      return 'var(--color-callout-note-bg)';
-    case 'warning':
-      return 'var(--color-callout-warning-bg)';
-    case 'success':
-      return 'var(--color-callout-success-bg)';
-    case 'info':
-    default:
-      return 'var(--color-callout-info-bg)';
-  }
+  return `var(--color-callout-${type}-bg)`;
 }
 
 function getCalloutTitleColor(type: SemanticCalloutType) {
-  switch (type) {
-    case 'caution':
-      return 'var(--color-callout-caution-title)';
-    case 'danger':
-      return 'var(--color-callout-danger-title)';
-    case 'example':
-      return 'var(--color-callout-example-title)';
-    case 'idea':
-      return 'var(--color-callout-idea-title)';
-    case 'note':
-      return 'var(--color-callout-note-title)';
-    case 'warning':
-      return 'var(--color-callout-warning-title)';
-    case 'success':
-      return 'var(--color-callout-success-title)';
-    case 'info':
-    default:
-      return 'var(--color-callout-info-title)';
-  }
+  return `var(--color-callout-${type}-title)`;
 }
 
+// Garden-themed lucide glyphs: a little bird brings info, a droplet for notes,
+// a sprout for ideas, a leaf for examples, a bloom for success, and the garden
+// pests (snail → bug → rat) escalating from caution to danger.
+const CALLOUT_ICONS: Record<SemanticCalloutType, typeof Leaf> = {
+  caution: Snail,
+  danger: Rat,
+  example: Leaf,
+  idea: Sprout,
+  info: Bird,
+  note: Droplet,
+  success: Flower2,
+  warning: Bug,
+};
+
 function getCalloutIcon(type: SemanticCalloutType): ReactNode {
-  switch (type) {
-    case 'caution':
-      return <CircleAlert className={iconClassName} />;
-    case 'danger':
-      return <OctagonX className={iconClassName} />;
-    case 'example':
-      return <SquarePlay className={iconClassName} />;
-    case 'idea':
-      return <Lightbulb className={iconClassName} />;
-    case 'note':
-      return <NotebookText className={iconClassName} />;
-    case 'warning':
-      return <TriangleAlert className={iconClassName} />;
-    case 'success':
-      return <BadgeCheck className={iconClassName} />;
-    case 'info':
-    default:
-      return <Info className={iconClassName} />;
-  }
+  const Icon = CALLOUT_ICONS[type] ?? Bird;
+  return <Icon width={18} height={18} aria-hidden="true" />;
 }
 
 export function NotesCallout({
@@ -165,36 +107,32 @@ export function NotesCallout({
   graphKind: _graphKind,
   graphType: _graphType,
   icon,
+  title,
   type = 'info',
+  children,
+  style,
   ...props
-}: NotesCalloutProps & {
-  displayName?: string;
-  graphKind?: 'section' | 'keyword';
-  graphType?: 'section' | 'keyword';
-}) {
-  const calloutType = getCalloutType(type);
+}: NotesCalloutProps) {
   const semanticType = getSemanticCalloutType(type);
   const calloutColor = getCalloutColor(semanticType);
   const calloutBackground = getCalloutBackground(semanticType);
   const calloutTitleColor = getCalloutTitleColor(semanticType);
-  const style = {
-    '--callout-color': calloutColor,
-    '--notes-callout-background': calloutBackground,
+  const resolvedTitle = title ?? LABELS[semanticType];
+
+  const rootStyle = {
     '--notes-callout-color': calloutColor,
+    '--notes-callout-background': calloutBackground,
     '--notes-callout-title-color': calloutTitleColor,
-    ...props.style,
+    ...style,
   } as CSSProperties;
 
   return (
-    <BaseCallout
-      {...props}
-      type={calloutType}
-      icon={icon ?? getCalloutIcon(semanticType)}
-      className={cn(
-        'border-[color:var(--notes-callout-color)] bg-[var(--notes-callout-background)] ps-3 shadow-sm [&>svg]:text-[color:var(--notes-callout-color)] [&>svg]:after:hidden [&>[role=none]]:hidden [&>svg+div]:border-s-2 [&>svg+div]:border-[color:color-mix(in_oklab,var(--notes-callout-color)_calc(var(--color-callout-separator-alpha)*100%),transparent)] [&>svg+div]:ps-3 [&>svg+div]:text-[0.8125rem] [&>svg+div]:leading-6 [&>svg+div>div]:text-[color:color-mix(in_oklab,var(--color-fd-foreground)_78%,var(--notes-callout-color))] [&>svg+div>p:first-child]:text-[color:var(--notes-callout-title-color)]',
-        className,
-      )}
-      style={style}
-    />
+    <div {...props} className={cn('notes-callout', className)} style={rootStyle}>
+      <div className="notes-callout-head">
+        <span className="notes-callout-icon">{icon ?? getCalloutIcon(semanticType)}</span>
+        <span className="notes-callout-title">{resolvedTitle}</span>
+      </div>
+      <div className="notes-callout-body">{children}</div>
+    </div>
   );
 }
