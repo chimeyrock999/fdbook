@@ -49,7 +49,8 @@ export function Keyword({
 			data-graph-id={id}
 			data-graph-display-name={displayName}
 			className={cn(
-				"font-medium text-[var(--color-graph-primary)] underline decoration-dotted underline-offset-4",
+				// Bold inside a keyword keeps the keyword colour instead of the prose bold colour.
+				"font-medium text-[var(--color-graph-primary)] underline decoration-dotted underline-offset-4 [&_strong]:text-inherit",
 				className,
 			)}
 			{...props}
