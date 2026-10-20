@@ -89,4 +89,18 @@ describe('notes sync', () => {
     await expect(stat(join(studio.root, 'content/notes/zz-new'))).rejects.toThrow();
     await expect(stat(join(studio.root, 'content/notes/streaming/zz-page.mdx'))).rejects.toThrow();
   });
+
+  // Known gap: the scope cannot tell a tree `delete` from a save on the same
+  // path, and createSyncServer has no hook for tree commands, so `delete` of
+  // an existing note is still accepted (meta.yaml is left as it was). Nothing
+  // in the Studio sends it; deleting belongs to #11 through the file API.
+  // Flip this test once upstream can authorize tree commands separately
+  // (fuma-nama/fumadocs-editor#24).
+  it('still accepts a tree delete of an existing note (known gap)', async () => {
+    const sync = connect();
+    sync.onTree(() => undefined);
+    await expect.poll(() => sync.tree() !== null).toBe(true);
+    await sync.run({ type: 'delete', path: 'streaming/index.mdx' });
+    await expect(stat(join(studio.root, 'content/notes/streaming/index.mdx'))).rejects.toThrow();
+  });
 });
