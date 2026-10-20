@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { notesMetaSchema, notesPageSchema } from '@site/lib/notes-schema';
 
-const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
+const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const notesDir = join(repoRoot, 'content/notes');
 const FRONTMATTER_REGEX = /^---\r?\n(?:([\s\S]*?)\r?\n)?---/;
 

@@ -13,7 +13,8 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-const { parseStudioPort, startStudioServer } = await import('./studio-server.ts');
+const { parseStudioPort } = await import('./config.ts');
+const { startStudioServer } = await import('./studio-server.ts');
 
 try {
   const studio = await startStudioServer({ port: parseStudioPort(process.env.STUDIO_PORT) });

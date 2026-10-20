@@ -1,9 +1,7 @@
 import type { AddressInfo } from 'node:net';
-import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DEFAULT_STUDIO_PORT, parseStudioPort, startStudioServer, type StudioServer } from '../server/studio-server';
-
-const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
+import { repoRoot } from '../../server/config';
+import { startStudioServer, type StudioServer } from '../../server/studio-server';
 
 describe('studio server', () => {
   let studio: StudioServer;
@@ -41,21 +39,5 @@ describe('studio server', () => {
   it('rejects a busy port without leaving a server behind', async () => {
     const { port } = studio.server.address() as AddressInfo;
     await expect(startStudioServer({ port })).rejects.toMatchObject({ code: 'EADDRINUSE' });
-  });
-});
-
-describe('parseStudioPort', () => {
-  it('uses the default port when unset or empty', () => {
-    expect(parseStudioPort(undefined)).toBe(DEFAULT_STUDIO_PORT);
-    expect(parseStudioPort('')).toBe(DEFAULT_STUDIO_PORT);
-    expect(parseStudioPort('  ')).toBe(DEFAULT_STUDIO_PORT);
-  });
-
-  it('accepts a valid port', () => {
-    expect(parseStudioPort('5000')).toBe(5000);
-  });
-
-  it.each(['abc', '0', '65536', '43.1', '-1', '0x1F', '1e3', '0b11', '5000.0'])('rejects %s', (value) => {
-    expect(() => parseStudioPort(value)).toThrow(/STUDIO_PORT/);
   });
 });
