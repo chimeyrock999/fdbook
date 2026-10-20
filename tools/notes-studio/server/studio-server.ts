@@ -1,29 +1,19 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { fileURLToPath } from 'node:url';
+import { SYNC_ENDPOINT } from '@fumadocs-editor/core/sync';
 import { createServer as createViteServer } from 'vite';
-
-export const STUDIO_HOST = '127.0.0.1';
-export const DEFAULT_STUDIO_PORT = 4310;
+import { DEFAULT_STUDIO_PORT, repoRoot, STUDIO_HOST, studioRoot } from './config.ts';
+import { createFilesApi } from './files/api.ts';
+import { createFileEvents } from './files/events.ts';
+import { pathnameOf } from './http.ts';
+import { createRequestListener, routeUpgrades } from './routing.ts';
+import { createNotesSync } from './sync/notes-sync.ts';
 
 export type StudioServer = {
   server: Server;
   url: string;
   close: () => Promise<void>;
 };
-
-const studioRoot = fileURLToPath(new URL('../', import.meta.url));
-
-// Empty or unset means the default port; anything else must be a valid port.
-export function parseStudioPort(value: string | undefined): number {
-  if (value === undefined || value.trim() === '') return DEFAULT_STUDIO_PORT;
-  // Decimal digits only: Number() would also take 0x1F, 1e3 or 5000.0.
-  const port = /^\d+$/.test(value.trim()) ? Number(value) : NaN;
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`STUDIO_PORT must be a port number between 1 and 65535, got "${value}".`);
-  }
-  return port;
-}
 
 function closeServer(server: Server) {
   return new Promise<void>((resolve) => {
@@ -33,9 +23,10 @@ function closeServer(server: Server) {
   });
 }
 
-// One process, one origin: the UI (Vite middleware) and, later, the file API
-// share 127.0.0.1:<port>, so Host/Origin checks live in a single place.
-export async function startStudioServer({ port = DEFAULT_STUDIO_PORT } = {}): Promise<StudioServer> {
+// One process, one origin: the UI (Vite middleware), the file API, file
+// events and the notes sync socket share 127.0.0.1:<port>, behind one
+// Host/Origin guard that runs on every request and every websocket upgrade.
+export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = repoRoot } = {}): Promise<StudioServer> {
   const server = createServer();
   // Bind first so a busy port fails before Vite starts its watcher.
   await new Promise<void>((resolve, reject) => {
@@ -58,13 +49,33 @@ export async function startStudioServer({ port = DEFAULT_STUDIO_PORT } = {}): Pr
     await closeServer(server);
     throw error;
   }
-  server.on('request', vite.middlewares);
+  const filesApi = createFilesApi(root);
+  const fileEvents = createFileEvents(root);
+  const notesSync = createNotesSync(root, boundPort);
+
+  server.on('request', createRequestListener(boundPort, [fileEvents.handle, filesApi], vite.middlewares));
+  routeUpgrades(server, boundPort, (viteHmr) => [
+    {
+      matches: (request) => pathnameOf(request) === SYNC_ENDPOINT,
+      handle: (request, socket, head) => {
+        notesSync.handleUpgrade(request, socket, head);
+      },
+    },
+    {
+      // Vite only answers on its base path; elsewhere it would leave the socket open.
+      matches: (request) =>
+        pathnameOf(request) === '/' && ['vite-hmr', 'vite-ping'].includes(request.headers['sec-websocket-protocol'] ?? ''),
+      handle: viteHmr,
+    },
+  ]);
 
   return {
     server,
     url: `http://${STUDIO_HOST}:${String(boundPort)}/`,
     close: async () => {
+      fileEvents.close();
       try {
+        await notesSync.close();
         await vite.close();
       } finally {
         await closeServer(server);
