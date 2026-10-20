@@ -198,9 +198,13 @@ function formatDirectiveAttributes(attributes: Record<string, unknown>) {
   const entries = Object.entries(attributes).filter(([, value]) => value !== undefined && value !== null);
   if (!entries.length) return '';
 
-  const formatted = entries.map(([name, value]) =>
-    value === '' ? name : `${name}="${String(value).replaceAll('"', '&quot;')}"`,
-  );
+  const formatted = entries.map(([name, value]) => {
+    const text = String(value);
+    if (text === '') return name;
+    // Prefer the quote the value does not contain, so the text reads as written.
+    if (text.includes('"') && !text.includes("'")) return `${name}='${text}'`;
+    return `${name}="${text.replaceAll('"', '&quot;')}"`;
+  });
 
   return `{${formatted.join(' ')}}`;
 }
@@ -215,7 +219,11 @@ function isDirectiveLabel(node: unknown) {
 }
 
 function createText(value: string, position?: Position) {
-  return position ? { type: 'text', value, position } : { type: 'text', value };
+  // `_stringify.text` makes fumadocs' remarkStructure (the search index) use the value
+  // as is. Its default markdown stringifier would escape the restored `:`, `[` and `{`
+  // (`\:keywrod\[Map]`), which only makes sense for re-parsing, not for a search entry.
+  const data = { _stringify: { text: value } };
+  return position ? { type: 'text', value, position, data } : { type: 'text', value, data };
 }
 
 function createParagraph(children: unknown[]) {
