@@ -29,7 +29,14 @@ runs TypeScript directly).
   - `security/` has the Host/Origin guard and the path policy.
   - `files/` has the file API, the file events and the file-system helpers.
   - `sync/` has the fumadocs-editor sync server for `content/notes`.
-- `src/`: the React UI. `src/api/` holds the clients for the server.
+- `src/`: the React UI.
+  - `api/` holds the clients for the server.
+  - `editor/` is the note editor: Visual and Source modes, save status and
+    the conflict dialog.
+  - `frontmatter/` reads and writes a note's YAML frontmatter and holds the
+    form.
+  - `notes/` is the note list and the check that a note can be opened.
+  - `plugins/` holds the editor plugins (see below).
 - `tests/`: laid out like `server/` and `src/`. `tests/support/` holds the
   fixtures: a throwaway worktree, a Studio on a free port, and raw HTTP and
   websocket helpers.
@@ -74,6 +81,68 @@ temp file and renames it over the target, keeping the file's mode.
 `src/api/files.ts` is the UI client. `writeFile` throws a
 `FileConflictError` that holds the disk version. `subscribeFileEvents` follows
 `/api/events`.
+
+## Editor
+
+Pick a note in the list (or open `?path=content/notes/…mdx`). The editor is
+[fumadocs-editor](https://github.com/fuma-nama/fumadocs-editor), opened
+through the notes sync socket:
+
+- **Visual** edits blocks in place. Type `/` for the block and component menu.
+  Blocks you don't touch are written back byte for byte. Syntax that no
+  plugin understands (inline `<GraphMeta>` and `<Keyword>`, `:::example`,
+  `:::accordion`, `:keyword[…]`) shows as source and still round-trips.
+- **Source** is CodeMirror 6 over the whole MDX file. Text that does not parse
+  stays in Source until it is fixed.
+- **Frontmatter** (the side panel) edits title, description, visible and
+  graph. Every change is checked against `notesPageSchema`
+  (`lib/notes-schema.ts`) and written only when it passes. Only the edited
+  values change; comments, key order, quoting and other keys stay. Visual
+  hides the YAML block; Source shows it.
+- **Saving** is automatic: edits go to the file in the worktree (no commit).
+  `Cmd/Ctrl-S` saves at once. Changes made on disk (Obsidian, an agent) are
+  merged into the open note. If the same block changed on both sides, a
+  dialog asks which version to keep.
+- Light and dark follow the system. Colours and fonts are the notes site's
+  (`.notes-theme` in `app/notes/notes.css`), copied onto the editor's
+  `--fde-*` tokens in `src/notes-theme.css`; a test fails when the two drift.
+  Components still use the editor's own look (#35).
+
+## Plugins
+
+What the editor understands comes from plugins in `src/plugins/<name>/`. The
+registry (`src/plugins/registry.ts`) finds every `index.ts` or `index.tsx`
+there, so adding a plugin needs no change anywhere else.
+
+```ts
+// src/plugins/svg-diagram/index.ts
+import type { UiComponentSpec } from '@fumadocs-editor/ui';
+import { definePlugin } from '../plugin';
+import { SvgDiagramCard } from './SvgDiagramCard'; // React components in their own file
+
+const svgDiagramSpec: UiComponentSpec = {
+  name: 'SvgDiagram', // the JSX tag
+  attributeRegions: [{ attribute: 'caption', region: 'caption' }],
+  props: [{ name: 'src', type: 'string' }, { name: 'label', type: 'string' }],
+  render: SvgDiagramCard,
+};
+
+export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] });
+```
+
+- `components` are `UiComponentSpec`s: how a component's attributes and
+  children map to editable regions and props, how it renders, and what the
+  slash menu inserts. Only add components the site renders
+  (`components/mdx.tsx`).
+- `syntax` turns on parse-level dialects such as `directives`.
+- Two plugins may not share an `id` or define the same component.
+- `tests/src/plugins/round-trip.test.ts` parses and writes back every note
+  with all plugins loaded and fails if a byte changes. Put sample MDX for a
+  new component in `src/plugins/<name>/fixtures/*.mdx` to add it to that test.
+
+Plugins today: `fumadocs-ui` (Callout, Cards, Steps, Tabs, Accordions),
+`admonition` (`:::note`, `:::info`, `:::tip`, `:::warn`, `:::warning`,
+`:::danger`, `:::success`) and `html-embed`.
 
 ## Checks
 

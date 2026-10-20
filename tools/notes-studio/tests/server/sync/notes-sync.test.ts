@@ -70,6 +70,19 @@ describe('notes sync', () => {
     await expect.poll(() => editor.external.at(-1), { timeout: 5000 }).toBe(`${opened.text}\nfrom the API\n`);
   });
 
+  // The editor's autosave path: an edit in the open document lands in the file.
+  it('writes edits made in the open document to the note', async () => {
+    const editor = new TextEditor();
+    const doc = connect().open('streaming/index.mdx', { editor });
+    const opened = await doc.opened;
+    editor.text = `${opened.text}\nfrom the editor\n`;
+    doc.changed();
+    await doc.flush();
+    const path = join(studio.root, 'content/notes/streaming/index.mdx');
+    await expect.poll(() => readFile(path, 'utf8'), { timeout: 5000 }).toBe(`${opened.text}\nfrom the editor\n`);
+    expect(doc.status()).toBe('synced');
+  });
+
   it('refuses files outside the notes policy', async () => {
     const sync = connect();
     await expect(sync.open('readme.md', { editor: new TextEditor() }).opened).rejects.toThrow(/denied/);
