@@ -1,4 +1,4 @@
-import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createSyncClient, SYNC_ENDPOINT, wsTransport, type DocumentEditor } from '@fumadocs-editor/core/sync';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -76,5 +76,17 @@ describe('notes sync', () => {
     await expect(sync.open('../../package.json', { editor: new TextEditor() }).opened).rejects.toThrow();
     // Same check as the file API: a symlink out of the notes is not followed.
     await expect(sync.open('leak.mdx', { editor: new TextEditor() }).opened).rejects.toThrow(/denied/);
+  });
+
+  // Tree commands write files the scope never sees (mkdir also writes
+  // meta.json) and skip meta.yaml, so new pages go through the file API.
+  it('refuses to create pages or folders', async () => {
+    const sync = connect();
+    sync.onTree(() => undefined);
+    await expect.poll(() => sync.tree() !== null).toBe(true);
+    await expect(sync.run({ type: 'mkdir', dir: 'zz-new', title: 'Zz' })).rejects.toThrow(/denied/);
+    await expect(sync.run({ type: 'create', path: 'streaming/zz-page.mdx', title: 'Zz' })).rejects.toThrow(/denied/);
+    await expect(stat(join(studio.root, 'content/notes/zz-new'))).rejects.toThrow();
+    await expect(stat(join(studio.root, 'content/notes/streaming/zz-page.mdx'))).rejects.toThrow();
   });
 });
