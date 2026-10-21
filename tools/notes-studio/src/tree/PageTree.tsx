@@ -229,7 +229,8 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
   const menuNode = menu?.node ?? null;
   const movesUnsaved =
     unsaved !== null && (menuNode?.kind === 'page' || menuNode?.kind === 'folder') && renamedPath(unsaved, menuNode.path, menuNode.path) !== null;
-  // Hiding or showing a page writes its frontmatter; a folder's only its meta.yaml.
+  // Hiding or showing a page writes its frontmatter; a folder's only its
+  // meta.yaml. An unlisted page counts too: it may also say visible: false.
   const writesUnsaved = movesUnsaved && menuNode.kind === 'page';
   return (
     <nav ref={navRef} aria-label="Page tree" className="flex min-h-0 flex-1 flex-col gap-2 p-2.5">
@@ -294,7 +295,7 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
           )}
           {movesUnsaved && (
             <p className="studio-menu-hint">
-              The open note has unsaved changes. {writesUnsaved ? `Rename or ${'hidden' in menuNode && menuNode.hidden !== null ? 'show' : 'hide'} it` : 'Rename'} once it shows Saved.
+              The open note has unsaved changes. {writesUnsaved ? `Rename or ${menuNode.hidden !== null ? 'show' : 'hide'} it` : 'Rename'} once it shows Saved.
             </p>
           )}
           {menuNode.kind === 'folder' && (

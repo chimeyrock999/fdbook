@@ -241,6 +241,14 @@ export type MoveRequest = { folder: string; from: unknown; to: unknown; baseMtim
 
 // Moves entry `from` of the folder's meta.yaml to index `to`. A folder
 // without meta.yaml gets one, listing its children in the new order.
+// The names of a folder's children in their order, as a `pages` list for a
+// folder that has no meta.yaml yet.
+function listedNames(folder: TreeFolder) {
+  return folder.children
+    .filter((child) => child.entry !== null && (child.kind === 'page' || child.kind === 'folder'))
+    .map((child) => (child.kind === 'folder' || child.kind === 'page' ? slugOf(child.path) : ''));
+}
+
 export async function planMove(root: string, tree: TreeFolder, request: MoveRequest): Promise<Plan> {
   const folder = findFolder(tree, request.folder);
   const { from, to } = request;
@@ -252,9 +260,7 @@ export async function planMove(root: string, tree: TreeFolder, request: MoveRequ
     return { writes: [{ path: folder.meta, content, baseMtime: meta.mtimeMs }], move: null, changes: [{ type: 'change', path: folder.meta, detail: 'new order' }], open: null };
   }
   if (request.baseMtime !== null) throw new HttpError(409, `${NOTES_DIR}/${inDir(folder.path, 'meta.yaml')} changed on disk`);
-  const names = folder.children
-    .filter((child) => child.entry !== null && (child.kind === 'page' || child.kind === 'folder'))
-    .map((child) => (child.kind === 'folder' || child.kind === 'page' ? child.path.slice(child.path.lastIndexOf('/') + 1).replace(/\.mdx$/, '') : ''));
+  const names = listedNames(folder);
   if (!(from >= 0 && from < names.length && to >= 0 && to < names.length)) throw new HttpError(409, 'no such entry');
   names.splice(to, 0, ...names.splice(from, 1));
   const path = inDir(folder.path, 'meta.yaml');
@@ -281,14 +287,16 @@ export async function planVisibility(root: string, tree: TreeFolder, request: Vi
   const writes: Write[] = [];
   const changes: TreeChange[] = [];
   const file = node.kind === 'folder' ? node.meta : node.path;
-  if (file === null) {
+  if (node.kind === 'folder' && file === null) {
     if (!visible) {
       const meta = inDir(path, 'meta.yaml');
       guarded(root, meta);
-      writes.push({ path: meta, content: 'visible: false\n', baseMtime: null });
+      // With its children listed, as a move would, so they can still be
+      // ordered: a meta.yaml without `pages` gives them no entries.
+      writes.push({ path: meta, content: `visible: false\n${pagesTemplate(listedNames(node))}`, baseMtime: null });
       changes.push({ type: 'add', path: meta });
     }
-  } else {
+  } else if (file !== null) {
     const current = await readText(root, file);
     const content = metaError(() => (node.kind === 'folder' ? writeMetaVisible : writePageVisible)(current.content, visible));
     if (content !== current.content) {

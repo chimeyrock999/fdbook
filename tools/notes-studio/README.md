@@ -292,9 +292,11 @@ a move that fails writes nothing.
 - **Hide from sidebar / Show in sidebar** (the row menu of a page or
   folder; not the root page) writes `visible: false` into the page's
   frontmatter or the folder's meta.yaml, after `title`, or takes that line
-  out again: hiding and showing gives back the file byte for byte. A folder
-  without meta.yaml gets one with only `visible: false`; shown again it
-  keeps `visible: true`, as an empty meta.yaml fails the site's schema.
+  out again: hiding and showing gives back the file byte for byte, unless
+  it said `visible: true` (that line goes too). A folder without meta.yaml
+  gets one with `visible: false` and its children in `pages`, as a reorder
+  writes, so they can still be ordered. A meta.yaml that showing would
+  leave empty, which the site's schema refuses, says `visible: true`.
   Showing an unlisted node also adds it at the end of its folder's `pages`.
   A note open in the editor merges the change through its sync; while it
   has unsaved edits, hiding or showing it waits, as a rename does.

@@ -93,14 +93,16 @@ describe('hiding and showing from the page tree', () => {
     // Its pages stay where they were, under the hidden folder.
     expect(await hiddenOf('distributed-systems/rpc-and-threads.mdx')).toBeNull();
 
-    const title = (nodeAt(await loadTree(worktree.root), 'data-modeling') as TreeFolder).title;
+    const before = nodeAt(await loadTree(worktree.root), 'data-modeling') as TreeFolder;
+    const order = (folder: TreeFolder) => folder.children.map((child) => `${child.kind === 'page' || child.kind === 'folder' ? child.path : child.kind} ${String(child.entry)}`);
     expect(await change('data-modeling', false)).toEqual([{ type: 'add', path: 'data-modeling/meta.yaml' }]);
-    expect(await text('data-modeling/meta.yaml')).toBe('visible: false\n');
+    expect(await text('data-modeling/meta.yaml')).toBe('visible: false\npages:\n  - "dimensional-modeling"\n');
     const folder = nodeAt(await loadTree(worktree.root), 'data-modeling') as TreeFolder;
-    expect([folder.hidden, folder.title, folder.defaultOpen]).toEqual(['visible-false', title, false]);
-    // Shown again: an empty meta.yaml would fail the site's schema.
+    expect([folder.hidden, folder.title, folder.defaultOpen]).toEqual(['visible-false', before.title, false]);
+    // Its children keep their order and their entries, so they can still move.
+    expect(order(folder)).toEqual(order(before));
     await change('data-modeling', true);
-    expect(await text('data-modeling/meta.yaml')).toBe('visible: true\n');
+    expect(await text('data-modeling/meta.yaml')).toBe('pages:\n  - "dimensional-modeling"\n');
     expect(await hiddenOf('data-modeling')).toBeNull();
   });
 
@@ -115,6 +117,12 @@ describe('hiding and showing from the page tree', () => {
     ]);
     expect(await text(`${dir}/meta.yaml`)).toBe(`${meta.replace(/\n?$/, '')}\n  - "command-execution-path"${meta.endsWith('\n') ? '\n' : ''}`);
     expect(await hiddenOf(path)).toBeNull();
+  });
+
+  it('has no folder node to show where `...name` brings in its children', async () => {
+    const meta = await text('meta.yaml');
+    await writeFile(notes('meta.yaml'), meta.replace('  - "data-platform"\n', '  - "...database"\n  - "data-platform"\n'));
+    expect(await hiddenOf('database')).toBe('gone');
   });
 
   it('adds an unlisted folder to the root meta.yaml', async () => {
