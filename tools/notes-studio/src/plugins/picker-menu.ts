@@ -55,7 +55,8 @@ function step(key: string, index: number, count: number) {
 // or Down from the button goes to the checked option, where the focus also
 // starts when `focus` is set (the menu was opened from the keyboard).
 // Returns what undoes it, which also gives the focus back to the button
-// when it was in the menu (a pick closes the menu under the option).
+// when it was in the menu (a pick closes the menu under the option), but
+// not after a press outside, which moves the focus itself.
 export function floatMenu({ menu, picker, button, focus = false }: FloatingMenu, close: () => void) {
   const options = () => [...menu.querySelectorAll<HTMLElement>('button')];
   const checked = () => menu.querySelector<HTMLElement>('button[aria-checked="true"]') ?? options().at(0);
@@ -63,6 +64,7 @@ export function floatMenu({ menu, picker, button, focus = false }: FloatingMenu,
   // the body with no element to go to, so only a move to another element
   // takes it out.
   let inside = false;
+  let pressed = false;
   const focusin = () => { inside = true; };
   const focusout = (event: FocusEvent) => {
     const to = event.relatedTarget;
@@ -70,7 +72,10 @@ export function floatMenu({ menu, picker, button, focus = false }: FloatingMenu,
   };
   const outside = (event: Event) => {
     const target = event.target;
-    if (!(target instanceof Node && (picker.contains(target) || menu.contains(target)))) close();
+    if (target instanceof Node && (picker.contains(target) || menu.contains(target))) return;
+    // The press moves the focus itself.
+    pressed = true;
+    close();
   };
   const keys = (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
@@ -120,6 +125,7 @@ export function floatMenu({ menu, picker, button, focus = false }: FloatingMenu,
     menu.removeEventListener('focusin', focusin);
     menu.removeEventListener('focusout', focusout);
     const active = document.activeElement;
-    if (menu.contains(active) || (inside && (active === null || active === document.body))) button.focus();
+    // The picker may be scrolled out of view.
+    if (!pressed && (menu.contains(active) || (inside && (active === null || active === document.body)))) button.focus({ preventScroll: true });
   };
 }

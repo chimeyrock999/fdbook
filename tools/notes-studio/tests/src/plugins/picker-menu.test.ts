@@ -215,4 +215,17 @@ describe('floatMenu', () => {
     stop();
     expect(document.activeElement).toBe(field);
   });
+
+  it('leaves the focus to a press outside, and hands it back without a scroll', () => {
+    const { picker, button, menu } = setup();
+    const focus = vi.spyOn(button, 'focus');
+    // A press outside closes the menu before the browser moves the focus.
+    let stop = floatMenu({ menu, picker, button, focus: true }, () => { stop(); });
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    expect(focus).not.toHaveBeenCalled();
+    // The picker may be scrolled out of view: the hand-back does not scroll.
+    stop = floatMenu({ menu, picker, button, focus: true }, vi.fn());
+    stop();
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  });
 });
