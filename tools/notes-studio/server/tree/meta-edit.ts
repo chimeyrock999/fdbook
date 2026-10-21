@@ -218,7 +218,9 @@ function writeFlag(text: string, key: string, flag: boolean, file: string) {
   return splice(text, [{ start, end: start, text: `${line}${eol}` }]);
 }
 
-// A meta.yaml that only orders the folder's pages.
+// A meta.yaml that only orders the folder's pages. No pages is `pages: []`:
+// a bare `pages:` is null, which the site's meta schema refuses.
 export function pagesTemplate(pages: string[]) {
+  if (pages.length === 0) return 'pages: []\n';
   return `pages:\n${pages.map((page) => `  - ${JSON.stringify(page)}\n`).join('')}`;
 }

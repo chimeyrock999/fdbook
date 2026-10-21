@@ -1,6 +1,8 @@
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
+import { notesMetaSchema } from '@site/lib/notes-schema';
 import { loadTree } from '../../../server/tree/build';
 import { applyPlan, planMove, planVisibility } from '../../../server/tree/ops';
 import type { TreeFolder, TreeNode } from '../../../server/tree/types';
@@ -109,6 +111,19 @@ describe('hiding and showing from the page tree', () => {
     // So a page added later shows by itself, as it did before.
     await writeFile(notes('data-modeling/later.mdx'), '---\ntitle: "Later"\n---\n');
     expect(await hiddenOf('data-modeling/later.mdx')).toBeNull();
+  });
+
+  it('hides a folder with only an index page in a meta.yaml the site accepts', async () => {
+    // data-modeling has no meta.yaml, so it lists the new folder by itself.
+    await mkdir(notes('data-modeling/raft'));
+    await writeFile(notes('data-modeling/raft/index.mdx'), '---\ntitle: "Raft"\n---\n');
+    await change('data-modeling/raft', false);
+    const meta = await text('data-modeling/raft/meta.yaml');
+    expect(meta).toBe('visible: false\npages: []\n');
+    expect(notesMetaSchema.safeParse(parse(meta)).success).toBe(true);
+    expect(await hiddenOf('data-modeling/raft')).toBe('visible-false');
+    expect(await change('data-modeling/raft', true)).toEqual([{ type: 'delete', path: 'data-modeling/raft/meta.yaml' }]);
+    expect(await exists('data-modeling/raft/meta.yaml')).toBe(false);
   });
 
   it('keeps the meta.yaml it wrote once the folder was reordered while hidden', async () => {
