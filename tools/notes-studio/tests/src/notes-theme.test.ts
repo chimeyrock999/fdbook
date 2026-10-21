@@ -9,8 +9,8 @@ import { repoRoot } from '../../server/config';
 
 const read = (path: string) => readFile(join(repoRoot, path), 'utf8');
 
-const LIGHT = ':root, .notes-theme';
-const DARK = '.dark, .dark .notes-theme';
+const LIGHT = ':root:has(.notes-theme), .notes-theme';
+const DARK = '.dark:has(.notes-theme), .dark .notes-theme';
 const PALETTE = /^--(color-fd|garden|color-graph|color-callout)-/;
 
 function block(css: string, selector: string) {
@@ -52,14 +52,19 @@ describe('notes theme', () => {
     }
   });
 
-  // On :root and .dark too, so what renders outside the notes layout (the
-  // search dialog and popovers portal to <body>) keeps the garden colours.
+  // On the page too, so what renders outside the notes layout (the search
+  // dialog and popovers portal to <body>) keeps the garden colours; only
+  // while it shows the layout, since the notes CSS stays loaded after a
+  // client-side navigation to another page.
   it('sets the palette on the page and on .notes-theme', async () => {
     const site = await read('styles/notes-theme.css');
     const light = values(block(site, LIGHT));
     expect(light['--color-fd-card']).toBeDefined();
     expect(light['--color-callout-info']).toBeDefined();
     expect(values(block(site, DARK))['--color-fd-card']).toBeDefined();
+    const parts = selectors(site).flatMap((s) => s.split(',').map((p) => p.trim()));
+    expect(parts).not.toContain(':root');
+    expect(parts).not.toContain('.dark');
     // The fonts read next/font variables set on the notes layout only.
     expect(light['--font-sans']).toBeUndefined();
     expect(values(block(site, '\n.notes-theme'))['--font-sans']).toBeDefined();

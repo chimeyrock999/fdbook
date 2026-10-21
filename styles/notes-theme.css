@@ -1,13 +1,14 @@
 /* The notes palette and fonts, the only place they are written. Plain CSS so
    both the site (app/notes/notes.css) and the Notes Studio
    (tools/notes-studio/src/notes-theme.css) import this one file.
-   The palette sits on the page as well as on `.notes-theme` (the notes
-   layout's container): what renders outside the layout, like the search
-   dialog portalled to <body>, keeps the garden colours, and the fumadocs
-   `bg-fd-*` utilities read these values. Import it after the fumadocs theme
-   so this `.dark` wins over its own. */
+   The palette sits on `.notes-theme` (the notes layout's container) and on
+   the page while it shows one: what renders outside the layout, like the
+   search dialog portalled to <body>, keeps the garden colours, and the
+   fumadocs `bg-fd-*` utilities read these values. `:has()` keeps it off
+   other pages, whose stylesheets stay loaded next to this one after a
+   client-side navigation, and outweighs their `:root` and `.dark`. */
 
-:root, .notes-theme {
+:root:has(.notes-theme), .notes-theme {
   /* ── Digital-garden palette (light) ── */
   --color-fd-background: #f8f5ec;
   --color-fd-foreground: #24402a;
@@ -85,7 +86,7 @@
   font-family: var(--font-sans);
 }
 
-.dark, .dark .notes-theme {
+.dark:has(.notes-theme), .dark .notes-theme {
   /* ── Digital-garden palette (dark) ── */
   --color-fd-background: #14201a;
   --color-fd-foreground: #e8f0e1;
