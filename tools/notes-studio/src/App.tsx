@@ -55,6 +55,7 @@ export function App() {
               key={active}
               path={syncPath(active)}
               frontmatterOpen={drawer === 'frontmatter'}
+              onOpenFrontmatter={() => { setDrawer('frontmatter'); }}
               onCloseFrontmatter={() => { setDrawer(null); }}
             />
           </NoteGate>

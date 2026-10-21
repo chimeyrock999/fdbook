@@ -1,0 +1,93 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { repoRoot } from '../../../server/config';
+import { decorateGraphObjects } from '../../../src/plugins/graph-objects/decorate';
+import { attributes } from '../../../src/plugins/source-attributes';
+import { defined, describeDecoration, editorState, nodesOf, withNode, withText } from '../../support/editor-state';
+import { realNotes } from '../../support/notes';
+
+const fixture = () => readFile(join(repoRoot, 'tools/notes-studio/src/plugins/graph-objects/fixtures/graph-objects.mdx'), 'utf8');
+
+function decorations(state: Parameters<typeof decorateGraphObjects>[0]) {
+  return decorateGraphObjects(state).map(describeDecoration);
+}
+
+function textOf(state: ReturnType<typeof editorState>, from: number, to: number) {
+  return state.doc.textBetween(from, to);
+}
+
+describe('source attributes', () => {
+  it('reads JSX and directive attributes', () => {
+    expect(attributes(' id="a-b" displayName=\'B "c"\' kind=keyword plate')).toEqual({ id: 'a-b', displayName: 'B "c"', kind: 'keyword', plate: '' });
+    expect(attributes('id="grain" displayName="Grain (fact)"')).toEqual({ id: 'grain', displayName: 'Grain (fact)' });
+  });
+});
+
+describe('graph object decorations', () => {
+  it('hides the tags of Keyword and Tag and styles their text', async () => {
+    const state = editorState(await fixture());
+    const found = decorations(state);
+    const styled = found.filter((item) => item.class?.startsWith('studio-keyword'));
+    expect(styled.map((item) => [item.class, textOf(state, item.from, item.to)])).toEqual([
+      ['studio-keyword', 'business process'],
+      ['studio-keyword studio-keyword-tag', 'fact'],
+      ['studio-keyword', 'process'],
+    ]);
+    const hidden = found.filter((item) => item.class === 'studio-hidden' && item.to - item.from > 1);
+    expect(hidden.map((item) => textOf(state, item.from, item.to))).toEqual([
+      '<GraphMeta id="grain" displayName="Grain" kind="keyword" />',
+      '<Keyword id="business-process" displayName="Business Process">',
+      '</Keyword>',
+      '<Tag id="fact" displayName="Fact">',
+      '</Tag>',
+      '<Keyword id="process" displayName="process">',
+      '</Keyword>',
+    ]);
+  });
+
+  it('draws markers and labels for GraphMeta and the text directives', async () => {
+    const widgets = decorations(editorState(await fixture())).flatMap((item) => (item.widget ? [item.widget] : []));
+    expect(widgets).toEqual([
+      'graph-meta:text:Grain',
+      'keyword:false:grain:Grain',
+      'graph-meta:atom:Thread Pool',
+      'keyword:true:fact tables:Fact Table',
+    ]);
+  });
+
+  it('shows the source while the caret is inside', async () => {
+    const state = editorState(await fixture());
+    const keyword = defined(decorations(state).find((item) => item.class === 'studio-keyword'));
+    const inside = decorations(withText(state, keyword.from + 2));
+    expect(inside.find((item) => item.class === 'studio-hidden' && textOf(state, item.from, item.to).startsWith('<Keyword id="business'))).toBeUndefined();
+    expect(inside.filter((item) => item.class === 'studio-keyword')).toHaveLength(2);
+
+    // Right after a hidden closing tag a Backspace would delete it unseen.
+    const closing = defined(decorations(state).find((item) => item.class === 'studio-hidden' && textOf(state, item.from, item.to) === '</Keyword>'));
+    expect(decorations(withText(state, closing.to)).filter((item) => item.class === 'studio-hidden' && item.from <= closing.from && item.to >= keyword.from - 1)).toEqual([]);
+
+    const marker = defined(decorations(state).find((item) => item.widget === 'graph-meta:text:Grain'));
+    expect(decorations(withText(state, marker.from + 1)).find((item) => item.widget === 'graph-meta:text:Grain')).toBeUndefined();
+
+    const [atom] = nodesOf(state, 'verbatimInline');
+    expect(decorations(withNode(state, atom.pos)).find((item) => item.from === atom.pos)).toBeUndefined();
+  });
+
+  // Every <Keyword>, <GraphMeta/> (or <graph-meta/>), :keyword[] and
+  // :graph-meta{} is drawn, except inside blocks the editor keeps as source
+  // (accordion groups, callouts with a formatted title).
+  it('draws every graph object in the real notes', async () => {
+    const count = (text: string) => (text.match(/<Keyword |<Tag |:keyword\[|:tag\[|<GraphMeta |<graph-meta |:graph-meta\{/g) ?? []).length;
+    let total = 0;
+    for (const { path, source } of await realNotes()) {
+      const state = editorState(source);
+      const kept = nodesOf(state, 'verbatim').reduce((sum, { node }) => sum + count(String(node.attrs.value)), 0);
+      const expected = count(source) - kept;
+      const found = decorations(state).filter((item) => item.widget !== undefined || item.class?.startsWith('studio-keyword') === true);
+      expect(found.length, path).toBe(expected);
+      total += expected;
+    }
+    expect(total).toBeGreaterThan(100);
+  });
+});

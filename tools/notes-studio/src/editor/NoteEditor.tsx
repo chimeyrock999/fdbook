@@ -1,8 +1,10 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { MdxEditor, useEditorMode, useSourceText, useSyncStatus } from '@fumadocs-editor/ui';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { FrontmatterForm } from '../frontmatter/FrontmatterForm';
 import { editorConfig } from '../plugins';
+import { decorationsPlugin, useEditorPlugin } from './decorations';
+import { NoteHeader } from './NoteHeader';
 import { SourceEditor } from './SourceEditor';
 import { ConflictDialog, SaveStatus } from './SyncState';
 
@@ -10,9 +12,10 @@ import { ConflictDialog, SaveStatus } from './SyncState';
 // changes made on disk, and the conflict choice when both sides edited the
 // same block. `path` is relative to content/notes; the caller remounts this
 // per path.
-export function NoteEditor({ path, frontmatterOpen, onCloseFrontmatter }: {
+export function NoteEditor({ path, frontmatterOpen, onOpenFrontmatter, onCloseFrontmatter }: {
   path: string;
   frontmatterOpen: boolean;
+  onOpenFrontmatter: () => void;
   onCloseFrontmatter: () => void;
 }) {
   // Null until the server sent the file. A denied open never reports it, so
@@ -37,22 +40,36 @@ export function NoteEditor({ path, frontmatterOpen, onCloseFrontmatter }: {
         status={writable === null && status !== 'denied' && status !== 'offline' ? null : (status ?? 'synced')}
         locked={locked}
         frontmatterOpen={frontmatterOpen}
+        onOpenFrontmatter={onOpenFrontmatter}
         onCloseFrontmatter={onCloseFrontmatter}
       />
     </MdxEditor.Root>
   );
 }
 
-function EditorLayout({ status, locked, frontmatterOpen, onCloseFrontmatter }: {
+// The plugins' decorations, one ProseMirror plugin for every editor.
+const decorations = decorationsPlugin(editorConfig.decorators);
+
+function EditorLayout({ status, locked, frontmatterOpen, onOpenFrontmatter, onCloseFrontmatter }: {
   status: DocumentStatus | null;
   locked: boolean;
   frontmatterOpen: boolean;
+  onOpenFrontmatter: () => void;
   onCloseFrontmatter: () => void;
 }) {
   const { mode, setMode, canShowVisual } = useEditorMode();
   const sync = useSyncStatus();
   const source = useSourceText();
+  const editor = useRef<HTMLElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  useEditorPlugin(editor, decorations);
 
+  // The header puts the focus on the panel's title field. From 1024px the
+  // panel is always shown; below, it is a drawer to open first.
+  const openFrontmatter = () => {
+    if (!window.matchMedia('(min-width: 1024px)').matches) onOpenFrontmatter();
+    requestAnimationFrame(() => { panel.current?.querySelector('input')?.focus(); });
+  };
 
   const form = (
     <FrontmatterForm
@@ -68,7 +85,7 @@ function EditorLayout({ status, locked, frontmatterOpen, onCloseFrontmatter }: {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
-      <section aria-label="Editor" className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--fde-background)]">
+      <section ref={editor} aria-label="Editor" className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--fde-background)]">
         <div className="flex flex-wrap items-center gap-2.5 border-b border-[var(--fde-border)] px-4 py-2">
           <SaveStatus status={status} />
           <span className="flex-1" />
@@ -83,13 +100,17 @@ function EditorLayout({ status, locked, frontmatterOpen, onCloseFrontmatter }: {
         </div>
         {mode === 'visual' ? (
           <div className="studio-visual min-h-0 flex-1 overflow-auto">
-            <MdxEditor.Visual className="mx-auto w-full max-w-[52rem] px-[clamp(16px,5vw,56px)] py-7" />
+            <div className="mx-auto w-full max-w-[52rem] px-[clamp(16px,5vw,56px)] py-7">
+              <NoteHeader source={source.value} onOpen={openFrontmatter} />
+              <MdxEditor.Visual className="studio-prose" />
+            </div>
           </div>
         ) : (
           <SourceEditor />
         )}
       </section>
       <aside
+        ref={panel}
         className={`studio-frontmatter ${frontmatterOpen ? 'studio-drawer-open' : ''}`}
         aria-label="Frontmatter panel"
       >

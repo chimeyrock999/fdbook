@@ -1,7 +1,12 @@
 import type { SyntaxOptions, UiComponentSpec } from '@fumadocs-editor/ui';
-import type { StudioPlugin } from './plugin';
+import type { Decorator, StudioPlugin } from './plugin';
 
-export type EditorConfig = { plugins: StudioPlugin[]; components: UiComponentSpec[]; syntax: SyntaxOptions };
+export type EditorConfig = {
+  plugins: StudioPlugin[];
+  components: UiComponentSpec[];
+  syntax: SyntaxOptions;
+  decorators: Decorator[];
+};
 
 // Plugin modules as import.meta.glob returns them, keyed by file path.
 export type PluginModules = Record<string, { default?: StudioPlugin }>;
@@ -19,6 +24,7 @@ export function buildEditorConfig(modules: PluginModules): EditorConfig {
   const owners = new Map<string, string>();
   const components: UiComponentSpec[] = [];
   const syntax: SyntaxOptions = {};
+  const decorators: Decorator[] = [];
   for (const plugin of plugins) {
     if (ids.has(plugin.id)) throw new Error(`Two plugins use the id "${plugin.id}"`);
     ids.add(plugin.id);
@@ -33,6 +39,7 @@ export function buildEditorConfig(modules: PluginModules): EditorConfig {
     for (const [key, value] of Object.entries(plugin.syntax ?? {}) as [keyof SyntaxOptions, boolean | undefined][]) {
       if (value !== undefined) syntax[key] = (syntax[key] ?? false) || value;
     }
+    if (plugin.decorate) decorators.push(plugin.decorate);
   }
-  return { plugins, components, syntax };
+  return { plugins, components, syntax, decorators };
 }

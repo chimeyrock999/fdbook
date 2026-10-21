@@ -88,10 +88,12 @@ Pick a note in the list (or open `?path=content/notes/…mdx`). The editor is
 [fumadocs-editor](https://github.com/fuma-nama/fumadocs-editor), opened
 through the notes sync socket:
 
-- **Visual** edits blocks in place. Type `/` for the block and component menu.
-  Blocks you don't touch are written back byte for byte. Syntax that no
-  plugin understands (inline `<GraphMeta>` and `<Keyword>`, `:::example`,
-  `:::accordion`, `:keyword[…]`) shows as source and still round-trips.
+- **Visual** edits blocks in place and looks like the note page: the
+  frontmatter title and description on top (a click opens the frontmatter
+  panel), the site's prose, callouts, code frames, keywords and accordions
+  (see Plugins). Type `/` for the block and component menu. Blocks you don't
+  touch are written back byte for byte. Syntax that no plugin understands
+  shows as source and still round-trips.
 - **Source** is CodeMirror 6 over the whole MDX file. Text that does not parse
   stays in Source until it is fixed.
 - **Frontmatter** (the side panel) edits title, description, visible and
@@ -105,8 +107,10 @@ through the notes sync socket:
   dialog asks which version to keep.
 - Light and dark follow the system. Colours and fonts are the notes site's
   (`.notes-theme` in `app/notes/notes.css`), copied onto the editor's
-  `--fde-*` tokens in `src/notes-theme.css`; a test fails when the two drift.
-  Components still use the editor's own look (#35).
+  `--fde-*` tokens in `src/notes-theme.css`, next to the site tokens the
+  components draw with (`--garden-*`, `--color-graph-*`, `--color-callout-*`);
+  a test fails when they drift. `src/notes-prose.css` copies the note page's
+  prose rules (`app/notes/notes.module.css`).
 
 ## Plugins
 
@@ -115,16 +119,17 @@ registry (`src/plugins/registry.ts`) finds every `index.ts` or `index.tsx`
 there, so adding a plugin needs no change anywhere else.
 
 ```ts
-// src/plugins/svg-diagram/index.ts
+// src/plugins/svg-diagram/index.ts, shortened
 import type { UiComponentSpec } from '@fumadocs-editor/ui';
 import { definePlugin } from '../plugin';
-import { SvgDiagramCard } from './SvgDiagramCard'; // React components in their own file
+import './svg-diagram.css'; // the plugin's own styles
+import { SvgDiagram } from './SvgDiagram'; // React components in their own file
 
 const svgDiagramSpec: UiComponentSpec = {
   name: 'SvgDiagram', // the JSX tag
   attributeRegions: [{ attribute: 'caption', region: 'caption' }],
   props: [{ name: 'src', type: 'string' }, { name: 'label', type: 'string' }],
-  render: SvgDiagramCard,
+  render: SvgDiagram,
 };
 
 export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] });
@@ -135,14 +140,42 @@ export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] })
   slash menu inserts. Only add components the site renders
   (`components/mdx.tsx`).
 - `syntax` turns on parse-level dialects such as `directives`.
+- `decorate` draws over what the editor keeps as source (inline JSX tags,
+  text directives, verbatim blocks) with ProseMirror decorations. It changes
+  how the document looks, never the document. `src/editor/decorations.ts`
+  puts every plugin's decorator on the live editor (`MdxEditor.Root` takes no
+  extra extensions, so it is registered on the TipTap editor itself). Cards
+  share `src/plugins/cards.css`; `.studio-hidden` hides the source a card
+  covers.
 - Two plugins may not share an `id` or define the same component.
 - `tests/src/plugins/round-trip.test.ts` parses and writes back every note
   with all plugins loaded and fails if a byte changes. Put sample MDX for a
   new component in `src/plugins/<name>/fixtures/*.mdx` to add it to that test.
 
-Plugins today: `fumadocs-ui` (Callout, Cards, Steps, Tabs, Accordions),
-`admonition` (`:::note`, `:::info`, `:::tip`, `:::warn`, `:::warning`,
-`:::danger`, `:::success`) and `html-embed`.
+Plugins today:
+
+- `callout`: `<Callout>` and `:::type[title]` drawn like
+  `components/notes-callout.tsx`, with the site's types and an icon menu to
+  change them. The editor only parses the admonition names in core's
+  `ADMONITION_TYPES`, so the plugin adds the site's own (`example`,
+  `caution`, `important`, `error`, from `lib/remark-notes-directives.ts`) to
+  that object at load; `tests/src/plugins/callout.test.ts` fails if a new
+  editor version stops reading it. A callout whose title has formatting, or
+  that holds an accordion group, stays source (the editor's rule).
+- `graph-objects`: `<Keyword>`, `<Tag>`, `:keyword[…]` and `:tag[…]` in the
+  keyword style, `<GraphMeta/>` and `:graph-meta{…}` as a small marker, all
+  as decorations: with the caret inside (or the atom selected) the source
+  shows again. `<SectionTitle>` is a component.
+- `site-directives`: `::::accordions` groups as the site's accordion cards
+  (the body opens as MDX source and is written back on blur) and
+  `::youtube` as a card. The MDX button shows the block's source.
+- `fumadocs-ui`: Cards, Steps, Tabs and Accordions.
+- `html-embed` and `svg-diagram`: cards. `SvgDiagram` shows a file under
+  `public/notes` through the file API and reads its props like the site
+  (`lib/mdx-props.ts`); a bare JSX boolean (`plate`) reaches the editor
+  without a value, so write `plate="true"` to see it. `HtmlEmbed` shows no
+  live page, since the file API serves HTML assets sandboxed without
+  scripts.
 
 ## Checks
 
