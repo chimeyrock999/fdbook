@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { repoRoot } from '../../../server/config';
-import { readFrontmatter, writeFrontmatter } from '../../../src/frontmatter/frontmatter';
+import { frontmatterPathAt, readFrontmatter, writeFrontmatter } from '../../../src/frontmatter/frontmatter';
 
 const note = `---
 # shown in the sidebar
@@ -154,5 +154,32 @@ describe('writeFrontmatter', () => {
       count += 1;
     }
     expect(count).toBeGreaterThan(50);
+  });
+});
+
+describe('frontmatterPathAt', () => {
+  const at = (needle: string, source = note) => frontmatterPathAt(source, source.indexOf(needle));
+
+  it('names the value under an offset as the schema names paths', () => {
+    expect(at("'Spark execution model'")).toBe('title');
+    expect(at('Cpu')).toBe('icon');
+    expect(at('id: spark')).toBe('graph.id');
+    expect(at('lineage')).toBe('graph.keywords.0.id');
+    expect(at('Lineage')).toBe('graph.keywords.0.displayName');
+  });
+
+  // An mdx-parse issue without a position comes back at offset 0.
+  it('is empty on a comment, and null on the fences or outside the block', () => {
+    expect(at('# shown')).toBe('');
+    expect(frontmatterPathAt(note, 0)).toBeNull();
+    expect(frontmatterPathAt(note, note.indexOf('---\n\n## Body'))).toBeNull();
+    expect(at('## Body')).toBeNull();
+    expect(frontmatterPathAt('# no frontmatter\n', 0)).toBeNull();
+  });
+
+  it('follows CRLF and broken YAML', () => {
+    const crlf = '---\r\ntitle: X\r\ngraph:\r\n  id: x\r\n---\r\n';
+    expect(frontmatterPathAt(crlf, crlf.indexOf('x\r\n---'))).toBe('graph.id');
+    expect(frontmatterPathAt('---\ntitle: [x\n---\n', 5)).toBeNull();
   });
 });

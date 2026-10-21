@@ -3,7 +3,8 @@ import { MdxEditor, useEditorMode, useSourceText, useSyncStatus } from '@fumadoc
 import { useRef, useState, type ReactNode } from 'react';
 import type { createFilesClient } from '../api/files';
 import type { LintClient, LintIssue } from '../api/lint';
-import { FrontmatterForm } from '../frontmatter/FrontmatterForm';
+import { frontmatterPathAt } from '../frontmatter/frontmatter';
+import type { FieldReveal } from '../frontmatter/MetadataStrip';
 import { IssuesChip, IssuesPanel } from '../lint/IssuesPanel';
 import { useLint } from '../lint/useLint';
 import { NOTES_PREFIX } from '../notes/notes';
@@ -23,7 +24,8 @@ const DRAWER_QUERY = '(max-width: 1023px)';
 // One note, open through the notes sync socket: autosave, live merge of
 // changes made on disk, and the conflict choice when both sides edited the
 // same block. `path` is relative to content/notes; the caller remounts this
-// per path. The side panel holds the frontmatter form and the lint issues.
+// per path. The frontmatter is edited in the note header; the side panel
+// holds the lint issues.
 export function NoteEditor({ path, ...rest }: { path: string } & Panels & Clients) {
   // Null until the server sent the file. A denied open never reports it, so
   // the status, not `writable` alone, decides whether editing is allowed.
@@ -66,46 +68,33 @@ function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel
   const { mode, setMode, canShowVisual } = useEditorMode();
   const sync = useSyncStatus();
   const source = useSourceText();
-  const [tab, setTab] = useState<'frontmatter' | 'issues'>('frontmatter');
   const [reveal, setReveal] = useState<RevealRequest | null>(null);
+  const [field, setField] = useState<FieldReveal | null>(null);
   const editor = useRef<HTMLElement>(null);
-  const panel = useRef<HTMLElement>(null);
   useEditorPlugin(editor, decorations);
   // Only once the server sent the note: before that (still opening, denied,
   // offline) the text is empty, and an empty note would pass as clean.
   const lintState = useLint(lint, files, notePath, opened ? source.value : null);
   // A request is for the Source on screen now; a later Source starts fresh.
   if (mode !== 'source' && reveal !== null) setReveal(null);
+  if (mode !== 'visual' && field !== null) setField(null);
 
-  // The header puts the focus on the frontmatter's title field, in the panel
-  // (a drawer to open first below 1024px).
-  const openFrontmatter = () => {
-    setTab('frontmatter');
-    if (window.matchMedia(DRAWER_QUERY).matches) onOpenPanel();
-    requestAnimationFrame(() => { panel.current?.querySelector('input')?.focus(); });
-  };
   const openIssues = () => {
-    setTab('issues');
     if (window.matchMedia(DRAWER_QUERY).matches) onOpenPanel();
   };
-  // Issue positions are into the source text, so show it in Source.
+  // An issue in the frontmatter opens its field in the header; any other
+  // position is into the source text, so show it in Source.
   const showIssue = (issue: LintIssue) => {
-    setMode('source');
-    setReveal((previous) => ({ start: issue.start, end: issue.end, seq: (previous?.seq ?? 0) + 1 }));
+    const path = canShowVisual ? frontmatterPathAt(source.value, issue.start.offset) : null;
+    if (path !== null) {
+      setMode('visual');
+      setField((previous) => ({ path, seq: (previous?.seq ?? 0) + 1 }));
+    } else {
+      setMode('source');
+      setReveal((previous) => ({ start: issue.start, end: issue.end, seq: (previous?.seq ?? 0) + 1 }));
+    }
     onClosePanel();
   };
-
-  const form = (
-    <FrontmatterForm
-      source={source.value}
-      onSource={source.onChange}
-      readOnly={source.readOnly || locked}
-      onOpenSource={() => {
-        setMode('source');
-        onClosePanel();
-      }}
-    />
-  );
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
@@ -126,7 +115,14 @@ function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel
         {mode === 'visual' ? (
           <div className="studio-visual min-h-0 flex-1 overflow-auto">
             <div className="mx-auto w-full max-w-[52rem] px-[clamp(16px,5vw,56px)] py-7">
-              <NoteHeader source={source.value} onOpen={openFrontmatter} />
+              <NoteHeader
+                source={source.value}
+                onSource={source.onChange}
+                readOnly={source.readOnly || locked}
+                onOpenSource={() => { setMode('source'); }}
+                onLeave={() => { focusBody(editor.current); }}
+                reveal={field}
+              />
               <MdxEditor.Visual className="studio-prose" />
             </div>
           </div>
@@ -134,24 +130,19 @@ function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel
           <SourceEditor reveal={reveal} />
         )}
       </section>
-      <aside ref={panel} className={`studio-panel ${panelOpen ? 'studio-drawer-open' : ''}`} aria-label="Side panel">
-        <div role="tablist" aria-label="Panel" className="studio-panel-tabs">
-          <PanelTab selected={tab === 'frontmatter'} onSelect={() => { setTab('frontmatter'); }}>
-            Frontmatter
-          </PanelTab>
-          <PanelTab selected={tab === 'issues'} onSelect={() => { setTab('issues'); }}>
-            Issues
-            {lintState.issues !== null && lintState.issues.length > 0 && (
-              <span
-                className={`rounded-full px-1.5 text-[11px] font-semibold text-[var(--fde-background)] tabular-nums ${lintState.issues.some((issue) => issue.severity === 'error') ? 'bg-[var(--fde-error)]' : 'bg-[var(--fde-warning)]'}`}
-              >
-                {lintState.issues.length}
-              </span>
-            )}
-          </PanelTab>
-        </div>
+      <aside className={`studio-panel ${panelOpen ? 'studio-drawer-open' : ''}`} aria-label="Side panel">
+        <h2 className="studio-panel-head">
+          Issues
+          {lintState.issues !== null && lintState.issues.length > 0 && (
+            <span
+              className={`rounded-full px-1.5 text-[11px] font-semibold text-[var(--fde-background)] tabular-nums ${lintState.issues.some((issue) => issue.severity === 'error') ? 'bg-[var(--fde-error)]' : 'bg-[var(--fde-warning)]'}`}
+            >
+              {lintState.issues.length}
+            </span>
+          )}
+        </h2>
         <div className="studio-panel-body">
-          {tab === 'frontmatter' ? form : <IssuesPanel state={lintState} onSelect={showIssue} />}
+          <IssuesPanel state={lintState} onSelect={showIssue} />
         </div>
       </aside>
       {panelOpen && <button type="button" aria-label="Close panel" className="studio-scrim lg:hidden" onClick={onClosePanel} />}
@@ -181,16 +172,10 @@ function Tab({ selected, disabled = false, onSelect, children }: {
   );
 }
 
-function PanelTab({ selected, onSelect, children }: { selected: boolean; onSelect: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={selected}
-      onClick={onSelect}
-      className={`inline-flex items-center gap-1.5 border-b-2 px-2.5 pt-1.5 pb-2 text-[13px] ${selected ? 'border-[var(--fde-foreground)] font-semibold' : 'border-transparent text-[var(--fde-muted-foreground)]'}`}
-    >
-      {children}
-    </button>
-  );
+// The body below the header: the static preview until the editor is live
+// (a key there starts it), then the editor itself.
+function focusBody(root: HTMLElement | null) {
+  const body = root?.querySelector('.studio-prose');
+  const target = body?.querySelector<HTMLElement>(':scope > [tabindex="0"]') ?? body?.querySelector<HTMLElement>('[contenteditable="true"]');
+  target?.focus();
 }
