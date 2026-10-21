@@ -84,6 +84,33 @@ describe('SiteCallout', () => {
     expect(setProp).toHaveBeenCalledWith('type', 'info');
   });
 
+  it('opens on the checked type from the keyboard and moves with the arrow keys', async () => {
+    const setProp = vi.fn();
+    draw('note', setProp);
+    const icon = screen.getByRole('button', { name: 'Callout type: note' });
+    icon.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: 'note' }));
+    const [first, second, third] = DIRECTIVE_TYPES;
+    await userEvent.keyboard('{Home}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: first }));
+    await userEvent.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: third }));
+    await userEvent.keyboard('{ArrowUp}{ArrowRight}{Enter}');
+    expect(setProp).toHaveBeenCalledWith('type', second);
+    // The menu went with the focused option: the icon has the focus back.
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(icon);
+  });
+
+  it('keeps the focus on the icon when the menu opens from a click', async () => {
+    draw('note');
+    const icon = screen.getByRole('button', { name: 'Callout type: note' });
+    await userEvent.click(icon);
+    expect(screen.getByRole('menu')).toBeTruthy();
+    expect(document.activeElement).not.toBe(screen.getByRole('menuitemradio', { name: 'note' }));
+  });
+
   it('keeps the type of a locked note', async () => {
     draw('note', vi.fn(), false);
     await userEvent.click(screen.getByRole('button', { name: 'Callout type: note' }));
