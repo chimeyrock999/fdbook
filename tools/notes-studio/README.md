@@ -50,8 +50,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `files/` has the file API, the file events and the file-system helpers.
   - `sync/` has the fumadocs-editor sync server for `content/notes`.
   - `lint/` checks a note against the site's rules (see Lint below).
-  - `tree/` builds the page tree and creates, renames and reorders pages
-    (see Page tree below).
+  - `tree/` builds the page tree and creates, renames, reorders, hides and
+    shows pages (see Page tree below).
   - `assets/` finds where notes use the files under `public/notes`, and
     renames and deletes them (see Assets below).
 - `src/`: the React UI.
@@ -289,6 +289,15 @@ a move that fails writes nothing.
   in its meta.yaml, for the site's sidebar: the value is replaced where it
   is, or a line is added after `title`. A folder without meta.yaml cannot
   set it.
+- **Hide from sidebar / Show in sidebar** (the row menu of a page or
+  folder; not the root page) writes `visible: false` into the page's
+  frontmatter or the folder's meta.yaml, after `title`, or takes that line
+  out again: hiding and showing gives back the file byte for byte. A folder
+  without meta.yaml gets one with only `visible: false`; shown again it
+  keeps `visible: true`, as an empty meta.yaml fails the site's schema.
+  Showing an unlisted node also adds it at the end of its folder's `pages`.
+  A note open in the editor merges the change through its sync; while it
+  has unsaved edits, hiding or showing it waits, as a rename does.
 - **Rename** gives a page or folder a new name in the same folder. Every
   meta.yaml entry that reached it (`a/b`, `!x`, `...x` included) and every
   Markdown link or link definition to it (`./`, `../` and `/notes/…`, anchors

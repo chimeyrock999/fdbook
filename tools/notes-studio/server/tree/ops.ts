@@ -7,10 +7,11 @@ import { knownTargets, replaceSegment, rewriteLinks, type Rename } from './links
 import { insertEntry, metaTemplate, MetaEditError, moveEntry, pagesTemplate, readPages, replaceEntry, setDefaultOpen } from './meta-edit.ts';
 import { slugify } from '../../src/slug.ts';
 import { pageTemplate } from './template.ts';
+import { writeMetaVisible, writePageVisible } from './visible-edit.ts';
 import type { TreeFolder, TreeNode } from './types.ts';
 
 // Page tree changes: create a page, rename a page or folder, move an entry
-// within its folder. Each is planned against the disk first (the files to
+// within its folder, hide or show a page or folder. Each is planned against the disk first (the files to
 // write, with the mtime each was read at), so a dry run can show it, then
 // applied. Paths are relative to content/notes.
 
@@ -261,6 +262,54 @@ export async function planMove(root: string, tree: TreeFolder, request: MoveRequ
   // Only `pages`: the folder keeps its title from the index page and stays
   // closed by default, as it was without a meta.yaml.
   return { writes: [{ path, content: pagesTemplate(names), baseMtime: null }], move: null, changes: [{ type: 'add', path }], open: null };
+}
+
+export type VisibilityRequest = { path: unknown; visible: unknown };
+
+// Hides a page or folder from the site's sidebar (`visible: false` in its
+// frontmatter or meta.yaml), or shows it again (the key comes out). A
+// folder without meta.yaml gets one only to hide it. An unlisted node shown
+// again is also added at the end of its folder's `pages`, as a create adds.
+export async function planVisibility(root: string, tree: TreeFolder, request: VisibilityRequest): Promise<Plan> {
+  const path = typeof request.path === 'string' ? request.path : '';
+  if (path === '' || path === 'index.mdx') throw new HttpError(400, 'the root page and folder are always shown');
+  if (typeof request.visible !== 'boolean') throw new HttpError(400, 'visible must be true or false');
+  const visible = request.visible;
+  const node = findNode(tree, (each) => (each.kind === 'page' || each.kind === 'folder') && each.path === path);
+  if (node?.kind !== 'page' && node?.kind !== 'folder') throw new HttpError(404, `no such page or folder: ${NOTES_DIR}/${path}`);
+
+  const writes: Write[] = [];
+  const changes: TreeChange[] = [];
+  const file = node.kind === 'folder' ? node.meta : node.path;
+  if (file === null) {
+    if (!visible) {
+      const meta = inDir(path, 'meta.yaml');
+      guarded(root, meta);
+      writes.push({ path: meta, content: 'visible: false\n', baseMtime: null });
+      changes.push({ type: 'add', path: meta });
+    }
+  } else {
+    const current = await readText(root, file);
+    const content = metaError(() => (node.kind === 'folder' ? writeMetaVisible : writePageVisible)(current.content, visible));
+    if (content !== current.content) {
+      writes.push({ path: file, content, baseMtime: current.mtimeMs });
+      changes.push({ type: 'change', path: file, detail: visible ? 'removes visible: false' : 'visible: false' });
+    }
+  }
+  if (visible && node.hidden === 'unlisted') {
+    const parent = findFolder(tree, dirOf(path));
+    if (parent.meta !== null) {
+      const meta = await readText(root, parent.meta);
+      const pages = metaError(() => readPages(meta.content)) ?? [];
+      const slug = slugOf(path);
+      const content = metaError(() => insertEntry(meta.content, slug, pages.length));
+      if (content !== null) {
+        writes.push({ path: parent.meta, content, baseMtime: meta.mtimeMs });
+        changes.push({ type: 'change', path: parent.meta, detail: `adds "${slug}"` });
+      }
+    }
+  }
+  return { writes, move: null, changes, open: null };
 }
 
 // Where `path` is after the plan's move.

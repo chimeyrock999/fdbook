@@ -1,8 +1,8 @@
 import { isMap, isScalar, isSeq, parse, parseDocument, Scalar, type YAMLSeq } from 'yaml';
 
-// Edits to the `pages` list of a meta.yaml. The YAML document only says
-// where each entry sits; the edit itself replaces those characters in the
-// text, so everything else (comments, blank lines, `icon`, `visible`, quote
+// Edits to the `pages` list of a meta.yaml, and to its true/false keys.
+// The YAML document only says where each entry sits; the edit itself
+// replaces those characters in the text, so everything else (comments, blank lines, `icon`, `visible`, quote
 // style, a missing final newline) stays byte for byte.
 
 export class MetaEditError extends Error {}
@@ -138,35 +138,66 @@ export function metaTemplate(title: string, pages: string[], open = false) {
 // when the title is a block scalar; first when there is no title). New
 // lines end like the file's.
 export function setDefaultOpen(text: string, open: boolean) {
-  const next = writeDefaultOpen(text, open);
+  return setFlag(text, 'defaultOpen', open);
+}
+
+// Sets the true/false `key` the way setDefaultOpen sets `defaultOpen`.
+// `file` names the YAML in errors: a meta.yaml, or a page's frontmatter.
+export function setFlag(text: string, key: string, value: boolean, file = 'meta.yaml') {
+  const next = writeFlag(text, key, value, file);
   // The edit is by text: refuse a result that does not read back as asked.
-  const data: unknown = parse(next);
-  if (typeof data !== 'object' || data === null || (data as Record<string, unknown>).defaultOpen !== open) {
-    throw new MetaEditError('could not set defaultOpen in this meta.yaml: edit it by hand');
-  }
+  if (dataOf(next)[key] !== value) throw new MetaEditError(`could not set ${key} in this ${file}: edit it by hand`);
   return next;
 }
 
-function writeDefaultOpen(text: string, open: boolean) {
+// Removes `key` and the line it sits on (with a comment after it), and
+// nothing else. A key added by setFlag comes out again byte for byte.
+export function removeKey(text: string, key: string, file = 'meta.yaml') {
+  const items = blockItems(text, file);
+  if (items === null) return text;
+  const pair = items.find((item) => isScalar(item.key) && item.key.value === key);
+  if (!pair) return text;
+  if (pair.value !== null && !isScalar(pair.value)) throw new MetaEditError(`${key} is not a value`);
+  const start = lineStart(text, (pair.key as Scalar).range?.[0] ?? 0);
+  const end = lineEnd(text, pair.value?.range[1] ?? (pair.key as Scalar).range?.[1] ?? start);
+  // The last line without a newline after it takes the newline before it.
+  const before = text[start - 2] === '\r' ? 2 : 1;
+  const next = end < text.length ? text.slice(0, start) + text.slice(end + 1) : text.slice(0, Math.max(0, start - before));
+  if (key in dataOf(next)) throw new MetaEditError(`could not remove ${key} from this ${file}: edit it by hand`);
+  return next;
+}
+
+function dataOf(text: string): Record<string, unknown> {
+  const data: unknown = parse(text);
+  return typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};
+}
+
+// The pairs of a block map, or null for an empty document.
+function blockItems(text: string, file: string) {
   const doc = parseDocument(text);
-  if (doc.errors.length > 0) throw new MetaEditError(`meta.yaml does not parse: ${doc.errors[0]?.message ?? ''}`);
-  const value = String(open);
+  if (doc.errors.length > 0) throw new MetaEditError(`${file} does not parse: ${doc.errors[0]?.message ?? ''}`);
+  if (doc.contents === null) return null;
+  if (!isMap(doc.contents) || doc.contents.flow) throw new MetaEditError(`${file} is not a block map`);
+  return doc.contents.items;
+}
+
+function writeFlag(text: string, key: string, flag: boolean, file: string) {
+  const value = String(flag);
   const eol = text.includes('\r\n') ? '\r\n' : '\n';
-  const line = `defaultOpen: ${value}`;
+  const line = `${key}: ${value}`;
   const append = () => `${text}${text === '' || text.endsWith('\n') ? '' : eol}${line}${text === '' || text.endsWith('\n') ? eol : ''}`;
-  if (doc.contents === null) return append();
-  if (!isMap(doc.contents) || doc.contents.flow) throw new MetaEditError('meta.yaml is not a block map');
-  const items = doc.contents.items;
-  const at = (key: string) => items.findIndex((item) => isScalar(item.key) && item.key.value === key);
-  const current = at('defaultOpen');
+  const items = blockItems(text, file);
+  if (items === null) return append();
+  const at = (name: string) => items.findIndex((item) => isScalar(item.key) && item.key.value === name);
+  const current = at(key);
   if (current !== -1) {
     const node = items[current].value;
-    if (node !== null && !isScalar(node)) throw new MetaEditError('defaultOpen is not a value');
-    // `defaultOpen:` with no value: write right after the colon, so the
-    // space before a comment that follows stays.
+    if (node !== null && !isScalar(node)) throw new MetaEditError(`${key} is not a value`);
+    // `key:` with no value: write right after the colon, so the space
+    // before a comment that follows stays.
     if (node === null || node.range[0] === node.range[1]) {
-      const key = items[current].key as Scalar;
-      const colon = text.indexOf(':', key.range?.[1] ?? 0) + 1;
+      const name = items[current].key as Scalar;
+      const colon = text.indexOf(':', name.range?.[1] ?? 0) + 1;
       return splice(text, [{ start: colon, end: colon, text: ` ${value}` }]);
     }
     return splice(text, [{ start: node.range[0], end: node.range[1], text: value }]);
@@ -181,9 +212,9 @@ function writeDefaultOpen(text: string, open: boolean) {
   }
   const next = title + 1;
   if (next === items.length) return append();
-  const key = items[next].key;
-  if (!isScalar(key)) throw new MetaEditError('meta.yaml has a key that is not a string');
-  const start = lineStart(text, key.range[0]);
+  const nextKey = items[next].key;
+  if (!isScalar(nextKey)) throw new MetaEditError(`${file} has a key that is not a string`);
+  const start = lineStart(text, nextKey.range[0]);
   return splice(text, [{ start, end: start, text: `${line}${eol}` }]);
 }
 
