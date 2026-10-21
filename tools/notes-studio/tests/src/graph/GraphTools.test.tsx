@@ -16,13 +16,13 @@ afterEach(cleanup);
 const decorations = decorationsPlugin(editorConfig.decorators);
 
 // GraphTools beside the editor, with the decorations NoteEditor adds.
-function Tools({ container }: { container: RefObject<HTMLElement | null> }) {
+function Tools({ container, graph }: { container: RefObject<HTMLElement | null>; graph?: unknown }) {
   useEditorPlugin(container, decorations);
-  return <GraphTools container={container} />;
+  return <GraphTools container={container} graph={graph} />;
 }
 
-async function mount(source: string, editable = true) {
-  const view = await mountVisual(source, { editable, extra: (container) => <Tools container={container} /> });
+async function mount(source: string, editable = true, graph?: unknown) {
+  const view = await mountVisual(source, { editable, extra: (container) => <Tools container={container} graph={graph} /> });
   // The toolbar registers after the live editor is up.
   await vi.waitFor(() => { expect(view.editor.state.plugins.some((plugin) => (plugin.spec.key as { key?: string } | undefined)?.key?.startsWith('studioGraph'))).toBe(true); });
   const select = (needle: string, nth = 0) => {
@@ -203,5 +203,55 @@ describe('GraphTools', () => {
     const dispatch = vi.fn();
     expect(graphCommand('Keyword')(view.editor.state, dispatch, view.editor.view)).toBe(false);
     expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('removes the marker at the caret from the bar, and only shows Remove on one', async () => {
+    const view = await mount('A <Tag id="fact" displayName="Fact">fact</Tag> and a term.\n');
+    view.select('term');
+    await screen.findByRole('toolbar', { name: 'Graph' });
+    expect(screen.queryByRole('button', { name: /^Remove/ })).toBeNull();
+    view.caret('fact', 2);
+    await view.press(/^Remove tag/);
+    await view.written('A fact and a term.\n');
+    expect(screen.queryByRole('button', { name: /^Remove/ })).toBeNull();
+  });
+
+  it('removes a graph node with its shortcut, not while an IME composes', async () => {
+    const view = await mount('### Hadoop Overview :graph-meta{id="hadoop" displayName="Hadoop"}\n\nText.\n');
+    view.caret('Overview', 2);
+    expect(await screen.findByRole('button', { name: /^Remove graph node/ })).toBeTruthy();
+    view.key('x', { ctrlKey: true, altKey: true, keyCode: 229 });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(view.markdown()).toBe('### Hadoop Overview :graph-meta{id="hadoop" displayName="Hadoop"}\n\nText.\n');
+    view.key('x', { ctrlKey: true, altKey: true });
+    await view.written('### Hadoop Overview\n\nText.\n');
+  });
+
+  it('removes from the fields without writing them', async () => {
+    const view = await mount('A <Keyword id="grain" displayName="Grain">grain</Keyword>.\n');
+    view.caret('grain', 2);
+    await view.press(/Edit keyword id/);
+    await screen.findByRole('dialog', { name: 'Keyword id' });
+    fireEvent.change(view.input('id'), { target: { value: 'not-saved' } });
+    const remove = screen.getByRole('button', { name: 'Remove keyword' });
+    // Enter on the button is the button's, not the form's save.
+    act(() => { fireEvent.keyDown(remove, { key: 'Enter' }); });
+    expect(view.markdown()).toBe('A <Keyword id="grain" displayName="Grain">grain</Keyword>.\n');
+    act(() => { fireEvent.click(remove); });
+    await view.written('A grain.\n');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('names the frontmatter entries that list the id, and leaves them', async () => {
+    const graph = { keywords: [{ id: 'grain', displayName: 'Grain' }], sections: [{ id: 's', displayName: 'S', keywords: [{ id: 'grain', displayName: 'Grain' }] }] };
+    const view = await mount('A <Keyword id="grain" displayName="Grain">grain</Keyword> and <Tag id="other" displayName="Other">other</Tag>.\n', true, graph);
+    view.caret('grain', 2);
+    const bar = await screen.findByRole('toolbar', { name: 'Graph' });
+    await vi.waitFor(() => { expect(bar.textContent).toContain('graph.keywords.0, graph.sections.0.keywords.0'); });
+    await view.press(/Edit keyword id/);
+    expect((await screen.findByRole('dialog')).textContent).toContain('graph.keywords.0');
+    act(() => { fireEvent.keyDown(view.input('id'), { key: 'Escape' }); });
+    view.caret('other', 2);
+    await vi.waitFor(() => { expect(screen.getByRole('toolbar', { name: 'Graph' }).textContent).not.toContain('graph.'); });
   });
 });

@@ -1,11 +1,12 @@
 import type { EditorView } from '@tiptap/pm/view';
-import { Highlighter, PencilLine, Sprout, Tag } from 'lucide-react';
+import { Eraser, Highlighter, PencilLine, Sprout, Tag, TriangleAlert } from 'lucide-react';
 import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditorPlugin } from '../editor/decorations';
 import { composing } from '../keyboard';
 import { useDock } from './dock';
 import { closeGraphFields, graphCommand, graphKey, graphPlugin, type GraphAction } from './graph-plugin';
+import { listedIn } from './listed';
 import { defaults, graphMetaTarget, markerAt, updateMarker, wrapRange, type Marker } from './markers';
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -17,11 +18,12 @@ function shortcut(key: string) {
 const LABELS: Record<Marker['kind'], string> = { Keyword: 'Keyword', Tag: 'Tag', GraphMeta: 'Graph node' };
 
 // The graph bar (wrap the selection as a Keyword or Tag, mark the heading
-// as a graph node, edit the marker there) and the fields of a marker's id
-// and displayName. The bar docks under the editor's own format bubble when
-// that sits under the selection (see dock.ts). Both live on the live editor
-// inside `container`, through the graph plugin.
-export function GraphTools({ container }: { container: RefObject<HTMLElement | null> }) {
+// as a graph node, edit or remove the marker there) and the fields of a
+// marker's id and displayName. The bar docks under the editor's own format
+// bubble when that sits under the selection (see dock.ts). Both live on the
+// live editor inside `container`, through the graph plugin. `graph` is the
+// note's graph frontmatter, to say where it lists the marker's id.
+export function GraphTools({ container, graph }: { container: RefObject<HTMLElement | null>; graph?: unknown }) {
   const [view, setView] = useState<EditorView | null>(null);
   const [, redraw] = useState(0);
   const plugin = useMemo(() => graphPlugin((next) => {
@@ -41,21 +43,23 @@ export function GraphTools({ container }: { container: RefObject<HTMLElement | n
   }, []);
 
   if (!view || view.isDestroyed || !view.editable) return null;
-  const graph = graphKey.getState(view.state);
-  if (!graph) return null;
-  const { marker, open, seq } = graph;
-  if (open !== null && marker) return <GraphFields key={seq} view={view} container={container} marker={marker} />;
+  const state = graphKey.getState(view.state);
+  if (!state) return null;
+  const { marker, open, seq } = state;
+  const listed = listedIn(graph, marker?.attrs.id ?? '');
+  if (open !== null && marker) return <GraphFields key={seq} view={view} container={container} marker={marker} listed={listed} />;
   if (!view.hasFocus() || view.composing) return null;
   const canWrap = wrapRange(view.state) !== null;
   const canMark = graphMetaTarget(view.state) !== null;
   if (!canWrap && !canMark && !marker) return null;
-  return <GraphBar view={view} container={container} marker={marker} canWrap={canWrap} canMark={canMark} />;
+  return <GraphBar view={view} container={container} marker={marker} listed={listed} canWrap={canWrap} canMark={canMark} />;
 }
 
-function GraphBar({ view, container, marker, canWrap, canMark }: {
+function GraphBar({ view, container, marker, listed, canWrap, canMark }: {
   view: EditorView;
   container: RefObject<HTMLElement | null>;
   marker: Marker | null;
+  listed: string[];
   canWrap: boolean;
   canMark: boolean;
 }) {
@@ -77,17 +81,24 @@ function GraphBar({ view, container, marker, canWrap, canMark }: {
       <BarButton icon={<Highlighter size={14} aria-hidden />} label="Keyword" keys="K" disabled={!canWrap} onRun={() => { run('Keyword'); }} />
       <BarButton icon={<Tag size={14} aria-hidden />} label="Tag" keys="T" disabled={!canWrap} onRun={() => { run('Tag'); }} />
       <BarButton icon={<Sprout size={14} aria-hidden />} label="Graph node" keys="G" disabled={!canMark} onRun={() => { run('GraphMeta'); }} />
-      {marker && <BarButton icon={<PencilLine size={14} aria-hidden />} label={`Edit ${LABELS[marker.kind].toLowerCase()} id`} onRun={() => { run('edit'); }} />}
+      {marker && (
+        <>
+          <BarButton icon={<PencilLine size={14} aria-hidden />} label={`Edit ${LABELS[marker.kind].toLowerCase()} id`} onRun={() => { run('edit'); }} />
+          <span className="studio-popup-separator" aria-hidden />
+          <BarButton icon={<Eraser size={14} aria-hidden />} label={`Remove ${LABELS[marker.kind].toLowerCase()}`} keys="X" quiet onRun={() => { run('remove'); }} />
+          <ListedNote id={marker.attrs.id} listed={listed} />
+        </>
+      )}
     </div>,
     document.body,
   );
 }
 
-function BarButton({ icon, label, keys, disabled, onRun }: { icon: ReactNode; label: string; keys?: string; disabled?: boolean; onRun: () => void }) {
+function BarButton({ icon, label, keys, disabled, quiet, onRun }: { icon: ReactNode; label: string; keys?: string; disabled?: boolean; quiet?: boolean; onRun: () => void }) {
   return (
     <button
       type="button"
-      className="studio-popup-button"
+      className={quiet ? 'studio-popup-button studio-popup-button-quiet' : 'studio-popup-button'}
       disabled={disabled}
       title={keys ? `${label} (${shortcut(keys)})` : label}
       // The editor keeps the focus and the selection.
@@ -103,11 +114,25 @@ function BarButton({ icon, label, keys, disabled, onRun }: { icon: ReactNode; la
   );
 }
 
+// Where the frontmatter lists the marker's id: removing the marker leaves
+// those entries as they are.
+function ListedNote({ id, listed }: { id: string | undefined; listed: string[] }) {
+  if (!id || listed.length === 0) return null;
+  return (
+    <div role="note" className="studio-popup-note">
+      <TriangleAlert size={12} aria-hidden />
+      <span>
+        id <code>{id}</code> is also listed in <code>{listed.join(', ')}</code>. Remove leaves the frontmatter as it is.
+      </span>
+    </div>
+  );
+}
+
 // A marker's id and displayName, and its text where it can be rewritten.
 // A new marker (no id yet) takes its id and displayName from the text until
 // they are edited. Enter or a click elsewhere writes them, Escape leaves
-// the marker as it is.
-function GraphFields({ view, container, marker }: { view: EditorView; container: RefObject<HTMLElement | null>; marker: Marker }) {
+// the marker as it is, Remove takes it off without writing them.
+function GraphFields({ view, container, marker, listed }: { view: EditorView; container: RefObject<HTMLElement | null>; marker: Marker; listed: string[] }) {
   const fresh = !marker.attrs.id;
   const [text, setText] = useState(marker.text);
   const [id, setId] = useState(marker.attrs.id ?? '');
@@ -132,6 +157,10 @@ function GraphFields({ view, container, marker }: { view: EditorView; container:
     view.focus();
   };
   const writeOnLeave = useEffectEvent(() => { close(true); });
+  const remove = () => {
+    if (!graphCommand('remove')(view.state, view.dispatch, view)) view.dispatch(closeGraphFields(view.state));
+    view.focus();
+  };
 
   useEffect(() => {
     first.current?.focus();
@@ -170,6 +199,8 @@ function GraphFields({ view, container, marker }: { view: EditorView; container:
           if (event.key === 'Enter') event.preventDefault();
           return;
         }
+        // Enter on a button is the button's.
+        if (event.key === 'Enter' && event.target instanceof HTMLButtonElement) return;
         if (event.key === 'Escape') {
           event.preventDefault();
           view.dispatch(closeGraphFields(view.state));
@@ -198,11 +229,17 @@ function GraphFields({ view, container, marker }: { view: EditorView; container:
         setId(values.id);
         setName(value);
       }, false)}
-      <div className="flex flex-wrap justify-between gap-2 text-[11px] text-[var(--fde-muted-foreground)]">
+      <ListedNote id={marker.attrs.id} listed={listed} />
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--fde-muted-foreground)]">
         <span>Enter saves · Esc closes</span>
-        <button type="button" className="font-medium text-[var(--color-graph-primary)]" onClick={() => { setFollow(true); }}>
-          Use defaults
-        </button>
+        <span className="flex gap-3">
+          <button type="button" className="font-medium hover:text-[var(--fde-warning)] focus-visible:text-[var(--fde-warning)]" onClick={remove}>
+            Remove {LABELS[marker.kind].toLowerCase()}
+          </button>
+          <button type="button" className="font-medium text-[var(--color-graph-primary)]" onClick={() => { setFollow(true); }}>
+            Use defaults
+          </button>
+        </span>
       </div>
     </form>,
     document.body,

@@ -229,12 +229,23 @@ Visual:
   marker as it is. A marker without an id (just inserted from `/`) opens
   them when the caret reaches it, and takes its id from the text as you
   type it.
+- **Remove keyword / tag / graph node** (`Mod-Alt-X`) on the bar, or Remove
+  at the foot of the fields, takes the marker at the caret off and keeps
+  what it marked: a keyword's text with its Markdown, a `:keyword[…]`
+  label as the text it reads as (its Markdown kept, its escapes written as
+  the editor writes that text), a heading's title without the space its
+  `:graph-meta` added. One undo puts it back. When the note's `graph`
+  frontmatter lists the marker's id (`graph.keywords`, `graph.sections`, a
+  section's `keywords`), the bar and the fields name those entries; Remove
+  leaves them.
 - Only the marker's own source changes. Keyword text with mixed formatting,
   or a `:keyword[…]` label with Markdown in it, is kept as it is; the fields
   then change only the id and displayName. A label typed in the fields is
   written with its Markdown and MDX characters escaped (`\*`, `` \` ``,
   `\[`, `\{`, `\<`), so the site shows it as typed. A value with both `"` and `'` is saved with its
-  `"` turned into `'`.
+  `"` turned into `'`. The rest of the marker's paragraph is written the
+  way the editor writes Markdown, as it is for any edit in Visual: wrapping
+  or removing a marker in `_a_ __b__ c` writes `*a* **b**`.
 
 ## Page tree
 
