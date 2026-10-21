@@ -2,6 +2,8 @@
 // server/tree/types.ts and server/tree/ops.ts; paths are relative to
 // content/notes.
 
+import { readJson } from './json';
+
 export type Hidden = 'unlisted' | 'visible-false';
 
 type Base = { id: string; entry: number | null };
@@ -47,7 +49,7 @@ export function createTreeClient(base = '') {
     async loadTree(): Promise<TreeFolder> {
       const response = await fetch(`${base}/api/tree`);
       if (!response.ok) return failed(response);
-      return ((await response.json()) as { tree: TreeFolder }).tree;
+      return (await readJson<{ tree: TreeFolder }>(response)).tree;
     },
 
     // Applies the change, or with `dryRun` only says what it would write.
@@ -58,7 +60,7 @@ export function createTreeClient(base = '') {
         body: JSON.stringify({ ...request, dryRun }),
       });
       if (!response.ok) return failed(response);
-      return (await response.json()) as TreeAnswer;
+      return readJson<TreeAnswer>(response);
     },
   };
 }

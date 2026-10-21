@@ -238,7 +238,7 @@
     background: var(--fde-card);
   }
   .studio-notes {
-    width: 268px;
+    width: 284px;
     flex: none;
     border-right: 1px solid var(--fde-border);
   }
@@ -324,12 +324,24 @@
   .studio-icon-button:hover {
     color: var(--fde-foreground);
   }
+  /* Spacing follows the site's sidebar (fumadocs-ui): 34px rows, 14px text,
+     16px icons 8px from the label, a guide line per nested level. */
+  .studio-tree-group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .studio-tree-nested {
+    margin: 2px 0 0 12px;
+    padding-left: 8px;
+    border-left: 1px solid var(--fde-border);
+  }
   .studio-tree-row {
     display: flex;
     align-items: center;
-    gap: 3px;
-    min-height: 28px;
-    padding-right: 2px;
+    gap: 4px;
+    min-height: 34px;
+    padding: 0 2px 0 4px;
     border-radius: 6px;
   }
   .studio-tree-row:hover,
@@ -365,12 +377,12 @@
   .studio-tree-label {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     min-width: 0;
     flex: 1;
-    padding: 4px 2px;
+    padding: 6px 2px;
     text-align: left;
-    font-size: 13px;
+    font-size: 14px;
   }
   .studio-tree-label svg {
     flex: none;

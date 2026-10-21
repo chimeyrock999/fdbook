@@ -57,8 +57,20 @@ describe('PageTree', () => {
     const badges = screen.getAllByText('hidden');
     expect(badges.map((badge) => badge.closest('.studio-tree-row')?.textContent)).toEqual([expect.stringContaining('Draft'), expect.stringContaining('Old')]);
     expect(screen.getByTitle(/No meta.yaml lists it/)).toBeTruthy();
-    // `Old` is closed by default (defaultOpen: false); opening it shows its pages.
+    // `Old` is closed until opened; Guide is open because the open note is in it.
     expect(screen.queryByRole('button', { name: 'X' })).toBeNull();
+  });
+
+  it("starts folders closed whatever meta.yaml's defaultOpen says", async () => {
+    const { client } = fakeClient(() => ({ changes: [], open: null }));
+    // Guide says defaultOpen: true, but that is the site sidebar's setting.
+    render(<PageTree root={root} client={client} active={null} onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Expand Guide' }).getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('button', { name: 'One' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Expand Guide' }));
+    expect(screen.getByRole('button', { name: 'One' })).toBeTruthy();
+    // Its child level hangs off a guide line.
+    expect(screen.getByRole('button', { name: 'One' }).closest('ul')?.className).toContain('studio-tree-nested');
   });
 
   it('opens notes and folders', async () => {
