@@ -20,10 +20,12 @@ runs TypeScript directly).
 (`npm run dev` at the repo root, `http://localhost:3000` unless
 `STUDIO_SITE_URL` says otherwise). The Studio does not start the site (#43).
 
-The Studio replaces the Chimey Notes Obsidian plugin, removed in #15. Its
-checks live on in Lint and its component snippets in the `/` menu; inserting
-Keyword, Tag and GraphMeta markers is #42, creating pages and editing
-`meta.yaml` come with the page tree (#11).
+The Studio replaces the Chimey Notes Obsidian plugin, removed in #44. Its
+checks that the site gets wrong live on in Lint, and its JSX snippets in the
+`/` menu; inserting graph markers, directive blocks and `<YouTube>` is #42,
+creating pages and editing `meta.yaml` come with the page tree (#11). A
+checkout that built the plugin keeps its untracked `obsidian-plugin/`
+(`node_modules`, `dist`) after pulling; remove it with `rm -rf obsidian-plugin`.
 
 ## Layout
 
