@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createFilesClient } from './api/files';
 import { createLintClient } from './api/lint';
 import { NoteEditor } from './editor/NoteEditor';
+import { useAssets } from './media/useAssets';
 import { NoteGate } from './notes/NoteGate';
 import { NoteList } from './notes/NoteList';
 import { noteFromUrl, syncPath } from './notes/notes';
@@ -11,6 +12,7 @@ export function App() {
   const files = useMemo(() => createFilesClient(), []);
   const lint = useMemo(() => createLintClient(), []);
   const { notes, error } = useNotes(files);
+  const assets = useAssets(files);
   const [active, setActive] = useState(() => noteFromUrl(window.location.search));
   const [drawer, setDrawer] = useState<'notes' | 'panel' | null>(null);
 
@@ -57,6 +59,7 @@ export function App() {
               key={active}
               path={syncPath(active)}
               files={files}
+              assets={assets}
               lint={lint}
               panelOpen={drawer === 'panel'}
               onOpenPanel={() => { setDrawer('panel'); }}

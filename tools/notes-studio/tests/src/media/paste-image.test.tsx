@@ -1,0 +1,89 @@
+// @vitest-environment jsdom
+import { MdxEditor, type MdxEditorRef } from '@fumadocs-editor/ui';
+import { createRef } from 'react';
+import { act, cleanup, render } from '@testing-library/react';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { lintNote } from '../../../server/lint/lint';
+import type { createFilesClient } from '../../../src/api/files';
+import { createAssetMedia } from '../../../src/media/asset-media';
+import { editorConfig } from '../../../src/plugins';
+import { defined } from '../../support/editor-state';
+
+const NOTE = 'content/notes/data-modeling/index.mdx';
+
+// A pasted image end to end in the live editor: its paste handler, the media
+// provider, the Markdown the editor writes, and the site lint that checks the
+// asset exists. The save itself goes to a recording file client here (jsdom
+// cannot host the Studio server); asset-media.test.ts saves through it.
+describe('pasting an image into the editor', () => {
+  // jsdom has neither; the editor asks about touch input and sizes menus.
+  beforeAll(() => {
+    vi.stubGlobal('ResizeObserver', class {
+      observe = () => undefined;
+      unobserve = () => undefined;
+      disconnect = () => undefined;
+    });
+    vi.stubGlobal('matchMedia', (media: string) => ({ matches: false, media, addEventListener: () => undefined, removeEventListener: () => undefined }));
+  });
+
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterEach(cleanup);
+
+  it('saves it in the page folder and writes a site path the lint accepts', async () => {
+    const written = new Map<string, Blob>();
+    const files = {
+      writeAsset: (path: string, data: Blob) => {
+        written.set(path, data);
+        return Promise.resolve(1);
+      },
+    } as unknown as ReturnType<typeof createFilesClient>;
+    const media = createAssetMedia({
+      files,
+      notePath: NOTE,
+      askName: () => Promise.resolve('warehouse-layers'),
+      notify: () => undefined,
+    });
+    const ref = createRef<MdxEditorRef>();
+    const { container } = render(
+      <MdxEditor.Root
+        defaultValue={'# Data modeling\n\nIntro.\n'}
+        ref={ref}
+        components={editorConfig.components}
+        syntax={editorConfig.syntax}
+        media={media}
+      >
+        <MdxEditor.Visual />
+      </MdxEditor.Root>,
+    );
+    const prose = await vi.waitFor(() => {
+      // The live editor, once it replaced the static first paint.
+      const found = defined(container.querySelector<HTMLElement>('.ProseMirror[contenteditable="true"]'), 'editor');
+      expect(found.textContent).toContain('Intro.');
+      return found;
+    }, { timeout: 3000 });
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'image.png', { type: 'image/png' });
+    const paste = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, 'clipboardData', { value: { files: [file], items: [], types: ['Files'], getData: () => '' } });
+    act(() => { prose.dispatchEvent(paste); });
+
+    const source = await vi.waitFor(() => {
+      const markdown = defined(ref.current).getMarkdown();
+      expect(markdown).toContain('(/notes/data-modeling/warehouse-layers.png)');
+      return markdown;
+    }, { timeout: 3000 });
+    expect(source).toMatch(/!\[image\]\(\/notes\/data-modeling\/warehouse-layers\.png\)/);
+    expect([...written.keys()]).toEqual(['public/notes/data-modeling/warehouse-layers.png']);
+    // The image shows through the file API, not as a broken /notes/… URL.
+    const img = await vi.waitFor(() => defined(container.querySelector('img[src]'), 'img'));
+    expect(img.getAttribute('src')).toBe('/api/file?path=public%2Fnotes%2Fdata-modeling%2Fwarehouse-layers.png');
+    const lint = (exists: boolean) =>
+      lintNote(source, { path: 'data-modeling/index.mdx', pages: new Set(['data-modeling/index.mdx']), assetExists: (asset) => exists && written.has(`public/${asset}`) })
+        .filter((issue) => issue.rule === 'asset-missing');
+    expect(lint(true)).toEqual([]);
+    // The rule does look at this image.
+    expect(lint(false)).toHaveLength(1);
+  });
+});

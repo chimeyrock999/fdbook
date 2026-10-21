@@ -7,6 +7,7 @@ import {
   type FrontmatterData,
   type FrontmatterIssue,
 } from './frontmatter';
+import { slugify } from '../slug';
 
 type Graph = NonNullable<NotesPageFrontmatter['graph']>;
 type Keyword = NonNullable<Graph['keywords']>[number];
@@ -208,16 +209,6 @@ export function FrontmatterForm({
 const RETRY_MS = 2000;
 
 const KNOWN = /^(title|description|visible|graph\..+)$/;
-
-function slugify(text: string) {
-  return text
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/đ/gi, 'd')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
 
 function Panel({ children }: { children: ReactNode }) {
   return (

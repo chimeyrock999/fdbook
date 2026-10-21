@@ -1,11 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '../http.ts';
+import { MAX_ASSET_BYTES } from '../security/asset-types.ts';
 import { ASSET_TYPES, extensionOf, resolveWorktreePath, type PathKind } from '../security/paths.ts';
 import { createKeyedLock, listEditableFiles, statOrNull, writeAtomic } from './store.ts';
 
 const MAX_TEXT_BYTES = 5 * 1024 * 1024;
-const MAX_ASSET_BYTES = 25 * 1024 * 1024;
 
 type Write = { data: string | Buffer; baseMtime: number | null };
 
