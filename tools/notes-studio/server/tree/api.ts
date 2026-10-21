@@ -27,7 +27,7 @@ export function createTreeApi(root: string, lock = createKeyedLock()): Handler {
       case 'move':
         return planMove(root, tree, { folder, from: body.from, to: body.to, baseMtime: body.baseMtime });
       case 'set-open':
-        return planSetOpen(root, tree, { folder, defaultOpen: body.defaultOpen, baseMtime: body.baseMtime });
+        return planSetOpen(root, tree, { folder: body.folder, defaultOpen: body.defaultOpen, baseMtime: body.baseMtime });
       default:
         throw new HttpError(400, 'op must be create, rename, move or set-open');
     }

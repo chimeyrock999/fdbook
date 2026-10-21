@@ -96,6 +96,15 @@ describe('meta.yaml edits', () => {
     expect(setDefaultOpen('', true)).toBe('defaultOpen: true\n');
   });
 
+  it('keeps comments where they are, an empty value a pair, and CRLF line ends', () => {
+    expect(setDefaultOpen('title: X\n\n# the order\npages: []\n', false)).toBe('title: X\ndefaultOpen: false\n\n# the order\npages: []\n');
+    expect(setDefaultOpen('title: X\ndefaultOpen:\npages: []\n', false)).toBe('title: X\ndefaultOpen: false\npages: []\n');
+    expect(setDefaultOpen('title: X\r\npages: []\r\n', true)).toBe('title: X\r\ndefaultOpen: true\r\npages: []\r\n');
+    expect(setDefaultOpen('title: X\r\n', true)).toBe('title: X\r\ndefaultOpen: true\r\n');
+    // A block title: the line goes before the next key.
+    expect(setDefaultOpen('title: |\n  Long\n  name\npages: []\n', true)).toBe('title: |\n  Long\n  name\ndefaultOpen: true\npages: []\n');
+  });
+
   it('refuses a meta.yaml it cannot edit by line', () => {
     expect(() => setDefaultOpen('pages: [a\n', true)).toThrow('does not parse');
     expect(() => setDefaultOpen('{ title: X }\n', true)).toThrow('not a block map');

@@ -135,7 +135,10 @@ export function CreateDialog({ client, parent, after, onDone, onClose }: {
   const submit = () => {
     if (request === null) return;
     client.change(request).then(
-      (answer) => { onDone(answer.open === null ? { folder: parent.path === '' ? finalSlug : `${parent.path}/${finalSlug}` } : { open: answer.open }); },
+      (answer) => {
+        // A plain folder has no note to open; it is where the request put it.
+        onDone(kind === 'folder' || answer.open === null ? { folder: parent.path === '' ? finalSlug : `${parent.path}/${finalSlug}` } : { open: answer.open });
+      },
       (reason: unknown) => { setFailed(reason instanceof Error ? reason.message : String(reason)); },
     );
   };

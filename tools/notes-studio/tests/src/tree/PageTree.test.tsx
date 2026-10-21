@@ -188,6 +188,27 @@ describe('PageTree', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Raft' }));
   });
 
+  it('does not move focus later when the filter hides the new folder', async () => {
+    const { client } = fakeClient(() => ({ changes: [{ type: 'add', path: 'raft/meta.yaml' }], open: null }));
+    const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+    const { rerender } = render(<PageTree root={root} {...props} />);
+    await userEvent.type(screen.getByLabelText('Filter notes'), 'guide');
+    await userEvent.click(screen.getByRole('button', { name: 'New page' }));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('radio', { name: /meta\.yaml/ }));
+    await userEvent.type(within(dialog).getByLabelText('Title'), 'Raft');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await screen.findByRole('status');
+    const raft: TreeFolder = { ...(root.children[3] as TreeFolder), id: 'folder:raft', path: 'raft', title: 'Raft', meta: 'raft/meta.yaml', hidden: null, children: [] };
+    const next = { ...root, children: [...root.children, raft] };
+    rerender(<PageTree root={next} {...props} />);
+    await userEvent.clear(screen.getByLabelText('Filter notes'));
+    screen.getByRole('button', { name: 'Guide' }).focus();
+    // Any later reload: the reveal was spent on the tree that held the folder.
+    rerender(<PageTree root={{ ...next }} {...props} />);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Guide' }));
+  });
+
   it('creates a folder page open by default when asked', async () => {
     const { change } = setup((_request, dryRun) => ({ changes: [{ type: 'add', path: 'raft/index.mdx' }], open: dryRun ? null : 'raft/index.mdx' }));
     await userEvent.click(screen.getByRole('button', { name: 'New page' }));

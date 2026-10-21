@@ -145,6 +145,8 @@ describe('tree API', () => {
       expect(await exists('data-modeling/meta.yaml')).toBe(false);
       expect((await post({ op: 'set-open', folder: '', defaultOpen: true, baseMtime: await mtime('meta.yaml') })).status).toBe(400);
       expect((await post({ op: 'set-open', folder: 'nowhere', defaultOpen: true, baseMtime: null })).status).toBe(404);
+      const missing = await post({ op: 'set-open', defaultOpen: true, baseMtime: null });
+      expect([missing.status, (json(missing) as { error: string }).error]).toEqual([400, 'folder must be a folder path']);
       expect((await post({ op: 'set-open', folder: 'data-platform', defaultOpen: 'yes', baseMtime: await mtime('data-platform/meta.yaml') })).status).toBe(400);
     });
   });

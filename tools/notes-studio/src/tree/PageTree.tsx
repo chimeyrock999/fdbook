@@ -1,10 +1,9 @@
 import { ArrowDown, ArrowUp, Check, ChevronRight, ExternalLink, EyeOff, FileText, Folder, GripVertical, Lock, MoreHorizontal, Pencil, Plus, TriangleAlert } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { createElement, useEffect, useRef, useState, type DragEvent } from 'react';
 import type { TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
 import { iconOf, useNoteIcons, type Icons } from '../frontmatter/note-icons';
 import { CreateDialog, RenameDialog } from './TreeDialogs';
-import { dropIndex, filterTree, movable, noteOf, renamedPath, stepIndex, titleOf } from './tree';
+import { dropIndex, filterTree, folderAt, movable, noteOf, renamedPath, stepIndex, titleOf } from './tree';
 import { useOpenFolders } from './useOpenFolders';
 
 type Named = Extract<TreeNode, { kind: 'page' | 'folder' }>;
@@ -26,7 +25,6 @@ function said(changes: TreeChange[]) {
   if (changes.length === 0) return 'Nothing to change.';
   const first = changes[0];
   if (first.type === 'add' && first.path.endsWith('meta.yaml')) return `Created ${first.path} with the new order.`;
-  if (first.type === 'change' && first.detail.startsWith('defaultOpen')) return `Saved ${first.detail} in ${first.path}.`;
   if (first.type === 'change') return `Saved the order in ${first.path}.`;
   return 'Saved.';
 }
@@ -47,12 +45,6 @@ type View = {
   onDrop: (event: DragEvent, node: TreeNode, parent: TreeFolder) => void;
   openMenu: (menu: Menu) => void;
 };
-
-// The icon the site's sidebar shows, or Folder / FileText when it sets
-// none, names one the site does not know, or the icons have not loaded.
-function RowIcon({ icon: Icon }: { icon: LucideIcon }) {
-  return <Icon size={16} aria-hidden="true" />;
-}
 
 function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; dim: boolean; view: View }) {
   const { active, icons, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu } = view;
@@ -104,7 +96,7 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
           </span>
         ) : (
           <button type="button" className="studio-tree-label" title={node.path} onClick={select}>
-            <RowIcon icon={iconOf(icons, node.icon ?? '') ?? (node.kind === 'folder' ? Folder : FileText)} />
+            {createElement(iconOf(icons, node.icon ?? '') ?? (node.kind === 'folder' ? Folder : FileText), { size: 16, 'aria-hidden': true })}
             <span className="truncate">{node.title}</span>
           </button>
         )}
@@ -169,16 +161,16 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
   const menuRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   // A plain folder just created: its row takes focus once the reloaded tree
-  // shows it, so its menu (New page here) is at hand.
-  const [reveal, setReveal] = useState<string | null>(null);
+  // holds it, so its menu (New page here) is at hand. Only that once: a
+  // row the filter hides then stays unfocused.
+  const reveal = useRef<string | null>(null);
 
   useEffect(() => {
-    if (reveal === null) return;
-    const label = [...(navRef.current?.querySelectorAll<HTMLElement>('.studio-tree-label') ?? [])].find((each) => each.title === reveal);
-    if (!label) return;
-    label.focus();
-    setReveal(null);
-  }, [root, reveal]);
+    if (reveal.current === null || !root || !folderAt(root, reveal.current)) return;
+    const path = reveal.current;
+    reveal.current = null;
+    [...(navRef.current?.querySelectorAll<HTMLElement>('.studio-tree-label') ?? [])].find((each) => each.title === path)?.focus();
+  }, [root]);
 
   useEffect(() => {
     if (!menu) return;
@@ -195,18 +187,20 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
   }, [menu]);
 
   // A change from the row menu, reported in the status line.
-  const send = (request: TreeRequest) => {
+  const send = (request: TreeRequest, report: (changes: TreeChange[]) => string) => {
     setMenu(null);
     client.change(request).then(
-      (answer) => { setStatus({ text: said(answer.changes), error: false }); },
+      (answer) => { setStatus({ text: report(answer.changes), error: false }); },
       (reason: unknown) => { setStatus({ text: reason instanceof Error ? reason.message : String(reason), error: true }); },
     ).finally(onChanged);
   };
 
   const move = (parent: TreeFolder, node: TreeNode, to: number | null) => {
-    setMenu(null);
-    if (to === null || node.entry === null) return;
-    send({ op: 'move', folder: parent.path, from: node.entry, to, baseMtime: parent.metaMtime });
+    if (to === null || node.entry === null) {
+      setMenu(null);
+      return;
+    }
+    send({ op: 'move', folder: parent.path, from: node.entry, to, baseMtime: parent.metaMtime }, said);
   };
 
   if (!root) return <p className="px-3 py-2 text-[12.5px] text-[var(--fde-muted-foreground)]">Loading notes…</p>;
@@ -287,7 +281,11 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
                 role="menuitemcheckbox"
                 aria-checked={menuNode.defaultOpen}
                 disabled={menuNode.meta === null}
-                onClick={() => { send({ op: 'set-open', folder: menuNode.path, defaultOpen: !menuNode.defaultOpen, baseMtime: menuNode.metaMtime }); }}
+                onClick={() => {
+                  const defaultOpen = !menuNode.defaultOpen;
+                  send({ op: 'set-open', folder: menuNode.path, defaultOpen, baseMtime: menuNode.metaMtime }, (changes) =>
+                    changes.length === 0 ? 'Nothing to change.' : `Saved defaultOpen: ${String(defaultOpen)} in ${menuNode.meta ?? 'meta.yaml'}.`);
+                }}
               >
                 <span className="studio-menu-check">{menuNode.defaultOpen && <Check size={14} />}</span> Open by default on the site
               </button>
@@ -320,7 +318,7 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
               onOpen(created.open);
             } else {
               openFolder({ id: `folder:${created.folder}` });
-              setReveal(created.folder);
+              reveal.current = created.folder;
               setStatus({ text: `Created ${created.folder}/.`, error: false });
             }
           }}

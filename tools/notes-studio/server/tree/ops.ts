@@ -132,11 +132,12 @@ export async function planCreate(root: string, tree: TreeFolder, request: Create
   };
 }
 
-export type SetOpenRequest = { folder: string; defaultOpen: unknown; baseMtime: unknown };
+export type SetOpenRequest = { folder: unknown; defaultOpen: unknown; baseMtime: unknown };
 
 // Sets `defaultOpen` in the folder's meta.yaml, which it must have: the
 // site's root folder has no open state.
 export async function planSetOpen(root: string, tree: TreeFolder, request: SetOpenRequest): Promise<Plan> {
+  if (typeof request.folder !== 'string') throw new HttpError(400, 'folder must be a folder path');
   if (request.folder === '') throw new HttpError(400, 'the root folder is always open');
   const folder = findFolder(tree, request.folder);
   if (typeof request.defaultOpen !== 'boolean') throw new HttpError(400, 'defaultOpen must be true or false');

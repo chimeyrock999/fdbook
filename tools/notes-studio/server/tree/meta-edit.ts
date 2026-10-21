@@ -134,29 +134,46 @@ export function metaTemplate(title: string, pages: string[], open = false) {
 }
 
 // Sets `defaultOpen`: its value is replaced where it is, keeping a comment
-// after it, or a line is added after `title` (first when there is none).
+// after it, or a line is added right after `title` (before the next key
+// when the title is a block scalar; first when there is no title). New
+// lines end like the file's.
 export function setDefaultOpen(text: string, open: boolean) {
   const doc = parseDocument(text);
   if (doc.errors.length > 0) throw new MetaEditError(`meta.yaml does not parse: ${doc.errors[0]?.message ?? ''}`);
   const value = String(open);
-  if (doc.contents === null) return `${text}${text === '' || text.endsWith('\n') ? '' : '\n'}defaultOpen: ${value}\n`;
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const line = `defaultOpen: ${value}`;
+  const append = () => `${text}${text === '' || text.endsWith('\n') ? '' : eol}${line}${text === '' || text.endsWith('\n') ? eol : ''}`;
+  if (doc.contents === null) return append();
   if (!isMap(doc.contents) || doc.contents.flow) throw new MetaEditError('meta.yaml is not a block map');
   const items = doc.contents.items;
   const at = (key: string) => items.findIndex((item) => isScalar(item.key) && item.key.value === key);
   const current = at('defaultOpen');
   if (current !== -1) {
     const node = items[current].value;
-    if (!isScalar(node)) throw new MetaEditError('defaultOpen is not a value');
-    const [start, end] = node.range;
-    return splice(text, [{ start, end, text: value }]);
+    if (node !== null && !isScalar(node)) throw new MetaEditError('defaultOpen is not a value');
+    // `defaultOpen:` with no value: write after the key, with its space.
+    if (node === null || node.range[0] === node.range[1]) {
+      const key = items[current].key as Scalar;
+      const colon = text.indexOf(':', key.range?.[1] ?? 0) + 1;
+      return splice(text, [{ start: colon, end: node?.range[1] ?? colon, text: ` ${value}` }]);
+    }
+    return splice(text, [{ start: node.range[0], end: node.range[1], text: value }]);
   }
-  const line = `defaultOpen: ${value}`;
-  const next = at('title') + 1;
-  if (next === items.length) return `${text}${text.endsWith('\n') ? '' : '\n'}${line}${text.endsWith('\n') ? '\n' : ''}`;
+  const title = at('title');
+  const titleValue = title === -1 ? null : items[title].value;
+  if (isScalar(titleValue) && titleValue.type !== Scalar.BLOCK_LITERAL && titleValue.type !== Scalar.BLOCK_FOLDED) {
+    const end = lineEnd(text, titleValue.range[1]);
+    const place = text[end - 1] === '\r' ? end - 1 : end;
+    if (place === text.length) return append();
+    return splice(text, [{ start: place, end: place, text: `${eol}${line}` }]);
+  }
+  const next = title + 1;
+  if (next === items.length) return append();
   const key = items[next].key;
   if (!isScalar(key)) throw new MetaEditError('meta.yaml has a key that is not a string');
   const start = lineStart(text, key.range[0]);
-  return splice(text, [{ start, end: start, text: `${line}\n` }]);
+  return splice(text, [{ start, end: start, text: `${line}${eol}` }]);
 }
 
 // A meta.yaml that only orders the folder's pages.
