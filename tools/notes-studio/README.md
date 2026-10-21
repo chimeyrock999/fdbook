@@ -20,7 +20,8 @@ After a pull, run `npm install` (and `npm run studio:install` when this
 package changed) and restart the Studio: the server keeps the code it started
 with. It refuses to start when a direct dependency, at the root or here, is
 missing or installed at another version than its `package-lock.json` pins,
-and names the packages and the command (`server/deps.ts`). A pull without a
+and names the command and the packages (`server/deps.ts`); `npm test` stops
+the same way. A package put in place with `npm link` is skipped. A pull without a
 reinstall once left fumadocs-core 16.8.11 in place, where every page tree
 folder got the same id.
 

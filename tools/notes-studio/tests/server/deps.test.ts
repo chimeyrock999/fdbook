@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { driftedPackages } from '../../server/deps';
+import { driftedPackages, installProblem } from '../../server/deps';
 
 describe('installed packages against the lockfile', () => {
   const dirs: string[] = [];
@@ -50,5 +50,33 @@ describe('installed packages against the lockfile', () => {
     const bare = await mkdtemp(join(tmpdir(), 'studio-deps-'));
     dirs.push(bare);
     expect(driftedPackages(bare)).toEqual([]);
+  });
+
+  it('skips a package linked on purpose with npm link', async () => {
+    const dir = await checkout({ 'fumadocs-editor': { locked: '0.3.0', installed: null }, zod: { locked: '4.1.0', installed: '4.0.0' } });
+    // npm link: a symlink to a local clone at another version, lockfile untouched.
+    const clone = await mkdtemp(join(tmpdir(), 'studio-deps-clone-'));
+    dirs.push(clone);
+    await writeFile(join(clone, 'package.json'), JSON.stringify({ name: 'fumadocs-editor', version: '0.9.9' }));
+    await mkdir(join(dir, 'node_modules'), { recursive: true });
+    await symlink(clone, join(dir, 'node_modules', 'fumadocs-editor'), 'dir');
+    expect(driftedPackages(dir)).toEqual(['zod 4.0.0 (lockfile 4.1.0)']);
+  });
+
+  it('puts the commands first and names at most five packages', async () => {
+    const empty = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`pkg-${String(i)}`, { locked: '1.0.0', installed: null }]));
+    const root = await checkout(empty);
+    const studio = await checkout({ vite: { locked: '8.3.4', installed: '8.3.4' } });
+    expect(installProblem([{ dir: studio, command: 'npm run studio:install' }])).toBeNull();
+    expect(
+      installProblem([
+        { dir: root, command: 'npm install' },
+        { dir: studio, command: 'npm run studio:install' },
+      ]),
+    ).toBe(
+      'Notes Studio dependencies do not match the lockfiles. Run `npm install` from the repo root. ' +
+        'Not as pinned: pkg-0 missing (lockfile 1.0.0), pkg-1 missing (lockfile 1.0.0), pkg-2 missing (lockfile 1.0.0), ' +
+        'pkg-3 missing (lockfile 1.0.0), pkg-4 missing (lockfile 1.0.0) and 3 more.',
+    );
   });
 });

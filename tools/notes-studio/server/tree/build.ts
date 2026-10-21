@@ -101,12 +101,15 @@ function convertNode(context: Context, node: PageTree.Node, folder: string): Tre
 
 // A folder's path. Without one every folder would share the empty path and
 // id, and so its open state. fumadocs-core before 16.17 gave folders a meta
-// path string as `$ref` (server/deps.ts stops the Studio on such an install).
+// path string as `$ref`, and none at all to a folder without meta.yaml
+// (server/deps.ts stops the Studio on such an install).
+const OLD_FUMADOCS = 'fumadocs-core is older than the site requires (run `npm install` from the repo root)';
+
 function folderPath(folder: PageTree.Folder): string {
   const ref: unknown = folder.$ref;
   if (typeof ref === 'object' && ref !== null && typeof (ref as { folder?: unknown }).folder === 'string') return (ref as { folder: string }).folder;
-  if (typeof ref === 'string') throw new Error('fumadocs-core is older than the site requires: run `npm install` from the repo root.');
-  throw new Error(`a page tree folder (${nameOf(folder)}) has no $ref.folder: the loader must keep refs`);
+  if (typeof ref === 'string') throw new Error(`${OLD_FUMADOCS}.`);
+  throw new Error(`a page tree folder (${nameOf(folder)}) has no $ref.folder: either ${OLD_FUMADOCS}, or the loader drops refs.`);
 }
 
 function convertFolder(context: Context, node: PageTree.Folder | PageTree.Root, path: string): TreeFolder {
