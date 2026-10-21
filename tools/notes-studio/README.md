@@ -21,9 +21,9 @@ runs TypeScript directly).
 `STUDIO_SITE_URL` says otherwise). The Studio does not start the site (#43).
 
 The Studio replaces the Chimey Notes Obsidian plugin, removed in #44. Its
-checks that the site gets wrong live on in Lint, and its JSX snippets in the
-`/` menu; inserting graph markers, directive blocks and `<YouTube>` is #42,
-creating pages and editing `meta.yaml` come with the page tree (#11). A
+checks that the site gets wrong live on in Lint, its JSX snippets, graph
+markers and directive blocks in the `/` menu and the graph bar (see Graph
+markers), creating pages and editing `meta.yaml` come with the page tree (#11). A
 checkout that built the plugin keeps its untracked `obsidian-plugin/`
 (`node_modules`, `dist`) after pulling; remove it with `rm -rf obsidian-plugin`.
 
@@ -54,6 +54,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     Images below).
   - `notes/` is the check that a note can be opened.
   - `tree/` is the page tree in the left panel and its dialogs.
+  - `graph/` wraps text as graph markers and edits their ids (see Graph
+    markers).
   - `plugins/` holds the editor plugins (see below).
 - `tests/`: laid out like `server/` and `src/`. `tests/support/` holds the
   fixtures: a throwaway worktree, a Studio on a free port, and raw HTTP and
@@ -138,6 +140,36 @@ through the notes sync socket:
   components draw with (`--garden-*`, `--color-graph-*`, `--color-callout-*`);
   a test fails when they drift. `src/notes-prose.css` copies the note page's
   prose rules (`app/notes/notes.module.css`).
+
+## Graph markers
+
+The graph markup of `components/graph-objects.tsx` is inserted and edited in
+Visual:
+
+- The `/` menu inserts a Keyword or Tag (`<Keyword id="" displayName="">`),
+  a Graph heading (`### Title :graph-meta{…}`) and the site's directive
+  blocks: accordions, tabs, steps and `::youtube`, next to the JSX
+  components (`<YouTube>` among them).
+- Select text and the graph bar under it wraps it as a **Keyword**
+  (`Mod-Alt-K`) or **Tag** (`Mod-Alt-T`). With the caret in a heading,
+  **Graph node** (`Mod-Alt-G`) adds `:graph-meta{…}` from its title. Some
+  systems take a shortcut before the page sees it (`Ctrl-Alt-T` opens a
+  terminal on GNOME, `Cmd-Opt-K` the Firefox console on macOS); the bar
+  buttons work everywhere.
+- The id is slugged from the text (Vietnamese marks dropped, `đ` → `d`) and
+  the displayName is the text. The fields open right after, and again from
+  **Edit … id** on the bar (caret in a keyword or a marked heading) or a
+  click on a graph node marker or a `:keyword[…]` label. Change the text, id
+  or displayName; Enter or a click elsewhere writes them, Escape leaves the
+  marker as it is. A marker without an id (just inserted from `/`) opens
+  them when the caret reaches it, and takes its id from the text as you
+  type it.
+- Only the marker's own source changes. Keyword text with mixed formatting,
+  or a `:keyword[…]` label with Markdown in it, is kept as it is; the fields
+  then change only the id and displayName. A label typed in the fields is
+  written with its Markdown and MDX characters escaped (`\*`, `` \` ``,
+  `\[`, `\{`, `\<`), so the site shows it as typed. A value with both `"` and `'` is saved with its
+  `"` turned into `'`.
 
 ## Page tree
 
@@ -315,6 +347,13 @@ Plugins today:
   (the body opens as MDX source and is written back as typing pauses, like
   any other edit) and `::youtube` as a card. The MDX button shows the
   block's source.
+- `site-inserts`: the `/` menu items for graph markers and directive
+  blocks. The menu lists components, so each is a spec named
+  `studio-insert-…` whose `insert` returns the site's syntax instead of a
+  node of its own; no note has such a tag, and
+  `tests/src/plugins/site-inserts.test.ts` checks that none parses.
+- `youtube`: `<YouTube>` as the same card as `::youtube`, its title edited in
+  place and its url in the props panel.
 - `fumadocs-ui`: Cards, Steps, Tabs and Accordions.
 - `html-embed` and `svg-diagram`: cards. `SvgDiagram` shows its inline
   `svg` (as an image, so no script runs) or else a file under `public/notes`

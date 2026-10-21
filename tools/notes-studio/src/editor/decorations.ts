@@ -24,16 +24,18 @@ type LiveEditor = {
 };
 
 // MdxEditor.Root takes no extra extensions, so the plugin goes onto the live
-// editor itself. TipTap leaves it on its ProseMirror root as `dom.editor`.
-// The Visual surface paints a static copy first and swaps the editor in
-// later, and a Source/Visual switch replaces it, so this keeps watching.
+// editor itself (it needs a key, to be taken off again). TipTap leaves it on
+// its ProseMirror root as `dom.editor`. The Visual surface paints a static
+// copy first and swaps the editor in later, and a Source/Visual switch
+// replaces it, so this keeps watching.
 export function useEditorPlugin(container: RefObject<HTMLElement | null>, plugin: Plugin) {
   useEffect(() => {
     const root = container.current;
-    if (!root) return;
+    const own = plugin.spec.key;
+    if (!root || !own) return;
     let current: LiveEditor | null = null;
     const detach = () => {
-      if (current && !current.isDestroyed) current.unregisterPlugin(key);
+      if (current && !current.isDestroyed) current.unregisterPlugin(own);
       current = null;
     };
     const attach = () => {
