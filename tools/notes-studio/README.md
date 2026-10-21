@@ -310,14 +310,15 @@ References are found on the parsed note, as the site reads them (the lint's
 under `public/`, links and `<img src>` are URLs from the page. Relative
 images (`./a.png`) are imported by the MDX build, so they are not assets
 here; the frontmatter and code blocks never count. A note that does not
-parse but holds the file's name counts as an unsure use: a rename is
-refused until it is fixed.
+parse but holds the file's name (whole, so `data.png` is not `ta.png`)
+counts as an unsure use: a rename is refused until it is fixed. The view
+loads the list only while it is shown.
 
 Changes go through `POST /api/assets`, which takes the same lock as page
 tree changes. Like those, a change is planned against the disk, then
 applied: the asset and every note must still have the mtime they were
 planned from, the asset moves first, then each note is written atomically.
-A note open in the editor merges the rewrite through its sync. While the
+If the first note cannot be written, the asset moves back. A note open in the editor merges the rewrite through its sync. While the
 open note has unsaved edits, rename and delete wait for it: the server only
 sees what is on disk.
 

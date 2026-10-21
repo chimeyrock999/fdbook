@@ -1,10 +1,9 @@
-import { readFile, readdir, rename, rm, rmdir, stat } from 'node:fs/promises';
+import { readFile, readdir, rename, rm, rmdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { slugify } from '../../src/slug.ts';
-import { listEditableFiles, statOrNull } from '../files/store.ts';
+import { listEditableFiles, statOrNull, writeAtomic } from '../files/store.ts';
 import { HttpError } from '../http.ts';
 import { ASSETS_DIR, extensionOf, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
-import { applyPlan } from '../tree/ops.ts';
 import { findAssetRefs, rewriteAssetRefs, type AssetRef } from './refs.ts';
 
 // Renaming and deleting files under public/notes, with every note that uses
@@ -30,11 +29,15 @@ export type AssetPlan = {
   asset: { path: string; baseMtime: number };
   // Where the asset goes; null deletes it.
   to: string | null;
-  // Notes to write, relative to content/notes as server/tree/ops.ts takes them.
   writes: Write[];
   changes: AssetChange[];
   usages: AssetUsage[];
 };
+
+// Each note as last read: its references (null when it does not parse) and
+// lines, kept while its mtime stays. The assets list is asked again after
+// every save, and most notes never change, so most are not read again.
+export type NoteScan = Map<string, { mtimeMs: number; refs: AssetRef[] | null; lines: string[] }>;
 
 const MAX_TEXT = 200;
 const notesPath = (path: string) => path.slice(NOTES_DIR.length + 1);
@@ -46,72 +49,74 @@ function lineText(lines: string[], line: number) {
   return text.length > MAX_TEXT ? `${text.slice(0, MAX_TEXT - 1)}…` : text;
 }
 
-type Note = { path: string; content: string; mtimeMs: number };
+function noteFile(root: string, path: string) {
+  const resolved = resolveWorktreePath(root, path);
+  return resolved?.kind === 'note' ? resolved.absolute : null;
+}
 
-async function readNotes(root: string): Promise<Note[]> {
-  const files = (await listEditableFiles(root)).filter((file) => file.kind === 'note');
-  const read = await Promise.all(
-    files.map(async (file) => {
-      const resolved = resolveWorktreePath(root, file.path);
-      if (!resolved) return null;
-      const info = await statOrNull(resolved.absolute);
-      if (!info?.isFile()) return null;
-      return { path: file.path, content: await readFile(resolved.absolute, 'utf8'), mtimeMs: info.mtimeMs };
+// Brings `scan` up to date with the notes on disk: a note whose mtime moved
+// is read and parsed again, a note that is gone is dropped. The mtime is
+// the one listed before the read, so a save during the read shows as a
+// newer mtime next time.
+async function scanNotes(root: string, scan: NoteScan) {
+  const notes = (await listEditableFiles(root)).filter((file) => file.kind === 'note');
+  const listed = new Set(notes.map((note) => note.path));
+  for (const path of scan.keys()) if (!listed.has(path)) scan.delete(path);
+  await Promise.all(
+    notes.map(async (note) => {
+      if (scan.get(note.path)?.mtimeMs === note.mtimeMs) return;
+      const absolute = noteFile(root, note.path);
+      const content = absolute === null ? null : await readFile(absolute, 'utf8').catch(() => null);
+      if (content === null) {
+        scan.delete(note.path);
+        return;
+      }
+      scan.set(note.path, { mtimeMs: note.mtimeMs, refs: findAssetRefs(content, notesPath(note.path)), lines: content.split('\n') });
     }),
   );
-  return read.filter((note) => note !== null);
+  return scan;
 }
 
-// The references found in each note, kept while its mtime stays: the
-// assets list is asked again after every save, and most notes never change.
-export type RefCache = Map<string, { mtimeMs: number; refs: AssetRef[] | null }>;
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-function refsOf(note: Note, cache?: RefCache) {
-  const cached = cache?.get(note.path);
-  if (cached?.mtimeMs === note.mtimeMs) return cached.refs;
-  const refs = findAssetRefs(note.content, notesPath(note.path));
-  cache?.set(note.path, { mtimeMs: note.mtimeMs, refs });
-  return refs;
-}
-
-// Every usage in `note`, by asset. In a note that does not parse, each
-// asset whose file name appears on a line counts as an unsure usage there.
-function usagesIn(note: Note, assets: Iterable<string>, add: (asset: string, usage: AssetUsage) => void, cache?: RefCache) {
-  const lines = note.content.split('\n');
-  const refs = refsOf(note, cache);
-  if (refs !== null) {
-    for (const ref of refs) add(ref.asset, { note: note.path, line: ref.line, column: ref.column, length: ref.end - ref.start, text: lineText(lines, ref.line), unsure: false });
-    return;
+// Where a note that does not parse may use `asset`: the first line that
+// holds its file name whole (`data.png` is not `ta.png`), as written or
+// percent-encoded.
+function unsureUsage(note: string, lines: string[], asset: string): AssetUsage | null {
+  const name = baseOf(asset);
+  const pattern = new RegExp(`(?<![\\w.%-])(${escapeRegExp(name)}|${escapeRegExp(encodeURIComponent(name))})(?![\\w-])`);
+  for (const [index, line] of lines.entries()) {
+    const match = pattern.exec(line);
+    if (match) return { note, line: index + 1, column: match.index + 1, length: match[0].length, text: lineText(lines, index + 1), unsure: true };
   }
-  for (const asset of assets) {
-    const name = baseOf(asset);
-    const index = lines.findIndex((line) => line.includes(name) || line.includes(encodeURIComponent(name)));
-    if (index === -1) continue;
-    const at = lines[index].includes(name) ? lines[index].indexOf(name) : lines[index].indexOf(encodeURIComponent(name));
-    const length = lines[index].includes(name) ? name.length : encodeURIComponent(name).length;
-    add(asset, { note: note.path, line: index + 1, column: at + 1, length, text: lineText(lines, index + 1), unsure: true });
-  }
+  return null;
 }
 
-// Every asset under public/notes with its usages, sorted by path. `cache`
-// keeps each note's references between calls.
-export async function listAssets(root: string, cache?: RefCache): Promise<AssetInfo[]> {
+// Every usage of the given assets, by asset.
+function usagesIn(scan: NoteScan, assets: Iterable<string>) {
+  const usages = new Map<string, AssetUsage[]>();
+  for (const asset of assets) usages.set(asset, []);
+  for (const [note, { refs, lines }] of scan) {
+    if (refs === null) {
+      for (const [asset, list] of usages) {
+        const usage = unsureUsage(note, lines, asset);
+        if (usage) list.push(usage);
+      }
+      continue;
+    }
+    for (const ref of refs) {
+      usages.get(ref.asset)?.push({ note, line: ref.line, column: ref.column, length: ref.end - ref.start, text: lineText(lines, ref.line), unsure: false });
+    }
+  }
+  return usages;
+}
+
+// Every asset under public/notes with its usages, sorted by path. `scan`
+// keeps what was read of the notes between calls.
+export async function listAssets(root: string, scan: NoteScan = new Map()): Promise<AssetInfo[]> {
   const files = (await listEditableFiles(root)).filter((file) => file.kind === 'asset');
-  const assets = new Map(files.map((file) => [file.path, { path: file.path, mtimeMs: file.mtimeMs, usages: [] as AssetUsage[] }]));
-  const notes = await readNotes(root);
-  const seen = new Set(notes.map((note) => note.path));
-  for (const note of notes) {
-    usagesIn(
-      note,
-      assets.keys(),
-      (asset, usage) => {
-        assets.get(asset)?.usages.push(usage);
-      },
-      cache,
-    );
-  }
-  if (cache) for (const path of cache.keys()) if (!seen.has(path)) cache.delete(path);
-  return [...assets.values()];
+  const usages = usagesIn(await scanNotes(root, scan), files.map((file) => file.path));
+  return files.map((file) => ({ path: file.path, mtimeMs: file.mtimeMs, usages: usages.get(file.path) ?? [] }));
 }
 
 function guarded(root: string, path: unknown) {
@@ -128,19 +133,6 @@ async function checkAsset(root: string, path: string, baseMtime: unknown) {
   return info;
 }
 
-// The notes that use `path`, read once, with its usages.
-async function usagesOf(root: string, path: string) {
-  const name = baseOf(path);
-  const notes = (await readNotes(root)).filter((note) => note.content.includes(name) || note.content.includes(encodeURIComponent(name)));
-  const usages: AssetUsage[] = [];
-  for (const note of notes) {
-    usagesIn(note, [path], (asset, usage) => {
-      if (asset === path) usages.push(usage);
-    });
-  }
-  return { notes, usages };
-}
-
 function listed(usages: AssetUsage[]) {
   const notes = [...new Set(usages.map((usage) => usage.note))];
   return notes.length > 3 ? `${notes.slice(0, 3).join(', ')} and ${plural(notes.length - 3, 'more note')}` : notes.join(', ');
@@ -151,7 +143,7 @@ export type RenameRequest = { path: unknown; name: unknown; baseMtime: unknown }
 // A new file name for the asset in its folder, extension kept, in the
 // upload dialog's form (lowercase letters, digits and dashes), and every
 // reference to it pointed at the new name.
-export async function planAssetRename(root: string, request: RenameRequest): Promise<AssetPlan> {
+export async function planAssetRename(root: string, request: RenameRequest, scan: NoteScan = new Map()): Promise<AssetPlan> {
   const path = typeof request.path === 'string' ? request.path : '';
   const info = await checkAsset(root, path, request.baseMtime);
   const { name } = request;
@@ -164,16 +156,25 @@ export async function planAssetRename(root: string, request: RenameRequest): Pro
   // A name that differs only in case is the same file on a case-insensitive disk.
   if (target && target.ino !== info.ino) throw new HttpError(409, `${to} already exists`);
 
-  const { notes, usages } = await usagesOf(root, path);
+  await scanNotes(root, scan);
+  const usages = usagesIn(scan, [path]).get(path) ?? [];
   const unsure = usages.filter((usage) => usage.unsure);
   if (unsure.length > 0) throw new HttpError(409, `${listed(unsure)} does not parse and may use ${baseOf(path)}: fix it first`);
   const writes: Write[] = [];
   const changes: AssetChange[] = [{ type: 'move', path, to }];
-  for (const note of notes) {
-    const result = rewriteAssetRefs(note.content, notesPath(note.path), (asset) => (asset === path ? to : null));
+  for (const note of new Set(usages.map((usage) => usage.note))) {
+    // The text the references were found in: read again, and parsed again
+    // only if it changed since the scan.
+    const absolute = noteFile(root, note);
+    const before = absolute === null ? null : await statOrNull(absolute);
+    if (absolute === null || !before) throw new HttpError(409, `${note} is gone`);
+    const content = await readFile(absolute, 'utf8');
+    const scanned = scan.get(note);
+    const refs = scanned?.mtimeMs === before.mtimeMs ? scanned.refs : findAssetRefs(content, notesPath(note));
+    const result = rewriteAssetRefs(content, notesPath(note), (asset) => (asset === path ? to : null), refs);
     if (!result || result.count === 0) continue;
-    writes.push({ path: notesPath(note.path), content: result.next, baseMtime: note.mtimeMs });
-    changes.push({ type: 'change', path: note.path, detail: plural(result.count, 'reference') });
+    writes.push({ path: note, content: result.next, baseMtime: before.mtimeMs });
+    changes.push({ type: 'change', path: note, detail: plural(result.count, 'reference') });
   }
   return { asset: { path, baseMtime: info.mtimeMs }, to, writes, changes, usages };
 }
@@ -181,10 +182,10 @@ export async function planAssetRename(root: string, request: RenameRequest): Pro
 export type DeleteRequest = { path: unknown; baseMtime: unknown };
 
 // Deletes an asset no note uses; refused (409) while any does.
-export async function planAssetDelete(root: string, request: DeleteRequest): Promise<AssetPlan> {
+export async function planAssetDelete(root: string, request: DeleteRequest, scan: NoteScan = new Map()): Promise<AssetPlan> {
   const path = typeof request.path === 'string' ? request.path : '';
   const info = await checkAsset(root, path, request.baseMtime);
-  const { usages } = await usagesOf(root, path);
+  const usages = usagesIn(await scanNotes(root, scan), [path]).get(path) ?? [];
   if (usages.length > 0) throw new HttpError(409, `${listed(usages)} still ${usages.length === 1 ? 'uses' : 'use'} ${baseOf(path)}: remove the references first`);
   return { asset: { path, baseMtime: info.mtimeMs }, to: null, writes: [], changes: [{ type: 'delete', path }], usages };
 }
@@ -199,19 +200,24 @@ async function pruneEmpty(root: string, dir: string) {
   }
 }
 
+async function checkNote(root: string, write: Write) {
+  const absolute = noteFile(root, write.path);
+  const info = absolute === null ? null : await statOrNull(absolute);
+  if (absolute === null || info?.mtimeMs !== write.baseMtime) throw new HttpError(409, `${write.path} changed on disk`);
+  return { absolute, info };
+}
+
 // Applies the plan: the asset and every note must still have the mtime it
-// was planned from. The asset moves (or goes) first, so a refused change
-// leaves everything as it was; then each note is written as page tree
-// changes write them. Not a transaction: a write that fails leaves the ones
-// before it written, and names the failed path.
+// was planned from, checked for all first and again before each write. The
+// asset moves (or goes) first, then each note is written atomically. If the
+// first note cannot be written, the asset moves back and nothing changed.
+// Not a transaction past that: a later failure leaves the notes before it
+// written, and the error says so.
 export async function applyAssetPlan(root: string, plan: AssetPlan) {
   const from = guarded(root, plan.asset.path);
   const info = await statOrNull(from);
   if (info?.mtimeMs !== plan.asset.baseMtime) throw new HttpError(409, `${plan.asset.path} changed on disk`);
-  for (const write of plan.writes) {
-    const note = await stat(join(root, NOTES_DIR, write.path)).catch(() => null);
-    if (note?.mtimeMs !== write.baseMtime) throw new HttpError(409, `${NOTES_DIR}/${write.path} changed on disk`);
-  }
+  for (const write of plan.writes) await checkNote(root, write);
   if (plan.to === null) {
     await rm(from);
     await pruneEmpty(root, dirname(from));
@@ -221,5 +227,20 @@ export async function applyAssetPlan(root: string, plan: AssetPlan) {
   const target = await statOrNull(to);
   if (target && target.ino !== info.ino) throw new HttpError(409, `${plan.to} already exists`);
   await rename(from, to);
-  await applyPlan(root, { writes: plan.writes, move: null, changes: [], open: null });
+  let written = 0;
+  for (const write of plan.writes) {
+    try {
+      const { absolute, info: note } = await checkNote(root, write);
+      await writeAtomic(absolute, write.content, note.mode);
+      written += 1;
+    } catch (error) {
+      const status = error instanceof HttpError ? error.status : 500;
+      const why = error instanceof HttpError ? error.message : `could not write ${write.path}: ${(error as Error).message}`;
+      if (written === 0) {
+        await rename(to, from);
+        throw new HttpError(status, `${why}; nothing was changed`);
+      }
+      throw new HttpError(status, `${why}; ${plan.asset.path} is already ${baseOf(plan.to)}, and ${plural(written, 'note')} before it point there`);
+    }
+  }
 }

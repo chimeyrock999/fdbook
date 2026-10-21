@@ -1,5 +1,5 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
 import { createFilesClient } from './api/files';
@@ -28,8 +28,8 @@ export function App() {
   const { tree, error, reload } = useTree(treeClient, files);
   const assets = useAssets(files);
   const assetsClient = useMemo(() => createAssetsClient(), []);
-  const assetList = useAssetList(assetsClient, files);
-  // A usage picked in the Assets view, to show in its note's Source.
+  // A usage picked in the Assets view, to show in its note's Source; any
+  // other way of opening a note drops it.
   const [place, setPlace] = useState<(SourcePlace & { note: string }) | null>(null);
   const [active, setActive] = useState(() => noteFromUrl(window.location.search));
   // The open note's autosave state, by path: a rename waits until it is saved.
@@ -42,6 +42,8 @@ export function App() {
   const [issueCount, setIssueCount] = useState<IssueCount>(null);
   const closeDrawer = useCallback(() => { setDrawer(false); }, []);
   const { show, select } = sidebar;
+  // The assets list follows the disk only while the Assets view is shown.
+  const assetList = useAssetList(assetsClient, files, sidebar.view === 'assets' && (sidebar.shown || drawer));
   // On a phone the drawer opens on the view, leaving the desktop layout as it
   // was; on a desktop the sidebar shows the view.
   const openView = useCallback((view: SidebarView) => {
@@ -62,21 +64,30 @@ export function App() {
 
   // Back and forward move between opened notes.
   useEffect(() => {
-    const onPop = () => { setActive(noteFromUrl(window.location.search)); };
+    const onPop = () => {
+      setPlace(null);
+      setActive(noteFromUrl(window.location.search));
+    };
     window.addEventListener('popstate', onPop);
     return () => { window.removeEventListener('popstate', onPop); };
   }, []);
 
-  const open = (path: string) => {
+  const go = (path: string) => {
     setDrawer(false);
     if (path === active) return;
     window.history.pushState(null, '', `?path=${encodeURIComponent(path)}`);
     setActive(path);
   };
+  const open = (path: string) => {
+    setPlace(null);
+    go(path);
+  };
 
+  const placeSeq = useRef(0);
   const openUsage = (usage: AssetUsage) => {
-    setPlace((previous) => ({ note: usage.note, line: usage.line, column: usage.column, length: usage.length, seq: (previous?.seq ?? 0) + 1 }));
-    open(usage.note);
+    placeSeq.current += 1;
+    setPlace({ note: usage.note, line: usage.line, column: usage.column, length: usage.length, seq: placeSeq.current });
+    go(usage.note);
   };
 
   // The open note moved with a rename: follow it without a new history entry.

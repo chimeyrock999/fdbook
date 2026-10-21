@@ -1,4 +1,4 @@
-import { cp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createSyncClient, SYNC_ENDPOINT, wsTransport, type DocumentEditor } from '@fumadocs-editor/core/sync';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -136,6 +136,39 @@ describe('assets API', () => {
       await writeFile(file(note), `${await text(note)}\nedited elsewhere\n`);
       await expect(applyAssetPlan(studio.root, plan)).rejects.toMatchObject({ status: 409 });
       expect(await exists(SUPERSET)).toBe(true);
+    });
+
+    it('rewrites a reference written with a Markdown escape', async () => {
+      await mkdir(file('public/notes/zz-escaped'), { recursive: true });
+      await writeFile(file('public/notes/zz-escaped/foo_bar.png'), 'x');
+      await writeFile(file('content/notes/zz-escaped.mdx'), 'See [the picture](/notes/zz-escaped/foo\\_bar.png).\n');
+      expect((await find('public/notes/zz-escaped/foo_bar.png'))?.usages).toHaveLength(1);
+      const response = await post({ op: 'rename', path: 'public/notes/zz-escaped/foo_bar.png', name: 'foo-bar', baseMtime: await mtime('public/notes/zz-escaped/foo_bar.png') });
+      expect((json(response) as Answer).changes).toContainEqual({ type: 'change', path: 'content/notes/zz-escaped.mdx', detail: '1 reference' });
+      expect(await text('content/notes/zz-escaped.mdx')).toBe('See [the picture](/notes/zz-escaped/foo-bar.png).\n');
+    });
+
+    it('moves the asset back when the first note cannot be written', async () => {
+      await mkdir(file('content/notes/zz-a-locked'));
+      await writeFile(file('content/notes/zz-a-locked/a.mdx'), '![a](/notes/zz-escaped/foo-bar.png)\n');
+      const asset = 'public/notes/zz-escaped/foo-bar.png';
+      const plan = await planAssetRename(studio.root, { path: asset, name: 'locked', baseMtime: await mtime(asset) });
+      await chmod(file('content/notes/zz-a-locked'), 0o555);
+      try {
+        await expect(applyAssetPlan(studio.root, plan)).rejects.toMatchObject({ status: 500 });
+      } finally {
+        await chmod(file('content/notes/zz-a-locked'), 0o755);
+      }
+      expect(await exists(asset)).toBe(true);
+      expect(await exists('public/notes/zz-escaped/locked.png')).toBe(false);
+      await rm(file('content/notes/zz-a-locked'), { recursive: true });
+    });
+
+    it('counts a broken note only for a name it holds whole', async () => {
+      await writeFile(file('public/notes/zz-escaped/ta.png'), 'x');
+      await writeFile(file('content/notes/zz-broken-name.mdx'), '<HtmlEmbed src="/notes/elsewhere/data.png"\n');
+      expect((await find('public/notes/zz-escaped/ta.png'))?.usages).toEqual([]);
+      await rm(file('content/notes/zz-broken-name.mdx'));
     });
 
     it('refuses while a note that does not parse may use it', async () => {

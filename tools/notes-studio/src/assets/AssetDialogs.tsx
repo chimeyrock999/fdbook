@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { extensionOf } from '../../server/security/asset-types';
 import type { AssetAnswer, AssetChange, AssetInfo, AssetRequest, AssetsClient, AssetUsage } from '../api/assets';
 import { sitePath } from '../media/asset-names';
 import { slugify } from '../slug';
@@ -7,7 +8,6 @@ import { nameOf } from './asset-tree';
 
 const PREVIEW_MS = 200;
 
-const extensionOf = (path: string) => path.slice(path.lastIndexOf('.') + 1);
 const stemOf = (path: string) => nameOf(path).slice(0, nameOf(path).lastIndexOf('.'));
 const message = (reason: unknown) => (reason instanceof Error ? reason.message : String(reason));
 
@@ -97,7 +97,9 @@ export function RenameAssetDialog({ client, asset, onDone, onClose }: {
   const [failed, setFailed] = useState<string | null>(null);
   const name = slugify(typed);
   const extension = extensionOf(asset.path);
-  const changed = name !== '' && name !== stemOf(asset.path);
+  // The name as it was is no change, even when it is not in slug form yet:
+  // only what the person types is.
+  const changed = name !== '' && typed !== stemOf(asset.path) && name !== stemOf(asset.path);
   const request: AssetRequest | null = changed ? { op: 'rename', path: asset.path, name, baseMtime: asset.mtimeMs } : null;
   const preview = usePreview(client, request);
   const to = `${asset.path.slice(0, asset.path.lastIndexOf('/'))}/${name || '…'}.${extension}`;

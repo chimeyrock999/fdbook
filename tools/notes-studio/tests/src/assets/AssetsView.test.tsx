@@ -12,6 +12,7 @@ const ASSETS: AssetInfo[] = [
   { path: 'public/notes/guide/old_name.png', mtimeMs: 7, usages: [usage('content/notes/guide/intro.mdx', 9)] },
   { path: 'public/notes/guide/spare.svg', mtimeMs: 9, usages: [] },
   { path: 'public/notes/other/pic.png', mtimeMs: 1, usages: [] },
+  { path: 'public/notes/other/Photo.PNG', mtimeMs: 2, usages: [] },
 ];
 
 function setup({ unsaved = false, active = 'content/notes/guide/intro.mdx' }: { unsaved?: boolean; active?: string | null } = {}) {
@@ -53,11 +54,11 @@ describe('AssetsView', () => {
 
   it('filters by name and by use', async () => {
     setup({ active: null });
-    await userEvent.click(screen.getByRole('button', { name: 'Unused 2' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Unused 3' }));
     expect(screen.getByRole('button', { name: /^spare/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^pic/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^flow/ })).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'All 4' }));
+    await userEvent.click(screen.getByRole('button', { name: 'All 5' }));
     await userEvent.type(screen.getByRole('searchbox', { name: 'Filter assets' }), 'FLOW');
     expect(screen.getByRole('button', { name: /^flow/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^spare/ })).toBeNull();
@@ -81,6 +82,9 @@ describe('AssetsView', () => {
     const dialog = screen.getByRole('dialog', { name: 'Rename “old_name.png”' });
     const input = within(dialog).getByRole('textbox', { name: 'File name' });
     expect(within(dialog).getByText('.png')).toBeTruthy();
+    // The old name, though not a slug, is no change: nothing to save yet.
+    expect(within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Rename' }).disabled).toBe(true);
+    expect(change).not.toHaveBeenCalled();
     await userEvent.clear(input);
     await userEvent.type(input, 'Old Name');
     expect(within(dialog).getByText('Notes get /notes/guide/old-name.png; a query or hash after it stays.')).toBeTruthy();
@@ -91,6 +95,16 @@ describe('AssetsView', () => {
     await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Renamed to old-name.png; updated 1 reference in 1 note.'); });
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(reload).toHaveBeenCalled();
+  });
+
+  it('shows the extension the server keeps, in lowercase', async () => {
+    setup({ active: null });
+    await userEvent.click(screen.getByRole('button', { name: 'Expand other' }));
+    await userEvent.click(within(await openMenu('Photo.PNG')).getByRole('menuitem', { name: 'Rename…' }));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'File name' }), ' 2');
+    expect(within(dialog).getByText('.png')).toBeTruthy();
+    expect(within(dialog).getByText('Notes get /notes/other/photo-2.png; a query or hash after it stays.')).toBeTruthy();
   });
 
   it('refuses to delete a file still in use, and lists where', async () => {

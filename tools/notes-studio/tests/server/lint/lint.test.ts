@@ -153,6 +153,11 @@ describe('assets', () => {
     expect(summary(lint(source))).toEqual(['asset-missing@1', 'asset-missing@3']);
   });
 
+  it('reads an image path as the browser asks for it, percent escapes decoded', () => {
+    expect(lint('![a](/notes/guide/my%20pic.png)\n', { assets: [...ASSETS, 'notes/guide/my pic.png'] })).toEqual([]);
+    expect(summary(lint('![a](/notes/guide/my%20pic.png)\n'))).toEqual(['asset-missing@1']);
+  });
+
   it('flags missing assets and embeds with no source', () => {
     const source = '<HtmlEmbed src="/notes/guide/gone.html" />\n\n::diagram{src="/notes/x.svg"}\n\n![a](/images/none.png)\n\n<HtmlEmbed title="t" />\n';
     expect(summary(lint(source))).toEqual(['asset-missing@1', 'asset-missing@3', 'asset-missing@5', 'asset-missing@7']);

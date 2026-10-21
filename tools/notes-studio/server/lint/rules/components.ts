@@ -54,6 +54,14 @@ function checkAsset(node: Nodes, source: string, context: LintContext, report: R
   });
 }
 
+function decodeUrlPath(url: string) {
+  try {
+    return decodeURI(url);
+  } catch {
+    return url;
+  }
+}
+
 function checkEmbeds(node: Nodes, source: string, context: LintContext, report: Report) {
   if (isJsx(node, ['HtmlEmbed', 'SvgDiagram'])) {
     // Inline markup (`html` or `svg`) needs no file.
@@ -67,9 +75,10 @@ function checkEmbeds(node: Nodes, source: string, context: LintContext, report: 
     }
     return;
   }
-  // Relative images are imported by the MDX build; only /… reads public/.
+  // Relative images are imported by the MDX build; only /… reads public/,
+  // as a URL the browser asks for, so percent escapes are decoded.
   if (node.type === 'image' && node.url.startsWith('/') && !node.url.startsWith('//')) {
-    checkAsset(node, source, context, report, node.url, 'The image');
+    checkAsset(node, source, context, report, decodeUrlPath(node.url), 'The image');
   }
 }
 

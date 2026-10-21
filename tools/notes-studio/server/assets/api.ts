@@ -1,6 +1,6 @@
 import { createKeyedLock } from '../files/store.ts';
 import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '../http.ts';
-import { applyAssetPlan, listAssets, planAssetDelete, planAssetRename, type AssetPlan, type RefCache } from './ops.ts';
+import { applyAssetPlan, listAssets, planAssetDelete, planAssetRename, type AssetPlan, type NoteScan } from './ops.ts';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -13,14 +13,15 @@ type Body = Record<string, unknown>;
 // only answers. `lock` is the one page tree changes take, since both write
 // notes: one change at a time, each planned from the disk it then writes.
 export function createAssetsApi(root: string, lock = createKeyedLock()): Handler {
-  const cache: RefCache = new Map();
+  // What was read of the notes, kept between requests (see NoteScan).
+  const scan: NoteScan = new Map();
 
   function plan(body: Body): Promise<AssetPlan> {
     switch (body.op) {
       case 'rename':
-        return planAssetRename(root, { path: body.path, name: body.name, baseMtime: body.baseMtime });
+        return planAssetRename(root, { path: body.path, name: body.name, baseMtime: body.baseMtime }, scan);
       case 'delete':
-        return planAssetDelete(root, { path: body.path, baseMtime: body.baseMtime });
+        return planAssetDelete(root, { path: body.path, baseMtime: body.baseMtime }, scan);
       default:
         throw new HttpError(400, 'op must be rename or delete');
     }
@@ -37,7 +38,7 @@ export function createAssetsApi(root: string, lock = createKeyedLock()): Handler
   }
 
   async function route(request: Parameters<Handler>[0]) {
-    if (request.method === 'GET') return { assets: await listAssets(root, cache) };
+    if (request.method === 'GET') return { assets: await listAssets(root, scan) };
     if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
     // JSON only, so a browser must preflight it and a foreign page cannot send one blind.
     if (!(request.headers['content-type'] ?? '').startsWith('application/json')) {

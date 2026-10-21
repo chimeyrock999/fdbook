@@ -9,9 +9,11 @@ import { ASSET_TYPES, ASSETS_DIR, extensionOf, publicAsset } from '../security/a
 // References from a note to files under public/notes, found on the parsed
 // note so code blocks and the frontmatter never count. Each reference is
 // resolved the way the site reads it:
-// - `src` of <HtmlEmbed>, <SvgDiagram> and ::html / ::svg / ::diagram, and
-//   Markdown images that start with `/`: a path under public/
-//   (lib/read-public-asset.ts). Relative images are imported by the MDX
+// - `src` of <HtmlEmbed>, <SvgDiagram> and ::html / ::svg / ::diagram: a
+//   path under public/ (lib/read-public-asset.ts). JSX takes a string or a
+//   string literal in braces (`src={"…"}`), which MDX evaluates the same.
+// - Markdown images that start with `/`: a URL the browser asks for, so
+//   percent escapes are decoded. Relative images are imported by the MDX
 //   build instead, so they are not public/ files.
 // - Markdown links, link definitions and <img src>: a URL, resolved against
 //   the page URL, as the browser does.
@@ -29,8 +31,8 @@ const PUBLIC_EMBEDS = ['HtmlEmbed', 'SvgDiagram'];
 const PUBLIC_DIRECTIVES = ['html', 'svg', 'diagram'];
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
-// The file under public/ that a URL in the note at `notePath` reaches, or
-// null for an anchor, another site or a scheme.
+// The file under public/ that a URL in the note at `notePath` reaches,
+// decoded, or null for an anchor, another site or a scheme.
 function urlAsset(href: string, notePath: string) {
   if (href === '' || href.startsWith('#') || href.startsWith('//') || SCHEME.test(href)) return null;
   try {
@@ -85,17 +87,26 @@ function markdownRange(node: Link | Image | Definition, source: string) {
   return null;
 }
 
-// The value of a plain string `src` attribute, as written.
+// The value of a `src` attribute as written: a string, or a string literal
+// in braces. Any other expression is code, not a path to rewrite.
 function jsxRange(node: Jsx, source: string) {
   const attribute = node.attributes.find((item) => item.type === 'mdxJsxAttribute' && item.name === 'src');
-  if (attribute?.type !== 'mdxJsxAttribute' || typeof attribute.value !== 'string') return null;
+  if (attribute?.type !== 'mdxJsxAttribute' || attribute.value === null || attribute.value === undefined) return null;
   const start = attribute.position?.start.offset;
   const end = attribute.position?.end.offset;
   if (start === undefined || end === undefined) return null;
-  const match = /^src\s*=\s*(["'])/.exec(source.slice(start, end));
+  const written = source.slice(start, end);
+  if (typeof attribute.value === 'string') {
+    const match = /^src\s*=\s*(["'])/.exec(written);
+    if (!match) return null;
+    const range = { start: start + match[0].length, end: end - 1 };
+    return source.slice(range.start, range.end) === attribute.value ? range : null;
+  }
+  const match = /^src\s*=\s*\{\s*(["'])([^"'\\\n]*)\1\s*\}$/.exec(written);
   if (!match) return null;
-  const range = { start: start + match[0].length, end: end - 1 };
-  return source.slice(range.start, range.end) === attribute.value ? range : null;
+  const raw = match[2];
+  const at = start + match[0].indexOf(match[1]) + 1;
+  return { start: at, end: at + raw.length };
 }
 
 // Directive attributes carry no positions: find `src=` in the attribute
@@ -108,7 +119,7 @@ function directiveRange(node: LeafDirective, source: string) {
   const head = source.slice(start, end);
   const open = head.indexOf('{');
   if (open === -1) return null;
-  const match = /[{\s]src=(?:"([^"]*)"|'([^']*)'|([^\s"'<=>`}]+))/.exec(head.slice(open));
+  const match = /[{\s]src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<=>`}]+))/.exec(head.slice(open));
   if (!match) return null;
   // Groups that did not take part are undefined, which the types leave out.
   const [whole, double, single, bare] = match as unknown as [string, string | undefined, string | undefined, string | undefined];
@@ -128,7 +139,7 @@ function referenceOf(node: Nodes, source: string, notePath: string): Found | nul
   if (node.type === 'image') {
     if (!node.url.startsWith('/') || node.url.startsWith('//')) return null;
     const range = markdownRange(node, source);
-    return range && { kind: 'image', asset: publicAsset(node.url), ...range };
+    return range && { kind: 'image', asset: urlAsset(node.url, notePath), ...range };
   }
   if ((node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') && node.name) {
     if (!PUBLIC_EMBEDS.includes(node.name) && node.name !== 'img') return null;
@@ -196,8 +207,14 @@ function movedRaw(ref: AssetRef, raw: string, from: string, to: string) {
 // `moved` maps an asset (`public/notes/…`) to where it goes, or null when it
 // stays. Only the path changes; its query, hash and quotes stay as written.
 // Null when the note does not parse.
-export function rewriteAssetRefs(source: string, notePath: string, moved: (asset: string) => string | null): { next: string; count: number } | null {
-  const refs = findAssetRefs(source, notePath);
+// `refs`, when given, are the note's references from findAssetRefs on this
+// same source, so it is not parsed again.
+export function rewriteAssetRefs(
+  source: string,
+  notePath: string,
+  moved: (asset: string) => string | null,
+  refs: AssetRef[] | null = findAssetRefs(source, notePath),
+): { next: string; count: number } | null {
   if (refs === null) return null;
   let next = source;
   let count = 0;

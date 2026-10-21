@@ -77,6 +77,50 @@ describe('findAssetRefs', () => {
     expect(findAssetRefs('[a](./a.png)\n', 'guide/index.mdx')?.map((ref) => ref.asset)).toEqual(['public/notes/a.png']);
   });
 
+  it('reads every way the site accepts a src: spaced directive attributes, string expressions, encoded images', () => {
+    const source = [
+      '::html{src = "/notes/guide/flow.html"}',
+      '',
+      '<HtmlEmbed src={"/notes/guide/flow.html?embed=1"} />',
+      '',
+      "<SvgDiagram src={ '/notes/guide/b.svg' } />",
+      '',
+      '<HtmlEmbed src={`/notes/guide/${name}.html`} />',
+      '',
+      '![a](/notes/guide/my%20pic.png)',
+      '',
+    ].join('\n');
+    const refs = findAssetRefs(source, 'guide/intro.mdx') ?? [];
+    expect(refs.map(({ asset, kind, line }) => [asset, kind, line])).toEqual([
+      ['public/notes/guide/flow.html', 'directive', 1],
+      ['public/notes/guide/flow.html', 'jsx', 3],
+      ['public/notes/guide/b.svg', 'jsx', 5],
+      ['public/notes/guide/my pic.png', 'image', 9],
+    ]);
+    expect(refs.map((ref) => source.slice(ref.start, ref.end))).toEqual([
+      '/notes/guide/flow.html',
+      '/notes/guide/flow.html',
+      '/notes/guide/b.svg',
+      '/notes/guide/my%20pic.png',
+    ]);
+    const moved = (asset: string) => asset.replace(/\/(flow|b|my pic)\./, '/renamed.');
+    expect(rewriteAssetRefs(source, 'guide/intro.mdx', moved)?.next).toBe(
+      source
+        .replace('src = "/notes/guide/flow.html"', 'src = "/notes/guide/renamed.html"')
+        .replace('src={"/notes/guide/flow.html?embed=1"}', 'src={"/notes/guide/renamed.html?embed=1"}')
+        .replace("src={ '/notes/guide/b.svg' }", "src={ '/notes/guide/renamed.svg' }")
+        .replace('(/notes/guide/my%20pic.png)', '(/notes/guide/renamed.png)'),
+    );
+  });
+
+  it('rewrites from references found earlier, without parsing again', () => {
+    const source = '![a](/notes/guide/a.png)\n';
+    const refs = findAssetRefs(source, 'guide/intro.mdx');
+    const result = rewriteAssetRefs('this text is not parsed', 'guide/intro.mdx', () => null, refs);
+    expect(result).toEqual({ next: 'this text is not parsed', count: 0 });
+    expect(rewriteAssetRefs(source, 'guide/intro.mdx', () => 'public/notes/guide/b.png', refs)?.next).toBe('![a](/notes/guide/b.png)\n');
+  });
+
   it('returns null for a note that does not parse', () => {
     expect(findAssetRefs('<HtmlEmbed src="/notes/a.html"\n', 'a.mdx')).toBeNull();
   });
