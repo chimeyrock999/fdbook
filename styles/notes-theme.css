@@ -1,11 +1,14 @@
-/* The notes palette and fonts, scoped to `.notes-theme` (the notes layout's
-   container). Plain CSS so both the site (app/notes/notes.css) and the Notes
-   Studio (tools/notes-studio/src/notes-theme.css) import this one file.
-   `--font-garden-*` are the next/font variables on the site; the Studio sets
-   them to its own copies of the same faces. */
+/* The notes palette and fonts, the only place they are written. Plain CSS so
+   both the site (app/notes/notes.css) and the Notes Studio
+   (tools/notes-studio/src/notes-theme.css) import this one file.
+   The palette sits on the page as well as on `.notes-theme` (the notes
+   layout's container): what renders outside the layout, like the search
+   dialog portalled to <body>, keeps the garden colours, and the fumadocs
+   `bg-fd-*` utilities read these values. Import it after the fumadocs theme
+   so this `.dark` wins over its own. */
 
-.notes-theme {
-  /* ── Digital-garden palette (light, scoped) ── */
+:root, .notes-theme {
+  /* ── Digital-garden palette (light) ── */
   --color-fd-background: #f8f5ec;
   --color-fd-foreground: #24402a;
   --color-fd-muted: #ede8d6;
@@ -72,14 +75,18 @@
   --color-callout-success-bg: #e4edd5;
   --color-callout-body-bg: #eff1e3;
   --color-callout-separator-alpha: 0.9;
+}
 
+/* `--font-garden-*` are the next/font variables, set on the notes layout
+   only; the Studio sets them to its own copies of the same faces. */
+.notes-theme {
   --font-sans: var(--font-garden-sans), 'Be Vietnam Pro', system-ui, sans-serif;
   --font-mono: var(--font-garden-mono), 'JetBrains Mono', ui-monospace, monospace;
   font-family: var(--font-sans);
 }
 
-.dark .notes-theme {
-  /* ── Digital-garden palette (dark, scoped) ── */
+.dark, .dark .notes-theme {
+  /* ── Digital-garden palette (dark) ── */
   --color-fd-background: #14201a;
   --color-fd-foreground: #e8f0e1;
   --color-fd-muted: #223021;
