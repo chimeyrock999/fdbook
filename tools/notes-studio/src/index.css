@@ -2,6 +2,7 @@
 @import '@fumadocs-editor/ui/styles.css';
 @import './notes-theme.css';
 @import './notes-prose.css';
+@import './assets/assets.css';
 
 /* The Studio chrome uses the editor's --fde-* tokens, which follow the
    system light/dark preference, so both always match. */

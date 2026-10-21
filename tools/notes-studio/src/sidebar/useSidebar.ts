@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 
-export type SidebarView = 'notes' | 'issues';
+export type SidebarView = 'notes' | 'assets' | 'issues';
 
 export const SIDEBAR_MIN = 220;
 export const SIDEBAR_MAX = 480;
@@ -17,7 +17,7 @@ function readStored(): Layout {
   try {
     const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<Record<keyof Layout, unknown>>;
     return {
-      view: value.view === 'issues' ? 'issues' : 'notes',
+      view: value.view === 'issues' || value.view === 'assets' ? value.view : 'notes',
       shown: value.shown !== false,
       width: typeof value.width === 'number' && Number.isFinite(value.width) ? clampWidth(value.width) : fallback.width,
     };
@@ -34,7 +34,7 @@ function store(layout: Layout) {
   }
 }
 
-// The sidebar's view (Notes or Issues), whether it is shown and its width,
+// The sidebar's view (Notes, Assets or Issues), whether it is shown and its width,
 // kept in localStorage. Picking the view that is already open folds the
 // sidebar, as VS Code's activity bar does.
 export function useSidebar() {

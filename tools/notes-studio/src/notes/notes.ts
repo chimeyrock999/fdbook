@@ -3,6 +3,14 @@ export const NOTES_PREFIX = 'content/notes/';
 // The file API speaks worktree paths, the sync socket paths inside content/notes.
 export const syncPath = (path: string) => path.slice(NOTES_PREFIX.length);
 
+// The open note (a sync path) while it has edits not on disk yet, from the
+// last autosave status the editor reported, or null. The editor reports a
+// status only when it changes, and starts at 'synced': a note that has
+// reported nothing yet has nothing unsaved.
+export function unsavedNote(active: string | null, saved: { path: string; status: string } | null): string | null {
+  return active !== null && saved?.path === active && saved.status !== 'synced' ? syncPath(active) : null;
+}
+
 const isNote = (path: string) => path.startsWith(NOTES_PREFIX) && path.endsWith('.mdx');
 
 // The note to open from `?path=`, if it names a note.

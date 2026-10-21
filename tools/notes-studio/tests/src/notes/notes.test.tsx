@@ -4,11 +4,22 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { NoteGate } from '../../../src/notes/NoteGate';
 import { OpenOnSite } from '../../../src/notes/OpenOnSite';
 import type { createFilesClient } from '../../../src/api/files';
-import { noteFromUrl, noteRoute, siteUrlFrom, syncPath } from '../../../src/notes/notes';
+import { noteFromUrl, noteRoute, siteUrlFrom, syncPath, unsavedNote } from '../../../src/notes/notes';
 
 afterEach(cleanup);
 
 describe('note helpers', () => {
+  it('counts a note as unsaved only once it reported a status other than synced', () => {
+    const note = 'content/notes/guide/a.mdx';
+    // The editor starts at 'synced' and reports changes only.
+    expect(unsavedNote(note, null)).toBeNull();
+    expect(unsavedNote(note, { path: 'content/notes/guide/b.mdx', status: 'dirty' })).toBeNull();
+    expect(unsavedNote(note, { path: note, status: 'dirty' })).toBe('guide/a.mdx');
+    expect(unsavedNote(note, { path: note, status: 'offline' })).toBe('guide/a.mdx');
+    expect(unsavedNote(note, { path: note, status: 'synced' })).toBeNull();
+    expect(unsavedNote(null, { path: note, status: 'dirty' })).toBeNull();
+  });
+
   it('maps paths and reads ?path=', () => {
     expect(syncPath('content/notes/streaming/index.mdx')).toBe('streaming/index.mdx');
     expect(noteFromUrl('?path=content%2Fnotes%2Fa.mdx')).toBe('content/notes/a.mdx');

@@ -1,4 +1,4 @@
-import { CircleAlert, FolderTree, PanelLeft } from 'lucide-react';
+import { CircleAlert, FolderTree, Images, PanelLeft } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { clampWidth, SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, type Sidebar as SidebarState, type SidebarView } from './useSidebar';
 
@@ -28,15 +28,15 @@ function useWidthCap() {
   return cap;
 }
 
-// The left side of the Studio, as in VS Code: an activity bar with the Notes
-// and Issues views and, at its foot, the button that hides the sidebar; then
+// The left side of the Studio, as in VS Code: an activity bar with the Notes,
+// Assets and Issues views and, at its foot, the button that hides the sidebar; then
 // the open view, which can be resized from its right edge. Below 768px the
 // whole sidebar is a drawer (`drawer`), always showing its view: there the
 // view buttons only switch views and the foot button closes the drawer
 // (`onCloseDrawer`), leaving the desktop layout as it was. The Issues
 // view is filled by the editor through a portal into `issuesRef`, since the
 // lint lives with the open note.
-export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, issuesRef }: {
+export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, assets, issuesRef }: {
   state: SidebarState;
   drawer: boolean;
   onCloseDrawer: () => void;
@@ -44,6 +44,7 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
   // Whether a note is open: its count is null until its first lint result.
   hasNote: boolean;
   notes: ReactNode;
+  assets: ReactNode;
   issuesRef: (element: HTMLElement | null) => void;
 }) {
   const pane = useRef<HTMLDivElement>(null);
@@ -108,6 +109,7 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
     <aside aria-label="Sidebar" className={`studio-sidebar ${drawer ? 'studio-drawer-open' : ''}`}>
       <nav aria-label="Sidebar views" className="studio-activity">
         {viewButton('notes', 'Notes', <FolderTree size={20} strokeWidth={1.8} />)}
+        {viewButton('assets', 'Assets', <Images size={20} strokeWidth={1.8} />)}
         {viewButton(
           'issues',
           issues === null || issues.count === 0 ? 'Issues' : `Issues (${String(issues.count)})`,
@@ -132,6 +134,10 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
       <div ref={pane} className="studio-pane" style={drawer ? undefined : { width }} hidden={!shown}>
         <div className="studio-pane-view" hidden={state.view !== 'notes'}>
           {notes}
+        </div>
+        <div className="studio-pane-view" hidden={state.view !== 'assets'}>
+          <h2 className="studio-pane-head">Assets</h2>
+          {assets}
         </div>
         <div className="studio-pane-view" hidden={state.view !== 'issues'}>
           <h2 className="studio-pane-head">Issues</h2>

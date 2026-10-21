@@ -14,7 +14,9 @@ import { findAssetRefs, rewriteAssetRefs, type AssetRef } from './refs.ts';
 
 // Where a note uses an asset: a reference found in the parsed note, or, in
 // a note that does not parse, a line that holds the file name (`unsure`).
-export type AssetUsage = { note: string; line: number; column: number; text: string; unsure: boolean };
+// `length` is that of the path (or name) at `line` and `column`; `text` is
+// the line.
+export type AssetUsage = { note: string; line: number; column: number; length: number; text: string; unsure: boolean };
 export type AssetInfo = { path: string; mtimeMs: number; usages: AssetUsage[] };
 
 export type AssetChange =
@@ -78,13 +80,16 @@ function usagesIn(note: Note, assets: Iterable<string>, add: (asset: string, usa
   const lines = note.content.split('\n');
   const refs = refsOf(note, cache);
   if (refs !== null) {
-    for (const ref of refs) add(ref.asset, { note: note.path, line: ref.line, column: ref.column, text: lineText(lines, ref.line), unsure: false });
+    for (const ref of refs) add(ref.asset, { note: note.path, line: ref.line, column: ref.column, length: ref.end - ref.start, text: lineText(lines, ref.line), unsure: false });
     return;
   }
   for (const asset of assets) {
     const name = baseOf(asset);
     const index = lines.findIndex((line) => line.includes(name) || line.includes(encodeURIComponent(name)));
-    if (index !== -1) add(asset, { note: note.path, line: index + 1, column: lines[index].indexOf(name) + 1, text: lineText(lines, index + 1), unsure: true });
+    if (index === -1) continue;
+    const at = lines[index].includes(name) ? lines[index].indexOf(name) : lines[index].indexOf(encodeURIComponent(name));
+    const length = lines[index].includes(name) ? name.length : encodeURIComponent(name).length;
+    add(asset, { note: note.path, line: index + 1, column: at + 1, length, text: lineText(lines, index + 1), unsure: true });
   }
 }
 
