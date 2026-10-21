@@ -1,10 +1,11 @@
 // Client for the Studio file API (server/files/api.ts, server/files/events.ts).
 
+import { assetUrl } from './asset-versions';
 import { errorOf, readJson } from './json';
 
 export type FileKind = 'note' | 'meta' | 'asset';
 export type TextFile = { path: string; content: string; mtimeMs: number };
-export type FileEntry = { path: string; kind: FileKind; mtimeMs: number };
+export type FileEntry = { path: string; kind: FileKind; mtimeMs: number; size: number };
 export type FileEvent = { type: 'add' | 'change' | 'unlink'; path: string; mtimeMs: number | null };
 
 // The save lost to a change made elsewhere. `disk` is what the file holds now
@@ -93,10 +94,10 @@ export function createFilesClient(base = '') {
 
 // A site path to a file under public/notes (`/notes/…/diagram.svg`, or
 // without the leading slash, as lib/read-public-asset.ts reads it) as the
-// file API URL that serves it; null for anything else, which the file API
-// does not serve.
+// file API URL that serves it, versioned once it changed (asset-versions.ts);
+// null for anything else, which the file API does not serve.
 export function publicAssetUrl(src: string | undefined, base = ''): string | null {
   const path = src?.split(/[?#]/)[0].trim().replace(/^\/+/, '') ?? '';
   if (!path.startsWith('notes/') || /^[a-z]+:/i.test(src ?? '')) return null;
-  return `${base}/api/file?path=${encodeURIComponent(`public/${path}`)}`;
+  return assetUrl(`public/${path}`, base);
 }

@@ -1,17 +1,21 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AssetUsage } from './api/assets';
+import type { AssetAnswer, AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
+import { assetChanged } from './api/asset-versions';
 import { createFilesClient } from './api/files';
 import { createLintClient } from './api/lint';
 import { createTreeClient } from './api/tree';
+import { movedTo } from './assets/asset-changes';
+import { AssetPage } from './assets/AssetPage';
 import { AssetsView } from './assets/AssetsView';
 import { useAssetList } from './assets/useAssetList';
 import { NoteEditor, type SourcePlace } from './editor/NoteEditor';
+import { ASSETS_PREFIX } from './media/asset-names';
 import { useAssets } from './media/useAssets';
 import { NoteGate } from './notes/NoteGate';
 import { OpenOnSite } from './notes/OpenOnSite';
-import { NOTES_PREFIX, noteFromUrl, syncPath, unsavedNote } from './notes/notes';
+import { NOTES_PREFIX, pageFromUrl, pageQuery, syncPath, unsavedNote, type Page } from './notes/notes';
 import { Sidebar, type IssueCount } from './sidebar/Sidebar';
 import { useSidebar, type SidebarView } from './sidebar/useSidebar';
 import { PageTree } from './tree/PageTree';
@@ -31,7 +35,10 @@ export function App() {
   // A usage picked in the Assets view, to show in its note's Source; any
   // other way of opening a note drops it.
   const [place, setPlace] = useState<(SourcePlace & { note: string }) | null>(null);
-  const [active, setActive] = useState(() => noteFromUrl(window.location.search));
+  // What the main pane shows: a note (`active`) or an asset page (`asset`).
+  const [page, setPage] = useState(() => pageFromUrl(window.location.search));
+  const active = page?.kind === 'note' ? page.path : null;
+  const asset = page?.kind === 'asset' ? page.path : null;
   // The open note's autosave state, by path: a rename waits until it is saved.
   const [saved, setSaved] = useState<{ path: string; status: DocumentStatus } | null>(null);
   const unsaved = unsavedNote(active, saved);
@@ -42,8 +49,8 @@ export function App() {
   const [issueCount, setIssueCount] = useState<IssueCount>(null);
   const closeDrawer = useCallback(() => { setDrawer(false); }, []);
   const { show, select } = sidebar;
-  // The assets list follows the disk only while the Assets view is shown.
-  const assetList = useAssetList(assetsClient, files, sidebar.view === 'assets' && (sidebar.shown || drawer));
+  // The assets list follows the disk only while the Assets view or an asset page is shown.
+  const assetList = useAssetList(assetsClient, files, (sidebar.view === 'assets' && (sidebar.shown || drawer)) || asset !== null);
   // On a phone the drawer opens on the view, leaving the desktop layout as it
   // was; on a desktop the sidebar shows the view.
   const openView = useCallback((view: SidebarView) => {
@@ -62,32 +69,49 @@ export function App() {
     return () => { query.removeEventListener('change', onChange); };
   }, []);
 
-  // Back and forward move between opened notes.
+  // An asset changed on disk: what shows it loads it again.
+  useEffect(() => files.subscribeFileEvents((event) => {
+    if (event.path.startsWith(ASSETS_PREFIX) && event.type !== 'unlink' && event.mtimeMs !== null) assetChanged(event.path, event.mtimeMs);
+  }), [files]);
+
+  // Back and forward move between opened notes and assets.
   useEffect(() => {
     const onPop = () => {
       setPlace(null);
-      setActive(noteFromUrl(window.location.search));
+      setPage(pageFromUrl(window.location.search));
     };
     window.addEventListener('popstate', onPop);
     return () => { window.removeEventListener('popstate', onPop); };
   }, []);
 
-  const go = (path: string) => {
+  const go = (next: Page) => {
     setDrawer(false);
-    if (path === active) return;
-    window.history.pushState(null, '', `?path=${encodeURIComponent(path)}`);
-    setActive(path);
+    if (next.kind === page?.kind && next.path === page.path) return;
+    window.history.pushState(null, '', pageQuery(next));
+    setPage(next);
   };
   const open = (path: string) => {
     setPlace(null);
-    go(path);
+    go({ kind: 'note', path });
+  };
+  const openAsset = (path: string) => {
+    setPlace(null);
+    go({ kind: 'asset', path });
+  };
+  // The open asset moved with a rename or a replace: follow it without a new history entry.
+  const assetChangedBy = (answer: AssetAnswer) => {
+    const to = movedTo(answer);
+    if (asset === null || to === null || answer.changes[0]?.path !== asset) return;
+    const next: Page = { kind: 'asset', path: to };
+    window.history.replaceState(null, '', pageQuery(next));
+    setPage(next);
   };
 
   const placeSeq = useRef(0);
   const openUsage = (usage: AssetUsage) => {
     placeSeq.current += 1;
     setPlace({ note: usage.note, line: usage.line, column: usage.column, length: usage.length, seq: placeSeq.current });
-    go(usage.note);
+    go({ kind: 'note', path: usage.note });
   };
 
   // The open note moved with a rename: follow it without a new history entry.
@@ -95,9 +119,9 @@ export function App() {
     if (active === null) return;
     const moved = renamedPath(syncPath(active), from, to);
     if (moved === null) return;
-    const path = NOTES_PREFIX + moved;
-    window.history.replaceState(null, '', `?path=${encodeURIComponent(path)}`);
-    setActive(path);
+    const next: Page = { kind: 'note', path: NOTES_PREFIX + moved };
+    window.history.replaceState(null, '', pageQuery(next));
+    setPage(next);
   };
 
   return (
@@ -107,8 +131,8 @@ export function App() {
           Notes
         </button>
         <span className="font-semibold whitespace-nowrap">Notes Studio</span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)]">{active ?? ''}</span>
-        {active && <OpenOnSite path={active} />}
+        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)]">{page?.path ?? ''}</span>
+        {page && <OpenOnSite path={page.path} />}
       </header>
       <div className="relative flex min-h-0 flex-1">
         <Sidebar
@@ -118,7 +142,18 @@ export function App() {
           issues={issueCount}
           hasNote={active !== null}
           issuesRef={setIssuesSlot}
-          assets={<AssetsView client={assetsClient} list={assetList} active={active} unsaved={unsaved !== null} onOpenUsage={openUsage} />}
+          assets={
+            <AssetsView
+              client={assetsClient}
+              list={assetList}
+              active={active}
+              current={asset}
+              unsaved={unsaved !== null}
+              onOpen={openAsset}
+              onOpenUsage={openUsage}
+              onChanged={assetChangedBy}
+            />
+          }
           notes={
             <>
               {error && <p role="alert" className="p-3 text-[12.5px] text-[var(--fde-error)]">Could not load the page tree: {error}</p>}
@@ -151,6 +186,8 @@ export function App() {
               place={place?.note === active ? place : null}
             />
           </NoteGate>
+        ) : asset ? (
+          <AssetPage client={assetsClient} list={assetList} path={asset} unsaved={unsaved !== null} onOpenUsage={openUsage} onChanged={assetChangedBy} />
         ) : (
           <p className="m-auto p-6 text-[13px] text-[var(--fde-muted-foreground)]">Pick a note to edit.</p>
         )}

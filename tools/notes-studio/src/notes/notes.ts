@@ -1,3 +1,5 @@
+import { classifyPath } from '../../server/security/asset-types';
+
 export const NOTES_PREFIX = 'content/notes/';
 
 // The file API speaks worktree paths, the sync socket paths inside content/notes.
@@ -18,6 +20,22 @@ export function noteFromUrl(search: string): string | null {
   const path = new URLSearchParams(search).get('path');
   return path !== null && isNote(path) ? path : null;
 }
+
+// What the main pane shows: a note or an asset, by worktree path.
+export type Page = { kind: 'note' | 'asset'; path: string };
+
+// The page to open from the URL: `?path=` names a note, `?asset=` a file
+// under public/notes.
+export function pageFromUrl(search: string): Page | null {
+  const note = noteFromUrl(search);
+  if (note !== null) return { kind: 'note', path: note };
+  const asset = new URLSearchParams(search).get('asset');
+  // The server's own lexical check, so the page opens only what it serves.
+  return asset !== null && classifyPath(asset) === 'asset' ? { kind: 'asset', path: asset } : null;
+}
+
+// The query that opens `page`, the inverse of pageFromUrl.
+export const pageQuery = (page: Page) => `?${page.kind === 'note' ? 'path' : 'asset'}=${encodeURIComponent(page.path)}`;
 
 // The note's page on the site, as fumadocs slugs it under `docsRoute`
 // (lib/shared.ts, which reads process.env and so is not imported here): an

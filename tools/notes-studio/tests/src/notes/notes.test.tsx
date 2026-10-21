@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { NoteGate } from '../../../src/notes/NoteGate';
 import { OpenOnSite } from '../../../src/notes/OpenOnSite';
 import type { createFilesClient } from '../../../src/api/files';
-import { noteFromUrl, noteRoute, siteUrlFrom, syncPath, unsavedNote } from '../../../src/notes/notes';
+import { noteFromUrl, noteRoute, pageFromUrl, pageQuery, siteUrlFrom, syncPath, unsavedNote } from '../../../src/notes/notes';
 
 afterEach(cleanup);
 
@@ -26,6 +26,23 @@ describe('note helpers', () => {
     expect(noteFromUrl('?path=content/notes/meta.yaml')).toBeNull();
     expect(noteFromUrl('?path=package.json')).toBeNull();
     expect(noteFromUrl('')).toBeNull();
+  });
+
+  it('reads the page to open: ?path= for a note, ?asset= for a file under public/notes', () => {
+    expect(pageFromUrl('?path=content%2Fnotes%2Fa.mdx')).toEqual({ kind: 'note', path: 'content/notes/a.mdx' });
+    expect(pageFromUrl('?asset=public%2Fnotes%2Fguide%2Fflow.png')).toEqual({ kind: 'asset', path: 'public/notes/guide/flow.png' });
+    expect(pageFromUrl('?asset=public/notes/guide/Photo.PNG')).toEqual({ kind: 'asset', path: 'public/notes/guide/Photo.PNG' });
+    expect(pageFromUrl('?asset=public/notes/guide/run.sh')).toBeNull();
+    expect(pageFromUrl('?asset=public/notes/../secret.png')).toBeNull();
+    expect(pageFromUrl('?asset=public/notes//a.png')).toBeNull();
+    expect(pageFromUrl('?asset=public/notes/.cache/a.png')).toBeNull();
+    expect(pageFromUrl('?asset=public/notes/a.constructor')).toBeNull();
+    expect(pageFromUrl('?asset=content/notes/a.png')).toBeNull();
+    expect(pageFromUrl('?path=package.json')).toBeNull();
+    expect(pageFromUrl('')).toBeNull();
+    for (const page of [{ kind: 'note', path: 'content/notes/a b/c#d.mdx' }, { kind: 'asset', path: 'public/notes/a b/c&d.png' }] as const) {
+      expect(pageFromUrl(pageQuery(page))).toEqual(page);
+    }
   });
 
   it('maps a note to its page on the site', () => {
@@ -55,6 +72,11 @@ describe('OpenOnSite', () => {
     const link = screen.getByRole('link', { name: 'Open on site' });
     expect(link.getAttribute('href')).toBe('http://127.0.0.1:3001/notes/database');
     expect(link.getAttribute('target')).toBe('_blank');
+  });
+
+  it('links a file under public/notes to the file the site serves', () => {
+    render(<OpenOnSite path="public/notes/guide/a b.png" siteUrl="http://127.0.0.1:3001" />);
+    expect(screen.getByRole('link', { name: 'Open on site' }).getAttribute('href')).toBe('http://127.0.0.1:3001/notes/guide/a%20b.png');
   });
 
   it('defaults to the dev server on localhost:3000', () => {

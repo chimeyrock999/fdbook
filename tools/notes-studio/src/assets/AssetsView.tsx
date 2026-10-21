@@ -1,47 +1,40 @@
-import { ChevronRight, FileCode, Folder, Image, List, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { ChevronRight, FileCode, Folder, Image, MoreHorizontal, PanelRight, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { AssetAnswer, AssetInfo, AssetsClient, AssetUsage } from '../api/assets';
 import { assetDirFor } from '../media/asset-names';
 import { buildAssetTree, foldersTo, nameOf, type AssetFolder } from './asset-tree';
-import { DeleteAssetDialog, RenameAssetDialog, SourceList, UsageList } from './AssetDialogs';
+import { isImage } from './asset-facts';
+import { plural, said } from './asset-changes';
+import { DeleteAssetDialog, RenameAssetDialog } from './AssetDialogs';
 import type { useAssetList } from './useAssetList';
 
 type Menu = { asset: AssetInfo; top: number; left: number };
 type Dialog = { kind: 'rename' | 'delete'; asset: AssetInfo };
 
-const IMAGE = /\.(avif|gif|jpe?g|png|svg|webp)$/i;
-const plural = (count: number, word: string) => `${String(count)} ${word}${count === 1 ? '' : 's'}`;
 
-function said(answer: AssetAnswer) {
-  const move = answer.changes.find((change) => change.type === 'move');
-  if (!move) return `Deleted ${answer.changes[0]?.path ?? 'the file'}.`;
-  const notes = answer.changes.filter((change) => change.type === 'change').length;
-  const refs = answer.usages.length;
-  return notes === 0 ? `Renamed to ${nameOf(move.to)}.` : `Renamed to ${nameOf(move.to)}; updated ${plural(refs, 'reference')} in ${plural(notes, 'note')}.`;
-}
+const dirOf = (path: string) => path.slice(0, path.lastIndexOf('/'));
 
 // What the rows need from the view around them.
 type View = {
   filtering: boolean;
-  open: ReadonlySet<string>;
+  openFolders: ReadonlySet<string>;
   toggle: (path: string) => void;
-  expanded: string | null;
-  expand: (path: string) => void;
+  current: string | null;
+  open: (path: string) => void;
   openMenu: (menu: Menu) => void;
-  onOpenUsage: (usage: AssetUsage) => void;
 };
 
 function FileRow({ asset, view }: { asset: AssetInfo; view: View }) {
   const name = nameOf(asset.path);
   const dot = name.lastIndexOf('.');
   const used = asset.usages.length;
-  const expanded = view.expanded === asset.path;
+  const current = view.current === asset.path;
   return (
     <li>
-      <div className="studio-tree-row" aria-current={expanded ? 'true' : undefined}>
+      <div className="studio-tree-row" aria-current={current ? 'page' : undefined}>
         <span className="studio-tree-chevron" />
-        <button type="button" className="studio-tree-label" title={asset.path} aria-expanded={expanded} onClick={() => { view.expand(asset.path); }}>
-          {IMAGE.test(name) ? <Image size={16} /> : <FileCode size={16} />}
+        <button type="button" className="studio-tree-label" title={asset.path} onClick={() => { view.open(asset.path); }}>
+          {isImage(name) ? <Image size={16} /> : <FileCode size={16} />}
           <span className="truncate">
             {name.slice(0, dot)}
             <span className="text-[var(--fde-muted-foreground)]">{name.slice(dot)}</span>
@@ -67,12 +60,6 @@ function FileRow({ asset, view }: { asset: AssetInfo; view: View }) {
           <MoreHorizontal size={14} />
         </button>
       </div>
-      {expanded && (
-        <div className="studio-asset-expanded">
-          {used === 0 ? <p className="studio-tree-status">No note uses it.</p> : <UsageList usages={asset.usages} onOpen={view.onOpenUsage} />}
-          {asset.sources.length > 0 && <SourceList sources={asset.sources} />}
-        </div>
-      )}
     </li>
   );
 }
@@ -81,7 +68,7 @@ function FolderItems({ folder, nested = false, view }: { folder: AssetFolder; ne
   return (
     <ul role="group" className={nested ? 'studio-tree-group studio-tree-nested' : 'studio-tree-group'}>
       {folder.folders.map((child) => {
-        const open = view.filtering || view.open.has(child.path);
+        const open = view.filtering || view.openFolders.has(child.path);
         return (
           <li key={child.path}>
             <div className="studio-tree-row">
@@ -103,32 +90,41 @@ function FolderItems({ folder, nested = false, view }: { folder: AssetFolder; ne
 }
 
 // The sidebar's Assets view: public/notes as folders, each file with how
-// many times notes use it. A file opens the list of the notes and lines
-// that use it; its menu renames it (every reference follows) or deletes it
-// (only once nothing uses it). `active` is the open note (a worktree path);
-// while it has edits not on disk yet (`unsaved`), rename and delete wait,
-// since the server only sees references that are saved.
-export function AssetsView({ client, list, active, unsaved, onOpenUsage }: {
+// many times notes use it. A file opens its asset page in the main pane
+// (`onOpen`; `current` is the one open there); its menu renames it (every
+// reference follows) or deletes it (only once nothing uses it), and
+// `onChanged` hears what changed. `active` is the open note (a worktree
+// path); while it has edits not on disk yet (`unsaved`), rename and delete
+// wait, since the server only sees references that are saved.
+export function AssetsView({ client, list, active, current, unsaved, onOpen, onOpenUsage, onChanged }: {
   client: AssetsClient;
   list: ReturnType<typeof useAssetList>;
   active: string | null;
+  current: string | null;
   unsaved: boolean;
+  onOpen: (path: string) => void;
   onOpenUsage: (usage: AssetUsage) => void;
+  onChanged: (answer: AssetAnswer) => void;
 }) {
   const [query, setQuery] = useState('');
   const [unused, setUnused] = useState(false);
-  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set(active === null ? [] : foldersTo(assetDirFor(active))));
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set([...(active === null ? [] : foldersTo(assetDirFor(active))), ...(current === null ? [] : foldersTo(dirOf(current)))]));
   const [menu, setMenu] = useState<Menu | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [status, setStatus] = useState<{ text: string; error: boolean } | null>(null);
   const [shownFor, setShownFor] = useState(active);
+  const [currentFor, setCurrentFor] = useState(current);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // The open note's asset folder shows when a note is opened.
   if (active !== shownFor) {
     setShownFor(active);
     if (active !== null) setOpen(new Set([...open, ...foldersTo(assetDirFor(active))]));
+  }
+  // So does the folder of the asset open in the main pane.
+  if (current !== currentFor) {
+    setCurrentFor(current);
+    if (current !== null) setOpen(new Set([...open, ...foldersTo(dirOf(current))]));
   }
 
   useEffect(() => {
@@ -155,7 +151,7 @@ export function AssetsView({ client, list, active, unsaved, onOpenUsage }: {
   const unusedCount = assets.filter((asset) => asset.usages.length === 0).length;
   const view: View = {
     filtering: query.trim() !== '' || unused,
-    open,
+    openFolders: open,
     toggle: (path) => {
       setOpen((current) => {
         const next = new Set(current);
@@ -163,18 +159,16 @@ export function AssetsView({ client, list, active, unsaved, onOpenUsage }: {
         return next;
       });
     },
-    expanded,
-    expand: (path) => { setExpanded((current) => (current === path ? null : path)); },
+    current,
+    open: onOpen,
     openMenu: setMenu,
-    onOpenUsage,
   };
   // The dialog works on the asset as listed now: its mtime and usages.
-  const current = dialog && assets.find((asset) => asset.path === dialog.asset.path);
+  const listed = dialog && assets.find((asset) => asset.path === dialog.asset.path);
   const done = (answer: AssetAnswer) => {
     setDialog(null);
     setStatus({ text: said(answer), error: false });
-    const move = answer.changes.find((change) => change.type === 'move');
-    if (move?.type === 'move' && expanded === move.path) setExpanded(move.to);
+    onChanged(answer);
     reload();
   };
   const empty = tree.folders.length === 0 && tree.files.length === 0;
@@ -199,8 +193,8 @@ export function AssetsView({ client, list, active, unsaved, onOpenUsage }: {
       )}
       {menu !== null && (
         <div ref={menuRef} role="menu" className="studio-menu" style={{ top: menu.top, left: menu.left }}>
-          <button type="button" role="menuitem" onClick={() => { setMenu(null); setExpanded(menu.asset.path); }}>
-            <List size={14} /> Show usage
+          <button type="button" role="menuitem" onClick={() => { setMenu(null); onOpen(menu.asset.path); }}>
+            <PanelRight size={14} /> Open
           </button>
           <button type="button" role="menuitem" disabled={unsaved} onClick={() => { setMenu(null); setDialog({ kind: 'rename', asset: menu.asset }); }}>
             <Pencil size={14} /> Rename…
@@ -212,13 +206,13 @@ export function AssetsView({ client, list, active, unsaved, onOpenUsage }: {
           {unsaved && <p className="studio-menu-hint">The open note has unsaved changes. Rename or delete once it shows Saved.</p>}
         </div>
       )}
-      {dialog?.kind === 'rename' && current && (
-        <RenameAssetDialog client={client} asset={current} onDone={done} onClose={() => { setDialog(null); }} />
+      {dialog?.kind === 'rename' && listed && (
+        <RenameAssetDialog client={client} asset={listed} onDone={done} onClose={() => { setDialog(null); }} />
       )}
-      {dialog?.kind === 'delete' && current && (
+      {dialog?.kind === 'delete' && listed && (
         <DeleteAssetDialog
           client={client}
-          asset={current}
+          asset={listed}
           onDone={done}
           onClose={() => { setDialog(null); }}
           onOpenUsage={(usage) => { setDialog(null); onOpenUsage(usage); }}
