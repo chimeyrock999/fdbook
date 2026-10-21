@@ -27,6 +27,7 @@ const cr = (slug: string, status: ChangeRequest['status'], more: Partial<ChangeR
 
 const LIST: CrList = {
   enabled: true,
+  taken: [],
   prError: null,
   crs: [
     cr('driver-notes', 'draft', { changedPages: 2, uncommitted: 1 }),

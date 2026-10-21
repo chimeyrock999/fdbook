@@ -86,7 +86,7 @@ function parseWorktrees(output: string): Worktree[] {
 // `home`, and the read-only worktree of origin/main the Studio opens first.
 // Git holds all of it: the name is the branch description, the creation
 // time a `studiocreated` key in the branch's config, the status the remote
-// branch and the pull request (gh). Opens `_main` (fetching origin/main) and
+// branch and the pull request (gh). Opens `_main` (fetching origin) and
 // prunes worktrees that were removed by hand.
 export async function openChangeRequests({ repo, home, pullRequests = ghPullRequests(repo), pagesProject = null }: ChangeRequestOptions) {
   const worktrees = join(home, 'worktrees');
@@ -143,9 +143,25 @@ export async function openChangeRequests({ repo, home, pullRequests = ghPullRequ
     return { changedPages: pages.size, uncommitted: dirty.length, updatedMs };
   }
 
-  // Every change request, the last updated first. `prError` says why the
-  // pull requests could not be read; the statuses then come from git alone.
-  async function list(fresh = false): Promise<{ crs: ChangeRequest[]; prError: string | null }> {
+  // main and every cr/* branch on origin, dropping the remote refs of
+  // branches deleted there (a merged pull request's, say), so pushed and the
+  // taken slugs follow the remote.
+  const fetchOrigin = () =>
+    inRepo('fetch', '--quiet', '--prune', REMOTE, `+refs/heads/main:refs/remotes/${BASE}`, `+refs/heads/${CR_BRANCH_PREFIX}*:refs/remotes/${REMOTE}/${CR_BRANCH_PREFIX}*`);
+
+  // The slugs a new change request cannot take: local and remote cr/*
+  // branches, the heads of past pull requests (a new branch of that name
+  // would show their status) and the folders in `home`.
+  async function takenSlugs() {
+    const [local, remote, prs, folders] = await Promise.all([branchSlugs(), remoteSlugs(), readPullRequests(), readdir(root)]);
+    const heads = [...prs.byBranch.keys()].map((branch) => branch.slice(CR_BRANCH_PREFIX.length));
+    return [...new Set([...local, ...remote, ...heads, ...folders])].filter(isCrSlug).sort();
+  }
+
+  // Every change request, the last updated first, and the slugs taken.
+  // `prError` says why the pull requests could not be read; the statuses
+  // then come from git alone.
+  async function list(fresh = false): Promise<{ crs: ChangeRequest[]; taken: string[]; prError: string | null }> {
     const [slugs, remote, config, trees, prs] = await Promise.all([
       branchSlugs(),
       remoteRefs(),
@@ -178,7 +194,7 @@ export async function openChangeRequests({ repo, home, pullRequests = ghPullRequ
         };
       }),
     );
-    return { crs: crs.sort((a, b) => b.updatedMs - a.updatedMs), prError: prs.error };
+    return { crs: crs.sort((a, b) => b.updatedMs - a.updatedMs), taken: await takenSlugs(), prError: prs.error };
   }
 
   // `_main` at origin/main as it is now. Nothing writes there, so a forced
@@ -198,15 +214,14 @@ export async function openChangeRequests({ repo, home, pullRequests = ghPullRequ
     if (name === '') throw new HttpError(400, 'Give the change request a name.');
     if (name.length > NAME_MAX) throw new HttpError(400, `The name is longer than ${String(NAME_MAX)} characters.`);
     return lock('cr', async () => {
-      // A branch someone pushed is taken too: its pull request and preview would pass for this one's.
-      const taken = new Set([...(await branchSlugs()), ...(await remoteSlugs()), ...(await readdir(root))]);
-      const slug = crSlug(name, taken);
-      if (slug === null) throw new HttpError(400, 'The name needs a letter or a digit.');
+      if (crSlug(name) === null) throw new HttpError(400, 'The name needs a letter or a digit.');
       try {
-        await inRepo('fetch', '--quiet', REMOTE, 'main');
+        await fetchOrigin();
       } catch (error) {
         throw new HttpError(502, `Could not fetch ${BASE}: ${(error as Error).message}`);
       }
+      // After the fetch, so a branch just pushed elsewhere counts.
+      const slug = crSlug(name, new Set(await takenSlugs())) ?? '';
       const branch = branchOf(slug);
       // --no-track: the branch must not push to main.
       await inRepo('worktree', 'add', '--quiet', '--no-track', '-b', branch, dirOf(slug), BASE);
@@ -257,7 +272,7 @@ export async function openChangeRequests({ repo, home, pullRequests = ghPullRequ
 
   await inRepo('worktree', 'prune');
   try {
-    await inRepo('fetch', '--quiet', REMOTE, 'main');
+    await fetchOrigin();
   } catch (error) {
     // Offline: read the origin/main this clone already has.
     console.warn(`Notes Studio could not fetch ${BASE}, reading the last one fetched: ${(error as Error).message}`);

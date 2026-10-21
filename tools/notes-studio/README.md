@@ -122,8 +122,8 @@ without `changeRequests`, as the tests start it, edits the one worktree at
 | `GET /api/assets` | Every file under `public/notes` with where notes use it and the diagram sources that generate it: `{ assets: [{ path, mtimeMs, size, usages: [{ note, line, column, length, text, unsure }], sources: [{ path, line, text }] }] }` (see Assets) |
 | `POST /api/assets` | Takes JSON `{ op: "rename" \| "delete" \| "replace", path, name?, extension?, baseMtime, dryRun? }`, changes the asset and the notes that use it, and returns `{ changes, usages }`. With `dryRun` it writes nothing; a replace is a dry run only here. |
 | `PUT /api/assets?path=…&extension=…&baseMtime=…` | Replaces the asset's content with the raw bytes (`X-Studio-Write: 1`, up to 25 MB), at its path or, with another extension, at its name with that one, and returns `{ changes, usages, mtimeMs }` (see Assets) |
-| `GET /api/crs` | The change requests: `{ enabled, crs: [{ slug, name, branch, status, pushed, worktree, changedPages, uncommitted, updatedMs, previewUrl, pr }], prError }`; `?fresh=1` reads the pull requests again (see Change requests) |
-| `POST /api/crs` | Takes JSON `{ name }`, fetches origin/main, adds the branch and its worktree, and returns `{ cr }` |
+| `GET /api/crs` | The change requests: `{ enabled, crs: [{ slug, name, branch, status, pushed, worktree, changedPages, uncommitted, updatedMs, previewUrl, pr }], taken, prError }`, `taken` being the slugs a new one cannot take; `?fresh=1` reads the pull requests again (see Change requests) |
+| `POST /api/crs` | Takes JSON `{ name }`, fetches origin, adds the branch and its worktree, and returns `{ cr }` |
 | `POST /api/crs/<slug>/discard` | Takes JSON `{ dryRun? }`, removes the worktree and the local branch, and returns `{ discard: { slug, branch, worktree, commits, uncommitted, pushed, pr } }`. With `dryRun` it removes nothing. |
 | `/cr/<slug>/api/…`, `/cr/<slug>/__fde_sync` | The endpoints above (but `/api/crs`) for the change request's worktree. An unknown slug answers `404`. |
 | any other `/api/…` | `404` with a JSON `{ error }`, never the app's page (see below) |
@@ -155,15 +155,19 @@ drag, and assets cannot be replaced, renamed or deleted. The server refuses
 every write there too (`403`), whatever the page sends; lint still runs.
 Main is a worktree of `origin/main` at
 `~/.chimey-studio/worktrees/_main`, checked out again at startup and when a
-change request is created (both fetch first; offline, startup reads the
-`origin/main` the clone has).
+change request is created. Both fetch `main` and every `cr/*` branch from
+origin first, dropping the remote refs of branches deleted there; offline,
+startup reads the `origin/main` the clone has.
 
 **Edit** in the header continues in a change request still open (Draft,
 Previewing, In review) or starts a new one; with none open it starts one at
 once. A new change request takes a name. Its slug is the name in kebab-case
 ASCII, at most 24 characters, with `-2`, `-3`, … when taken, so `cr-<slug>`
-fits the 28 characters Cloudflare Pages keeps in a preview alias. Creating
-it fetches `origin/main`, then adds branch `cr/<slug>` from it (not tracking
+fits the 28 characters Cloudflare Pages keeps in a preview alias. Taken
+means a local or remote `cr/*` branch, the head of a past pull request
+(whose status a new branch of that name would show) or a folder in the
+Studio home; the dialog shows the branch the server will pick. Creating it
+fetches origin, then adds branch `cr/<slug>` from `origin/main` (not tracking
 main, so a push cannot land there) with its worktree at
 `~/.chimey-studio/worktrees/<slug>` (`STUDIO_HOME` moves the folder). The
 name is the branch description and the creation time a `studiocreated` key

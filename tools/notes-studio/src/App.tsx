@@ -248,7 +248,7 @@ export function App() {
       {crDialog?.kind === 'new' && (
         <NewCrDialog
           client={crClient}
-          taken={crs.list?.crs.map((cr) => cr.slug) ?? []}
+          taken={crs.list?.taken ?? []}
           onCreated={(cr) => { switchTo(cr.slug); }}
           onClose={() => { setCrDialog(null); }}
         />

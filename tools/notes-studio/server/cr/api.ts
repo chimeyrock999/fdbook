@@ -4,7 +4,7 @@ import type { ChangeRequests } from './manager.ts';
 
 const MAX_BODY_BYTES = 16 * 1024;
 
-// GET /api/crs: { enabled, crs, prError } (`?fresh=1` reads the pull
+// GET /api/crs: { enabled, crs, taken, prError } (`?fresh=1` reads the pull
 // requests again). POST /api/crs with { name } creates one and answers
 // { cr }. POST /api/crs/<slug>/discard with { dryRun? } answers what it
 // removes (see manager.ts). Without change requests (a Studio over one
@@ -13,7 +13,7 @@ export function createChangeRequestsApi(crs: ChangeRequests | null): Handler {
   async function route(request: IncomingMessage, pathname: string) {
     if (pathname === '/api/crs') {
       if (request.method === 'GET') {
-        if (crs === null) return { enabled: false, crs: [], prError: null };
+        if (crs === null) return { enabled: false, crs: [], taken: [], prError: null };
         const fresh = new URL(request.url ?? '/', 'http://studio').searchParams.get('fresh') === '1';
         return { enabled: true, ...(await crs.list(fresh)) };
       }

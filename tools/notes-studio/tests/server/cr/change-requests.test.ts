@@ -8,7 +8,7 @@ import type { ChangeRequest, Discard } from '../../../server/cr/manager';
 import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '../../support/git-repo';
 import { json, rawRequest, tryUpgrade } from '../../support/http';
 
-type List = { enabled: boolean; crs: ChangeRequest[]; prError: string | null };
+type List = { enabled: boolean; crs: ChangeRequest[]; taken: string[]; prError: string | null };
 
 class TextEditor implements DocumentEditor {
   text = '';
@@ -65,7 +65,7 @@ describe('change requests', () => {
       const main = join(await worktrees(), '_main');
       expect((await git(main, 'rev-parse', 'HEAD')).trim()).toBe((await git(repo.repo, 'rev-parse', 'origin/main')).trim());
       expect((await readNote('', 'content/notes/index.mdx')).content).toBe(await readFile(join(main, 'content/notes/index.mdx'), 'utf8'));
-      expect(await list()).toEqual({ enabled: true, crs: [], prError: null });
+      expect(await list()).toEqual({ enabled: true, crs: [], taken: [], prError: null });
     });
 
     it('refuses every write to main', async () => {
@@ -117,12 +117,23 @@ describe('change requests', () => {
       await send(`/api/crs/${again.slug}/discard`, 'POST', {});
     });
 
-    it('does not take the slug of a branch someone else pushed', async () => {
+    it('does not take the slug of a branch someone else pushed, fetching origin itself', async () => {
       await git(repo.repo, 'push', '--quiet', 'origin', 'origin/main:refs/heads/cr/fix-typo');
-      await git(repo.repo, 'fetch', '--quiet', 'origin');
+      // As if pushed from another machine: this clone has not fetched it.
+      await git(repo.repo, 'update-ref', '-d', 'refs/remotes/origin/cr/fix-typo');
       const mine = await create('Fix typo');
       expect(mine.slug).toBe('fix-typo-2');
+      expect((await list()).taken).toContain('fix-typo');
       await send(`/api/crs/${mine.slug}/discard`, 'POST', {});
+    });
+
+    it('does not take the slug of a past pull request, whose status it would show', async () => {
+      studio.fake.prs = [{ number: 7, url: 'https://github.com/o/r/pull/7', state: 'MERGED', headRefName: 'cr/old-work' }];
+      expect((await list(true)).taken).toContain('old-work');
+      const again = await create('Old work');
+      expect(again).toMatchObject({ slug: 'old-work-2', status: 'draft', pr: null });
+      studio.fake.prs = [];
+      await send(`/api/crs/${again.slug}/discard`, 'POST', {});
     });
 
     it('refuses a name without letters or digits, and an empty one', async () => {
@@ -184,6 +195,15 @@ describe('change requests', () => {
         const found = (await list(true)).crs.find((each) => each.slug === cr.slug);
         expect(found).toMatchObject({ status, pr: { number: 81, url: pr.url } });
       }
+    });
+
+    it('is Draft again once its remote branch is deleted, after the next fetch', async () => {
+      studio.fake.prs = [];
+      await git(repo.origin, 'update-ref', '-d', `refs/heads/${cr.branch}`);
+      const other = await create('Triggers a fetch');
+      expect((await list(true)).crs.find((each) => each.slug === cr.slug)).toMatchObject({ status: 'draft', pushed: false, previewUrl: null });
+      await send(`/api/crs/${other.slug}/discard`, 'POST', {});
+      await git(cr.worktree ?? '', 'push', '--quiet', 'origin', `${cr.branch}:${cr.branch}`);
     });
 
     it('falls back to git when the pull requests cannot be read', async () => {

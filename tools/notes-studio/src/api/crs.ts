@@ -22,7 +22,8 @@ export type ChangeRequest = {
 export type Discard = { slug: string; branch: string; worktree: string | null; commits: number; uncommitted: number; pushed: boolean; pr: { number: number; url: string } | null };
 
 // `enabled`: false in a Studio over one worktree, which edits it directly.
-export type CrList = { enabled: boolean; crs: ChangeRequest[]; prError: string | null };
+// `taken`: the slugs a new change request cannot take, as the server picks one.
+export type CrList = { enabled: boolean; crs: ChangeRequest[]; taken: string[]; prError: string | null };
 
 export function createCrClient(base = '') {
   async function post<T>(path: string, body: unknown): Promise<T> {
