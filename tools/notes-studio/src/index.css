@@ -63,7 +63,7 @@
     background: var(--fde-card);
   }
   .studio-notes {
-    width: 248px;
+    width: 268px;
     flex: none;
     border-right: 1px solid var(--fde-border);
   }
@@ -171,5 +171,267 @@
     font-size: 13px;
     font-style: italic;
     color: var(--fde-muted-foreground);
+  }
+}
+
+/* The page tree (src/tree): rows, the actions menu and the dialogs. */
+@layer components {
+  .studio-field-label {
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .studio-icon-button {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 30px;
+    border: 1px solid var(--fde-border);
+    background: var(--fde-background);
+    border-radius: 7px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-icon-button:hover {
+    color: var(--fde-foreground);
+  }
+  .studio-tree-row {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    min-height: 28px;
+    padding-right: 2px;
+    border-radius: 6px;
+  }
+  .studio-tree-row:hover,
+  .studio-tree-row[aria-current='page'] {
+    background: var(--fde-accent);
+  }
+  .studio-tree-row[aria-current='page'] .studio-tree-label {
+    font-weight: 600;
+  }
+  .studio-tree-row[data-faded] .studio-tree-label {
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-row[data-drop='before'] {
+    box-shadow: inset 0 2px 0 var(--fde-primary);
+  }
+  .studio-tree-row[data-drop='after'] {
+    box-shadow: inset 0 -2px 0 var(--fde-primary);
+  }
+  .studio-tree-chevron {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-chevron svg {
+    transition: transform 0.12s;
+  }
+  .studio-tree-chevron svg[data-open] {
+    transform: rotate(90deg);
+  }
+  .studio-tree-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+    padding: 4px 2px;
+    text-align: left;
+    font-size: 13px;
+  }
+  .studio-tree-label svg {
+    flex: none;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-separator {
+    flex: 1;
+    padding: 8px 2px 2px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-missing {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+    padding: 3px 6px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--fde-error);
+    background: color-mix(in srgb, var(--fde-error) 9%, transparent);
+  }
+  .studio-tree-missing small {
+    margin-left: auto;
+    font-size: 10.5px;
+  }
+  .studio-tree-badge {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    background: var(--fde-muted);
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-grip,
+  .studio-tree-more {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    color: var(--fde-muted-foreground);
+    /* Shown on hover; opacity, not visibility, so the button stays in the
+       tab order and the accessibility tree. */
+    opacity: 0;
+  }
+  .studio-tree-grip {
+    cursor: grab;
+  }
+  .studio-tree-more:hover {
+    background: var(--fde-muted);
+    color: var(--fde-foreground);
+  }
+  .studio-tree-row:hover :is(.studio-tree-grip, .studio-tree-more),
+  .studio-tree-row:focus-within .studio-tree-more {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .studio-tree-more {
+      opacity: 1;
+    }
+  }
+  .studio-tree-status,
+  .studio-tree-error {
+    padding: 0 4px;
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-error {
+    color: var(--fde-error);
+  }
+  .studio-menu {
+    position: fixed;
+    z-index: 60;
+    display: grid;
+    min-width: 190px;
+    max-width: 240px;
+    padding: 4px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    background: var(--fde-card);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  }
+  .studio-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    text-align: left;
+    font-size: 13px;
+  }
+  .studio-menu button:hover:not(:disabled) {
+    background: var(--fde-accent);
+  }
+  .studio-menu button:disabled {
+    opacity: 0.45;
+  }
+  .studio-menu hr {
+    margin: 4px 2px;
+    border-color: var(--fde-border);
+  }
+  .studio-menu-hint {
+    padding: 4px 8px 6px;
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-dialog-back {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgb(0 0 0 / 0.35);
+  }
+  .studio-dialog {
+    display: grid;
+    gap: 12px;
+    width: min(440px, 100%);
+    max-height: 100%;
+    overflow: auto;
+    padding: 18px;
+    border: 1px solid var(--fde-border);
+    border-radius: 12px;
+    background: var(--fde-card);
+    box-shadow: 0 20px 50px rgb(0 0 0 / 0.25);
+  }
+  .studio-tree-kinds {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .studio-tree-kinds legend {
+    margin-bottom: 4px;
+  }
+  .studio-tree-kinds label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .studio-tree-kinds label:has(input:checked) {
+    border-color: var(--fde-primary);
+    background: var(--fde-accent);
+  }
+  .studio-tree-kinds small {
+    width: 100%;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-changes {
+    overflow-x: auto;
+    padding: 8px 10px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    background: var(--fde-background);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: nowrap;
+  }
+  .studio-tree-changes [data-change='add'] {
+    color: var(--fde-success);
+  }
+  .studio-tree-changes [data-change='change'],
+  .studio-tree-changes [data-change='move'] {
+    color: var(--fde-warning);
+  }
+  .studio-tree-changes span {
+    color: var(--fde-muted-foreground);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .studio-tree-chevron svg {
+      transition: none;
+    }
   }
 }

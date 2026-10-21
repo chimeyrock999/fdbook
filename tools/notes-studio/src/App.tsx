@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createFilesClient } from './api/files';
 import { createLintClient } from './api/lint';
+import { createTreeClient } from './api/tree';
 import { NoteEditor } from './editor/NoteEditor';
 import { NoteGate } from './notes/NoteGate';
-import { NoteList } from './notes/NoteList';
-import { noteFromUrl, syncPath } from './notes/notes';
-import { useNotes } from './notes/useNotes';
+import { NOTES_PREFIX, noteFromUrl, syncPath } from './notes/notes';
+import { PageTree } from './tree/PageTree';
+import { renamedPath } from './tree/tree';
+import { useTree } from './tree/useTree';
 
 export function App() {
   const files = useMemo(() => createFilesClient(), []);
   const lint = useMemo(() => createLintClient(), []);
-  const { notes, error } = useNotes(files);
+  const treeClient = useMemo(() => createTreeClient(), []);
+  const { tree, error, reload } = useTree(treeClient, files);
   const [active, setActive] = useState(() => noteFromUrl(window.location.search));
   const [drawer, setDrawer] = useState<'notes' | 'panel' | null>(null);
 
@@ -25,6 +28,16 @@ export function App() {
     setDrawer(null);
     if (path === active) return;
     window.history.pushState(null, '', `?path=${encodeURIComponent(path)}`);
+    setActive(path);
+  };
+
+  // The open note moved with a rename: follow it without a new history entry.
+  const renamed = (from: string, to: string) => {
+    if (active === null) return;
+    const moved = renamedPath(syncPath(active), from, to);
+    if (moved === null) return;
+    const path = NOTES_PREFIX + moved;
+    window.history.replaceState(null, '', `?path=${encodeURIComponent(path)}`);
     setActive(path);
   };
 
@@ -44,11 +57,15 @@ export function App() {
       </header>
       <div className="relative flex min-h-0 flex-1">
         <aside aria-label="Notes panel" className={`studio-notes ${drawer === 'notes' ? 'studio-drawer-open' : ''}`}>
-          {error ? (
-            <p role="alert" className="p-3 text-[12.5px] text-[var(--fde-error)]">Could not list the notes: {error}</p>
-          ) : (
-            <NoteList notes={notes} active={active} onSelect={open} />
-          )}
+          {error && <p role="alert" className="p-3 text-[12.5px] text-[var(--fde-error)]">Could not load the page tree: {error}</p>}
+          <PageTree
+            root={tree}
+            client={treeClient}
+            active={active === null ? null : syncPath(active)}
+            onOpen={(path) => { open(NOTES_PREFIX + path); }}
+            onRenamed={renamed}
+            onChanged={reload}
+          />
         </aside>
         {drawer === 'notes' && <button type="button" aria-label="Close notes" className="studio-scrim md:hidden" onClick={() => { setDrawer(null); }} />}
         {active ? (

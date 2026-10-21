@@ -15,7 +15,7 @@ const processor = unified().use(remarkParse).use(remarkMdx).use(remarkGfm).use(r
 const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/;
 
 // Blanks the frontmatter instead of cutting it, so positions stay the file's.
-function parseNote(source: string): Root {
+export function parseNote(source: string): Root {
   const blanked = source.replace(FRONTMATTER, (block) => block.replace(/[^\r\n]/g, ' '));
   return processor.parse(blanked);
 }
