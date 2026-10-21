@@ -2,9 +2,11 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { SYNC_ENDPOINT } from '@fumadocs-editor/core/sync';
 import { createServer as createViteServer } from 'vite';
+import { createAssetsApi } from './assets/api.ts';
 import { DEFAULT_STUDIO_PORT, repoRoot, STUDIO_HOST, studioRoot } from './config.ts';
 import { createFilesApi } from './files/api.ts';
 import { createFileEvents } from './files/events.ts';
+import { createKeyedLock } from './files/store.ts';
 import { pathnameOf } from './http.ts';
 import { createIconsApi } from './icons/api.ts';
 import { createLintApi } from './lint/api.ts';
@@ -54,12 +56,15 @@ export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = rep
   }
   const filesApi = createFilesApi(root);
   const lintApi = createLintApi(root);
-  const treeApi = createTreeApi(root);
+  // Tree and asset changes both write notes: one at a time.
+  const notesLock = createKeyedLock();
+  const treeApi = createTreeApi(root, notesLock);
+  const assetsApi = createAssetsApi(root, notesLock);
   const iconsApi = createIconsApi();
   const fileEvents = createFileEvents(root);
   const notesSync = createNotesSync(root, boundPort);
 
-  server.on('request', createRequestListener(boundPort, [fileEvents.handle, filesApi, lintApi, treeApi, iconsApi], vite.middlewares));
+  server.on('request', createRequestListener(boundPort, [fileEvents.handle, filesApi, lintApi, treeApi, assetsApi, iconsApi], vite.middlewares));
   routeUpgrades(server, boundPort, (viteHmr) => [
     {
       matches: (request) => pathnameOf(request) === SYNC_ENDPOINT,

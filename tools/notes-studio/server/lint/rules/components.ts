@@ -3,6 +3,7 @@ import type { ContainerDirective, LeafDirective, TextDirective } from 'mdast-uti
 import type { MdxJsxFlowElement, MdxJsxTextElement } from 'mdast-util-mdx-jsx';
 import { visit } from 'unist-util-visit';
 import { ACCORDION_KINDS, CALLOUT_TYPES } from '../../../../../lib/notes-syntax.ts';
+import { publicAsset } from '../../security/asset-types.ts';
 import { headOf, type LintContext, type Report } from '../types.ts';
 
 const calloutTypes = new Set<string>(CALLOUT_TYPES);
@@ -33,20 +34,6 @@ function firstAttribute(node: Jsx | Directive, names: string[]) {
 
 function isJsx(node: Nodes, names: string[]): node is Jsx {
   return (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') && names.includes(node.name ?? '');
-}
-
-// The file under public/ that the site would read for `src`
-// (lib/read-public-asset.ts), or null when it is outside public/.
-function publicAsset(src: string) {
-  const segments: string[] = [];
-  for (const segment of (src.split(/[?#]/)[0] ?? '').trim().split('/')) {
-    if (segment === '' || segment === '.') continue;
-    if (segment === '..') {
-      if (segments.length === 0) return null;
-      segments.pop();
-    } else segments.push(segment);
-  }
-  return segments.length > 0 ? segments.join('/') : null;
 }
 
 // The site reads `src` from public/ only (lib/read-public-asset.ts): a URL

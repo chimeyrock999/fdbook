@@ -12,10 +12,10 @@ type Body = Record<string, unknown>;
 // { op: 'create' | 'rename' | 'move', dryRun?, ... } changes it and answers
 // { changes, open } (see server/tree/ops.ts); with dryRun it only answers.
 // Page tree changes go through here, never through the notes sync, which
-// cannot update meta.yaml.
-export function createTreeApi(root: string): Handler {
-  // One tree change at a time: each plans from the disk it then writes.
-  const lock = createKeyedLock();
+// cannot update meta.yaml. `lock` runs one change at a time, each planned
+// from the disk it then writes; asset changes (server/assets/api.ts) share
+// it, since both write notes.
+export function createTreeApi(root: string, lock = createKeyedLock()): Handler {
 
   function plan(tree: TreeFolder, body: Body): Promise<Plan> {
     const folder = typeof body.folder === 'string' ? body.folder : '';
@@ -35,7 +35,7 @@ export function createTreeApi(root: string): Handler {
     const answer = (planned: Plan) => ({ changes: planned.changes, open: planned.open });
     // A dry run only reads, so it does not wait behind the changes.
     if (body.dryRun === true) return answer(await plan(await loadTree(root), body));
-    return lock('tree', async () => {
+    return lock('notes', async () => {
       const planned = await plan(await loadTree(root), body);
       await applyPlan(root, planned);
       return answer(planned);
