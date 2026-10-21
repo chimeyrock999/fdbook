@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { HttpError } from '../http.ts';
-import { MAX_ASSET_BYTES } from '../security/asset-types.ts';
-import { classifyPath, extensionOf, resolveWorktreePath } from '../security/paths.ts';
+import { isTextPath, MAX_ASSET_BYTES } from '../security/asset-types.ts';
+import { ASSETS_DIR, classifyPath, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 import { statOrNull } from '../files/store.ts';
 import { assertWorktreeTop, runGit, runGitBytes } from './git.ts';
 import { baseOf } from './history.ts';
@@ -17,11 +17,7 @@ export type DiffStatus = 'same' | 'M' | 'A' | 'D' | 'R';
 export type FileDiff = { path: string; from?: string; base: string | null; status: DiffStatus; before: DiffSide | null; after: DiffSide | null };
 
 const MAX_TEXT_BYTES = 2 * 1024 * 1024;
-// Assets the diff reads as text; every other asset type is binary.
-const TEXT_ASSETS = new Set(['svg', 'html']);
 const SHA = /^[0-9a-f]{40}$/;
-
-const isText = (path: string) => classifyPath(path) !== 'asset' || TEXT_ASSETS.has(extensionOf(path));
 
 // The commit the change request left main at: what main held when the work
 // started, so commits main gained since are not shown as this work undoing them.
@@ -44,7 +40,7 @@ const readBlob = (root: string, base: string, path: string) => runGitBytes(root,
 async function sideAtBase(root: string, base: string, path: string): Promise<DiffSide | null> {
   const size = await sizeAtBase(root, base, path);
   if (size === null) return null;
-  if (!isText(path) || size > MAX_TEXT_BYTES) return { kind: 'binary', size };
+  if (!isTextPath(path) || size > MAX_TEXT_BYTES) return { kind: 'binary', size };
   return { kind: 'text', text: (await readBlob(root, base, path)).toString('utf8'), size };
 }
 
@@ -52,7 +48,7 @@ async function sideAtBase(root: string, base: string, path: string): Promise<Dif
 async function sideOnDisk(absolute: string, path: string): Promise<DiffSide | null> {
   const info = await statOrNull(absolute);
   if (!info?.isFile()) return null;
-  if (!isText(path) || info.size > MAX_TEXT_BYTES) return { kind: 'binary', size: info.size };
+  if (!isTextPath(path) || info.size > MAX_TEXT_BYTES) return { kind: 'binary', size: info.size };
   const data = await readFile(absolute);
   return { kind: 'text', text: data.toString('utf8'), size: data.length };
 }
@@ -74,15 +70,35 @@ async function sameBlob(root: string, base: string, from: string, path: string) 
   return then.trim() !== '' && then.trim() === now.trim();
 }
 
+// The old name of `path` if the change request renamed it since `base`:
+// git status names only renames against HEAD, so one already committed
+// comes from comparing the worktree with the base. A file not yet known to
+// git (a rename the Studio made, not committed) has none.
+async function renamedFrom(root: string, base: string, path: string) {
+  const output = await runGit(root, ['diff', '-z', '--name-status', '--find-renames', base, '--', NOTES_DIR, ASSETS_DIR]);
+  const entries = output.split('\0');
+  for (let index = 0; index < entries.length; index += 1) {
+    if (!entries[index].startsWith('R')) continue;
+    const [old, now] = [entries[index + 1], entries[index + 2]];
+    index += 2;
+    if (now === path && classifyPath(old) !== null) return old;
+  }
+  return null;
+}
+
 // What `path` is now (on disk, committed or not) against what main held at
-// the merge base; a rename reads main under the old name, `from`.
-export async function loadDiff(root: string, path: string, from?: string): Promise<FileDiff> {
+// the merge base. A rename reads main under the old name: `from`, or the
+// one renamedFrom finds when main has nothing at `path`.
+export async function loadDiff(root: string, path: string, given?: string): Promise<FileDiff> {
   const absolute = checked(root, path);
-  if (from !== undefined) checked(root, from);
+  if (given !== undefined) checked(root, given);
   await assertWorktreeTop(root);
   const base = await mergeBase(root);
+  const [atBase, after] = await Promise.all([base === null ? null : sideAtBase(root, base, given ?? path), sideOnDisk(absolute, path)]);
+  const found = base !== null && atBase === null && given === undefined ? await renamedFrom(root, base, path) : null;
+  const from = given ?? found ?? undefined;
+  const before = base !== null && found !== null ? await sideAtBase(root, base, found) : atBase;
   const old = from ?? path;
-  const [before, after] = await Promise.all([base === null ? null : sideAtBase(root, base, old), sideOnDisk(absolute, path)]);
   if (before === null && after === null) throw new HttpError(404, `no such file on main or in the worktree: ${path}`);
   let status: DiffStatus;
   if (before === null) status = 'A';

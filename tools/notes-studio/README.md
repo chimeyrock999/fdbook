@@ -583,6 +583,9 @@ A file picked in the Changes view opens in the main pane against main
 (#18, `src/diff`): what main held at the merge base, where the change
 request left it, against what the worktree holds now, committed or not.
 Commits main gained since are not this work, so they never show as undone.
+A file main has no copy of under its path is looked up as a rename against
+the base, so a rename already committed (which `git status` no longer
+names) still reads main under the old name.
 The bar names the file (both paths for a rename) with its status, and
 **Open in editor** opens a note or an asset that is still there.
 

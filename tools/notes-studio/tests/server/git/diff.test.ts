@@ -91,6 +91,20 @@ describe('diff API', () => {
     git(studio.root, 'mv', moved, page);
   });
 
+  it('finds a rename already committed, and reads main under the old name', async () => {
+    const page = 'content/notes/streaming/index.mdx';
+    const moved = 'content/notes/streaming/moved.mdx';
+    const edited = await readFile(at(page), 'utf8');
+    git(studio.root, 'mv', page, moved);
+    git(studio.root, 'commit', '--quiet', '-am', 'docs: move the page');
+    await writeFile(at(moved), `${edited}\nAfter the move.\n`);
+    // git status compares with HEAD, so the Changes view names no old path.
+    expect(await diffOf(moved)).toMatchObject({ path: moved, from: page, status: 'R', before: { kind: 'text', text: original }, after: { kind: 'text', text: `${edited}\nAfter the move.\n` } });
+    await writeFile(at(moved), edited);
+    git(studio.root, 'mv', moved, page);
+    git(studio.root, 'commit', '--quiet', '-am', 'docs: move it back');
+  });
+
   it('answers an image as binary, and serves it as it is on main', async () => {
     const before = await readFile(at(PIXEL));
     await writeFile(at(PIXEL), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]));

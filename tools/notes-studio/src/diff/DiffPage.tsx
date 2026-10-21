@@ -1,6 +1,6 @@
 import { ChevronLeft, FileCode, Pencil } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { extensionOf } from '../../server/security/asset-types';
+import { extensionOf, isTextPath } from '../../server/security/asset-types';
 import type { ChangesClient, DiffSide, FileDiff } from '../api/changes';
 import { useAssetUrl } from '../api/asset-versions';
 import { formatSize, isImage } from '../assets/asset-facts';
@@ -30,8 +30,7 @@ function modesOf(diff: FileDiff): Mode[] {
 
 // A note, meta.yaml or HTML file the server sent only the sizes of.
 function tooLarge(diff: FileDiff) {
-  const textFile = !diff.path.startsWith('public/') || extensionOf(diff.path) === 'svg' || extensionOf(diff.path) === 'html';
-  return textFile && [diff.before, diff.after].some((side) => side?.kind === 'binary');
+  return isTextPath(diff.path) && [diff.before, diff.after].some((side) => side?.kind === 'binary');
 }
 
 const sizeOf = (side: DiffSide | null, missing: string) => (side === null ? missing : formatSize(side.size));
