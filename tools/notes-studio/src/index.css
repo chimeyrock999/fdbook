@@ -328,8 +328,18 @@
     border-radius: 1px;
     background: var(--fde-primary);
   }
+  /* A page open in the main pane (the change requests): filled, at the
+     foot above the hide button. */
+  .studio-activity-button[aria-current='page'] {
+    color: var(--fde-foreground);
+    background: var(--fde-accent);
+  }
+  .studio-activity-page,
   .studio-activity-bottom {
     margin-top: auto;
+  }
+  .studio-activity-page + .studio-activity-bottom {
+    margin-top: 0;
   }
   .studio-activity-count {
     position: absolute;

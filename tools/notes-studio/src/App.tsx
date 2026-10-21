@@ -290,7 +290,7 @@ export function App() {
           onClose={() => { setCrDialog(null); }}
         />
       )}
-      {crDialog?.kind === 'discard' && <DiscardDialog client={crClient} cr={crDialog.cr} onDone={discarded} onClose={() => { setCrDialog(null); }} />}
+      {crDialog?.kind === 'discard' && <DiscardDialog client={crClient} cr={crDialog.cr} current={crDialog.cr.slug === CURRENT_CR} onDone={discarded} onClose={() => { setCrDialog(null); }} />}
     </div>
   );
 }

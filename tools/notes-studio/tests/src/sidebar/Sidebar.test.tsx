@@ -200,7 +200,7 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: 'Issues' }).querySelector('.studio-activity-count')).toBeNull();
   });
 
-  it('opens the change requests from a button under the views, only when there are change requests', async () => {
+  it('opens the change requests from a button at the foot, above the hide button, only when there are change requests', async () => {
     const { rerender } = render(<Harness />);
     expect(screen.queryByRole('button', { name: 'Change requests' })).toBeNull();
     const onOpen = vi.fn();
@@ -210,6 +210,25 @@ describe('Sidebar', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Change requests' }));
     expect(onOpen).toHaveBeenCalledOnce();
     rerender(<Harness changeRequests={{ shown: true, onOpen }} />);
-    expect(screen.getByRole('button', { name: 'Change requests' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Change requests' }).getAttribute('aria-current')).toBe('page');
+  });
+
+  it('marks the open list as a page, apart from the open view', async () => {
+    render(<Harness changeRequests={{ shown: true, onOpen: () => undefined }} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Assets' }));
+    const crs = screen.getByRole('button', { name: 'Change requests' });
+    // The rail marks the open sidebar view only: the list is a page in the main pane.
+    expect(crs.hasAttribute('aria-pressed')).toBe(false);
+    expect(crs.getAttribute('aria-current')).toBe('page');
+    expect(crs.classList.contains('studio-activity-page')).toBe(true);
+    const pressed = screen.getAllByRole('button', { pressed: true }).map((button) => button.getAttribute('aria-label'));
+    expect(pressed).toEqual(['Assets']);
+  });
+
+  it('leaves the change requests button unmarked while the list is not open', () => {
+    render(<Harness changeRequests={{ shown: false, onOpen: () => undefined }} />);
+    const crs = screen.getByRole('button', { name: 'Change requests' });
+    expect(crs.hasAttribute('aria-current')).toBe(false);
+    expect(crs.hasAttribute('aria-pressed')).toBe(false);
   });
 });

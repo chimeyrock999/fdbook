@@ -149,17 +149,17 @@ describe('CrListPage', () => {
     render(<CrListPage list={list} error={null} current={current} {...props} />);
     return props;
   };
-  const group = (title: RegExp) => {
+  const group = (title: string) => {
     const heading = screen.getByRole('heading', { name: title });
     return heading.parentElement ?? heading;
   };
 
   it('groups them as in progress, waiting to merge and to clean up', () => {
     setup();
-    const names = (title: RegExp) => within(group(title)).queryAllByRole('listitem').map((item) => item.getAttribute('aria-label'));
-    expect(names(/In progress · 2/)).toEqual(['Driver Notes', 'Spark Tuning']);
-    expect(names(/Waiting to merge · 1/)).toEqual(['Uc Grants']);
-    expect(names(/To clean up · 2/)).toEqual(['Delta Links', 'Old Airflow']);
+    const names = (title: string) => within(group(title)).queryAllByRole('listitem').map((item) => item.getAttribute('aria-label'));
+    expect(names('In progress 2')).toEqual(['Driver Notes', 'Spark Tuning']);
+    expect(names('Waiting to merge 1')).toEqual(['Uc Grants']);
+    expect(names('To clean up 2')).toEqual(['Delta Links', 'Old Airflow']);
   });
 
   it('shows each one with its status, branch, counts, last update and links', () => {
@@ -179,7 +179,10 @@ describe('CrListPage', () => {
   it('opens, discards and refreshes', async () => {
     const { onOpen, onDiscard, onRefresh, onNew } = setup(LIST, 'driver-notes');
     const current = screen.getByRole('listitem', { name: 'Driver Notes' });
-    expect(within(current).getByRole<HTMLButtonElement>('button', { name: 'Open here' }).disabled).toBe(true);
+    // The open one says so, with no button to open it again.
+    expect(within(current).queryByRole('button', { name: /^Open/ })).toBeNull();
+    expect(within(current).getByText('Open now')).toBeTruthy();
+    expect(within(current).getByRole('button', { name: 'Discard Driver Notes' })).toBeTruthy();
     await userEvent.click(within(screen.getByRole('listitem', { name: 'Uc Grants' })).getByRole('button', { name: 'Open' }));
     expect(onOpen).toHaveBeenCalledWith('uc-grants');
     await userEvent.click(screen.getByRole('button', { name: 'Discard Old Airflow' }));
@@ -242,7 +245,7 @@ describe('DiscardDialog', () => {
   it('lists what goes from this machine, then discards', async () => {
     const discard = vi.fn((_slug: string, dryRun?: boolean) => Promise.resolve(plan({ ...(dryRun ? {} : { commits: 3 }) })));
     const onDone = vi.fn();
-    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[1]} onDone={onDone} onClose={vi.fn()} />);
+    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[1]} current={false} onDone={onDone} onClose={vi.fn()} />);
     const removed = await screen.findByRole('list', { name: 'Removed' });
     expect([...removed.querySelectorAll('li')].map((item) => item.textContent)).toEqual([
       'Worktree /home/me/.chimey-studio/worktrees/spark-tuning',
@@ -256,9 +259,17 @@ describe('DiscardDialog', () => {
     await waitFor(() => { expect(onDone).toHaveBeenCalled(); });
   });
 
+  it('says when it is the change request being worked in', async () => {
+    const discard = vi.fn(() => Promise.resolve(plan()));
+    const { rerender } = render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[1]} current onDone={vi.fn()} onClose={vi.fn()} />);
+    expect(await screen.findByText('You are working in this change request. Studio goes back to main afterwards.')).toBeTruthy();
+    rerender(<DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[1]} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByText(/You are working in this change request/)).toBeNull();
+  });
+
   it('says a pushed branch and its pull request stay on the remote', async () => {
     const discard = vi.fn(() => Promise.resolve(plan({ pushed: true, pr: { number: 81, url: 'u' } })));
-    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[2]} onDone={vi.fn()} onClose={vi.fn()} />);
+    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[2]} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
     expect(await screen.findByText('The branch is on origin. The remote branch, pull request #81 and its preview stay there.')).toBeTruthy();
   });
 });

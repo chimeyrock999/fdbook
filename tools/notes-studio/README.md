@@ -204,13 +204,15 @@ shows the name, status, branch, the notes changed against origin/main
 (committed or not), how many files are not committed, when it was last
 updated (its last commit, an uncommitted file, or its creation), the preview
 link once it is pushed (`https://cr-<slug>.<project>.pages.dev`, with the
-project from `STUDIO_PAGES_PROJECT`) and the pull request. It loads again
-when the window gets the focus back and when files change.
+project from `STUDIO_PAGES_PROJECT`) and the pull request. The card of the
+change request the page shows says Open now instead of an Open button. It
+loads again when the window gets the focus back and when files change.
 
 **Discard** (on a card) asks first, listing what goes from this machine: the
 worktree, with what was not committed, and the local branch with its
 commits. A branch already on origin, its pull request and its preview stay
-there (#21). Discarding the change request the page shows goes back to main.
+there (#21). Discarding the change request the page shows goes back to main,
+and the dialog says so.
 
 ## Editor
 
@@ -276,7 +278,10 @@ view (the page tree), the **Assets** view (see Assets), the **Issues**
 view (the open note's lint issues, with their count on the icon) and the
 **Changes** view (see Changes, with the number of changed files); picking
 the open view again hides the sidebar, and so does the button at the foot of
-the bar. Drag the sidebar's right edge to resize it (220–480px), or focus
+the bar. A rail marks the open view. The **Change requests** button (in
+change request mode) sits at the foot, above that button: it opens a page in
+the main pane rather than a view, so it is filled, not railed, while the list
+is open. Drag the sidebar's right edge to resize it (220–480px), or focus
 the edge and use the arrow keys, Shift for bigger steps, Home and End for
 the limits; double-click resets it to 284px. It never takes more than the
 window leaves the editor (420px); resizing starts from the width it shows.
