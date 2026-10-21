@@ -241,7 +241,9 @@ Visual:
   then change only the id and displayName. A label typed in the fields is
   written with its Markdown and MDX characters escaped (`\*`, `` \` ``,
   `\[`, `\{`, `\<`), so the site shows it as typed. A value with both `"` and `'` is saved with its
-  `"` turned into `'`.
+  `"` turned into `'`. The rest of the marker's paragraph is written the
+  way the editor writes Markdown, as it is for any edit in Visual: wrapping
+  or removing a marker in `_a_ __b__ c` writes `*a* **b**`.
 
 ## Page tree
 

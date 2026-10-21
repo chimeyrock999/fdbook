@@ -8,6 +8,7 @@
 @import '../../../styles/notes-prose.css';
 @import './notes-prose.css';
 @import './assets/assets.css';
+@import './graph/graph.css';
 /* Site components whose classes the Studio draws with (src/plugins). */
 @source '../../../components/graph-objects.tsx';
 
@@ -83,35 +84,6 @@
     .studio-popup-button kbd {
       display: none;
     }
-  }
-  /* Remove takes markup off: its icon stays out of the graph colour. */
-  .studio-popup-button-quiet svg {
-    color: var(--fde-muted-foreground);
-  }
-  .studio-popup-separator {
-    width: 1px;
-    align-self: stretch;
-    margin: 3px 2px;
-    background: var(--fde-border);
-  }
-  .studio-popup-note {
-    flex-basis: 100%;
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    border-radius: 6px;
-    padding: 4px 9px 5px;
-    font-size: 11.5px;
-    color: var(--fde-warning);
-    background: color-mix(in oklab, var(--fde-warning) 9%, transparent);
-  }
-  .studio-popup-note svg {
-    flex: none;
-    margin-top: 2px;
-  }
-  .studio-popup-note code {
-    font: 11px var(--font-mono);
-    overflow-wrap: anywhere;
   }
   .studio-link {
     font-size: 12px;
