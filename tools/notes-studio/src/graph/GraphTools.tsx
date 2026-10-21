@@ -4,7 +4,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode, t
 import { createPortal } from 'react-dom';
 import { useEditorPlugin } from '../editor/decorations';
 import { composing } from '../keyboard';
-import { findBubble, placeBar } from './dock';
+import { useDock } from './dock';
 import { closeGraphFields, graphCommand, graphKey, graphPlugin, type GraphAction } from './graph-plugin';
 import { defaults, graphMetaTarget, markerAt, updateMarker, wrapRange, type Marker } from './markers';
 
@@ -15,39 +15,6 @@ function shortcut(key: string) {
 }
 
 const LABELS: Record<Marker['kind'], string> = { Keyword: 'Keyword', Tag: 'Tag', GraphMeta: 'Graph node' };
-
-// The selection's box on screen. The selection, not the marker: a
-// marker's hidden source (a heading's :graph-meta) has no box to measure.
-function selectionBox(view: EditorView) {
-  const { from, to } = view.state.selection;
-  const start = view.coordsAtPos(from);
-  const end = view.coordsAtPos(to);
-  return {
-    top: Math.min(start.top, end.top),
-    bottom: Math.max(start.bottom, end.bottom),
-    left: Math.min(start.left, end.left),
-    right: Math.max(start.right, end.right),
-  };
-}
-
-// Where a popup goes: under the selection, kept on screen.
-function below(view: EditorView, width: number) {
-  return placeBar(selectionBox(view), null, { width, height: 0 }, { width: window.innerWidth, height: Infinity });
-}
-
-// Draws again while a popup is up and the page scrolls or resizes.
-function useFollowScroll() {
-  const [, redraw] = useState(0);
-  useEffect(() => {
-    const again = () => { redraw((count) => count + 1); };
-    window.addEventListener('scroll', again, true);
-    window.addEventListener('resize', again);
-    return () => {
-      window.removeEventListener('scroll', again, true);
-      window.removeEventListener('resize', again);
-    };
-  }, []);
-}
 
 // The graph bar (wrap the selection as a Keyword or Tag, mark the heading
 // as a graph node, edit the marker there) and the fields of a marker's id
@@ -77,37 +44,13 @@ export function GraphTools({ container }: { container: RefObject<HTMLElement | n
   const graph = graphKey.getState(view.state);
   if (!graph) return null;
   const { marker, open, seq } = graph;
-  if (open !== null && marker) return <GraphFields key={seq} view={view} marker={marker} />;
+  if (open !== null && marker) return <GraphFields key={seq} view={view} container={container} marker={marker} />;
   if (!view.hasFocus() || view.composing) return null;
   const canWrap = wrapRange(view.state) !== null;
   const canMark = graphMetaTarget(view.state) !== null;
   if (!canWrap && !canMark && !marker) return null;
   return <GraphBar view={view} container={container} marker={marker} canWrap={canWrap} canMark={canMark} />;
 }
-
-// Draws again when the editor's bubble shows, hides or moves: it follows the
-// selection 150ms late, after this bar was placed.
-function useFollowBubble(container: RefObject<HTMLElement | null>) {
-  const [, redraw] = useState(0);
-  useEffect(() => {
-    const root = container.current;
-    if (!root) return;
-    let frame = 0;
-    const observer = new MutationObserver(() => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => { redraw((count) => count + 1); });
-    });
-    observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] });
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, [container]);
-}
-
-// The bar's size for placing it: its width is capped, its height one row.
-const BAR_SIZE = { width: 330, height: 36 };
-const viewport = () => ({ width: window.innerWidth, height: window.innerHeight });
 
 function GraphBar({ view, container, marker, canWrap, canMark }: {
   view: EditorView;
@@ -116,17 +59,19 @@ function GraphBar({ view, container, marker, canWrap, canMark }: {
   canWrap: boolean;
   canMark: boolean;
 }) {
-  useFollowScroll();
-  useFollowBubble(container);
   const run = (action: GraphAction) => { graphCommand(action)(view.state, view.dispatch, view); };
-  const selection = selectionBox(view);
-  const bubble = container.current ? findBubble(container.current, selection) : null;
+  const bar = useRef<HTMLDivElement>(null);
+  const { from, to } = view.state.selection;
+  // Hidden until the editor's bubble is placed, so the bar does not jump.
+  const { docked, waiting } = useDock(view, container, bar, `${String(from)}-${String(to)}`, true);
   return createPortal(
     <div
+      ref={bar}
       role="toolbar"
       aria-label="Graph"
-      className="studio-popup fixed z-40 flex max-w-[calc(100vw-16px)] flex-wrap gap-0.5 p-[3px]"
-      style={placeBar(selection, bubble, BAR_SIZE, viewport())}
+      data-docked={docked}
+      className="studio-popup fixed top-0 left-0 z-40 flex max-w-[calc(100vw-16px)] flex-wrap gap-0.5 p-[3px]"
+      style={{ visibility: waiting ? 'hidden' : 'visible' }}
     >
       <BarButton icon={<Highlighter size={14} aria-hidden />} label="Keyword" keys="K" disabled={!canWrap} onRun={() => { run('Keyword'); }} />
       <BarButton icon={<Tag size={14} aria-hidden />} label="Tag" keys="T" disabled={!canWrap} onRun={() => { run('Tag'); }} />
@@ -161,8 +106,7 @@ function BarButton({ icon, label, keys, disabled, onRun }: { icon: ReactNode; la
 // A new marker (no id yet) takes its id and displayName from the text until
 // they are edited. Enter or a click elsewhere writes them, Escape leaves
 // the marker as it is.
-function GraphFields({ view, marker }: { view: EditorView; marker: Marker }) {
-  useFollowScroll();
+function GraphFields({ view, container, marker }: { view: EditorView; container: RefObject<HTMLElement | null>; marker: Marker }) {
   const fresh = !marker.attrs.id;
   const [text, setText] = useState(marker.text);
   const [id, setId] = useState(marker.attrs.id ?? '');
@@ -170,6 +114,9 @@ function GraphFields({ view, marker }: { view: EditorView; marker: Marker }) {
   const [follow, setFollow] = useState(fresh);
   const root = useRef<HTMLFormElement>(null);
   const first = useRef<HTMLInputElement>(null);
+  // The bubble hides while the fields have the focus: under the selection,
+  // or above it with no room below.
+  useDock(view, container, root, 'fields', false);
   const derived = defaults(text);
   const values = { id: follow ? derived.id : id, displayName: follow ? derived.displayName : name, text };
 
@@ -216,8 +163,7 @@ function GraphFields({ view, marker }: { view: EditorView; marker: Marker }) {
       ref={root}
       role="dialog"
       aria-label={`${LABELS[marker.kind]} id`}
-      className="studio-popup fixed z-40 grid w-[min(330px,calc(100vw-16px))] gap-[7px] px-3 py-2.5 text-[12.5px]"
-      style={below(view, 330)}
+      className="studio-popup fixed top-0 left-0 z-40 grid w-[min(330px,calc(100vw-16px))] gap-[7px] px-3 py-2.5 text-[12.5px]"
       onKeyDown={(event) => {
         if (composing(event)) {
           if (event.key === 'Enter') event.preventDefault();
