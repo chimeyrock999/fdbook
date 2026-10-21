@@ -13,13 +13,15 @@ export default defineConfig({
   define: { 'import.meta.env.STUDIO_SITE_URL': JSON.stringify(process.env.STUDIO_SITE_URL ?? '') },
   resolve: {
     // Shared code from the site (e.g. lib/notes-schema.ts). Its own imports
-    // (zod, fumadocs-core) resolve from the repo root node_modules.
-    alias: { '@site': repoRoot },
-    // Keep one React even when shared code resolves it from the repo root.
-    dedupe: ['react', 'react-dom'],
+    // (zod, fumadocs-core) resolve from the repo root node_modules, and `@/`
+    // is the site's own alias for the repo root (components/*.tsx use it).
+    alias: { '@site': repoRoot, '@/': repoRoot },
+    // Keep one React, and one lucide-react on it, even when shared code
+    // (components/*.tsx) resolves them from the repo root.
+    dedupe: ['react', 'react-dom', 'lucide-react'],
   },
   server: {
     // Only what the Studio needs; the rest of the repo stays unreachable.
-    fs: { allow: [studioRoot, `${repoRoot}lib`, `${repoRoot}node_modules`] },
+    fs: { allow: [studioRoot, `${repoRoot}lib`, `${repoRoot}components`, `${repoRoot}styles`, `${repoRoot}node_modules`] },
   },
 });

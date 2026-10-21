@@ -181,7 +181,7 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, place
                 onLeave={() => { focusBody(editor.current); }}
                 reveal={field}
               />
-              <MdxEditor.Visual className="studio-prose" />
+              <MdxEditor.Visual className="studio-prose notes-prose" />
               <GraphTools container={editor} />
             </div>
           </div>

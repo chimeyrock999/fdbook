@@ -1,6 +1,7 @@
 import type { Node as PmNode } from '@tiptap/pm/model';
 import { NodeSelection, TextSelection, type EditorState, type Selection } from '@tiptap/pm/state';
 import { Decoration } from '@tiptap/pm/view';
+import { keywordClassName, tagClassName } from '@site/components/graph-objects';
 import { Sprout } from 'lucide';
 import { OPEN_GRAPH_FIELDS } from '../../graph/meta';
 import { icon } from '../icon';
@@ -76,6 +77,11 @@ function within(selection: Selection, from: number, to: number) {
   return selection.from >= from && selection.to <= to;
 }
 
+// The site's own <Keyword>/<Tag> classes (src/index.css scans the file), plus
+// `studio-keyword` for the Studio's own rules and lookups.
+export const KEYWORD_CLASS = `studio-keyword ${keywordClassName}`;
+export const TAG_CLASS = `studio-keyword studio-keyword-tag ${tagClassName}`;
+
 function hide(from: number, to: number) {
   return Decoration.inline(from, to, { class: 'studio-hidden' });
 }
@@ -106,7 +112,7 @@ export function decorateGraphObjects(state: EditorState): Decoration[] {
         if (!shown) out.push(hide(opening.from, opening.to), hide(tag.from, tag.to));
         if (tag.from > opening.to) {
           out.push(Decoration.inline(opening.to, tag.from, {
-            class: name === 'Tag' ? 'studio-keyword studio-keyword-tag' : 'studio-keyword',
+            class: name === 'Tag' ? TAG_CLASS : KEYWORD_CLASS,
             title: nameOf(opening.attrs),
           }));
         }
@@ -157,7 +163,7 @@ function graphMarker(pos: number, name: string, target: 'text' | 'atom') {
 function keywordLabel(pos: number, label: string, name: string, tag: boolean) {
   return Decoration.widget(pos, (view, getPos) => {
     const span = document.createElement('span');
-    span.className = tag ? 'studio-keyword studio-keyword-tag' : 'studio-keyword';
+    span.className = tag ? TAG_CLASS : KEYWORD_CLASS;
     span.textContent = label;
     span.title = name;
     span.addEventListener('mousedown', (event) => {

@@ -1,54 +1,33 @@
-/* .notes-callout from app/notes/notes.module.css. The editor renders the
-   title and body regions inside one hole element, so the callout is a grid
-   and the hole steps aside (display: contents): the icon and the title share
-   the bar, the body spans the row below. */
-.studio-callout {
+/* The site's callout (.notes-callout in styles/notes-prose.css) draws the
+   colours, borders, padding and type. The editor renders the title and body
+   regions inside one hole element, so the head cannot wrap the icon and the
+   title: the callout is a grid and the hole steps aside (display: contents).
+   The icon and the title are two head cells sharing the bar, the body spans
+   the row below. Not overflow: hidden as on the site, which would clip the
+   editor's controls, so each cell rounds its own corners. */
+.notes-prose .notes-callout.studio-callout {
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  margin-block: 1.125rem;
-  border: 1px solid var(--notes-callout-color);
-  border-radius: 0.75rem;
   overflow: visible;
 }
 .studio-callout > [data-fde-hole] {
   display: contents;
 }
-.studio-callout-picker {
+/* The picker button carries 4px of its own padding around the icon. */
+.notes-prose .studio-callout .studio-callout-picker {
   position: relative;
-  display: flex;
-  align-items: center;
-  padding: 0.5625rem 0 0.5625rem calc(0.875rem - 4px);
-  background: var(--notes-callout-background);
-  border-bottom: 1px solid var(--notes-callout-color);
-  border-top-left-radius: 0.75rem;
+  padding-inline: calc(0.875rem - 4px) 0;
+  border-start-start-radius: 0.75rem;
 }
-.studio-callout-icon {
-  color: var(--notes-callout-title-color);
+/* A head cell, but editable text, not a flex row of an icon and a title. */
+.notes-prose .studio-callout .studio-callout-title {
+  display: block;
+  padding-inline-start: 0.4375rem;
+  border-start-end-radius: 0.75rem;
 }
-.studio-callout .studio-callout-title {
-  padding: 0.5625rem 0.875rem 0.5625rem 0.4375rem;
-  background: var(--notes-callout-background);
-  border-bottom: 1px solid var(--notes-callout-color);
-  border-top-right-radius: 0.75rem;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--notes-callout-title-color);
-}
-.studio-callout .studio-callout-body {
+.notes-prose .studio-callout .studio-callout-body {
   grid-column: 1 / -1;
-  padding: 0.75rem 0.9375rem;
-  background: var(--color-callout-body-bg);
-  border-bottom-left-radius: 0.75rem;
-  border-bottom-right-radius: 0.75rem;
-  font-size: 0.84375rem;
-  line-height: 1.7;
-  color: var(--garden-ink-2);
-}
-.studio-callout-body > :first-child {
-  margin-top: 0;
-}
-.studio-callout-body > :last-child {
-  margin-bottom: 0;
+  border-end-start-radius: 0.75rem;
+  border-end-end-radius: 0.75rem;
 }

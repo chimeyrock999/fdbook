@@ -1,9 +1,15 @@
 @import 'tailwindcss';
-@import '@fumadocs-editor/ui/styles.css';
+/* The editor's rules carry :not(#\#) ×3, which outweighs any selector; in
+   a layer they give way to the site's prose and the Studio's own rules, and
+   still beat Tailwind's layers, declared first. */
+@import '@fumadocs-editor/ui/styles.css' layer(editor);
 @import './notes-theme.css';
 @import './scrollbars.css';
+@import '../../../styles/notes-prose.css';
 @import './notes-prose.css';
 @import './assets/assets.css';
+/* Site components whose classes the Studio draws with (src/plugins). */
+@source '../../../components/graph-objects.tsx';
 
 /* The Studio chrome uses the editor's --fde-* tokens, which follow the
    system light/dark preference, so both always match. */

@@ -1,8 +1,8 @@
-import { CALLOUT_DIRECTIVES, CALLOUT_TYPES as SITE_CALLOUT_TYPES } from '@site/lib/notes-syntax';
-import { Bird, Bug, Droplet, Flower2, Leaf, Rat, Snail, Sprout, type LucideIcon } from 'lucide-react';
+import { CALLOUT_ICONS, getSemanticCalloutType, type SemanticCalloutType } from '@site/components/notes-callout';
+import { CALLOUT_DIRECTIVES, CALLOUT_TYPES as SITE_CALLOUT_TYPES, type CalloutType } from '@site/lib/notes-syntax';
 
 // The callout types and looks of components/notes-callout.tsx.
-export type SemanticType = 'caution' | 'danger' | 'example' | 'idea' | 'info' | 'note' | 'success' | 'warning';
+export type SemanticType = SemanticCalloutType;
 
 // The site's callout types (lib/notes-syntax.ts) in menu order: mild to
 // severe. A type the order does not know yet goes last.
@@ -19,37 +19,10 @@ export const CALLOUT_TYPES = inMenuOrder(SITE_CALLOUT_TYPES);
 // `:::name` callouts: every type but `idea`, which only JSX spells.
 export const DIRECTIVE_TYPES = inMenuOrder(CALLOUT_DIRECTIVES);
 
+// components/notes-callout.tsx reads any string: a type it does not know is
+// drawn as `info`.
 export function semanticType(type: string | undefined): SemanticType {
-  switch (type) {
-    case 'tip':
-      return 'idea';
-    case 'caution':
-    case 'important':
-      return 'caution';
-    case 'warn':
-    case 'warning':
-      return 'warning';
-    case 'danger':
-    case 'error':
-      return 'danger';
-    case 'example':
-    case 'idea':
-    case 'info':
-    case 'note':
-    case 'success':
-      return type;
-    default:
-      return 'info';
-  }
+  return getSemanticCalloutType(type as CalloutType | undefined);
 }
 
-export const ICONS: Record<SemanticType, LucideIcon> = {
-  caution: Snail,
-  danger: Rat,
-  example: Leaf,
-  idea: Sprout,
-  info: Bird,
-  note: Droplet,
-  success: Flower2,
-  warning: Bug,
-};
+export const ICONS = CALLOUT_ICONS;

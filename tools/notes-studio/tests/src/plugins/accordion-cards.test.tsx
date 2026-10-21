@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/core';
 import { cleanup, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { accordionKindVariables } from '@site/lib/notes-accordion';
 import { ACCORDION_KINDS } from '@site/lib/notes-syntax';
 import { decorationsPlugin, useEditorPlugin } from '../../../src/editor/decorations';
 import { editorConfig } from '../../../src/plugins';
@@ -82,6 +83,15 @@ function store(live: Editor) {
 }
 
 describe('accordion cards', () => {
+  it('colours each card with the site palette of its kind', () => {
+    const { container } = mount();
+    const cards = [...container.querySelectorAll<HTMLElement>('.studio-accordion')];
+    expect(cards).toHaveLength(2);
+    for (const [card, kind] of [[cards[0], 'question'], [cards[1], 'tip']] as const) {
+      for (const [name, value] of Object.entries(accordionKindVariables(kind))) expect(card.style.getPropertyValue(name), name).toBe(value);
+    }
+  });
+
   it('writes a body when the focus leaves and hands the focus on after the rebuild', async () => {
     const { container, editor: live } = mount();
     for (const toggle of toggles(container)) await userEvent.click(toggle);

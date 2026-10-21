@@ -4,7 +4,7 @@ import { cn } from '@/lib/cn';
 import type { CalloutType } from '@/lib/notes-syntax';
 
 type NotesCalloutType = CalloutType;
-type SemanticCalloutType =
+export type SemanticCalloutType =
   | 'caution'
   | 'danger'
   | 'example'
@@ -24,7 +24,7 @@ type NotesCalloutProps = Omit<ComponentProps<'div'>, 'title'> & {
   graphType?: 'section' | 'keyword';
 };
 
-function getSemanticCalloutType(type: NotesCalloutType | undefined): SemanticCalloutType {
+export function getSemanticCalloutType(type: NotesCalloutType | undefined): SemanticCalloutType {
   switch (type) {
     case 'tip':
       return 'idea';
@@ -59,22 +59,19 @@ const LABELS: Record<SemanticCalloutType, string> = {
   warning: 'Warning',
 };
 
-function getCalloutColor(type: SemanticCalloutType) {
-  return `var(--color-callout-${type})`;
-}
-
-function getCalloutBackground(type: SemanticCalloutType) {
-  return `var(--color-callout-${type}-bg)`;
-}
-
-function getCalloutTitleColor(type: SemanticCalloutType) {
-  return `var(--color-callout-${type}-title)`;
+// The variables the callout's CSS (styles/notes-prose.css) draws with.
+export function getCalloutVariables(type: SemanticCalloutType) {
+  return {
+    '--notes-callout-color': `var(--color-callout-${type})`,
+    '--notes-callout-background': `var(--color-callout-${type}-bg)`,
+    '--notes-callout-title-color': `var(--color-callout-${type}-title)`,
+  };
 }
 
 // Garden-themed lucide glyphs: a little bird brings info, a droplet for notes,
 // a sprout for ideas, a leaf for examples, a bloom for success, and the garden
 // pests (snail → bug → rat) escalating from caution to danger.
-const CALLOUT_ICONS: Record<SemanticCalloutType, typeof Leaf> = {
+export const CALLOUT_ICONS: Record<SemanticCalloutType, typeof Leaf> = {
   caution: Snail,
   danger: Rat,
   example: Leaf,
@@ -103,17 +100,9 @@ export function NotesCallout({
   ...props
 }: NotesCalloutProps) {
   const semanticType = getSemanticCalloutType(type);
-  const calloutColor = getCalloutColor(semanticType);
-  const calloutBackground = getCalloutBackground(semanticType);
-  const calloutTitleColor = getCalloutTitleColor(semanticType);
   const resolvedTitle = title ?? LABELS[semanticType];
 
-  const rootStyle = {
-    '--notes-callout-color': calloutColor,
-    '--notes-callout-background': calloutBackground,
-    '--notes-callout-title-color': calloutTitleColor,
-    ...style,
-  } as CSSProperties;
+  const rootStyle = { ...getCalloutVariables(semanticType), ...style } as CSSProperties;
 
   return (
     <div {...props} className={cn('notes-callout', className)} style={rootStyle}>

@@ -3,31 +3,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { repoRoot } from '../../server/config';
 
-// src/notes-theme.css copies the site's notes palette onto --fde-* tokens.
-// Each copied value must still be the site's.
-const MAP: Record<string, string> = {
-  background: '--color-fd-background',
-  foreground: '--color-fd-foreground',
-  muted: '--color-fd-muted',
-  'muted-foreground': '--color-fd-muted-foreground',
-  popover: '--color-fd-popover',
-  'popover-foreground': '--color-fd-popover-foreground',
-  card: '--color-fd-card',
-  'card-foreground': '--color-fd-card-foreground',
-  border: '--color-fd-border',
-  primary: '--color-fd-primary',
-  'primary-foreground': '--color-fd-primary-foreground',
-  secondary: '--color-fd-secondary',
-  'secondary-foreground': '--color-fd-secondary-foreground',
-  accent: '--color-fd-accent',
-  'accent-foreground': '--color-fd-accent-foreground',
-  ring: '--color-fd-ring',
-  info: '--color-callout-info',
-  idea: '--color-callout-idea',
-  warning: '--color-callout-warning',
-  error: '--color-callout-error',
-  success: '--color-callout-success',
-};
+// The Studio draws with the site's notes theme (styles/notes-theme.css) and
+// prose (styles/notes-prose.css), imported, not copied: a change there shows
+// in the Studio with no Studio edit.
+
+const read = (path: string) => readFile(join(repoRoot, path), 'utf8');
 
 function block(css: string, selector: string) {
   const start = css.indexOf(`${selector} {`);
@@ -39,32 +19,72 @@ function values(css: string) {
   return Object.fromEntries([...css.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
 }
 
-async function themes() {
-  const site = await readFile(join(repoRoot, 'app/notes/notes.css'), 'utf8');
-  const studio = await readFile(join(repoRoot, 'tools/notes-studio/src/notes-theme.css'), 'utf8');
-  return [
-    [values(block(site, '\n.notes-theme')), values(block(studio, '\n:root'))],
-    [values(block(site, '.dark .notes-theme')), values(block(studio, ':root:not(.light):not(.dark)'))],
-  ] as const;
+// Selectors of the top-level rules and of those inside @media.
+function selectors(css: string) {
+  const plain = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  return [...plain.matchAll(/([^{}@;]+)\{[^{}]*\}/g)].map((m) => m[1].trim()).filter((s) => !s.startsWith('@'));
 }
 
 describe('notes theme', () => {
-  it('matches the site palette in light and dark', async () => {
-    const pairs = await themes();
-    for (const [siteValues, studioValues] of pairs) {
-      for (const [token, siteToken] of Object.entries(MAP)) {
-        expect(studioValues[`--fde-${token}`], token).toBe(siteValues[siteToken]);
-      }
+  it('imports the site theme and copies no value', async () => {
+    const studio = await read('tools/notes-studio/src/notes-theme.css');
+    expect(studio).toContain("@import '../../../styles/notes-theme.css';");
+    const rules = studio.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(rules).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|oklch\(/i);
+  });
+
+  it('maps every --fde-* token onto a site token in light and dark', async () => {
+    const studio = values(block(await read('tools/notes-studio/src/notes-theme.css'), '\n.notes-theme'));
+    const site = await read('styles/notes-theme.css');
+    const light = values(block(site, '\n.notes-theme'));
+    const dark = values(block(site, '.dark .notes-theme'));
+    const mapped = Object.entries(studio).filter(([name]) => name.startsWith('--fde-'));
+    expect(mapped.length).toBeGreaterThan(20);
+    for (const [name, value] of mapped) {
+      const token = /^var\((--[\w-]+)\)$/.exec(value)?.[1];
+      expect(token, name).toBeDefined();
+      expect(light[token ?? ''], `${name} light`).toBeDefined();
+      expect(dark[token ?? ''], `${name} dark`).toBeDefined();
     }
   });
 
-  // The component plugins (callout, graph objects, accordions, cards) draw
-  // with these site tokens under their own names.
-  it('copies the site tokens the component plugins use', async () => {
-    for (const [siteValues, studioValues] of await themes()) {
-      const copied = Object.entries(siteValues).filter(([name]) => /^--(garden|color-graph|color-callout)-/.test(name));
-      expect(copied.length).toBeGreaterThan(40);
-      for (const [name, value] of copied) expect(studioValues[name], name).toBe(value);
-    }
+  it('keeps the palette in the shared file only', async () => {
+    const notes = await read('app/notes/notes.css');
+    expect(notes).toContain("@import '../../styles/notes-theme.css';");
+    expect(notes).not.toMatch(/(^|\n)(\.dark )?\.notes-theme \{[^}]*--color-callout-/);
+  });
+
+  it('dark is the site class the Studio sets on <html>', async () => {
+    const site = await read('styles/notes-theme.css');
+    expect(site).toContain('.dark .notes-theme {');
+    const html = await read('tools/notes-studio/index.html');
+    expect(html).toContain('<body class="notes-theme">');
+    // Set before the first paint, so a dark system never flashes light.
+    expect(html.indexOf("classList.toggle('dark'")).toBeGreaterThan(-1);
+    expect(html.indexOf("classList.toggle('dark'")).toBeLessThan(html.indexOf('src/main.tsx'));
+  });
+});
+
+describe('notes prose', () => {
+  it('is imported from the site and drawn on the editor', async () => {
+    const index = await read('tools/notes-studio/src/index.css');
+    expect(index.indexOf("@import '../../../styles/notes-prose.css';")).toBeGreaterThan(-1);
+    expect(index.indexOf("@import '../../../styles/notes-prose.css';")).toBeLessThan(index.indexOf("@import './notes-prose.css';"));
+    expect(await read('tools/notes-studio/src/editor/NoteEditor.tsx')).toContain('className="studio-prose notes-prose"');
+    expect(await read('app/notes/[[...slug]]/page.tsx')).toContain('className="notes-prose"');
+  });
+
+  // What is left styles only the editor's own DOM: the header's text areas,
+  // its code block frame and where its markup differs from the page's.
+  it('leaves only editor rules in src/notes-prose.css', async () => {
+    const studio = selectors(await read('tools/notes-studio/src/notes-prose.css'));
+    expect(studio.length).toBeGreaterThan(5);
+    for (const selector of studio) expect(selector).toMatch(/\.studio-(?!prose\b)|\.studio-prose\.notes-prose|figure\[dir='ltr'\]/);
+  });
+
+  it('leaves no prose rule in the page module', async () => {
+    const module = await read('app/notes/notes.module.css');
+    expect(module).not.toContain('.body');
+    expect(module).not.toContain(':global(.notes-');
   });
 });

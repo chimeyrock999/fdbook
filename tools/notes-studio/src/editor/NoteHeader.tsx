@@ -44,7 +44,7 @@ export function NoteHeader({ frontmatter, readOnly, onOpenSource, onLeave, revea
     <header className="studio-note-header">
       <Line
         ref={title}
-        className="studio-note-title"
+        className="notes-title studio-note-title"
         label="Title"
         placeholder="Untitled"
         value={typeof data.title === 'string' ? data.title : ''}
@@ -56,7 +56,7 @@ export function NoteHeader({ frontmatter, readOnly, onOpenSource, onLeave, revea
       <FieldError message={titleError} />
       <Line
         ref={description}
-        className="studio-note-description"
+        className="notes-description studio-note-description"
         label="Description"
         placeholder="Add a description"
         value={typeof data.description === 'string' ? data.description : ''}

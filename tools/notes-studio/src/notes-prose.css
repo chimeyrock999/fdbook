@@ -1,8 +1,10 @@
-/* The note page's prose (`.title`, `.description` and `.body` in
-   app/notes/notes.module.css) on the Visual surface: heading sizes, garden
-   bullets and numbered badges, inline code pills, links, blockquotes, tables
-   and code block frames. The editor's own rules are single classes, so these
-   win by one element of specificity. */
+/* The note's prose is the site's own (styles/notes-prose.css, on the editor
+   as `.notes-prose`); its rules beat the editor's single-class rules by one
+   element of specificity. This file holds what only the editor needs: the
+   title and description as text areas set as the page's own lines
+   (`.notes-title`, `.notes-description`), where the editor's DOM differs
+   from the page's (headings, tables, MDX source chips), and the editor's
+   code block frame, which is not the site's figure. */
 
 .studio-note-header {
   display: grid;
@@ -35,221 +37,51 @@
   color: var(--fde-muted-foreground);
   opacity: 0.6;
 }
-.studio-note-title {
-  font-size: 1.5rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  text-wrap: pretty;
-}
-.studio-note-description {
-  font-size: 0.75rem;
-  line-height: 1.7;
-  color: color-mix(in oklab, var(--fde-muted-foreground) 70%, transparent);
+/* A text area keeps its own block layout, not the page title's flex row. */
+.studio-note-line.notes-title {
+  display: block;
 }
 
-.studio-prose {
-  font-size: 0.875rem;
-  line-height: 1.75;
-}
-.studio-prose :is(h1, h2, h3, h4) {
-  font-weight: 700;
-}
-.studio-prose h1 {
-  font-size: 1.5rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.25;
-}
-.studio-prose h2 {
-  padding-top: 1em;
-  font-size: 1.25rem;
-  letter-spacing: -0.02em;
-}
-.studio-prose h3 {
-  padding-top: 0.75em;
-  font-size: 1.125rem;
-  letter-spacing: -0.015em;
-}
-.studio-prose h4 {
-  padding-top: 0.5em;
-  font-size: 1rem;
-}
-@media (min-width: 30rem) {
-  .studio-note-title,
-  .studio-prose h1 {
-    font-size: 1.875rem;
-  }
-  .studio-prose h2 {
-    font-size: 1.5rem;
-  }
-  .studio-prose h3 {
-    font-size: 1.25rem;
-  }
-  .studio-prose h4 {
-    font-size: 1.125rem;
-  }
-}
-@media (min-width: 64rem) {
-  .studio-note-title,
-  .studio-prose h1 {
-    font-size: 2.25rem;
-  }
-  .studio-prose h2 {
-    font-size: 1.875rem;
-  }
-  .studio-prose h3 {
-    font-size: 1.5rem;
-  }
-  .studio-prose h4 {
-    font-size: 1.25rem;
-  }
+/* The page's headings are flex rows around one link; the editor's hold
+   their inline runs directly, which a flex row would pull apart. */
+.studio-prose.notes-prose :is(h1, h2, h3, h4) {
+  display: block;
 }
 
-.studio-prose :is(p, li, blockquote, table) {
-  font-size: 0.875rem;
-}
-.studio-prose a {
-  color: var(--color-graph-primary);
-  font-weight: 500;
-  text-decoration-color: var(--color-graph-primary-muted);
-  text-underline-offset: 0.2em;
-}
-.studio-prose :not(pre) > code:not([data-mdx-tag], [data-mdx-verbatim], [data-mdx-expression]) {
-  padding: 0.125rem 0.34rem;
-  border-radius: 0.3125rem;
-  background: var(--garden-accent-soft);
-  color: var(--garden-accent-ink);
-  font-family: var(--font-mono);
-  font-size: 0.82em;
-  font-weight: 500;
-}
-
-/* Garden bullets and numbered badges. */
-.studio-prose li {
-  list-style: none;
-}
-.studio-prose ul {
-  list-style: none;
-  margin-block: 1rem;
-  padding-inline-start: 0;
-}
-.studio-prose ul > li {
-  position: relative;
-  margin-block: 0.25rem;
-  padding-inline-start: 1.375rem;
-}
-.studio-prose ul > li::before {
-  content: '';
-  position: absolute;
-  inset-inline-start: 0.375rem;
-  top: 0.68em;
-  width: 0.375rem;
-  height: 0.375rem;
-  border-radius: 9999px;
-  background: var(--garden-accent);
-}
-.studio-prose li > ul > li::before {
-  width: 0.4375rem;
-  height: 0.4375rem;
-  background: transparent;
-  border: 1.5px solid var(--garden-accent);
-}
-.studio-prose ol {
-  list-style: none;
-  counter-reset: garden-ol;
-  margin-block: 1rem;
-  padding-inline-start: 0;
-}
-.studio-prose ol > li {
-  position: relative;
-  counter-increment: garden-ol;
-  margin-block: 0.7rem;
-  padding-inline-start: 2.4rem;
-}
-.studio-prose ol > li::before {
-  content: counter(garden-ol);
-  position: absolute;
-  inset-inline-start: 0;
-  top: 0.05em;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.55rem;
-  height: 1.55rem;
-  border-radius: 0.5rem;
-  background: var(--garden-accent-soft);
-  color: var(--garden-accent-ink);
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 1;
-}
-.studio-prose li > ol > li {
-  padding-inline-start: 2rem;
-}
-.studio-prose li > ol > li::before {
-  width: 1.3rem;
-  height: 1.3rem;
-  border-radius: 0.4375rem;
-  font-size: 0.7rem;
-}
-.studio-prose li li {
-  color: color-mix(in oklab, var(--fde-foreground) 86%, var(--fde-muted-foreground));
-}
-
-.studio-prose blockquote {
-  margin-block: 1rem;
-  padding: 0.75rem 1.125rem;
-  border: 0;
-  border-inline-start: 3px solid var(--garden-accent);
-  border-radius: 0 0.75rem 0.75rem 0;
-  background: var(--garden-accent-soft);
-  color: var(--garden-ink-2);
-  font-style: normal;
-}
-
-.studio-prose table {
+/* The site's rounded table card needs separate borders, which fumadocs'
+   prose sets on the page and the editor does not. */
+.studio-prose.notes-prose table {
   border-collapse: separate;
   border-spacing: 0;
-  overflow: hidden;
-  border: 1px solid color-mix(in oklab, var(--fde-border) 90%, var(--fde-foreground) 10%);
-  border-radius: 0.75rem;
-  box-shadow: var(--garden-shadow);
-}
-.studio-prose :is(th, td) {
-  border-color: color-mix(in oklab, var(--fde-border) 90%, var(--fde-foreground) 10%);
-}
-.studio-prose th {
-  background: var(--garden-surface-2);
-  font-weight: 700;
-}
-.studio-prose tr:nth-child(2n) > td {
-  background: color-mix(in oklab, var(--garden-accent) 5%, transparent);
 }
 
-/* Code blocks: the frame of components/codeblock.tsx (.notes-code-block). */
-.studio-prose figure[dir='ltr'] {
-  overflow: hidden;
-  border: 1px solid color-mix(in oklab, var(--garden-code-bg) 60%, var(--fde-foreground) 16%);
-  border-radius: 0.75rem;
-  background: var(--garden-code-bg);
+/* The editor shows MDX source (JSX tags, expressions, verbatim text) as
+   `code` with these attributes. It is not inline code: the site's code rules
+   step aside and the editor's own (a lower layer, src/index.css) apply. */
+.studio-prose.notes-prose code:is([data-mdx-tag], [data-mdx-expression], [data-mdx-verbatim]) {
+  all: revert-layer;
 }
-.studio-prose figure[dir='ltr'] > [data-fde-row] {
+
+/* Code blocks: the editor's frame (a figure with a [data-fde-row] header)
+   takes the colours of the site's (.notes-code-block). */
+.notes-prose figure[dir='ltr'] {
+  overflow: hidden;
+  border: 1px solid var(--notes-code-border);
+  border-radius: 0.75rem;
+  background: var(--notes-code-surface);
+}
+.notes-prose figure[dir='ltr'] > [data-fde-row] {
   min-height: 2.375rem;
-  border-bottom: 1px solid color-mix(in oklab, var(--garden-code-bg) 60%, var(--fde-foreground) 16%);
-  background: var(--garden-surface-2);
+  border-bottom: 1px solid var(--notes-code-border);
+  background: var(--notes-code-header-surface);
   color: var(--fde-muted-foreground);
 }
-.studio-prose figure[dir='ltr'] pre {
-  font-family: var(--font-mono);
-}
 /* Inside a callout the frame takes the callout's tint, as on the site. */
-.studio-callout figure[dir='ltr'] {
+.notes-prose .notes-callout figure[dir='ltr'] {
   border-color: color-mix(in oklab, var(--notes-callout-color) 54%, var(--fde-border));
   background: color-mix(in oklab, var(--fde-background) 86%, var(--notes-callout-color) 14%);
 }
-.studio-callout figure[dir='ltr'] > [data-fde-row] {
+.notes-prose .notes-callout figure[dir='ltr'] > [data-fde-row] {
   border-color: color-mix(in oklab, var(--notes-callout-color) 54%, var(--fde-border));
   background: color-mix(in oklab, var(--fde-background) 82%, var(--notes-callout-color) 18%);
 }
