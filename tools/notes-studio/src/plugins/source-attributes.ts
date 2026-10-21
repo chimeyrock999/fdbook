@@ -1,5 +1,11 @@
 const ATTRIBUTE = /([^\s"'=<>`{}]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`{}]+)))?/g;
 
+// Each attribute of a list, with where it is in it: quoted values are read
+// whole, so a name inside another attribute's value is not an attribute.
+export function attributeSpans(source: string): { name: string; from: number; to: number }[] {
+  return [...source.matchAll(ATTRIBUTE)].map((match) => ({ name: match[1], from: match.index, to: match.index + match[0].length }));
+}
+
 // The string attributes of a JSX tag (`id="a" displayName='B'`) or of a
 // directive's `{…}` (also unquoted values). Bare names are empty strings;
 // `#id` and `.class` shorthands are not read.

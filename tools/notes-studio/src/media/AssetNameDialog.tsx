@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { NameRequest } from './asset-media';
+import { composing } from '../keyboard';
 import { slugify } from '../slug';
 import { sitePath } from './asset-names';
 
@@ -118,13 +119,6 @@ function trapFocus(dialog: HTMLElement, event: { shiftKey: boolean; preventDefau
     event.preventDefault();
     first?.focus();
   }
-}
-
-// Safari ends a composition before the keydown of the key that ends it, so
-// that keydown has isComposing false but keyCode 229.
-function composing(event: KeyboardEvent) {
-  // eslint-disable-next-line @typescript-eslint/no-deprecated -- keyCode is the only signal Safari gives here
-  return event.nativeEvent.isComposing || event.keyCode === 229;
 }
 
 // Makes every other child of <body> inert until the returned cleanup runs.

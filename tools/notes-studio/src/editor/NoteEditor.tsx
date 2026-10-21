@@ -12,6 +12,7 @@ import { UploadNotice } from '../media/UploadNotice';
 import { useAssetUploads } from '../media/useAssetUploads';
 import { NOTES_PREFIX } from '../notes/notes';
 import { assetCompletion } from './asset-completion';
+import { GraphTools } from '../graph/GraphTools';
 import { editorConfig } from '../plugins';
 import { decorationsPlugin, useEditorPlugin } from './decorations';
 import { NoteHeader } from './NoteHeader';
@@ -140,6 +141,7 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, panel
                 reveal={field}
               />
               <MdxEditor.Visual className="studio-prose" />
+              <GraphTools container={editor} />
             </div>
           </div>
         ) : (
