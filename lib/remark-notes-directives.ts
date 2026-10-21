@@ -126,7 +126,7 @@ function restoreUnknownDirective(node: DirectiveNode & { type: DirectiveType }, 
   return [
     createParagraph(restoreDirectiveHead(node, labelChildren, source)),
     ...body,
-    ...(closingFence ? [createParagraph([createText(closingFence)])] : []),
+    ...(closingFence ? [createParagraph([createText(closingFence.fence, closingFence.position)])] : []),
   ];
 }
 
@@ -178,20 +178,31 @@ function restoreDirectiveHead(node: DirectiveNode & { type: DirectiveType }, lab
   return [createText(`${fence}${node.name ?? ''}[`), ...labelChildren, createText(`]${attributes}`)];
 }
 
-function getClosingFence(node: DirectiveNode, source: string | undefined) {
+function getClosingFence(node: DirectiveNode, source: string | undefined): { fence: string; position?: Position } | undefined {
   const start = node.position?.start?.offset;
-  const end = node.position?.end?.offset;
+  const end = node.position?.end;
 
-  if (source === undefined || start === undefined || end === undefined) return ':::';
+  if (source === undefined || start === undefined || end?.offset === undefined) return { fence: ':::' };
 
-  const lines = source.slice(start, end).split(/\r?\n/);
+  const lines = source.slice(start, end.offset).split(/\r?\n/);
   const openingLength = lines[0].match(/^:*/)![0].length;
   // The last line may sit behind a blockquote marker or list indentation (`> :::`).
-  const closing = lines.length > 1 ? lines.at(-1)!.match(/^[\s>]*(:{3,})\s*$/)?.[1] : undefined;
+  const lastLine = lines.length > 1 ? lines.at(-1)! : '';
+  const closing = lines.length > 1 ? lastLine.match(/^[\s>]*(:{3,})\s*$/)?.[1] : undefined;
 
   // An unclosed container runs to the end of the document and has no closing fence of
   // its own; a shorter fence on its last line belongs to a nested container.
-  return closing && closing.length >= openingLength ? closing : undefined;
+  if (!closing || closing.length < openingLength) return undefined;
+
+  const column = lastLine.indexOf(closing) + 1;
+  const offset = end.offset - lastLine.length + column - 1;
+  return {
+    fence: closing,
+    position: {
+      start: { line: end.line, column, offset },
+      end: { line: end.line, column: column + closing.length, offset: offset + closing.length },
+    },
+  };
 }
 
 function formatDirectiveAttributes(attributes: Record<string, unknown>) {
@@ -219,15 +230,18 @@ function isDirectiveLabel(node: unknown) {
 }
 
 function createText(value: string, position?: Position) {
-  // `_stringify.text` makes fumadocs' remarkStructure (the search index) use the value
-  // as is. Its default markdown stringifier would escape the restored `:`, `[` and `{`
-  // (`\:keywrod\[Map]`), which only makes sense for re-parsing, not for a search entry.
-  const data = { _stringify: { text: value } };
-  return position ? { type: 'text', value, position, data } : { type: 'text', value, data };
+  return position ? { type: 'text', value, position } : { type: 'text', value };
 }
 
+/**
+ * A paragraph spanning its children. fumadocs' remarkStructure (the search index) slices
+ * each paragraph from the authored source by its position and skips one without.
+ */
 function createParagraph(children: unknown[]) {
-  return { type: 'paragraph', children };
+  const start = (children[0] as PositionedNode | undefined)?.position?.start;
+  const end = (children.at(-1) as PositionedNode | undefined)?.position?.end;
+
+  return start && end ? { type: 'paragraph', children, position: { start, end } } : { type: 'paragraph', children };
 }
 
 function transformContainerDirective(node: DirectiveNode) {
