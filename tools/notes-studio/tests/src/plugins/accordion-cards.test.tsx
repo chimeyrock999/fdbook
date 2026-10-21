@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import type { Editor } from '@tiptap/core';
-import { cleanup, renderHook } from '@testing-library/react';
+import { cleanup, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ACCORDION_KINDS } from '@site/lib/notes-syntax';
 import { decorationsPlugin, useEditorPlugin } from '../../../src/editor/decorations';
 import { editorConfig } from '../../../src/plugins';
 import { defined } from '../../support/editor-state';
@@ -33,10 +34,10 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function mount() {
+function mount(note = NOTE) {
   const container = document.createElement('div');
   document.body.append(container);
-  editor = mountEditor(container, NOTE);
+  editor = mountEditor(container, note);
   renderHook(() => { useEditorPlugin({ current: container }, decorationsPlugin(editorConfig.decorators)); });
   return { container, editor };
 }
@@ -48,7 +49,16 @@ const value = (live: Editor) => {
   });
   return found;
 };
+const groups = (live: Editor) => {
+  const found: string[] = [];
+  live.state.doc.descendants((node) => {
+    if (node.type.name === 'verbatim') found.push(String(node.attrs.value));
+  });
+  return found;
+};
 const textareas = (container: HTMLElement) => [...container.querySelectorAll('textarea')];
+const toggles = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('button.studio-accordion-state')];
+const titles = () => screen.getAllByRole<HTMLInputElement>('textbox', { name: 'Accordion title' });
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // What MdxEditor's store saves (attachEditor in @fumadocs-editor/ui): the
@@ -74,7 +84,7 @@ function store(live: Editor) {
 describe('accordion cards', () => {
   it('writes a body when the focus leaves and hands the focus on after the rebuild', async () => {
     const { container, editor: live } = mount();
-    for (const head of container.querySelectorAll('button.studio-accordion-head')) await userEvent.click(head);
+    for (const toggle of toggles(container)) await userEvent.click(toggle);
     const [first, second] = textareas(container);
     await userEvent.clear(defined(first));
     await userEvent.type(defined(first), 'Changed.');
@@ -86,12 +96,12 @@ describe('accordion cards', () => {
     const rebuilt = textareas(container);
     expect(rebuilt[1]).not.toBe(second);
     expect(document.activeElement).toBe(rebuilt[1]);
-    expect(container.querySelectorAll('[aria-expanded="true"]')).toHaveLength(2);
+    expect(toggles(container).map((toggle) => toggle.getAttribute('aria-expanded'))).toEqual(['true', 'true']);
   });
 
   it('writes a body as typing pauses and keeps the caret in it', async () => {
     const { container, editor: live } = mount();
-    await userEvent.click(defined(container.querySelector<HTMLElement>('button.studio-accordion-head')));
+    await userEvent.click(defined(toggles(container)[0]));
     const first = defined(container.querySelector('textarea'));
     await userEvent.click(first);
     first.setSelectionRange(3, 3);
@@ -112,7 +122,7 @@ describe('accordion cards', () => {
   // a composition would rebuild the textarea under it and duplicate the text.
   it('waits for an IME composition to end before writing', async () => {
     const { container, editor: live } = mount();
-    await userEvent.click(defined(container.querySelector<HTMLElement>('button.studio-accordion-head')));
+    await userEvent.click(defined(toggles(container)[0]));
     const first = defined(container.querySelector('textarea'));
     first.focus();
     first.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
@@ -136,7 +146,7 @@ describe('accordion cards', () => {
   it('saves a body written just before the note closes', async () => {
     const { container, editor: live } = mount();
     const saving = store(live);
-    await userEvent.click(defined(container.querySelector<HTMLElement>('button.studio-accordion-head')));
+    await userEvent.click(defined(toggles(container)[0]));
     const first = defined(container.querySelector('textarea'));
     await userEvent.click(first);
     await userEvent.keyboard('{End} Plus.');
@@ -145,16 +155,187 @@ describe('accordion cards', () => {
     expect(saving.saved()).toContain('\nOne. Plus.\n');
   });
 
+  it('opens an item in its own group only', async () => {
+    const { container, editor: live } = mount(`${NOTE}\n${NOTE.replace('Intro.', 'More.').replaceAll('First', 'Third').replaceAll('Second', 'Fourth')}`);
+    await userEvent.click(defined(toggles(container)[0]));
+    expect(toggles(container).map((toggle) => toggle.getAttribute('aria-expanded'))).toEqual(['true', 'false', 'false', 'false']);
+    // A write in the first group keeps its item open.
+    const first = defined(textareas(container)[0]);
+    await userEvent.click(first);
+    await userEvent.keyboard('{End} Plus.');
+    await wait(300);
+    expect(groups(live)[0]).toContain('One. Plus.');
+    expect(toggles(container).map((toggle) => toggle.getAttribute('aria-expanded'))).toEqual(['true', 'false', 'false', 'false']);
+    // A write in the second group rebuilds it with its own open items.
+    await userEvent.click(defined(toggles(container)[3]));
+    const fourth = defined(textareas(container)[3]);
+    await userEvent.click(fourth);
+    await userEvent.keyboard('{End} Plus.');
+    await wait(300);
+    expect(groups(live)[1]).toContain('Two. Plus.');
+    expect(toggles(container).map((toggle) => toggle.getAttribute('aria-expanded'))).toEqual(['true', 'false', 'false', 'true']);
+  });
+
   it('writes nothing into a locked note', async () => {
     const { container, editor: live } = mount();
     const before = value(live);
     live.setEditable(false);
-    await userEvent.click(defined(container.querySelector<HTMLElement>('button.studio-accordion-head')));
+    await userEvent.click(defined(toggles(container)[0]));
     const first = defined(container.querySelector('textarea'));
     await userEvent.click(first);
     expect(first.readOnly).toBe(true);
     first.value = 'Changed.';
     first.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
     expect(value(live)).toBe(before);
+  });
+});
+
+describe('accordion kind and title', () => {
+  it('picks a kind from the icon and rewrites only that line', async () => {
+    const { editor: live } = mount();
+    const before = value(live);
+    await userEvent.click(screen.getByRole('button', { name: 'Accordion kind: question' }));
+    expect(screen.getAllByRole('menuitemradio').map((item) => item.textContent)).toEqual([...ACCORDION_KINDS]);
+    expect(screen.getByRole('menuitemradio', { name: 'question' }).getAttribute('aria-checked')).toBe('true');
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'deep-dive' }));
+    expect(value(live)).toBe(before.replace('{kind="question" title="First"}', '{kind="deep-dive" title="First"}'));
+    expect(screen.queryByRole('menu')).toBeNull();
+    // The cards were rebuilt; the focus is on the new kind button.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Accordion kind: deep-dive' }));
+  });
+
+  it('closes the kind menu on a press outside or Escape', async () => {
+    mount();
+    const kind = screen.getByRole('button', { name: 'Accordion kind: tip' });
+    await userEvent.click(kind);
+    await userEvent.click(document.body);
+    expect(screen.queryByRole('menu')).toBeNull();
+    await userEvent.click(kind);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(kind.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('writes a title as typing pauses, keeps the caret and the open item', async () => {
+    const { container, editor: live } = mount();
+    await userEvent.click(defined(toggles(container)[0]));
+    const [first] = titles();
+    await userEvent.click(first);
+    first.setSelectionRange(5, 5);
+    await userEvent.keyboard(' one');
+    expect(value(live)).toContain('title="First"');
+    await wait(300);
+    expect(value(live)).toContain(':::accordion{kind="question" title="First one"}\nOne.\n:::');
+    const [rebuilt] = titles();
+    expect(rebuilt).not.toBe(first);
+    expect(document.activeElement).toBe(rebuilt);
+    expect([rebuilt.selectionStart, rebuilt.selectionEnd]).toEqual([9, 9]);
+    expect(toggles(container)[0].getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('writes a title on Enter, and Escape takes the edit back', async () => {
+    const { editor: live } = mount();
+    const [, second] = titles();
+    await userEvent.clear(second);
+    await userEvent.type(second, 'Later{Enter}');
+    expect(value(live)).toContain('{kind="tip" title="Later"}');
+    const [, rebuilt] = titles();
+    await userEvent.type(rebuilt, ' and more{Escape}');
+    await wait(300);
+    expect(rebuilt.value).toBe('Later');
+    expect(value(live)).toContain('{kind="tip" title="Later"}');
+  });
+
+  it('keeps the old title when the field is left empty', async () => {
+    const { editor: live } = mount();
+    const before = value(live);
+    const [first] = titles();
+    await userEvent.clear(first);
+    await wait(300);
+    await userEvent.click(document.body);
+    expect(value(live)).toBe(before);
+    expect(titles()[0].value).toBe('First');
+  });
+
+  // Telex and VNI: no write while a composition runs, and the Enter that
+  // commits it (keyCode 229 in Safari) is not a submit.
+  it('waits for an IME composition to end before writing a title', async () => {
+    const { editor: live } = mount();
+    const [first] = titles();
+    first.focus();
+    first.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    first.value = 'First tu';
+    first.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }));
+    first.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', keyCode: 229 }));
+    await wait(300);
+    expect(value(live)).toContain('title="First"');
+    expect(first.isConnected).toBe(true);
+    first.value = 'First tươi';
+    first.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: 'tươi' }));
+    await wait(300);
+    expect(value(live)).toContain('title="First tươi"');
+  });
+
+  it('keeps the kind and title of a locked note', async () => {
+    const { editor: live } = mount();
+    const before = value(live);
+    live.setEditable(false);
+    await userEvent.click(screen.getByRole('button', { name: 'Accordion kind: question' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    const [first] = titles();
+    await userEvent.click(first);
+    expect(first.readOnly).toBe(true);
+    first.value = 'Changed';
+    first.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    expect(value(live)).toBe(before);
+  });
+
+  it('keeps the open items when the group is drawn again', async () => {
+    const { container, editor: live } = mount();
+    await userEvent.click(defined(toggles(container)[1]));
+    // The MDX button shows the source; selecting text again brings the cards back.
+    await userEvent.click(screen.getByRole('button', { name: 'MDX' }));
+    expect(toggles(container)).toEqual([]);
+    live.commands.setTextSelection(2);
+    expect(toggles(container).map((toggle) => toggle.getAttribute('aria-expanded'))).toEqual(['false', 'true']);
+  });
+
+  // The edit is written on the way to the button, which draws the cards
+  // again under the pointer: the click still lands.
+  // jsdom sends the release to the pressed node; a browser sends it to
+  // whatever is under the pointer, the new button.
+  it('opens the kind menu on the first click after a title edit', async () => {
+    const { editor: live } = mount();
+    const [first] = titles();
+    await userEvent.click(first);
+    await userEvent.keyboard('X');
+    const kind = screen.getByRole('button', { name: 'Accordion kind: question' });
+    kind.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    first.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: kind }));
+    expect(value(live)).toContain('title="FirstX"');
+    const again = screen.getByRole('button', { name: 'Accordion kind: question' });
+    expect(again).not.toBe(kind);
+    again.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    expect(screen.getByRole('menu')).toBeTruthy();
+    // A press and release on the same button is the browser's own click.
+    await userEvent.click(again);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('closes the kind menu when the group is drawn again', async () => {
+    const { container, editor: live } = mount();
+    await userEvent.click(screen.getByRole('button', { name: 'Accordion kind: question' }));
+    const removed = vi.spyOn(document, 'removeEventListener');
+    // A change from elsewhere (sync, undo) draws the group again.
+    let pos = -1;
+    live.state.doc.descendants((node, at) => {
+      if (node.type.name === 'verbatim') pos = at;
+    });
+    const node = defined(live.state.doc.nodeAt(pos));
+    live.view.dispatch(live.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, value: String(node.attrs.value).replace('Two.', 'Two!') }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(container.querySelector('.studio-accordion-kind')?.getAttribute('aria-expanded')).toBe('false');
+    // Its listeners on the document went with it.
+    expect(removed.mock.calls.map(([type]) => type)).toEqual(expect.arrayContaining(['mousedown', 'keydown']));
   });
 });

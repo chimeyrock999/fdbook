@@ -1,6 +1,7 @@
 import { ADMONITION_TYPES } from '@fumadocs-editor/core';
 import { admonitionSpec, emptyComponent, fumadocsUiComponents, type ComponentRenderProps, type UiComponentSpec } from '@fumadocs-editor/ui';
 import { definePlugin } from '../plugin';
+import '../picker.css';
 import './callout.css';
 import { SiteCallout } from './SiteCallout';
 import { CALLOUT_TYPES, DIRECTIVE_TYPES } from './types';

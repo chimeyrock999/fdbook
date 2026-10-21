@@ -1,0 +1,61 @@
+/* The icon that picks a callout's type or an accordion's kind, and its
+   menu. In an editable note the icon shows it is a button: a tint and a
+   chevron on hover and focus. */
+.studio-picker {
+  position: relative;
+  display: inline-flex;
+}
+.studio-picker-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 3px 3px 4px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.studio-picker-chevron {
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.ProseMirror[contenteditable='true'] .studio-picker-button:is(:hover, :focus-visible, [aria-expanded='true']) {
+  background: color-mix(in oklab, currentColor 14%, transparent);
+}
+.ProseMirror[contenteditable='true'] .studio-picker-button:is(:hover, :focus-visible, [aria-expanded='true']) .studio-picker-chevron {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-picker-chevron {
+    transition: none;
+  }
+}
+.studio-picker-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  width: 15rem;
+  padding: 4px;
+  border: 1px solid var(--fde-border);
+  border-radius: 8px;
+  background: var(--fde-popover);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.14);
+}
+.studio-picker-menu button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  font-size: 12px;
+  text-align: left;
+}
+.studio-picker-menu button span {
+  color: var(--fde-foreground);
+}
+.studio-picker-menu button:hover,
+.studio-picker-menu button[aria-checked='true'] {
+  background: var(--fde-muted);
+}
