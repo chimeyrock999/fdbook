@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createFilesClient } from './api/files';
+import { createLintClient } from './api/lint';
 import { NoteEditor } from './editor/NoteEditor';
 import { NoteGate } from './notes/NoteGate';
 import { NoteList } from './notes/NoteList';
@@ -8,9 +9,10 @@ import { useNotes } from './notes/useNotes';
 
 export function App() {
   const files = useMemo(() => createFilesClient(), []);
+  const lint = useMemo(() => createLintClient(), []);
   const { notes, error } = useNotes(files);
   const [active, setActive] = useState(() => noteFromUrl(window.location.search));
-  const [drawer, setDrawer] = useState<'notes' | 'frontmatter' | null>(null);
+  const [drawer, setDrawer] = useState<'notes' | 'panel' | null>(null);
 
   // Back and forward move between opened notes.
   useEffect(() => {
@@ -35,8 +37,8 @@ export function App() {
         <span className="font-semibold whitespace-nowrap">Notes Studio</span>
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)]">{active ?? ''}</span>
         {active && (
-          <button type="button" className="studio-button lg:hidden" onClick={() => { setDrawer('frontmatter'); }}>
-            Frontmatter
+          <button type="button" className="studio-button lg:hidden" onClick={() => { setDrawer('panel'); }}>
+            Panel
           </button>
         )}
       </header>
@@ -54,8 +56,11 @@ export function App() {
             <NoteEditor
               key={active}
               path={syncPath(active)}
-              frontmatterOpen={drawer === 'frontmatter'}
-              onCloseFrontmatter={() => { setDrawer(null); }}
+              files={files}
+              lint={lint}
+              panelOpen={drawer === 'panel'}
+              onOpenPanel={() => { setDrawer('panel'); }}
+              onClosePanel={() => { setDrawer(null); }}
             />
           </NoteGate>
         ) : (

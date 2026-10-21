@@ -8,6 +8,7 @@ import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers } f
 import { useSourceText } from '@fumadocs-editor/ui';
 import { tags } from '@lezer/highlight';
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { revealField, revealRange, type RevealRequest } from './reveal';
 
 // Colours come from the editor's --fde-* tokens, so light and dark follow
 // whatever theme the editor resolved.
@@ -31,6 +32,11 @@ const theme = EditorView.theme({
   '.cm-gutters': { backgroundColor: 'var(--fde-card)', color: 'var(--fde-muted-foreground)', borderRight: '1px solid var(--fde-border)' },
   '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'var(--fde-accent)' },
   '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': { backgroundColor: 'var(--fde-accent) !important' },
+  // A picked lint issue: drawn over the text, so the active line cannot hide it.
+  '.cm-lint-reveal': {
+    backgroundColor: 'color-mix(in srgb, var(--fde-error) 22%, transparent)',
+    borderBottom: '2px solid var(--fde-error)',
+  },
   '.cm-cursor': { borderLeftColor: 'var(--fde-foreground)' },
   '.cm-panels': { backgroundColor: 'var(--fde-card)', color: 'var(--fde-foreground)' },
 });
@@ -39,8 +45,8 @@ const locked = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), Editor
 
 // The note's MDX in CodeMirror 6, bound to the editor's source text: typing
 // here parses back into the document once it parses; visual edits and disk
-// changes arrive as new text.
-export function SourceEditor() {
+// changes arrive as new text. `reveal` selects a range (a lint issue).
+export function SourceEditor({ reveal = null }: { reveal?: RevealRequest | null }) {
   const { value, onChange, error, readOnly } = useSourceText();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -62,6 +68,7 @@ export function SourceEditor() {
           drawSelection(),
           highlightActiveLine(),
           highlightSelectionMatches(),
+          revealField,
           search({ top: true }),
           keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
           yamlFrontmatter({ content: markdown() }),
@@ -110,6 +117,11 @@ export function SourceEditor() {
   useEffect(() => {
     view.current?.dispatch({ effects: editable.current.reconfigure(locked(readOnly)) });
   }, [readOnly]);
+
+  // After the text effect above, so a freshly opened Source has the text.
+  useEffect(() => {
+    if (reveal && view.current) revealRange(view.current, reveal.start, reveal.end);
+  }, [reveal]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

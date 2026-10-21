@@ -1,0 +1,26 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createLintClient } from '../../../src/api/lint';
+import { startTestStudio, type TestStudio } from '../../support/studio';
+
+describe('lint client', () => {
+  let studio: TestStudio;
+  let client: ReturnType<typeof createLintClient>;
+
+  beforeAll(async () => {
+    studio = await startTestStudio();
+    client = createLintClient(studio.url.slice(0, -1));
+  });
+
+  afterAll(async () => {
+    await studio.close();
+  });
+
+  it('returns the issues of the text it sends', async () => {
+    const issues = await client.lintNote('content/notes/index.mdx', ':::nope\nx\n:::\n');
+    expect(issues).toMatchObject([{ rule: 'directive-unknown', severity: 'error', start: { line: 1, offset: 0 } }]);
+  });
+
+  it('throws the server error', async () => {
+    await expect(client.lintNote('content/notes/meta.yaml', '')).rejects.toThrow('not a note');
+  });
+});

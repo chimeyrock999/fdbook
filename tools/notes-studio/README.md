@@ -29,12 +29,14 @@ runs TypeScript directly).
   - `security/` has the Host/Origin guard and the path policy.
   - `files/` has the file API, the file events and the file-system helpers.
   - `sync/` has the fumadocs-editor sync server for `content/notes`.
+  - `lint/` checks a note against the site's rules (see Lint below).
 - `src/`: the React UI.
   - `api/` holds the clients for the server.
   - `editor/` is the note editor: Visual and Source modes, save status and
     the conflict dialog.
   - `frontmatter/` reads and writes a note's YAML frontmatter and holds the
     form.
+  - `lint/` is the Issues tab and the issue count in the toolbar.
   - `notes/` is the note list and the check that a note can be opened.
   - `plugins/` holds the editor plugins (see below).
 - `tests/`: laid out like `server/` and `src/`. `tests/support/` holds the
@@ -69,6 +71,7 @@ another one.
 | `GET /api/file?path=…` | Notes and `meta.yaml` come back as `{ path, content, mtimeMs }`. Assets come back as bytes with an `X-Mtime` header. |
 | `PUT /api/file?path=…` | Notes and `meta.yaml` take a JSON body `{ content, baseMtime }`. Assets take the raw bytes plus `X-Studio-Write: 1` and `X-Base-Mtime`. |
 | `GET /api/events` | Server-sent events: `{ type: "add" \| "change" \| "unlink", path, mtimeMs }` |
+| `POST /api/lint` | Takes JSON `{ path, content }` for a note and returns `{ path, issues }` (see Lint). Writes nothing. |
 | `/__fde_sync` (websocket) | The fumadocs-editor sync server for `content/notes`. It reads `.mdx` only, writes only notes that already exist (no page or folder creation; that goes through the file API), and merges changes made on disk into open documents. Known gap: its tree `delete` command still removes an existing note, without updating `meta.yaml` or checking the mtime, because the scope cannot tell it apart from a save on the same path. Don't wire the editor's tree delete until upstream can authorize tree commands separately (fuma-nama/fumadocs-editor#24). |
 
 A save names the mtime it was edited from; `null` means a new file. If the
@@ -94,7 +97,7 @@ through the notes sync socket:
   `:::accordion`, `:keyword[…]`) shows as source and still round-trips.
 - **Source** is CodeMirror 6 over the whole MDX file. Text that does not parse
   stays in Source until it is fixed.
-- **Frontmatter** (the side panel) edits title, description, visible and
+- **Frontmatter** (a tab of the side panel) edits title, description, visible and
   graph. Every change is checked against `notesPageSchema`
   (`lib/notes-schema.ts`) and written only when it passes. Only the edited
   values change; comments, key order, quoting and other keys stay. Visual
@@ -107,6 +110,39 @@ through the notes sync socket:
   (`.notes-theme` in `app/notes/notes.css`), copied onto the editor's
   `--fde-*` tokens in `src/notes-theme.css`; a test fails when the two drift.
   Components still use the editor's own look (#35).
+
+## Lint
+
+The side panel has two tabs, Frontmatter and Issues; below 1024px it is a
+drawer opened from the header's Panel button. Issues lists what the site
+would get wrong in the open note, checked about 400ms after typing stops and
+again when another file changes on disk. The toolbar shows the count;
+picking an issue opens Source with the problem selected and marked.
+
+The rules live in `server/lint/` and follow what the site does, not a style
+guide: the site turns many mistakes into plain text or a placeholder instead
+of failing the build.
+
+| Rule | Level | Reports |
+| --- | --- | --- |
+| `directive-unknown` | error | A container or leaf directive the site does not render, a text directive with a label or attributes that it does not render (`:keywrod[Map]`; a bare `a:b` is fine), a `:::tab` with no value or label |
+| `directive-unclosed` | error | A container with no closing fence of its own |
+| `directive-nesting` | error | A nested container with as many colons as its parent, and a fence left with nothing to close |
+| `callout-type` | error | `<Callout type>` outside the site's list |
+| `accordion-kind` | error | `kind` of `:::accordion` or `<Accordion>` outside the site's list |
+| `link-broken` | error | A `./` or `../` link that reaches no note, resolved like `source.resolveHref` (as a file next to the note, then as a URL against the page), and `/notes/…` links with no page |
+| `asset-missing` | error | `src` of `HtmlEmbed`, `SvgDiagram`, `::html`, `::svg`, `::diagram`, or a `/…` image, that is not a file in `public/` (a URL such as `https://…` included: the site only reads `public/`) |
+| `graph-id-duplicate` | error | Two sections with one id in a note: `GraphMeta`, `:graph-meta`, `SectionTitle`, `GraphSection`, or any marker with `graphType`/`graphKind="section"`. Keywords may reuse a section's id, and the same id on two notes is how the graph links them. |
+| `graph-meta-incomplete` | error, warning | A marker with no `id`, a Keyword, Tag or SectionTitle with no `displayName` (the graph drops it); a warning for GraphMeta with no `displayName`, since the heading text stands in |
+| `mdx-parse` | error | The note does not parse |
+
+Code blocks and inline code are never checked. Directive names, callout
+types and accordion kinds come from `lib/notes-syntax.ts`, the same lists the
+site's directive plugin and components use, so the two cannot drift.
+
+`npm run studio:lint` (from the repo root) lints every note and exits 1 on
+an error; `tests/server/lint/notes.test.ts` keeps the whole of
+`content/notes` at zero issues.
 
 ## Plugins
 
