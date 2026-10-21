@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AssetNameDialog } from '../../../src/media/AssetNameDialog';
+import { defined } from '../../support/editor-state';
 
 afterEach(cleanup);
 
@@ -60,10 +61,31 @@ describe('AssetNameDialog', () => {
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Save' }).disabled).toBe(true);
   });
 
-  it('keeps the dialog open when Escape ends an IME composition', () => {
+  it('neither cancels nor saves on a key that ends an IME composition', () => {
     const { onDone, input } = open();
     fireEvent.keyDown(input, { key: 'Escape', isComposing: true });
+    // Safari: the composition already ended, the keydown still says 229.
+    fireEvent.keyDown(input, { key: 'Escape', keyCode: 229 });
+    expect(fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 })).toBe(false);
     expect(onDone).not.toHaveBeenCalled();
+  });
+
+  // The editor inserts where the caret was at the paste, so the note must not
+  // change while the name is asked.
+  it('makes the rest of the page inert and keeps the focus on a backdrop click', async () => {
+    const page = document.createElement('div');
+    const editor = document.createElement('input');
+    page.append(editor);
+    document.body.append(page);
+    const { input } = open();
+    expect(page.inert).toBe(true);
+    const backdrop = defined(screen.getByRole('dialog').parentElement);
+    await userEvent.click(backdrop);
+    expect(document.activeElement).toBe(input);
+    await userEvent.keyboard('{Escape}');
+    cleanup();
+    expect(page.inert).toBe(false);
+    page.remove();
   });
 
   it('keeps the focus inside the dialog', async () => {
