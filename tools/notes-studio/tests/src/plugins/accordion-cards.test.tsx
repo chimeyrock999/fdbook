@@ -205,15 +205,31 @@ describe('accordion kind and title', () => {
   });
 
   it('closes the kind menu on a press outside or Escape', async () => {
-    mount();
+    const { container } = mount();
     const kind = screen.getByRole('button', { name: 'Accordion kind: tip' });
     await userEvent.click(kind);
+    // Drawn on the page body, not in the block; a press on it keeps it open.
+    const menu = screen.getByRole('menu');
+    expect(menu.parentElement).toBe(document.body);
+    expect(container.contains(menu)).toBe(false);
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: menu });
+    expect(screen.getByRole('menu')).toBeTruthy();
+    await userEvent.pointer({ keys: '[/MouseLeft]' });
     await userEvent.click(document.body);
     expect(screen.queryByRole('menu')).toBeNull();
     await userEvent.click(kind);
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('menu')).toBeNull();
     expect(kind.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(kind);
+  });
+
+  it('takes its menu off the page body when the editor goes', async () => {
+    const { editor: live } = mount();
+    await userEvent.click(screen.getByRole('button', { name: 'Accordion kind: tip' }));
+    expect(document.body.querySelector('.studio-picker-menu')).not.toBeNull();
+    live.destroy();
+    expect(document.body.querySelector('.studio-picker-menu')).toBeNull();
   });
 
   it('writes a title as typing pauses, keeps the caret and the open item', async () => {

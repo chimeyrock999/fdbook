@@ -3,6 +3,7 @@ import { Decoration, type EditorView } from '@tiptap/pm/view';
 import { Bug, ChevronDown, CircleDashed, CircleHelp, CirclePlay, Droplet, Leaf, Rat, Shovel, Sprout, Tag, type IconNode } from 'lucide';
 import { ACCORDION_KINDS, type AccordionKind } from '@site/lib/notes-syntax';
 import { icon } from '../icon';
+import { floatMenu } from '../picker-menu';
 import { attributes } from '../source-attributes';
 import { parseAccordions, withAccordionAttributes, withAccordionBody, type AccordionItem } from './accordions';
 
@@ -257,31 +258,20 @@ function kindPicker(cards: Cards, item: AccordionItem, index: number) {
       });
       menu.append(option);
     }
-    // Any press outside closes the menu (Safari does not focus a clicked
-    // button, so a blur would not come).
-    const outside = (event: Event) => {
-      if (!(event.target instanceof Node && picker.contains(event.target))) close?.();
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      close?.();
-      button.focus();
-    };
+    // Drawn on document.body over the note (picker-menu.ts).
+    document.body.append(menu);
+    button.setAttribute('aria-expanded', 'true');
+    const stop = floatMenu({ menu, picker, button }, () => { close?.(); });
     close = () => {
       closers.get(cards.root)?.delete(closing);
+      stop();
       menu.remove();
       button.setAttribute('aria-expanded', 'false');
-      document.removeEventListener('mousedown', outside);
-      document.removeEventListener('keydown', escape);
       close = null;
     };
-    document.addEventListener('mousedown', outside);
-    document.addEventListener('keydown', escape);
     const closing = () => { close?.(); };
     const all = closers.get(cards.root) ?? new Set<() => void>();
     closers.set(cards.root, all.add(closing));
-    picker.append(menu);
-    button.setAttribute('aria-expanded', 'true');
   };
   button.addEventListener('click', () => {
     if (close) close();
