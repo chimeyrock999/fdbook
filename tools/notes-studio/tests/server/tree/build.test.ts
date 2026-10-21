@@ -37,6 +37,29 @@ function content(pages: Record<string, Record<string, unknown>>, metas: Record<s
 }
 
 describe('page tree on content/notes', () => {
+  it('carries the icons the site shows, a folder falling back to its index page', async () => {
+    const icons: Record<string, string> = {};
+    const walk = (nodes: TreeNode[]) => {
+      for (const node of nodes) {
+        if ((node.kind === 'page' || node.kind === 'folder') && node.icon !== null) icons[node.path] = node.icon;
+        if (node.kind === 'folder') walk(node.children);
+      }
+    };
+    walk(buildTree(await readNotesContent(repoRoot)).children);
+    expect(icons).toEqual({
+      'index.mdx': 'Brain',
+      'data-platform': 'TreePine',
+      'personal-reflections': 'Flower2',
+      // Listed as pages: these index pages are rows of their own.
+      'computer-systems/index.mdx': 'Shrub',
+      'database/index.mdx': 'Leaf',
+      'streaming/index.mdx': 'Clover',
+      // No icon in meta.yaml (or no meta.yaml): the index page's.
+      'data-modeling': 'Sprout',
+      'distributed-systems': 'Trees',
+    });
+  });
+
   it('lists what the site lists, in the same order', async () => {
     const notes = await readNotesContent(repoRoot);
     const tree = buildTree(notes);
@@ -109,6 +132,14 @@ describe('page tree syntax', () => {
       'guide/meta.yaml': { title: 'The Guide', defaultOpen: false, pages: ['two', 'z...a'] },
     },
   );
+
+  it('takes a folder icon from meta.yaml before its index page', () => {
+    const tree = buildTree(content(
+      { 'a/index.mdx': { title: 'A', icon: 'Sprout' }, 'b/index.mdx': { title: 'B', icon: 'Sprout' }, 'c/x.mdx': { title: 'X', icon: 'Leaf' }, 'd.mdx': { title: 'D' } },
+      { 'b/meta.yaml': { title: 'B', icon: 'TreePine' } },
+    ));
+    expect(['a', 'b', 'c', 'c/x.mdx', 'd.mdx'].map((path) => (find(tree, path) as { icon: string | null }).icon)).toEqual(['Sprout', 'TreePine', null, 'Leaf', null]);
+  });
 
   it('follows separators, links, rest, extract, exclude and nested entries', () => {
     const tree = buildTree(notes);

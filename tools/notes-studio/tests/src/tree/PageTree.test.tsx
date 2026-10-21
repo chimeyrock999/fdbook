@@ -4,30 +4,34 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TreeAnswer, TreeClient, TreeFolder, TreeRequest } from '../../../src/api/tree';
 import { PageTree } from '../../../src/tree/PageTree';
+import { NOTE_ICON_NAMES } from '@site/lib/notes-icons';
+
+// The server's list of the site's icon names (server/icons/api.ts).
+vi.mock('../../../src/api/icons', () => ({ fetchIconNames: () => Promise.resolve(NOTE_ICON_NAMES) }));
 
 const root: TreeFolder = {
-  kind: 'folder', id: 'folder:', path: '', title: 'Notes', meta: 'meta.yaml', metaMtime: 10, index: null, defaultOpen: true, hidden: null, entry: null,
+  kind: 'folder', id: 'folder:', path: '', title: 'Notes', meta: 'meta.yaml', metaMtime: 10, index: null, defaultOpen: true, icon: null, hidden: null, entry: null,
   children: [
     {
       kind: 'folder', id: 'folder:guide', path: 'guide', title: 'Guide', meta: 'guide/meta.yaml', metaMtime: 20, index: 'guide/index.mdx',
-      defaultOpen: true, hidden: null, entry: 0,
+      defaultOpen: true, icon: 'TreePine', hidden: null, entry: 0,
       children: [
-        { kind: 'page', id: 'page:guide/one.mdx', path: 'guide/one.mdx', title: 'One', entry: 0, hidden: null },
-        { kind: 'page', id: 'page:guide/two.mdx', path: 'guide/two.mdx', title: 'Two', entry: 1, hidden: null },
+        { kind: 'page', id: 'page:guide/one.mdx', path: 'guide/one.mdx', title: 'One', icon: 'NotALucideIcon', entry: 0, hidden: null },
+        { kind: 'page', id: 'page:guide/two.mdx', path: 'guide/two.mdx', title: 'Two', icon: 'Sprout', entry: 1, hidden: null },
         { kind: 'missing', id: 'missing:guide/meta.yaml:2', entry: 2, value: 'gone', meta: 'guide/meta.yaml' },
-        { kind: 'page', id: 'page:guide/rest.mdx', path: 'guide/rest.mdx', title: 'From rest', entry: null, hidden: null },
+        { kind: 'page', id: 'page:guide/rest.mdx', path: 'guide/rest.mdx', title: 'From rest', icon: null, entry: null, hidden: null },
       ],
     },
     { kind: 'separator', id: 'separator:meta.yaml:1', entry: 1, title: 'Later' },
-    { kind: 'page', id: 'page:draft.mdx', path: 'draft.mdx', title: 'Draft', entry: null, hidden: 'unlisted' },
+    { kind: 'page', id: 'page:draft.mdx', path: 'draft.mdx', title: 'Draft', icon: null, entry: null, hidden: 'unlisted' },
     {
       kind: 'folder', id: 'folder:old', path: 'old', title: 'Old', meta: 'old/meta.yaml', metaMtime: 30, index: null,
-      defaultOpen: false, hidden: 'visible-false', entry: null,
-      children: [{ kind: 'page', id: 'page:old/x.mdx', path: 'old/x.mdx', title: 'X', entry: 0, hidden: null }],
+      defaultOpen: false, icon: null, hidden: 'visible-false', entry: null,
+      children: [{ kind: 'page', id: 'page:old/x.mdx', path: 'old/x.mdx', title: 'X', icon: null, entry: 0, hidden: null }],
     },
     {
       kind: 'folder', id: 'folder:loose', path: 'loose', title: 'Loose', meta: null, metaMtime: null, index: null,
-      defaultOpen: false, hidden: null, entry: null, children: [],
+      defaultOpen: false, icon: null, hidden: null, entry: null, children: [],
     },
   ],
 };
@@ -63,6 +67,17 @@ describe('PageTree', () => {
     expect(screen.getByTitle(/No meta.yaml lists it/)).toBeTruthy();
     // `Old` is closed until opened; Guide is open because the open note is in it.
     expect(screen.queryByRole('button', { name: 'X' })).toBeNull();
+  });
+
+  it('draws the icons the site shows, else the default ones', async () => {
+    setup();
+    const iconIn = (name: string) => screen.getByRole('button', { name }).querySelector('svg')?.getAttribute('class') ?? '';
+    await waitFor(() => { expect(iconIn('Guide')).toContain('lucide-tree-pine'); });
+    expect(iconIn('Two')).toContain('lucide-sprout');
+    // A name the site does not know, and no icon at all.
+    expect(iconIn('One')).toContain('lucide-file-text');
+    expect(iconIn('Draft')).toContain('lucide-file-text');
+    expect(iconIn('Loose')).toContain('lucide-folder');
   });
 
   it('starts folders closed, whatever the site would open', async () => {
@@ -167,7 +182,7 @@ describe('PageTree', () => {
     expect(props.onChanged).toHaveBeenCalled();
     // The reloaded tree holds the folder: it is open, with Guide, and has focus.
     const guide = root.children[0] as TreeFolder;
-    const raft: TreeFolder = { ...guide, id: 'folder:guide/raft', path: 'guide/raft', title: 'Raft', meta: 'guide/raft/meta.yaml', index: null, defaultOpen: false, entry: 2, children: [] };
+    const raft: TreeFolder = { ...guide, id: 'folder:guide/raft', path: 'guide/raft', title: 'Raft', meta: 'guide/raft/meta.yaml', index: null, defaultOpen: false, icon: null, entry: 2, children: [] };
     rerender(<PageTree root={{ ...root, children: [{ ...guide, children: [...guide.children, raft] }, ...root.children.slice(1)] }} {...props} />);
     expect(screen.getByRole('button', { name: 'Collapse Raft' }).getAttribute('aria-expanded')).toBe('true');
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Raft' }));

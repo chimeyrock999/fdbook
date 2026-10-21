@@ -236,7 +236,11 @@ as on the site. On top of that the tree shows:
   the site's sidebar and is not read here: most folders set it, so the whole
   tree would open at once.
 - Rows follow the site's sidebar: 34px high, 14px text, a guide line for
-  each nested level.
+  each nested level, and the icon the site shows: a page's frontmatter
+  `icon`, a folder's meta.yaml `icon` or else its index page's. A row
+  without one, or with a name the site does not know, gets the plain
+  folder or page icon. A new icon set in the metadata strip shows once the
+  note is saved, as a new title does.
 
 Changes go through `POST /api/tree`, never through the notes sync, which
 cannot update meta.yaml. Each one is planned against the disk and applied

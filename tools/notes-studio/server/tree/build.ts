@@ -86,6 +86,11 @@ function resolveEntry(context: Context, folder: string, item: string): string | 
 // Node names are React nodes in fumadocs; the loader makes them strings.
 const nameOf = (node: { name?: unknown }) => (typeof node.name === 'string' ? node.name : '');
 
+// Without lucideIconsPlugin (lib/source.ts has it) an icon stays the name
+// written in frontmatter or meta.yaml. A folder's is its meta.yaml `icon`,
+// else its index page's, as the loader sets it.
+const iconOf = (node: { icon?: unknown }) => (typeof node.icon === 'string' && node.icon !== '' ? node.icon : null);
+
 function hiddenOf(data: Data | undefined): Hidden | null {
   return data?.visible === false ? 'visible-false' : null;
 }
@@ -94,7 +99,7 @@ function convertNode(context: Context, node: PageTree.Node, folder: string): Tre
   if (node.type === 'separator') return { kind: 'separator', id: '', entry: null, title: nameOf(node) };
   if (node.type === 'page') {
     if (node.$ref === undefined) return { kind: 'link', id: '', entry: null, title: nameOf(node), url: node.url };
-    return { kind: 'page', id: `page:${node.$ref}`, entry: null, title: nameOf(node), path: node.$ref, hidden: hiddenOf(context.pages.get(node.$ref)) };
+    return { kind: 'page', id: `page:${node.$ref}`, entry: null, title: nameOf(node), path: node.$ref, icon: iconOf(node), hidden: hiddenOf(context.pages.get(node.$ref)) };
   }
   return convertFolder(context, node, folder);
 }
@@ -127,6 +132,7 @@ function convertFolder(context: Context, node: PageTree.Folder | PageTree.Root, 
     metaMtime: meta === null ? null : (context.mtimes.get(meta) ?? null),
     index: 'index' in node && node.index?.$ref !== undefined ? node.index.$ref : null,
     defaultOpen: metaData?.defaultOpen === true,
+    icon: 'icon' in node ? iconOf(node) : null,
     hidden: hiddenOf(metaData),
     children,
   };

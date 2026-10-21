@@ -17,10 +17,12 @@ export type TreeFolder = Base & {
   index: string | null;
   // meta.yaml's `defaultOpen`: whether the site's sidebar starts it open.
   defaultOpen: boolean;
+  // The lucide icon name the site's sidebar shows (see iconOf in build.ts).
+  icon: string | null;
   hidden: Hidden | null;
   children: TreeNode[];
 };
-export type TreePage = Base & { kind: 'page'; title: string; path: string; hidden: Hidden | null };
+export type TreePage = Base & { kind: 'page'; title: string; path: string; icon: string | null; hidden: Hidden | null };
 export type TreeSeparator = Base & { kind: 'separator'; title: string };
 export type TreeLink = Base & { kind: 'link'; title: string; url: string };
 export type TreeMissing = Base & { kind: 'missing'; value: string; meta: string };

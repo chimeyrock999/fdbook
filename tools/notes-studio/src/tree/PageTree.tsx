@@ -1,6 +1,8 @@
 import { ArrowDown, ArrowUp, Check, ChevronRight, ExternalLink, EyeOff, FileText, Folder, GripVertical, Lock, MoreHorizontal, Pencil, Plus, TriangleAlert } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import type { TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
+import { iconOf, useNoteIcons, type Icons } from '../frontmatter/note-icons';
 import { CreateDialog, RenameDialog } from './TreeDialogs';
 import { dropIndex, filterTree, movable, noteOf, renamedPath, stepIndex, titleOf } from './tree';
 import { useOpenFolders } from './useOpenFolders';
@@ -32,6 +34,7 @@ function said(changes: TreeChange[]) {
 // What the rows need from the tree around them.
 type View = {
   active: string | null;
+  icons: Icons | 'failed' | null;
   filtering: boolean;
   isOpen: (folder: TreeFolder) => boolean;
   toggle: (folder: TreeFolder) => void;
@@ -45,8 +48,14 @@ type View = {
   openMenu: (menu: Menu) => void;
 };
 
+// The icon the site's sidebar shows, or Folder / FileText when it sets
+// none, names one the site does not know, or the icons have not loaded.
+function RowIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon size={16} aria-hidden="true" />;
+}
+
 function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; dim: boolean; view: View }) {
-  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu } = view;
+  const { active, icons, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu } = view;
   const hidden = 'hidden' in node ? node.hidden : null;
   const note = noteOf(node);
   const open = node.kind === 'folder' && (filtering || isOpen(node));
@@ -95,7 +104,7 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
           </span>
         ) : (
           <button type="button" className="studio-tree-label" title={node.path} onClick={select}>
-            {node.kind === 'folder' ? <Folder size={16} /> : <FileText size={16} />}
+            <RowIcon icon={iconOf(icons, node.icon ?? '') ?? (node.kind === 'folder' ? Folder : FileText)} />
             <span className="truncate">{node.title}</span>
           </button>
         )}
@@ -156,6 +165,7 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
   const [dragging, setDragging] = useState<{ node: TreeNode; parent: TreeFolder } | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
   const { isOpen, toggle, openFolder } = useOpenFolders(root, active);
+  const { icons } = useNoteIcons();
   const menuRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   // A plain folder just created: its row takes focus once the reloaded tree
@@ -218,7 +228,7 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
     setDrop(null);
   };
 
-  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu };
+  const view: View = { active, icons, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu };
   const menuNode = menu?.node ?? null;
   const movesUnsaved =
     unsaved !== null && (menuNode?.kind === 'page' || menuNode?.kind === 'folder') && renamedPath(unsaved, menuNode.path, menuNode.path) !== null;
