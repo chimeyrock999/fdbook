@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { glob, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { repoRoot } from '../../server/config';
@@ -8,6 +8,10 @@ import { repoRoot } from '../../server/config';
 // in the Studio with no Studio edit.
 
 const read = (path: string) => readFile(join(repoRoot, path), 'utf8');
+
+const LIGHT = ':root:has(.notes-theme), .notes-theme';
+const DARK = '.dark:has(.notes-theme), .dark .notes-theme';
+const PALETTE = /^--(color-fd|garden|color-graph|color-callout)-/;
 
 function block(css: string, selector: string) {
   const start = css.indexOf(`${selector} {`);
@@ -36,8 +40,8 @@ describe('notes theme', () => {
   it('maps every --fde-* token onto a site token in light and dark', async () => {
     const studio = values(block(await read('tools/notes-studio/src/notes-theme.css'), '\n.notes-theme'));
     const site = await read('styles/notes-theme.css');
-    const light = values(block(site, '\n.notes-theme'));
-    const dark = values(block(site, '.dark .notes-theme'));
+    const light = values(block(site, LIGHT));
+    const dark = values(block(site, DARK));
     const mapped = Object.entries(studio).filter(([name]) => name.startsWith('--fde-'));
     expect(mapped.length).toBeGreaterThan(20);
     for (const [name, value] of mapped) {
@@ -48,18 +52,43 @@ describe('notes theme', () => {
     }
   });
 
-  // The .notes-theme palette, which the Studio draws with. The site's own
-  // @theme and global .dark blocks still repeat the values for its Tailwind
-  // utilities: #72.
-  it('keeps the .notes-theme palette in the shared file only', async () => {
-    const notes = await read('app/notes/notes.css');
-    expect(notes).toContain("@import '../../styles/notes-theme.css';");
-    expect(notes).not.toMatch(/(^|\n)(\.dark )?\.notes-theme \{[^}]*--color-callout-/);
+  // On the page too, so what renders outside the notes layout (the search
+  // dialog and popovers portal to <body>) keeps the garden colours; only
+  // while it shows the layout, since the notes CSS stays loaded after a
+  // client-side navigation to another page.
+  it('sets the palette on the page and on .notes-theme', async () => {
+    const site = await read('styles/notes-theme.css');
+    const light = values(block(site, LIGHT));
+    expect(light['--color-fd-card']).toBeDefined();
+    expect(light['--color-callout-info']).toBeDefined();
+    expect(values(block(site, DARK))['--color-fd-card']).toBeDefined();
+    const parts = selectors(site).flatMap((s) => s.split(',').map((p) => p.trim()));
+    expect(parts).not.toContain(':root');
+    expect(parts).not.toContain('.dark');
+    // The fonts read next/font variables set on the notes layout only.
+    expect(light['--font-sans']).toBeUndefined();
+    expect(values(block(site, '\n.notes-theme'))['--font-sans']).toBeDefined();
+  });
+
+  it('writes each palette value once, in styles/notes-theme.css', async () => {
+    const copies: string[] = [];
+    for await (const path of glob('{app,styles,components,tools/notes-studio/src}/**/*.css', { cwd: repoRoot })) {
+      if (path === 'styles/notes-theme.css') continue;
+      const css = (await read(path)).replace(/\/\*[\s\S]*?\*\//g, '');
+      for (const [, name, value] of css.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
+        if (!PALETTE.test(name) || value.trim().startsWith('var(')) continue;
+        if (name === '--garden-leaf-mask') continue; // an image, not a colour
+        // The home page has its own fumadocs palette.
+        if (name.startsWith('--color-fd-') && path.startsWith('app/(home)/')) continue;
+        copies.push(`${path}: ${name}`);
+      }
+    }
+    expect(copies).toEqual([]);
   });
 
   it('dark is the site class the Studio sets on <html>', async () => {
     const site = await read('styles/notes-theme.css');
-    expect(site).toContain('.dark .notes-theme {');
+    expect(site).toContain(`${DARK} {`);
     const html = await read('tools/notes-studio/index.html');
     expect(html).toContain('<body class="notes-theme">');
     // Set before the first paint, so a dark system never flashes light, and
