@@ -50,6 +50,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `frontmatter/` reads and writes a note's YAML frontmatter and holds the
     form.
   - `lint/` is the Issues tab and the issue count in the toolbar.
+  - `media/` saves pasted and dropped images under `public/notes` (see
+    Images below).
   - `notes/` is the check that a note can be opened.
   - `tree/` is the page tree in the left panel and its dialogs.
   - `plugins/` holds the editor plugins (see below).
@@ -170,9 +172,9 @@ a move that fails writes nothing.
 - **New page** (the `+` button, or New page here / below in the row menu)
   writes `slug.mdx`, or `slug/index.mdx` plus `slug/meta.yaml`, with the
   frontmatter the notes use (title, description, graph), as the Obsidian
-  plugin wrote it. The slug is added
-  to the parent's `pages` after the chosen entry, unless the parent has no
-  meta.yaml, no `pages`, or `...`/`z...a`, which list it already.
+  plugin wrote it. The slug is added to the parent's `pages` after the
+  chosen entry, unless the parent has no meta.yaml, no `pages`, or
+  `...`/`z...a`, which list it already.
 - **Rename** gives a page or folder a new name in the same folder. Every
   meta.yaml entry that reached it (`a/b`, `!x`, `...x` included) and every
   Markdown link or link definition to it (`./`, `../` and `/notes/…`, anchors
@@ -184,8 +186,40 @@ a move that fails writes nothing.
   its edits are saved. The dialogs show what will be written (a dry run)
   before you confirm.
 
-Rename and reorder do not cover moving a page to another folder, deleting,
-or editing a folder's title, icon or `defaultOpen`.
+A rename does not move the page's images: they stay in
+`public/notes/<old path>/` and the links to them keep working, while new
+images go to the folder of the new path (see Images). Rename and reorder do
+not cover moving a page to another folder, deleting, or editing a folder's
+title, icon or `defaultOpen`.
+
+## Images
+
+Paste or drop an image in Visual, pick one from the `/` menu's Image item, or
+use Upload on a selected image's toolbar. A dialog asks for the file name
+first: the image's own name in kebab-case ASCII is offered, selected, and the
+extension stays as it is. A name already used in the page's folder cannot be
+saved, and Escape or Cancel writes nothing.
+
+- The file goes to the page's folder under `public/notes`:
+  `content/notes/a/b.mdx` uses `public/notes/a/b/`, and a folder's
+  `index.mdx` uses the folder (`public/notes/a/`).
+- The note gets `![alt](/notes/a/b/name.png)`, the path the site reads; the
+  editor fills the alt text from the original file name, so edit it in the
+  image toolbar. The editor shows `/notes/…` images through the file API.
+- The dialog keeps the focus while it is open: the editor inserts the image
+  where the caret was when it was pasted, so the note should not change
+  meanwhile.
+- Only images the site serves are saved (PNG, JPEG, WebP, GIF, AVIF, SVG, up
+  to 25 MB); anything else is refused with a notice beside the save status.
+  The save is a new file only, so a name taken meanwhile is refused, never
+  overwritten.
+- In Source, typing `src="` or an image's `](` suggests the assets under
+  `public/notes`, those of the open page first. `HtmlEmbed` and `::html`
+  suggest `.html` files, `SvgDiagram`, `::svg` and `::diagram` suggest `.svg`,
+  images suggest images. The page's own folder ranks first, then the folder
+  the note sits in, where many notes keep their assets.
+
+Renaming or deleting an existing asset is not supported yet.
 
 ## Lint
 

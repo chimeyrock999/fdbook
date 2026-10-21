@@ -65,17 +65,6 @@ export function stepIndex(folder: TreeFolder, node: TreeNode, direction: -1 | 1)
 // The name a page or folder has in its folder: `intro` for intro.mdx.
 export const slugOf = (path: string) => path.slice(path.lastIndexOf('/') + 1).replace(/\.mdx$/, '');
 
-// Same as server/tree/template.ts (tests/src/tree/tree.test.ts checks).
-export function normalizeSlug(input: string): string {
-  return input
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[đĐ]/g, 'd')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
 // `path` after the rename of `from` to `to` (a page `x.mdx` or a folder),
 // or null when the rename does not move it.
 export function renamedPath(path: string, from: string, to: string): string | null {

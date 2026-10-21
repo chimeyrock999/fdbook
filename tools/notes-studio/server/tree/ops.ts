@@ -5,7 +5,8 @@ import { listEditableFiles, statOrNull, writeAtomic } from '../files/store.ts';
 import { NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 import { replaceSegment, rewriteLinks, type Rename } from './links.ts';
 import { insertEntry, metaTemplate, MetaEditError, moveEntry, pagesTemplate, readPages, replaceEntry } from './meta-edit.ts';
-import { normalizeSlug, pageTemplate } from './template.ts';
+import { slugify } from '../../src/slug.ts';
+import { pageTemplate } from './template.ts';
 import type { TreeFolder, TreeNode } from './types.ts';
 
 // Page tree changes: create a page, rename a page or folder, move an entry
@@ -65,7 +66,7 @@ function findFolder(tree: TreeFolder, path: string) {
 }
 
 function checkSlug(slug: unknown): string {
-  if (typeof slug !== 'string' || slug === '' || normalizeSlug(slug) !== slug) {
+  if (typeof slug !== 'string' || slug === '' || slugify(slug) !== slug) {
     throw new HttpError(400, 'the slug must be lowercase letters, digits and dashes');
   }
   if (slug === 'index') throw new HttpError(400, '`index` is the folder page: name the folder instead');

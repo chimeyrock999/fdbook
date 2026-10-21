@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { normalizeSlug, pageTemplate } from '../../../server/tree/template';
+import { pageTemplate } from '../../../server/tree/template';
 
 const frontmatter = (source: string) => /^---\n([\s\S]*?)\n---\n\n$/.exec(source)?.[1] ?? '';
 
@@ -20,15 +20,5 @@ describe('page template', () => {
   it('keeps quotes and backslashes in the title valid YAML', () => {
     const title = 'Path C:\\data "x"';
     expect(parse(frontmatter(pageTemplate('path', title)))).toMatchObject({ title, graph: { displayName: title } });
-  });
-
-  it('makes slugs from titles', () => {
-    expect(['Raft Consensus', '  Ổn định  ', 'C++ & Go!', '---', 'already-a-slug'].map(normalizeSlug)).toEqual([
-      'raft-consensus',
-      'on-dinh',
-      'c-go',
-      '',
-      'already-a-slug',
-    ]);
   });
 });

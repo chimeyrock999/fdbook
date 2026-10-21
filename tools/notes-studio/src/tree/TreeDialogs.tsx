@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode, type SyntheticEvent } from 'react';
 import type { TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
-import { normalizeSlug, slugOf } from './tree';
+import { slugify } from '../slug';
+import { slugOf } from './tree';
 
 const PREVIEW_MS = 200;
 
@@ -99,8 +100,8 @@ export function CreateDialog({ client, parent, after, onDone, onClose }: {
   const [kind, setKind] = useState<'page' | 'folder'>('page');
   const [failed, setFailed] = useState<string | null>(null);
   // Typed freely; what is saved is its slug form.
-  const shownSlug = slug ?? normalizeSlug(title);
-  const finalSlug = normalizeSlug(shownSlug);
+  const shownSlug = slug ?? slugify(title);
+  const finalSlug = slugify(shownSlug);
   const request: TreeRequest | null = finalSlug === '' ? null : { op: 'create', parent: parent.path, slug: finalSlug, title, kind, after };
   const preview = usePreview(client, request);
 
@@ -155,7 +156,7 @@ export function RenameDialog({ client, node, onDone, onClose }: {
 }) {
   const [typed, setTyped] = useState(slugOf(node.path));
   const [failed, setFailed] = useState<string | null>(null);
-  const slug = normalizeSlug(typed);
+  const slug = slugify(typed);
   const changed = slug !== '' && slug !== slugOf(node.path);
   const request: TreeRequest | null = changed ? { op: 'rename', path: node.path, slug } : null;
   const preview = usePreview(client, request);

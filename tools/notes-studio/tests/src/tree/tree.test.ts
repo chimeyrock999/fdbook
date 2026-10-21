@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TreeFolder, TreeNode } from '../../../src/api/tree';
-import { dropIndex, filterTree, normalizeSlug, renamedPath, stepIndex, trailTo } from '../../../src/tree/tree';
-import { normalizeSlug as serverSlug } from '../../../server/tree/template';
+import { dropIndex, filterTree, renamedPath, stepIndex, trailTo } from '../../../src/tree/tree';
 
 const page = (path: string, title: string, entry: number | null, hidden: 'unlisted' | null = null): TreeNode => ({
   kind: 'page', id: `page:${path}`, path, title, entry, hidden,
@@ -51,9 +50,5 @@ describe('tree helpers', () => {
     expect(renamedPath('guidebook/x.mdx', 'guide', 'manual')).toBeNull();
     // A page rename does not move a folder of the same name.
     expect(renamedPath('guide/intro/x.mdx', 'guide/intro.mdx', 'guide/start.mdx')).toBeNull();
-  });
-
-  it('makes slugs like the server', () => {
-    for (const input of ['Raft Consensus', 'Ổn định', 'C++ & Go!']) expect(normalizeSlug(input)).toBe(serverSlug(input));
   });
 });

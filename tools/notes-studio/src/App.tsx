@@ -4,6 +4,7 @@ import { createFilesClient } from './api/files';
 import { createLintClient } from './api/lint';
 import { createTreeClient } from './api/tree';
 import { NoteEditor } from './editor/NoteEditor';
+import { useAssets } from './media/useAssets';
 import { NoteGate } from './notes/NoteGate';
 import { OpenOnSite } from './notes/OpenOnSite';
 import { NOTES_PREFIX, noteFromUrl, syncPath } from './notes/notes';
@@ -16,6 +17,7 @@ export function App() {
   const lint = useMemo(() => createLintClient(), []);
   const treeClient = useMemo(() => createTreeClient(), []);
   const { tree, error, reload } = useTree(treeClient, files);
+  const assets = useAssets(files);
   const [active, setActive] = useState(() => noteFromUrl(window.location.search));
   // The open note's autosave state, by path: a rename waits until it is saved.
   const [saved, setSaved] = useState<{ path: string; status: DocumentStatus } | null>(null);
@@ -82,6 +84,7 @@ export function App() {
               path={syncPath(active)}
               onStatus={(status) => { setSaved({ path: active, status }); }}
               files={files}
+              assets={assets}
               lint={lint}
               panelOpen={drawer === 'panel'}
               onOpenPanel={() => { setDrawer('panel'); }}
