@@ -138,15 +138,18 @@ as on the site. On top of that the tree shows:
 
 Changes go through `POST /api/tree`, never through the notes sync, which
 cannot update meta.yaml. Each one is planned against the disk and applied
-under one lock; every file it writes must still have the mtime it was read
-at, or nothing is written and the answer is `409`.
+under one lock. Every file it writes must still have the mtime it was read
+at, checked before anything is written and again just before each write;
+otherwise the answer is `409`. A rename moves the page or folder first, so
+a move that fails writes nothing.
 
 - **Reorder** (drag a row, or the row menu's Move up / Move down) moves an
   entry within its folder's `pages`. Only nodes with an entry of their own
   there can move; a lock explains the others. The edit swaps the text of the
   entry lines, so comments, blank lines, quote style, `icon`, `visible` and a
   missing final newline stay as they were. A folder without meta.yaml gets
-  one, listing its children in the new order.
+  one with only `pages`, in the new order, so its title (from the index
+  page) and its closed-by-default state stay.
 - **New page** (the `+` button, or New page here / below in the row menu)
   writes `slug.mdx`, or `slug/index.mdx` plus `slug/meta.yaml`, with the
   frontmatter obsidian-plugin writes (`createPageTemplate`). The slug is added
@@ -156,9 +159,12 @@ at, or nothing is written and the answer is `409`.
   meta.yaml entry that reached it (`a/b`, `!x`, `...x` included) and every
   Markdown link or link definition to it (`./`, `../` and `/notes/…`, anchors
   kept) points at the new name; only the changed path segment is rewritten.
-  JSX `href`s are not rewritten. A note open in the editor follows the
-  rename. The dialogs show what will be written (a dry run) before you
-  confirm.
+  For a page only links that end at it change: `/notes/a/page/x.png` (an
+  asset folder named after the page) and a folder `page/` next to
+  `page.mdx` keep their paths. JSX `href`s are not rewritten. A note open
+  in the editor follows the rename; renaming it, or its folder, waits until
+  its edits are saved. The dialogs show what will be written (a dry run)
+  before you confirm.
 
 Rename and reorder do not cover moving a page to another folder, deleting,
 or editing a folder's title, icon or `defaultOpen`.

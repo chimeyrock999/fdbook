@@ -25,7 +25,9 @@ function decode(segment: string) {
 // exactly on `target`, that segment is swapped for `name` and the new path
 // is returned; null when the walk never reaches `target`. Only the one
 // segment changes, so the rest of the text (escapes, `./`) stays as written.
-export function replaceSegment(start: string[], path: string, target: string, name: string): string | null {
+// With `whole`, the path must end at `target` (a page): `guide/intro/a.png`
+// does not point at the page `guide/intro`.
+export function replaceSegment(start: string[], path: string, target: string, name: string, whole = false): string | null {
   const segments = path.split('/');
   const current = [...start];
   for (const [index, segment] of segments.entries()) {
@@ -34,6 +36,7 @@ export function replaceSegment(start: string[], path: string, target: string, na
     else if (value !== '' && value !== '.') {
       current.push(value);
       if (current.join('/') === target) {
+        if (whole && segments.slice(index + 1).some((rest) => !['', '.'].includes(decode(rest)))) return null;
         segments[index] = name;
         return segments.join('/');
       }
@@ -56,13 +59,13 @@ export function rewriteHref(href: string, notePath: string, rename: Rename): str
   const withSuffix = (next: string | null) => (next === null ? null : next + suffix);
 
   if (path.startsWith('./') || path.startsWith('../')) {
-    const file = replaceSegment(dirSegments(notePath), path, rename.from, name);
+    const file = replaceSegment(dirSegments(notePath), path, rename.from, name, !rename.folder);
     if (file !== null) return file + suffix;
   }
   const fromUrl = (rename.folder ? `/notes/${rename.from}` : pageUrl(rename.from)).slice(1);
   const toName = rename.folder ? name : name.replace(/\.mdx$/, '');
   const urlDir = pageUrl(notePath).slice(1).split('/').slice(0, -1);
-  return withSuffix(replaceSegment(path.startsWith('/') ? [] : urlDir, path, fromUrl, toName));
+  return withSuffix(replaceSegment(path.startsWith('/') ? [] : urlDir, path, fromUrl, toName, !rename.folder));
 }
 
 // Where the destination of a link or definition sits in the source.

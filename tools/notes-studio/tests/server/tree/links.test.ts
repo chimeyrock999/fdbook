@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rewriteHref, rewriteLinks, type Rename } from '../../../server/tree/links';
+import { replaceSegment, rewriteHref, rewriteLinks, type Rename } from '../../../server/tree/links';
 
 const page: Rename = { from: 'computer-systems/operating-systems/page-cache.mdx', to: 'computer-systems/operating-systems/os-cache.mdx', folder: false };
 const folder: Rename = { from: 'distributed-systems/mapreduce', to: 'distributed-systems/map-reduce', folder: true };
@@ -23,6 +23,19 @@ describe('rewriteHref', () => {
   it('moves links inside a renamed folder only when they leave it and come back', () => {
     expect(rewriteHref('./mit-65840-lab01.mdx', 'distributed-systems/mapreduce/index.mdx', folder)).toBeNull();
     expect(rewriteHref('../mapreduce/mit-65840-lab01.mdx', 'distributed-systems/mapreduce/index.mdx', folder)).toBe('../map-reduce/mit-65840-lab01.mdx');
+  });
+
+  it('leaves paths under the page name alone: assets and a folder of the same name', () => {
+    const post: Rename = { from: 'pr/post.mdx', to: 'pr/renamed.mdx', folder: false };
+    // Assets kept in public/notes/pr/post/ are not the page.
+    expect(rewriteHref('/notes/pr/post/big.jpg', 'pr/post.mdx', post)).toBeNull();
+    expect(rewriteHref('/notes/pr/post', 'pr/post.mdx', post)).toBe('/notes/pr/renamed');
+    expect(rewriteHref('/notes/pr/post/', 'pr/post.mdx', post)).toBe('/notes/pr/renamed/');
+    // A folder pr/post/ next to the page pr/post.mdx.
+    expect(rewriteHref('./post/setup.mdx', 'pr/index.mdx', post)).toBeNull();
+    expect(replaceSegment(['pr'], 'post/setup', 'pr/post', 'renamed', true)).toBeNull();
+    expect(replaceSegment(['pr'], 'post', 'pr/post', 'renamed', true)).toBe('renamed');
+    expect(replaceSegment(['pr'], 'post/setup', 'pr/post', 'renamed')).toBe('renamed/setup');
   });
 
   it('leaves anchors, other sites and other pages alone', () => {

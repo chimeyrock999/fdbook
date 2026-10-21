@@ -49,6 +49,8 @@ describe('tree helpers', () => {
     expect(renamedPath('guide/two.mdx', 'guide/two.mdx', 'guide/2.mdx')).toBe('guide/2.mdx');
     expect(renamedPath('guide/two.mdx', 'guide', 'manual')).toBe('manual/two.mdx');
     expect(renamedPath('guidebook/x.mdx', 'guide', 'manual')).toBeNull();
+    // A page rename does not move a folder of the same name.
+    expect(renamedPath('guide/intro/x.mdx', 'guide/intro.mdx', 'guide/start.mdx')).toBeNull();
   });
 
   it('makes slugs like obsidian-plugin', () => {

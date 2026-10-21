@@ -32,10 +32,13 @@ export function createTreeApi(root: string): Handler {
   }
 
   async function change(body: Body) {
+    const answer = (planned: Plan) => ({ changes: planned.changes, open: planned.open });
+    // A dry run only reads, so it does not wait behind the changes.
+    if (body.dryRun === true) return answer(await plan(await loadTree(root), body));
     return lock('tree', async () => {
       const planned = await plan(await loadTree(root), body);
-      if (body.dryRun !== true) await applyPlan(root, planned);
-      return { changes: planned.changes, open: planned.open };
+      await applyPlan(root, planned);
+      return answer(planned);
     });
   }
 

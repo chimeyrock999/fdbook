@@ -24,7 +24,8 @@ const DRAWER_QUERY = '(max-width: 1023px)';
 // changes made on disk, and the conflict choice when both sides edited the
 // same block. `path` is relative to content/notes; the caller remounts this
 // per path. The side panel holds the frontmatter form and the lint issues.
-export function NoteEditor({ path, ...rest }: { path: string } & Panels & Clients) {
+// `onStatus` follows the autosave state, so a rename can wait for it.
+export function NoteEditor({ path, onStatus, ...rest }: { path: string; onStatus?: (status: DocumentStatus) => void } & Panels & Clients) {
   // Null until the server sent the file. A denied open never reports it, so
   // the status, not `writable` alone, decides whether editing is allowed.
   const [writable, setWritable] = useState<boolean | null>(null);
@@ -37,7 +38,10 @@ export function NoteEditor({ path, ...rest }: { path: string } & Panels & Client
         onOpen: (opened) => {
           setWritable(opened.writable);
         },
-        onStatus: setStatus,
+        onStatus: (next) => {
+          setStatus(next);
+          onStatus?.(next);
+        },
       }}
       components={editorConfig.components}
       syntax={editorConfig.syntax}

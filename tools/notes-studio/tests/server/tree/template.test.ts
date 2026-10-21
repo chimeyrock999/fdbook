@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 import { createPageTemplate, normalizePageSlug } from '../../../../../obsidian-plugin/src/services/page-creation';
 import { normalizeSlug, pageTemplate } from '../../../server/tree/template';
 
@@ -10,6 +11,11 @@ describe('page template', () => {
     for (const [slug, title] of cases) {
       expect(pageTemplate(slug, title)).toBe(createPageTemplate({ slug, title }));
     }
+  });
+
+  it('keeps a backslash in the title valid YAML', () => {
+    const yaml = /^---\n([\s\S]*?)\n---/.exec(pageTemplate('path', 'Path C:\\data "x"'))?.[1] ?? '';
+    expect(parse(yaml)).toMatchObject({ title: 'Path C:\\data "x"', graph: { displayName: 'Path C:\\data "x"' } });
   });
 
   it('makes slugs like obsidian-plugin', () => {

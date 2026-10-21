@@ -136,6 +136,29 @@ describe('PageTree', () => {
     expect(within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Create' }).disabled).toBe(true);
   });
 
+  it('waits for the open note to be saved before renaming it or its folder', async () => {
+    const { client } = fakeClient(() => ({ changes: [], open: null }));
+    render(<PageTree root={root} client={client} active="guide/two.mdx" unsaved="guide/two.mdx" onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={vi.fn()} />);
+    for (const name of ['Two', 'Guide']) {
+      await userEvent.click(screen.getByRole('button', { name: `Actions for ${name}` }));
+      expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: 'Rename…' }).disabled).toBe(true);
+      expect(screen.getByRole('menu').textContent).toContain('unsaved changes');
+      await userEvent.keyboard('{Escape}');
+    }
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for One' }));
+    expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: 'Rename…' }).disabled).toBe(false);
+  });
+
+  it('opens the folders on the way once a reloaded tree holds the open note', () => {
+    const { client } = fakeClient(() => ({ changes: [], open: null }));
+    const props = { client, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+    // The note was just renamed into `old`, which is closed by default; the tree has not reloaded yet.
+    const stale: TreeFolder = { ...root, children: root.children.filter((child) => child.id !== 'folder:old') };
+    const { rerender } = render(<PageTree root={stale} active="old/x.mdx" {...props} />);
+    rerender(<PageTree root={root} active="old/x.mdx" {...props} />);
+    expect(screen.getByRole('button', { name: 'X' }).closest('[aria-current]')).toBeTruthy();
+  });
+
   it('renames a folder and reports where it went', async () => {
     const { change, onRenamed } = setup(() => ({
       changes: [{ type: 'move', path: 'guide', to: 'manual' }, { type: 'change', path: 'index.mdx', detail: '2 links' }],

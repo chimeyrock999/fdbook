@@ -4,7 +4,7 @@ import { HttpError } from '../http.ts';
 import { listEditableFiles, statOrNull, writeAtomic } from '../files/store.ts';
 import { NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 import { replaceSegment, rewriteLinks, type Rename } from './links.ts';
-import { insertEntry, metaTemplate, MetaEditError, moveEntry, readPages, replaceEntry } from './meta-edit.ts';
+import { insertEntry, metaTemplate, MetaEditError, moveEntry, pagesTemplate, readPages, replaceEntry } from './meta-edit.ts';
 import { normalizeSlug, pageTemplate } from './template.ts';
 import type { TreeFolder, TreeNode } from './types.ts';
 
@@ -28,6 +28,7 @@ export type Plan = {
   open: string | null;
 };
 
+const slugOf = (path: string) => path.slice(path.lastIndexOf('/') + 1).replace(/\.mdx$/, '');
 const dirOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
 const inDir = (dir: string, name: string) => (dir === '' ? name : `${dir}/${name}`);
 const absolute = (root: string, path: string) => join(root, NOTES_DIR, path);
@@ -142,11 +143,18 @@ export async function planRename(root: string, tree: TreeFolder, request: Rename
   const writes: Write[] = [];
   const changes: TreeChange[] = [{ type: 'move', path, to }];
   const files = (await listEditableFiles(root)).filter((file) => file.kind !== 'asset');
-  for (const file of files) {
-    const notesPath = file.path.slice(NOTES_DIR.length + 1);
-    const { content, mtimeMs } = await readText(root, notesPath);
+  // A file that does not hold the old name cannot point at it: skip the parse.
+  const oldName = slugOf(path);
+  const read = await Promise.all(
+    files.map(async (file) => {
+      const notesPath = file.path.slice(NOTES_DIR.length + 1);
+      return { kind: file.kind, notesPath, ...(await readText(root, notesPath)) };
+    }),
+  );
+  for (const { kind, notesPath, content, mtimeMs } of read) {
+    if (!content.includes(oldName)) continue;
     const { next, count, unit } =
-      file.kind === 'meta'
+      kind === 'meta'
         ? { ...metaError(() => renameEntries(content, dirOf(notesPath), change)), unit: ['entry', 'entries'] as const }
         : { ...rewriteLinks(content, notesPath, change), unit: ['link', 'links'] as const };
     if (next === content) continue;
@@ -173,8 +181,8 @@ function renameEntries(content: string, dir: string, change: Rename) {
     const raw = item.slice(prefix.length);
     const renamed = change.folder
       ? replaceSegment(start, raw, change.from, name)
-      : (replaceSegment(start, raw, change.from.replace(/\.mdx$/, ''), name.replace(/\.mdx$/, '')) ??
-        replaceSegment(start, raw, change.from, name));
+      : (replaceSegment(start, raw, change.from.replace(/\.mdx$/, ''), name.replace(/\.mdx$/, ''), true) ??
+        replaceSegment(start, raw, change.from, name, true));
     if (renamed === null) return;
     next = replaceEntry(next, index, prefix + renamed);
     count += 1;
@@ -204,26 +212,43 @@ export async function planMove(root: string, tree: TreeFolder, request: MoveRequ
   names.splice(to, 0, ...names.splice(from, 1));
   const path = inDir(folder.path, 'meta.yaml');
   guarded(root, path);
-  return { writes: [{ path, content: metaTemplate(folder.title, names), baseMtime: null }], move: null, changes: [{ type: 'add', path }], open: null };
+  // Only `pages`: the folder keeps its title from the index page and stays
+  // closed by default, as it was without a meta.yaml.
+  return { writes: [{ path, content: pagesTemplate(names), baseMtime: null }], move: null, changes: [{ type: 'add', path }], open: null };
 }
 
-// Writes the plan: every file must still have the mtime it was planned
-// from, then each is written atomically, then the page or folder moves.
-// Not a transaction: if a write fails, the ones before it stay written and
-// the error names the failed path.
+// Where `path` is after the plan's move.
+function movedPath(path: string, move: Plan['move']) {
+  if (!move) return path;
+  if (path === move.from) return move.to;
+  return path.startsWith(`${move.from}/`) ? move.to + path.slice(move.from.length) : path;
+}
+
+// Writes the plan. Every file must still have the mtime it was planned
+// from, checked once for all and again just before each write. The page or
+// folder moves first, so a move that fails leaves everything as it was;
+// then each file is written atomically, at its place after the move. Not a
+// transaction: if a write fails, the ones before it stay written and the
+// error names the failed path.
 export async function applyPlan(root: string, plan: Plan) {
-  for (const write of plan.writes) {
-    const info = await statOrNull(guarded(root, write.path));
-    if ((info?.mtimeMs ?? null) !== write.baseMtime) throw new HttpError(409, `${NOTES_DIR}/${write.path} changed on disk`);
+  const check = async (path: string, baseMtime: number | null) => {
+    const info = await statOrNull(guarded(root, path));
+    if ((info?.mtimeMs ?? null) !== baseMtime) throw new HttpError(409, `${NOTES_DIR}/${path} changed on disk`);
+    return info;
+  };
+  for (const write of plan.writes) await check(write.path, write.baseMtime);
+  if (plan.move) {
+    if (!(await statOrNull(absolute(root, plan.move.from)))) throw new HttpError(409, `${NOTES_DIR}/${plan.move.from} is gone`);
+    if (await statOrNull(absolute(root, plan.move.to))) throw new HttpError(409, `${NOTES_DIR}/${plan.move.to} already exists`);
+    await rename(absolute(root, plan.move.from), absolute(root, plan.move.to));
   }
-  if (plan.move && (await statOrNull(absolute(root, plan.move.to)))) throw new HttpError(409, `${NOTES_DIR}/${plan.move.to} already exists`);
   for (const write of plan.writes) {
-    const file = guarded(root, write.path);
+    const path = movedPath(write.path, plan.move);
+    const info = await check(path, write.baseMtime);
     try {
-      await writeAtomic(file, write.content, (await statOrNull(file))?.mode);
+      await writeAtomic(guarded(root, path), write.content, info?.mode);
     } catch (error) {
-      throw new HttpError(500, `could not write ${NOTES_DIR}/${write.path}: ${(error as Error).message}`);
+      throw new HttpError(500, `could not write ${NOTES_DIR}/${path}: ${(error as Error).message}`);
     }
   }
-  if (plan.move) await rename(absolute(root, plan.move.from), absolute(root, plan.move.to));
 }

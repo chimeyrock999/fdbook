@@ -131,3 +131,8 @@ export function metaTemplate(title: string, pages: string[]) {
   else lines.push('pages:', ...pages.map((page) => `  - ${JSON.stringify(page)}`));
   return `${lines.join('\n')}\n`;
 }
+
+// A meta.yaml that only orders the folder's pages.
+export function pagesTemplate(pages: string[]) {
+  return `pages:\n${pages.map((page) => `  - ${JSON.stringify(page)}\n`).join('')}`;
+}

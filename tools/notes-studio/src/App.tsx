@@ -1,3 +1,4 @@
+import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { useEffect, useMemo, useState } from 'react';
 import { createFilesClient } from './api/files';
 import { createLintClient } from './api/lint';
@@ -15,6 +16,9 @@ export function App() {
   const treeClient = useMemo(() => createTreeClient(), []);
   const { tree, error, reload } = useTree(treeClient, files);
   const [active, setActive] = useState(() => noteFromUrl(window.location.search));
+  // The open note's autosave state, by path: a rename waits until it is saved.
+  const [saved, setSaved] = useState<{ path: string; status: DocumentStatus } | null>(null);
+  const unsaved = active !== null && (saved?.path !== active || saved.status !== 'synced') ? syncPath(active) : null;
   const [drawer, setDrawer] = useState<'notes' | 'panel' | null>(null);
 
   // Back and forward move between opened notes.
@@ -64,6 +68,7 @@ export function App() {
             active={active === null ? null : syncPath(active)}
             onOpen={(path) => { open(NOTES_PREFIX + path); }}
             onRenamed={renamed}
+            unsaved={unsaved}
             onChanged={reload}
           />
         </aside>
@@ -73,6 +78,7 @@ export function App() {
             <NoteEditor
               key={active}
               path={syncPath(active)}
+              onStatus={(status) => { setSaved({ path: active, status }); }}
               files={files}
               lint={lint}
               panelOpen={drawer === 'panel'}

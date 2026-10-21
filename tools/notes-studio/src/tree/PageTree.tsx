@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, EyeOff, FileText, Folde
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import type { TreeChange, TreeClient, TreeFolder, TreeNode } from '../api/tree';
 import { CreateDialog, RenameDialog } from './TreeDialogs';
-import { dropIndex, filterTree, movable, noteOf, stepIndex, titleOf } from './tree';
+import { dropIndex, filterTree, movable, noteOf, renamedPath, stepIndex, titleOf } from './tree';
 import { useOpenFolders } from './useOpenFolders';
 
 type Named = Extract<TreeNode, { kind: 'page' | 'folder' }>;
@@ -137,10 +137,13 @@ function Items({ folder, depth, dim, view }: { folder: TreeFolder; depth: number
 // The notes as the site's sidebar shows them, from meta.yaml, plus what the
 // site hides. Pages can be created, renamed and reordered here; every change
 // goes through /api/tree. `active` and paths are relative to content/notes.
-export function PageTree({ root, client, active, onOpen, onRenamed, onChanged }: {
+export function PageTree({ root, client, active, unsaved = null, onOpen, onRenamed, onChanged }: {
   root: TreeFolder | null;
   client: TreeClient;
   active: string | null;
+  // The open note while it has edits not on disk yet: renaming it (or its
+  // folder) would move the file under the editor and lose them.
+  unsaved?: string | null;
   onOpen: (path: string) => void;
   onRenamed: (from: string, to: string) => void;
   onChanged: () => void;
@@ -198,6 +201,8 @@ export function PageTree({ root, client, active, onOpen, onRenamed, onChanged }:
 
   const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu };
   const menuNode = menu?.node ?? null;
+  const movesUnsaved =
+    unsaved !== null && (menuNode?.kind === 'page' || menuNode?.kind === 'folder') && renamedPath(unsaved, menuNode.path, menuNode.path) !== null;
   return (
     <nav aria-label="Page tree" className="flex min-h-0 flex-1 flex-col gap-2 p-2.5">
       <div className="flex gap-1.5">
@@ -239,12 +244,13 @@ export function PageTree({ root, client, active, onOpen, onRenamed, onChanged }:
             <button
               type="button"
               role="menuitem"
-              disabled={menuNode.path === 'index.mdx' || menuNode.path === ''}
+              disabled={menuNode.path === 'index.mdx' || menuNode.path === '' || movesUnsaved}
               onClick={() => { setMenu(null); setDialog({ kind: 'rename', node: menuNode }); }}
             >
               <Pencil size={14} /> Rename…
             </button>
           )}
+          {movesUnsaved && <p className="studio-menu-hint">The open note has unsaved changes. Rename once it shows Saved.</p>}
           <hr />
           <button type="button" role="menuitem" disabled={filtering || stepIndex(menu.parent, menuNode, -1) === null} onClick={() => { move(menu.parent, menuNode, stepIndex(menu.parent, menuNode, -1)); }}>
             <ArrowUp size={14} /> Move up

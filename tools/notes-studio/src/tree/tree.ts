@@ -69,16 +69,16 @@ export const slugOf = (path: string) => path.slice(path.lastIndexOf('/') + 1).re
 export function normalizeSlug(input: string): string {
   return input
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 }
 
-// `path` after the rename of `from` to `to`, or null when it is not under it.
+// `path` after the rename of `from` to `to` (a page `x.mdx` or a folder),
+// or null when the rename does not move it.
 export function renamedPath(path: string, from: string, to: string): string | null {
   if (path === from) return to;
-  const folderFrom = from.replace(/\.mdx$/, '');
-  if (path.startsWith(`${folderFrom}/`)) return `${to.replace(/\.mdx$/, '')}${path.slice(folderFrom.length)}`;
+  if (!from.endsWith('.mdx') && path.startsWith(`${from}/`)) return `${to}${path.slice(from.length)}`;
   return null;
 }

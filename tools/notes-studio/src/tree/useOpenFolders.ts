@@ -30,8 +30,12 @@ export function useOpenFolders(root: TreeFolder | null, active: string | null) {
 
   useEffect(() => {
     if (!root || active === null || revealed.current === active) return;
+    const trail = trailTo(root, active);
+    // A tree that does not hold the note yet (it was just created or
+    // renamed) gets another try when it reloads.
+    if (trail.length === 0) return;
     revealed.current = active;
-    const folders = trailTo(root, active).filter((node): node is TreeFolder => node.kind === 'folder');
+    const folders = trail.filter((node): node is TreeFolder => node.kind === 'folder');
     setChoices((current) => {
       const closed = folders.filter((folder) => !(current[folder.id] ?? folder.defaultOpen));
       if (closed.length === 0) return current;
