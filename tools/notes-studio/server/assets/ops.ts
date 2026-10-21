@@ -5,23 +5,28 @@ import { listEditableFiles, statOrNull, writeAtomic } from '../files/store.ts';
 import { HttpError } from '../http.ts';
 import { ASSETS_DIR, extensionOf, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 import { findAssetRefs, rewriteAssetRefs, type AssetRef } from './refs.ts';
+import { findAssetSources, type AssetSource } from './sources.ts';
 
 // Renaming and deleting files under public/notes, with every note that uses
 // them kept in step. Like the page tree changes (server/tree/ops.ts), each
 // is planned against the disk first, so a dry run can show it, then
 // applied. Paths are worktree paths (`public/notes/…`, `content/notes/…`).
 
-// Where a note uses an asset: a reference found in the parsed note, or, in
-// a note that does not parse, a line that holds the file name (`unsure`).
+// Where a note uses an asset: a reference found in the parsed note, or
+// `unsure`: a reference whose path could not be placed in the source, or,
+// in a note that does not parse, a line that holds the file name.
 // `length` is that of the path (or name) at `line` and `column`; `text` is
 // the line.
 export type AssetUsage = { note: string; line: number; column: number; length: number; text: string; unsure: boolean };
-export type AssetInfo = { path: string; mtimeMs: number; usages: AssetUsage[] };
+// `sources` are the diagram sources that generate it (server/assets/sources.ts).
+export type AssetInfo = { path: string; mtimeMs: number; usages: AssetUsage[]; sources: AssetSource[] };
 
 export type AssetChange =
   | { type: 'move'; path: string; to: string }
   | { type: 'change'; path: string; detail: string }
-  | { type: 'delete'; path: string };
+  | { type: 'delete'; path: string }
+  // Left as it is: a diagram source that still names the old path.
+  | { type: 'keep'; path: string; detail: string };
 
 type Write = { path: string; content: string; baseMtime: number };
 
@@ -92,11 +97,11 @@ function unsureUsage(note: string, lines: string[], asset: string): AssetUsage |
   return null;
 }
 
-// Every usage of the given assets, by asset.
+// Every usage of the given assets, by asset, in note and line order.
 function usagesIn(scan: NoteScan, assets: Iterable<string>) {
   const usages = new Map<string, AssetUsage[]>();
   for (const asset of assets) usages.set(asset, []);
-  for (const [note, { refs, lines }] of scan) {
+  for (const [note, { refs, lines }] of [...scan].sort(([a], [b]) => a.localeCompare(b))) {
     if (refs === null) {
       for (const [asset, list] of usages) {
         const usage = unsureUsage(note, lines, asset);
@@ -105,7 +110,7 @@ function usagesIn(scan: NoteScan, assets: Iterable<string>) {
       continue;
     }
     for (const ref of refs) {
-      usages.get(ref.asset)?.push({ note, line: ref.line, column: ref.column, length: ref.end - ref.start, text: lineText(lines, ref.line), unsure: false });
+      usages.get(ref.asset)?.push({ note, line: ref.line, column: ref.column, length: ref.end - ref.start, text: lineText(lines, ref.line), unsure: !ref.exact });
     }
   }
   return usages;
@@ -116,7 +121,8 @@ function usagesIn(scan: NoteScan, assets: Iterable<string>) {
 export async function listAssets(root: string, scan: NoteScan = new Map()): Promise<AssetInfo[]> {
   const files = (await listEditableFiles(root)).filter((file) => file.kind === 'asset');
   const usages = usagesIn(await scanNotes(root, scan), files.map((file) => file.path));
-  return files.map((file) => ({ path: file.path, mtimeMs: file.mtimeMs, usages: usages.get(file.path) ?? [] }));
+  const sources = await findAssetSources(root);
+  return files.map((file) => ({ path: file.path, mtimeMs: file.mtimeMs, usages: usages.get(file.path) ?? [], sources: sources.get(file.path) ?? [] }));
 }
 
 function guarded(root: string, path: unknown) {
@@ -159,7 +165,9 @@ export async function planAssetRename(root: string, request: RenameRequest, scan
   await scanNotes(root, scan);
   const usages = usagesIn(scan, [path]).get(path) ?? [];
   const unsure = usages.filter((usage) => usage.unsure);
-  if (unsure.length > 0) throw new HttpError(409, `${listed(unsure)} does not parse and may use ${baseOf(path)}: fix it first`);
+  if (unsure.length > 0) {
+    throw new HttpError(409, `${listed(unsure)} may use ${baseOf(path)} in a way the Studio cannot rewrite (the note does not parse, or the path is written with escapes it does not read): fix it first`);
+  }
   const writes: Write[] = [];
   const changes: AssetChange[] = [{ type: 'move', path, to }];
   for (const note of new Set(usages.map((usage) => usage.note))) {
@@ -176,6 +184,10 @@ export async function planAssetRename(root: string, request: RenameRequest, scan
     writes.push({ path: note, content: result.next, baseMtime: before.mtimeMs });
     changes.push({ type: 'change', path: note, detail: plural(result.count, 'reference') });
   }
+  // The Studio does not write diagrams/: say what still names the old path.
+  for (const source of (await findAssetSources(root)).get(path) ?? []) {
+    changes.push({ type: 'keep', path: source.path, detail: `still writes ${baseOf(path)}: update it before regenerating` });
+  }
   return { asset: { path, baseMtime: info.mtimeMs }, to, writes, changes, usages };
 }
 
@@ -187,6 +199,10 @@ export async function planAssetDelete(root: string, request: DeleteRequest, scan
   const info = await checkAsset(root, path, request.baseMtime);
   const usages = usagesIn(await scanNotes(root, scan), [path]).get(path) ?? [];
   if (usages.length > 0) throw new HttpError(409, `${listed(usages)} still ${usages.length === 1 ? 'uses' : 'use'} ${baseOf(path)}: remove the references first`);
+  const sources = (await findAssetSources(root)).get(path) ?? [];
+  if (sources.length > 0) {
+    throw new HttpError(409, `${sources.map((source) => source.path).join(', ')} generates ${baseOf(path)}, and regenerating would write it again: change or remove the diagram first`);
+  }
   return { asset: { path, baseMtime: info.mtimeMs }, to: null, writes: [], changes: [{ type: 'delete', path }], usages };
 }
 

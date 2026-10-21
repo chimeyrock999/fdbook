@@ -22,8 +22,9 @@ export type AssetRefKind = 'image' | 'link' | 'jsx' | 'directive';
 
 // `asset` is a worktree path (`public/notes/…`); `start`/`end` are offsets
 // of the path as written, without its query or hash; line and column are
-// 1-based, of `start`.
-export type AssetRef = { asset: string; kind: AssetRefKind; start: number; end: number; line: number; column: number };
+// 1-based, of `start`. Not `exact`: the path could not be placed, so
+// `start` is the node's and `end` equals it.
+export type AssetRef = { asset: string; kind: AssetRefKind; start: number; end: number; line: number; column: number; exact: boolean };
 
 type Jsx = MdxJsxFlowElement | MdxJsxTextElement;
 
@@ -49,11 +50,33 @@ function managed(asset: string | null) {
 }
 
 const unescapeMarkdown = (raw: string) => raw.replace(/\\([!-/:-@[-`{-~])/g, '$1');
-const pathEnd = (raw: string) => (raw.search(/[?#]/) === -1 ? raw.length : raw.search(/[?#]/));
+// Where the query or hash starts; the `#` of a character reference (`&#46;`)
+// is part of the path.
+const pathEnd = (raw: string) => {
+  const at = raw.search(/\?|(?<!&)#/);
+  return at === -1 ? raw.length : at;
+};
 
-// The destination of a link, image or definition as written, between
-// `start` and `end`, or null. `marker` is what comes right before it.
-function destinationAt(source: string, at: number, end: number) {
+const NAMED: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+
+// Numeric character references and the few named ones a path may need. A
+// path written with any other name is not placed (see `exact`), never
+// guessed at.
+function decodeRefs(raw: string) {
+  return raw.replace(/&(#\d+|#x[\da-f]+|[a-z]+);/gi, (whole, name: string) => {
+    if (name.startsWith('#')) {
+      const code = name[1] === 'x' || name[1] === 'X' ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+    }
+    return NAMED[name.toLowerCase()] ?? whole;
+  });
+}
+
+type Range = { start: number; end: number };
+
+// The destination of a link, image or definition as written, from `at`,
+// or null.
+function destinationAt(source: string, at: number, end: number): Range | null {
   while (at < end && /\s/.test(source.charAt(at))) at += 1;
   if (source.charAt(at) === '<') {
     const close = source.indexOf('>', at);
@@ -73,85 +96,120 @@ function destinationAt(source: string, at: number, end: number) {
 }
 
 // Where the destination of `node` sits: the first `](` (or `]:` for a
-// definition) whose destination reads as the node's URL. An alt text or
-// label may hold `](` itself, so each candidate is checked.
-function markdownRange(node: Link | Image | Definition, source: string) {
-  const start = node.position?.start.offset;
+// definition) whose destination reads as the node's URL. A link's own
+// destination comes after its text, which may hold an image with the same
+// URL, so the search starts after the last child; an alt text or label may
+// hold `](` itself, so each candidate is checked.
+function markdownRange(node: Link | Image | Definition, source: string): Range | null {
+  const start = node.type === 'link' ? (node.children.at(-1)?.position?.end.offset ?? node.position?.start.offset) : node.position?.start.offset;
   const end = node.position?.end.offset;
   if (start === undefined || end === undefined) return null;
   const marker = node.type === 'definition' ? ']:' : '](';
   for (let at = source.indexOf(marker, start); at !== -1 && at < end; at = source.indexOf(marker, at + 1)) {
     const range = destinationAt(source, at + 2, end);
-    if (range && unescapeMarkdown(source.slice(range.start, range.end)) === node.url) return range;
+    if (range && decodeRefs(unescapeMarkdown(source.slice(range.start, range.end))) === node.url) return range;
   }
   return null;
 }
 
-// The value of a `src` attribute as written: a string, or a string literal
-// in braces. Any other expression is code, not a path to rewrite.
-function jsxRange(node: Jsx, source: string) {
+// The `src` attribute: its value (a string, or a string literal in braces,
+// which MDX evaluates the same) and where it is written. Any other
+// expression is code, not a path: no value.
+function jsxSrc(node: Jsx, source: string): { value: string | null; range: Range | null } {
   const attribute = node.attributes.find((item) => item.type === 'mdxJsxAttribute' && item.name === 'src');
-  if (attribute?.type !== 'mdxJsxAttribute' || attribute.value === null || attribute.value === undefined) return null;
+  if (attribute?.type !== 'mdxJsxAttribute' || attribute.value === null || attribute.value === undefined) return { value: null, range: null };
   const start = attribute.position?.start.offset;
   const end = attribute.position?.end.offset;
-  if (start === undefined || end === undefined) return null;
-  const written = source.slice(start, end);
+  const written = start === undefined || end === undefined ? '' : source.slice(start, end);
   if (typeof attribute.value === 'string') {
     const match = /^src\s*=\s*(["'])/.exec(written);
-    if (!match) return null;
+    if (!match || start === undefined || end === undefined) return { value: attribute.value, range: null };
     const range = { start: start + match[0].length, end: end - 1 };
-    return source.slice(range.start, range.end) === attribute.value ? range : null;
+    return { value: attribute.value, range: decodeRefs(source.slice(range.start, range.end)) === attribute.value ? range : null };
   }
   const match = /^src\s*=\s*\{\s*(["'])([^"'\\\n]*)\1\s*\}$/.exec(written);
-  if (!match) return null;
-  const raw = match[2];
+  if (!match || start === undefined) return { value: null, range: null };
   const at = start + match[0].indexOf(match[1]) + 1;
-  return { start: at, end: at + raw.length };
+  return { value: match[2], range: { start: at, end: at + match[2].length } };
 }
 
-// Directive attributes carry no positions: find `src=` in the attribute
-// block on the directive's first line.
-function directiveRange(node: LeafDirective, source: string) {
+// Skips a `[label]` from `at` (escapes and nested brackets kept), returning
+// where it ends, or -1.
+function skipLabel(text: string, at: number) {
+  let depth = 0;
+  for (let index = at; index < text.length; index += 1) {
+    const char = text.charAt(index);
+    if (char === '\\') index += 1;
+    else if (char === '[') depth += 1;
+    else if (char === ']' && --depth === 0) return index + 1;
+  }
+  return -1;
+}
+
+// Directive attributes carry no positions. After `::name` and its label
+// comes the `{…}` block; each attribute there starts after `{` or a space,
+// so `src=` inside a quoted value is not one. The last `src` wins, as in
+// remark-directive.
+function directiveRange(node: LeafDirective, source: string): Range | null {
   const start = node.position?.start.offset;
   const end = node.position?.end.offset;
   const value = node.attributes?.src;
   if (start === undefined || end === undefined || typeof value !== 'string') return null;
   const head = source.slice(start, end);
-  const open = head.indexOf('{');
-  if (open === -1) return null;
-  const match = /[{\s]src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<=>`}]+))/.exec(head.slice(open));
-  if (!match) return null;
-  // Groups that did not take part are undefined, which the types leave out.
-  const [whole, double, single, bare] = match as unknown as [string, string | undefined, string | undefined, string | undefined];
-  const raw = double ?? single ?? bare ?? '';
-  if (raw !== value) return null;
-  const at = start + open + match.index + whole.length - raw.length - (bare === undefined ? 1 : 0);
-  return { start: at, end: at + raw.length };
+  let at = 2 + node.name.length;
+  if (head.charAt(at) === '[') at = skipLabel(head, at);
+  if (at === -1 || head.charAt(at) !== '{') return null;
+  let found: Range | null = null;
+  at += 1;
+  while (at < head.length && head.charAt(at) !== '}') {
+    while (/\s/.test(head.charAt(at))) at += 1;
+    const key = /^[^\s=}"']*/.exec(head.slice(at))?.[0] ?? '';
+    at += key.length;
+    const equals = /^\s*=\s*/.exec(head.slice(at));
+    if (!equals) {
+      if (key === '') at += 1;
+      continue;
+    }
+    at += equals[0].length;
+    const quote = head.charAt(at);
+    let valueStart = at;
+    let valueEnd: number;
+    if (quote === '"' || quote === "'") {
+      valueStart = at + 1;
+      valueEnd = head.indexOf(quote, valueStart);
+      if (valueEnd === -1) return null;
+      at = valueEnd + 1;
+    } else {
+      valueEnd = valueStart + (/^[^\s"'<=>`}]*/.exec(head.slice(valueStart))?.[0].length ?? 0);
+      at = valueEnd;
+    }
+    if (key === 'src') found = { start: start + valueStart, end: start + valueEnd };
+  }
+  return found && decodeRefs(source.slice(found.start, found.end)) === value ? found : null;
 }
 
-type Found = { kind: AssetRefKind; asset: string | null; start: number; end: number };
+// A reference: what it reaches, and where its path is written (null when it
+// cannot be placed exactly).
+type Found = { kind: AssetRefKind; asset: string | null; range: Range | null };
 
 function referenceOf(node: Nodes, source: string, notePath: string): Found | null {
   if (node.type === 'link' || node.type === 'definition') {
-    const range = markdownRange(node, source);
-    return range && { kind: 'link', asset: urlAsset(node.url, notePath), ...range };
+    return { kind: 'link', asset: urlAsset(node.url, notePath), range: markdownRange(node, source) };
   }
   if (node.type === 'image') {
     if (!node.url.startsWith('/') || node.url.startsWith('//')) return null;
-    const range = markdownRange(node, source);
-    return range && { kind: 'image', asset: urlAsset(node.url, notePath), ...range };
+    return { kind: 'image', asset: urlAsset(node.url, notePath), range: markdownRange(node, source) };
   }
   if ((node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') && node.name) {
     if (!PUBLIC_EMBEDS.includes(node.name) && node.name !== 'img') return null;
-    const range = jsxRange(node, source);
-    if (!range) return null;
-    const src = source.slice(range.start, range.end);
-    return { kind: 'jsx', asset: node.name === 'img' ? urlAsset(src, notePath) : SCHEME.test(src) ? null : publicAsset(src), ...range };
+    const { value, range } = jsxSrc(node, source);
+    if (value === null) return null;
+    return { kind: 'jsx', asset: node.name === 'img' ? urlAsset(value, notePath) : SCHEME.test(value) ? null : publicAsset(value), range };
   }
   if (node.type === 'leafDirective' && PUBLIC_DIRECTIVES.includes(node.name)) {
-    const range = directiveRange(node, source);
-    const src = range && source.slice(range.start, range.end);
-    return range && src !== null ? { kind: 'directive', asset: SCHEME.test(src) ? null : publicAsset(src), ...range } : null;
+    const value = node.attributes?.src;
+    if (typeof value !== 'string') return null;
+    return { kind: 'directive', asset: SCHEME.test(value) ? null : publicAsset(value), range: directiveRange(node, source) };
   }
   return null;
 }
@@ -164,7 +222,9 @@ function lineStarts(source: string) {
 
 // Every reference in the note at `notePath` (relative to content/notes) to
 // a file under public/notes, in file order; null when the note does not
-// parse.
+// parse. A reference whose path cannot be placed exactly in the source
+// still counts, as not `exact`: it marks the node's start and is never
+// rewritten.
 export function findAssetRefs(source: string, notePath: string): AssetRef[] | null {
   let tree;
   try {
@@ -176,13 +236,13 @@ export function findAssetRefs(source: string, notePath: string): AssetRef[] | nu
   const refs: AssetRef[] = [];
   visit(tree, (node) => {
     const found = referenceOf(node, source, notePath);
-    if (!found) return;
-    const end = found.start + pathEnd(source.slice(found.start, found.end));
-    const asset = managed(found.asset);
-    if (asset === null) return;
+    const asset = managed(found?.asset ?? null);
+    if (!found || asset === null) return;
+    const at = found.range?.start ?? node.position?.start.offset ?? 0;
+    const end = found.range ? at + pathEnd(source.slice(at, found.range.end)) : at;
     let line = starts.length;
-    while (starts[line - 1] > found.start) line -= 1;
-    refs.push({ asset, kind: found.kind, start: found.start, end, line, column: found.start - starts[line - 1] + 1 });
+    while (starts[line - 1] > at) line -= 1;
+    refs.push({ asset, kind: found.kind, start: at, end, line, column: at - starts[line - 1] + 1, exact: found.range !== null });
   });
   return refs.sort((a, b) => a.start - b.start);
 }
@@ -218,9 +278,13 @@ export function rewriteAssetRefs(
   if (refs === null) return null;
   let next = source;
   let count = 0;
-  for (const ref of [...refs].reverse()) {
+  // From the end, so earlier offsets stay true; a range that overlaps one
+  // already written is skipped rather than spliced twice.
+  let limit = Infinity;
+  for (const ref of [...refs].sort((a, b) => b.start - a.start)) {
     const to = moved(ref.asset);
-    if (to === null || to === ref.asset) continue;
+    if (!ref.exact || to === null || to === ref.asset || ref.end > limit) continue;
+    limit = ref.start;
     next = next.slice(0, ref.start) + movedRaw(ref, source.slice(ref.start, ref.end), ref.asset, to) + next.slice(ref.end);
     count += 1;
   }

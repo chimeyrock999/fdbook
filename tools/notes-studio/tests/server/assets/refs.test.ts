@@ -113,6 +113,52 @@ describe('findAssetRefs', () => {
     );
   });
 
+  it('gives a linked image and its link their own ranges', () => {
+    const source = '[![a](/notes/x/a.png)](/notes/x/a.png)\n';
+    const refs = findAssetRefs(source, 'guide/intro.mdx') ?? [];
+    expect(refs.map((ref) => [ref.kind, ref.start, ref.end])).toEqual([
+      ['image', 6, 20],
+      ['link', 23, 37],
+    ]);
+    expect(rewriteAssetRefs(source, 'guide/intro.mdx', () => 'public/notes/x/renamed-asset.png')?.next).toBe(
+      '[![a](/notes/x/renamed-asset.png)](/notes/x/renamed-asset.png)\n',
+    );
+  });
+
+  it('never splices two overlapping ranges', () => {
+    const source = '![a](/notes/x/a.png)\n';
+    const [ref] = findAssetRefs(source, 'a.mdx') ?? [];
+    const result = rewriteAssetRefs(source, 'a.mdx', () => 'public/notes/x/b.png', [ref, { ...ref }]);
+    expect(result).toEqual({ next: '![a](/notes/x/b.png)\n', count: 1 });
+  });
+
+  it('reads character references in a path', () => {
+    const source = '![a](/notes/x/a&#46;png)\n\n::svg{src="/notes/x/a&#x2E;png"}\n';
+    const refs = findAssetRefs(source, 'a.mdx') ?? [];
+    expect(refs.map((ref) => [ref.asset, ref.exact])).toEqual([
+      ['public/notes/x/a.png', true],
+      ['public/notes/x/a.png', true],
+    ]);
+    expect(rewriteAssetRefs(source, 'a.mdx', () => 'public/notes/x/b.png')?.next).toBe('![a](/notes/x/b.png)\n\n::svg{src="/notes/x/b.png"}\n');
+  });
+
+  it('finds a directive src only where an attribute starts, after the label', () => {
+    const source = '::svg[a src=x]{src="/notes/x/a.png"}\n\n::svg{label="a src=/notes/x/b.png" src="/notes/x/a.png"}\n';
+    const refs = findAssetRefs(source, 'a.mdx') ?? [];
+    expect(refs.map((ref) => [ref.asset, source.slice(ref.start, ref.end), ref.exact])).toEqual([
+      ['public/notes/x/a.png', '/notes/x/a.png', true],
+      ['public/notes/x/a.png', '/notes/x/a.png', true],
+    ]);
+    expect(refs[1].start).toBe(source.lastIndexOf('/notes/x/a.png'));
+  });
+
+  it('keeps a reference it cannot place as not exact, and never rewrites it', () => {
+    const source = '![a](/notes/x/a&period;png)\n';
+    const refs = findAssetRefs(source, 'a.mdx') ?? [];
+    expect(refs.map((ref) => [ref.asset, ref.exact, ref.line])).toEqual([['public/notes/x/a.png', false, 1]]);
+    expect(rewriteAssetRefs(source, 'a.mdx', () => 'public/notes/x/b.png')).toEqual({ next: source, count: 0 });
+  });
+
   it('rewrites from references found earlier, without parsing again', () => {
     const source = '![a](/notes/guide/a.png)\n';
     const refs = findAssetRefs(source, 'guide/intro.mdx');

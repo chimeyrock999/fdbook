@@ -48,6 +48,13 @@
     border-radius: 6px;
     text-align: left;
   }
+  .studio-asset-source {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1px 8px;
+    padding: 4px 6px;
+    border-left: 2px solid var(--fde-border);
+  }
   .studio-asset-usages button:hover {
     background: var(--fde-accent);
   }
@@ -114,6 +121,9 @@
   }
   .studio-menu .studio-menu-danger:not(:disabled) {
     color: var(--fde-error);
+  }
+  .studio-tree-changes [data-change='keep'] {
+    color: var(--fde-muted-foreground);
   }
   .studio-tree-changes [data-change='delete'] {
     color: var(--fde-error);

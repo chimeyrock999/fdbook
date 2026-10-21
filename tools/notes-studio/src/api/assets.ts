@@ -4,15 +4,21 @@ import { errorOf, readJson } from './json';
 // server/assets/ops.ts; paths are worktree paths (`public/notes/…`,
 // `content/notes/…`).
 
-// Where a note uses an asset. `unsure`: the note does not parse, and the
-// line holds the file name.
+// Where a note uses an asset. `unsure`: the Studio cannot rewrite it (the
+// note does not parse and the line holds the file name, or the path is
+// written with escapes it does not read).
 export type AssetUsage = { note: string; line: number; column: number; length: number; text: string; unsure: boolean };
-export type AssetInfo = { path: string; mtimeMs: number; usages: AssetUsage[] };
+// A diagram source under diagrams/ that generates the asset, and the line
+// that names it.
+export type AssetSource = { path: string; line: number; text: string };
+export type AssetInfo = { path: string; mtimeMs: number; usages: AssetUsage[]; sources: AssetSource[] };
 
 export type AssetChange =
   | { type: 'move'; path: string; to: string }
   | { type: 'change'; path: string; detail: string }
-  | { type: 'delete'; path: string };
+  | { type: 'delete'; path: string }
+  // Left as it is: a diagram source that still names the old path.
+  | { type: 'keep'; path: string; detail: string };
 
 export type AssetRequest =
   | { op: 'rename'; path: string; name: string; baseMtime: number }

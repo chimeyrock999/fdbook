@@ -9,7 +9,7 @@ import { json, rawRequest } from '../../support/http';
 import { startTestStudio, type TestStudio } from '../../support/studio';
 
 type Usage = { note: string; line: number; column: number; text: string; unsure: boolean };
-type Asset = { path: string; mtimeMs: number; usages: Usage[] };
+type Asset = { path: string; mtimeMs: number; usages: Usage[]; sources: { path: string; line: number; text: string }[] };
 type Answer = { changes: { type: string; path: string; to?: string; detail?: string }[]; usages: Usage[] };
 
 class TextEditor implements DocumentEditor {
@@ -60,6 +60,7 @@ describe('assets API', () => {
   beforeAll(async () => {
     studio = await startTestStudio();
     await cp(join(repoRoot, 'public/notes'), file('public/notes'), { recursive: true });
+    await cp(join(repoRoot, 'diagrams'), file('diagrams'), { recursive: true });
   });
 
   afterAll(async () => {
@@ -79,6 +80,24 @@ describe('assets API', () => {
     expect(assets.flatMap((asset) => asset.usages).length).toBeGreaterThanOrEqual(15);
     expect(await missingAssets()).toEqual([]);
   }, 20_000);
+
+  it('names the diagram sources that generate an asset', async () => {
+    const generated = await find('public/notes/data-platform/processing/apache-spark/spark-logic-to-execution.html');
+    expect(generated?.usages).toEqual([]);
+    expect(generated?.sources).toEqual([
+      {
+        path: 'diagrams/data-platform/processing/apache-spark/spark-logic-to-execution.architecture.json',
+        line: 7,
+        text: '"output": "public/notes/data-platform/processing/apache-spark/spark-logic-to-execution.html",',
+      },
+    ]);
+    const scripted = await find(LIFECYCLE);
+    expect(scripted?.sources.map((source) => source.path)).toEqual([
+      'diagrams/data-platform/stacks-integration/databricks/databricks-interactive-runtime/runtime-lifecycle-layers.architecture.json',
+      'diagrams/data-platform/stacks-integration/databricks/databricks-interactive-runtime/runtime-lifecycle-layers.regen.sh',
+    ]);
+    expect((await find(SUPERSET))?.sources).toEqual([]);
+  });
 
   describe('rename', () => {
     it('shows a dry run and writes nothing', async () => {
@@ -102,10 +121,14 @@ describe('assets API', () => {
       expect(await missingAssets()).toEqual([]);
     }, 20_000);
 
-    it('keeps the query of an embed', async () => {
+    it('keeps the query of an embed, and says which diagram sources still name the old path', async () => {
       const before = await text(LIFECYCLE_NOTE);
       const response = await post({ op: 'rename', path: LIFECYCLE, name: 'lifecycle-layers', baseMtime: await mtime(LIFECYCLE) });
       expect(response.status).toBe(200);
+      expect((json(response) as Answer).changes.filter((change) => change.type === 'keep').map((change) => change.path)).toEqual([
+        'diagrams/data-platform/stacks-integration/databricks/databricks-interactive-runtime/runtime-lifecycle-layers.architecture.json',
+        'diagrams/data-platform/stacks-integration/databricks/databricks-interactive-runtime/runtime-lifecycle-layers.regen.sh',
+      ]);
       expect(await text(LIFECYCLE_NOTE)).toBe(before.replace('/runtime-lifecycle-layers.html?embed=1', '/lifecycle-layers.html?embed=1'));
       expect(await missingAssets()).toEqual([]);
     }, 20_000);
@@ -149,13 +172,15 @@ describe('assets API', () => {
     });
 
     it('moves the asset back when the first note cannot be written', async () => {
+      // Its own asset, used by one note in a folder that cannot be written.
+      const asset = 'public/notes/zz-escaped/locked-asset.png';
+      await writeFile(file(asset), 'x');
       await mkdir(file('content/notes/zz-a-locked'));
-      await writeFile(file('content/notes/zz-a-locked/a.mdx'), '![a](/notes/zz-escaped/foo-bar.png)\n');
-      const asset = 'public/notes/zz-escaped/foo-bar.png';
+      await writeFile(file('content/notes/zz-a-locked/a.mdx'), '![a](/notes/zz-escaped/locked-asset.png)\n');
       const plan = await planAssetRename(studio.root, { path: asset, name: 'locked', baseMtime: await mtime(asset) });
       await chmod(file('content/notes/zz-a-locked'), 0o555);
       try {
-        await expect(applyAssetPlan(studio.root, plan)).rejects.toMatchObject({ status: 500 });
+        await expect(applyAssetPlan(studio.root, plan)).rejects.toMatchObject({ status: 500, message: expect.stringContaining('nothing was changed') });
       } finally {
         await chmod(file('content/notes/zz-a-locked'), 0o755);
       }
@@ -164,11 +189,25 @@ describe('assets API', () => {
       await rm(file('content/notes/zz-a-locked'), { recursive: true });
     });
 
+    it('lists usages in note and line order', async () => {
+      const usages = (await find('public/notes/zz-escaped/foo-bar.png'))?.usages ?? [];
+      expect(usages.map((usage) => usage.note)).toEqual([...usages.map((usage) => usage.note)].sort());
+    });
+
     it('counts a broken note only for a name it holds whole', async () => {
       await writeFile(file('public/notes/zz-escaped/ta.png'), 'x');
       await writeFile(file('content/notes/zz-broken-name.mdx'), '<HtmlEmbed src="/notes/elsewhere/data.png"\n');
       expect((await find('public/notes/zz-escaped/ta.png'))?.usages).toEqual([]);
       await rm(file('content/notes/zz-broken-name.mdx'));
+    });
+
+    it('counts a reference it cannot place as unsure, which blocks delete', async () => {
+      const asset = 'public/notes/zz-escaped/ta.png';
+      await writeFile(file('content/notes/zz-unplaced.mdx'), '![a](/notes/zz-escaped/ta&period;png)\n');
+      expect((await find(asset))?.usages).toMatchObject([{ note: 'content/notes/zz-unplaced.mdx', line: 1, unsure: true }]);
+      expect((await post({ op: 'delete', path: asset, baseMtime: await mtime(asset) })).status).toBe(409);
+      expect((await post({ op: 'rename', path: asset, name: 'tb', baseMtime: await mtime(asset) })).status).toBe(409);
+      await rm(file('content/notes/zz-unplaced.mdx'));
     });
 
     it('refuses while a note that does not parse may use it', async () => {
@@ -219,6 +258,14 @@ describe('assets API', () => {
       expect(rest.status).toBe(200);
       expect(await exists('public/notes/demo')).toBe(false);
       expect(await exists('public/notes')).toBe(true);
+    });
+
+    it('refuses to delete an asset a diagram source generates', async () => {
+      const generated = 'public/notes/data-platform/processing/apache-spark/spark-logic-to-execution.html';
+      const response = await post({ op: 'delete', path: generated, baseMtime: await mtime(generated) });
+      expect(response.status).toBe(409);
+      expect((json(response) as { error: string }).error).toContain('spark-logic-to-execution.architecture.json generates');
+      expect(await exists(generated)).toBe(true);
     });
 
     it('refuses a stale delete', async () => {

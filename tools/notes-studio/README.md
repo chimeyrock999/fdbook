@@ -162,15 +162,15 @@ through the notes sync socket:
 
 The left side works like VS Code's. The activity bar holds the **Notes**
 view (the page tree), the **Assets** view (see Assets) and the **Issues**
-view (the open note's lint issues, with their count on the icon); picking the open view again hides the
-sidebar, and so does the button at the foot of the bar. Drag the sidebar's
-right edge to resize it (220–480px), or focus the edge and use the arrow
-keys, Shift for bigger steps, Home and End for the limits; double-click
-resets it to 284px. It never takes more than the window leaves the editor
-(420px); resizing starts from the width it shows. The view, the width and
-whether it is shown are kept in localStorage. Below 768px the sidebar is a
-drawer, opened from the header's Notes button or the toolbar's issue count,
-and its view takes up to 320px.
+view (the open note's lint issues, with their count on the icon); picking
+the open view again hides the sidebar, and so does the button at the foot of
+the bar. Drag the sidebar's right edge to resize it (220–480px), or focus
+the edge and use the arrow keys, Shift for bigger steps, Home and End for
+the limits; double-click resets it to 284px. It never takes more than the
+window leaves the editor (420px); resizing starts from the width it shows.
+The view, the width and whether it is shown are kept in localStorage. Below
+768px the sidebar is a drawer, opened from the header's Notes button or the
+toolbar's issue count, and its view takes up to 320px.
 
 ## Graph markers
 
@@ -294,36 +294,49 @@ Renaming or deleting an asset is in the Assets view.
 ## Assets
 
 The sidebar's Assets view shows `public/notes` as folders, the open note's
-asset folder open, each file with how many times notes use it (`unused`
-when none does). Filter by name, or show the unused files only. A file
-opens the list of the notes and lines that use it; picking one opens the
-note in Source with the path selected. Its menu:
+asset folder open, each file with how many times notes use it (`unused` when
+none does) and `diagram` when a diagram source generates it. Filter by name,
+or show the unused files only. A file opens the list of the notes and lines
+that use it, and the diagram sources that generate it; picking a note line
+opens the note in Source with the path selected. Its menu:
 
 - **Rename…** gives the file a new name in its folder, in the same
   kebab-case as uploads; the extension stays. Every reference to it is
   rewritten: `![…](/notes/…)` images, Markdown links and link definitions,
   `src` on `HtmlEmbed`, `SvgDiagram` and `<img>`, and `::html`, `::svg`,
   `::diagram`. Only the path changes: a query or hash (`?embed=1`) and the
-  way the path was written stay. The dialog shows every file it writes.
-- **Delete…** removes a file no note uses, and the folders it leaves empty.
-  While notes use it, the dialog lists them instead and offers no delete.
+  way the path was written stay. The dialog shows every file it writes,
+  and the diagram sources that still name the old path.
+- **Delete…** removes a file no note uses and no diagram generates, and
+  the folders it leaves empty. Otherwise the dialog lists those instead and
+  offers no delete.
 
 References are found on the parsed note, as the site reads them (the lint's
-`asset-missing` rule uses the same reading): `src` and `/…` images are paths
-under `public/`, links and `<img src>` are URLs from the page. Relative
-images (`./a.png`) are imported by the MDX build, so they are not assets
-here; the frontmatter and code blocks never count. A note that does not
-parse but holds the file's name (whole, so `data.png` is not `ta.png`)
-counts as an unsure use: a rename is refused until it is fixed. The view
-loads the list only while it is shown.
+`asset-missing` rule uses the same reading): embed `src` is a path under
+`public/` (a string, or a string literal in braces), `/…` images, links and
+`<img src>` are URLs from the page, percent escapes decoded. Relative images
+(`./a.png`) are imported by the MDX build, so they are not assets here; the
+frontmatter and code blocks never count. Some uses cannot be rewritten: a
+path written with a character reference the Studio does not read, or a note
+that does not parse but holds the file's name (whole, so `data.png` is not
+`ta.png`). They count as unsure uses, so delete is refused and a rename
+waits until they are fixed.
+
+Diagram sources are the Archify specs under `diagrams/` (their
+`meta.output`) and the `*.regen.sh` scripts (their `OUT=`). Regenerating
+writes that path again, so the Studio does not delete such a file. It does
+not edit `diagrams/` either: after a rename, update the source before
+regenerating. The list reads them again when a note or an asset changes, not
+when a diagram does.
 
 Changes go through `POST /api/assets`, which takes the same lock as page
 tree changes. Like those, a change is planned against the disk, then
 applied: the asset and every note must still have the mtime they were
 planned from, the asset moves first, then each note is written atomically.
-If the first note cannot be written, the asset moves back. A note open in the editor merges the rewrite through its sync. While the
-open note has unsaved edits, rename and delete wait for it: the server only
-sees what is on disk.
+If the first note cannot be written, the asset moves back. A note open in
+the editor merges the rewrite through its sync. While the open note has
+unsaved edits, rename and delete wait for it: the server only sees what is
+on disk. The view loads the list only while it is shown.
 
 ## Lint
 
