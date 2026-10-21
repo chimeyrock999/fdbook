@@ -16,6 +16,15 @@ npm run studio           # http://127.0.0.1:4310
 Set `STUDIO_PORT` to use another port. Needs Node 22.18 or newer (the server
 runs TypeScript directly).
 
+After a pull, run `npm install` (and `npm run studio:install` when this
+package changed) and restart the Studio: the server keeps the code it started
+with. It refuses to start when a direct dependency, at the root or here, is
+missing or installed at another version than its `package-lock.json` pins,
+and names the command and the packages (`server/deps.ts`); `npm test` stops
+the same way. A package put in place with `npm link` is skipped. A pull without a
+reinstall once left fumadocs-core 16.8.11 in place, where every page tree
+folder got the same id.
+
 **Open on site** in the header opens the note's page on the site's dev server
 (`npm run dev` at the repo root, `http://localhost:3000` unless
 `STUDIO_SITE_URL` says otherwise). The Studio does not start the site (#43).

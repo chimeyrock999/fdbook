@@ -1,19 +1,14 @@
-import { existsSync } from 'node:fs';
+import { parseStudioPort } from './config.ts';
+import { installProblem } from './deps.ts';
 
-// Studio deps live in this package; shared @site code resolves zod and
-// fumadocs-core from the repo root.
-const missing = [
-  ['../node_modules/vite', 'npm run studio:install'],
-  ['../../../node_modules/zod', 'npm install'],
-].filter(([path]) => !existsSync(new URL(path, import.meta.url)));
-
-if (missing.length > 0) {
-  const commands = missing.map(([, command]) => `\`${command}\``).join(' and ');
-  console.error(`Notes Studio dependencies are not installed. Run ${commands} from the repo root.`);
+// Each dependency must be installed as its package-lock.json pins: a pull
+// without a reinstall shows up here, before anything runs on the old packages.
+const problem = installProblem();
+if (problem !== null) {
+  console.error(problem);
   process.exit(1);
 }
 
-const { parseStudioPort } = await import('./config.ts');
 const { startStudioServer } = await import('./studio-server.ts');
 
 try {

@@ -1,0 +1,52 @@
+/* Scrollbars as in VS Code: thin, no track, and the thumb only on the
+   scroll areas under the pointer (always, on a device without hover). The
+   colour follows the theme. The editor's own menus and code blocks keep
+   their fumadocs-editor scrollbars. */
+@layer base {
+  :root {
+    --studio-scroll-thumb: color-mix(in srgb, var(--fde-muted-foreground) 45%, transparent);
+  }
+
+  /* Inside @supports: WebKit ignores ::-webkit-scrollbar once
+     scrollbar-width is set, which would undo the fallback below. */
+  @supports (scrollbar-color: auto) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: transparent transparent;
+    }
+    *:hover {
+      scrollbar-color: var(--studio-scroll-thumb) transparent;
+    }
+    @media (hover: none) {
+      * {
+        scrollbar-color: var(--studio-scroll-thumb) transparent;
+      }
+    }
+  }
+
+  /* Safari has no scrollbar-color yet. */
+  @supports not (scrollbar-color: auto) {
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      border: 2px solid transparent;
+      border-radius: 5px;
+      background-clip: padding-box;
+      background-color: transparent;
+    }
+    *:hover::-webkit-scrollbar-thumb {
+      background-color: var(--studio-scroll-thumb);
+    }
+    @media (hover: none) {
+      ::-webkit-scrollbar-thumb {
+        background-color: var(--studio-scroll-thumb);
+      }
+    }
+  }
+}
