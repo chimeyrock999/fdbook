@@ -99,11 +99,19 @@ function convertNode(context: Context, node: PageTree.Node, folder: string): Tre
   return convertFolder(context, node, folder);
 }
 
+// A folder's path. fumadocs-core before 16.17 gave folders a meta path
+// string as `$ref`: every folder would get the same empty path and id.
+function folderPath(folder: PageTree.Folder): string {
+  const ref: unknown = folder.$ref;
+  if (typeof ref === 'object' && ref !== null && typeof (ref as { folder?: unknown }).folder === 'string') return (ref as { folder: string }).folder;
+  throw new Error('fumadocs-core is older than the site requires: run `npm install` from the repo root.');
+}
+
 function convertFolder(context: Context, node: PageTree.Folder | PageTree.Root, path: string): TreeFolder {
   const ref = '$ref' in node ? node.$ref : undefined;
   const meta = ref?.meta ?? (path === '' && context.metas.has('meta.yaml') ? 'meta.yaml' : null);
   const metaData = meta === null ? undefined : context.metas.get(meta);
-  const children = node.children.map((child) => convertNode(context, child, child.type === 'folder' ? (child.$ref?.folder ?? '') : path));
+  const children = node.children.map((child) => convertNode(context, child, child.type === 'folder' ? folderPath(child) : path));
   const folder: TreeFolder = {
     kind: 'folder',
     id: `folder:${path}`,
@@ -179,13 +187,13 @@ function folderMap(folder: TreeFolder, map = new Map<string, TreeFolder>()) {
 // the tree at its own folder, after the listed children, marked unlisted.
 function mergeFallback(context: Context, main: Map<string, TreeFolder>, into: TreeFolder, fallback: PageTree.Folder | PageTree.Root) {
   for (const child of fallback.children) {
-    if (child.type === 'folder' && child.$ref && main.has(child.$ref.folder)) {
-      const existing = main.get(child.$ref.folder);
+    if (child.type === 'folder' && main.has(folderPath(child))) {
+      const existing = main.get(folderPath(child));
       if (existing) mergeFallback(context, main, existing, child);
       continue;
     }
     if (child.type === 'separator') continue;
-    const node = convertNode(context, child, child.type === 'folder' ? (child.$ref?.folder ?? '') : into.path);
+    const node = convertNode(context, child, child.type === 'folder' ? folderPath(child) : into.path);
     if (node.kind === 'page' || node.kind === 'folder') node.hidden = 'unlisted';
     node.entry = null;
     into.children.push(node);

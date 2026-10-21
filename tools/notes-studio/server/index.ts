@@ -13,6 +13,16 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
+// Installed, but older than the site now asks for: a pull without a
+// reinstall. The page tree depends on fumadocs-core's current shape.
+const { staleRootPackages } = await import('./deps.ts');
+const { repoRoot } = await import('./config.ts');
+const stale = staleRootPackages(repoRoot);
+if (stale.length > 0) {
+  console.error(`Notes Studio needs newer packages at the repo root: ${stale.join(', ')}. Run \`npm install\` from the repo root.`);
+  process.exit(1);
+}
+
 const { parseStudioPort } = await import('./config.ts');
 const { startStudioServer } = await import('./studio-server.ts');
 

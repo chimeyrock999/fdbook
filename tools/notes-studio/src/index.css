@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import '@fumadocs-editor/ui/styles.css';
 @import './notes-theme.css';
+@import './scrollbars.css';
 @import './notes-prose.css';
 
 /* The Studio chrome uses the editor's --fde-* tokens, which follow the

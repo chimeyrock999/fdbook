@@ -16,6 +16,12 @@ npm run studio           # http://127.0.0.1:4310
 Set `STUDIO_PORT` to use another port. Needs Node 22.18 or newer (the server
 runs TypeScript directly).
 
+After a pull, run `npm install` (and `npm run studio:install` when this
+package changed) and restart the Studio: the server keeps the code it started
+with. It refuses to start when a root package it relies on (`fumadocs-core`,
+whose page tree shape the tree builder reads) is older than the root
+`package.json` asks for, and names the package (`server/deps.ts`).
+
 **Open on site** in the header opens the note's page on the site's dev server
 (`npm run dev` at the repo root, `http://localhost:3000` unless
 `STUDIO_SITE_URL` says otherwise). The Studio does not start the site (#43).
