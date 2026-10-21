@@ -3,7 +3,7 @@ import type { AssetInfo } from '../../../src/api/assets';
 import { buildAssetTree, foldersTo, type AssetFolder } from '../../../src/assets/asset-tree';
 
 const use = { note: 'content/notes/a.mdx', line: 1, column: 1, length: 1, text: '', unsure: false };
-const asset = (path: string, used = 0): AssetInfo => ({ path, mtimeMs: 1, usages: Array.from({ length: used }, () => use), sources: [] });
+const asset = (path: string, used = 0): AssetInfo => ({ path, mtimeMs: 1, size: 1, usages: Array.from({ length: used }, () => use), sources: [] });
 
 const ASSETS = [
   asset('public/notes/guide/b.png', 1),

@@ -1,6 +1,6 @@
 import { lstat, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { ASSET_TYPES, ASSETS_DIR, extensionOf } from '../security/asset-types.ts';
+import { ASSETS_DIR, extensionOf, isAssetExtension } from '../security/asset-types.ts';
 
 // Assets that a diagram source generates: an Archify spec under diagrams/
 // names its file in `meta.output`, and a `*.regen.sh` script in `OUT=`.
@@ -21,7 +21,7 @@ const OUT = /^\s*(?:export\s+)?OUT=(["']?)([^"'\s]+)\1\s*(?:#.*)?$/;
 // `public/notes/…` for a file the Studio manages there, else null.
 function managed(path: string) {
   const clean = path.replace(/^\.\//, '');
-  return clean.startsWith(`${ASSETS_DIR}/`) && extensionOf(clean) in ASSET_TYPES ? clean : null;
+  return clean.startsWith(`${ASSETS_DIR}/`) && isAssetExtension(extensionOf(clean)) ? clean : null;
 }
 
 function named(content: string, path: string): { asset: string; line: number }[] {

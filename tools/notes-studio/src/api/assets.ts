@@ -11,18 +11,22 @@ export type AssetUsage = { note: string; line: number; column: number; length: n
 // A diagram source under diagrams/ that generates the asset, and the line
 // that names it.
 export type AssetSource = { path: string; line: number; text: string };
-export type AssetInfo = { path: string; mtimeMs: number; usages: AssetUsage[]; sources: AssetSource[] };
+export type AssetInfo = { path: string; mtimeMs: number; size: number; usages: AssetUsage[]; sources: AssetSource[] };
 
 export type AssetChange =
   | { type: 'move'; path: string; to: string }
   | { type: 'change'; path: string; detail: string }
   | { type: 'delete'; path: string }
+  // New content at `to`: the asset's own path, or its name with the new extension.
+  | { type: 'replace'; path: string; to: string }
   // Left as it is: a diagram source that still names the old path.
   | { type: 'keep'; path: string; detail: string };
 
 export type AssetRequest =
   | { op: 'rename'; path: string; name: string; baseMtime: number }
-  | { op: 'delete'; path: string; baseMtime: number };
+  | { op: 'delete'; path: string; baseMtime: number }
+  // A dry run only: the content goes through `replace`.
+  | { op: 'replace'; path: string; extension: string; baseMtime: number };
 
 export type AssetAnswer = { changes: AssetChange[]; usages: AssetUsage[] };
 
@@ -47,6 +51,15 @@ export function createAssetsClient(base = '') {
       });
       if (!response.ok) return failed(response);
       return readJson<AssetAnswer>(response);
+    },
+
+    // Puts `file` in place of the asset listed at `baseMtime`, under its own
+    // path or, with another extension, its name with that one.
+    async replace(path: string, extension: string, file: Blob, baseMtime: number): Promise<AssetAnswer & { mtimeMs: number }> {
+      const query = new URLSearchParams({ path, extension, baseMtime: String(baseMtime) });
+      const response = await fetch(`${base}/api/assets?${query.toString()}`, { method: 'PUT', headers: { 'X-Studio-Write': '1' }, body: file });
+      if (!response.ok) return failed(response);
+      return readJson<AssetAnswer & { mtimeMs: number }>(response);
     },
   };
 }

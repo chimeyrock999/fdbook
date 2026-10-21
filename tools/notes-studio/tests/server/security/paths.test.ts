@@ -47,6 +47,10 @@ describe('classifyPath', () => {
     'public/notes/a.js',
     'public/notes/a.exe',
     'public/notes/meta.yaml',
+    // names of Object.prototype, which are not types
+    'public/notes/a.constructor',
+    'public/notes/a.__proto__',
+    'public/notes/a.tostring',
   ])('rejects %j', (path) => {
     expect(classifyPath(path)).toBeNull();
   });

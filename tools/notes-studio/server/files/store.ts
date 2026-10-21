@@ -3,7 +3,7 @@ import { chmod, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/prom
 import { basename, dirname, join } from 'node:path';
 import { ASSETS_DIR, NOTES_DIR, resolveWorktreePath, type PathKind } from '../security/paths.ts';
 
-export type EditableFile = { path: string; kind: PathKind; mtimeMs: number };
+export type EditableFile = { path: string; kind: PathKind; mtimeMs: number; size: number };
 
 export async function statOrNull(path: string) {
   try {
@@ -27,7 +27,7 @@ export async function listEditableFiles(root: string) {
       const resolved = resolveWorktreePath(root, path);
       if (!resolved) return null;
       const info = await stat(resolved.absolute).catch(() => null);
-      return info?.isFile() ? { path, kind: resolved.kind, mtimeMs: info.mtimeMs } : null;
+      return info?.isFile() ? { path, kind: resolved.kind, mtimeMs: info.mtimeMs, size: info.size } : null;
     }),
   );
   return files.filter((file) => file !== null).sort((a, b) => a.path.localeCompare(b.path));
