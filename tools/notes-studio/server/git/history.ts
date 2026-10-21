@@ -37,7 +37,7 @@ export async function readCommits(root: string, range: string[]) {
   return parseLog(await runGit(root, ['log', '-z', `--format=${RECORD}%H${FIELD}%cI${FIELD}%s`, '--name-status', '--no-renames', ...range]));
 }
 
-async function baseOf(root: string) {
+export async function baseOf(root: string) {
   for (const ref of BASES) {
     const found = await runGit(root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).then(() => true, () => false);
     if (found) return ref;

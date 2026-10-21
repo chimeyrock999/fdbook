@@ -54,8 +54,9 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     shows pages (see Page tree below).
   - `assets/` finds where notes use the files under `public/notes`, and
     renames and deletes them (see Assets below).
-  - `git/` reads `git status` and the change request's commits, and commits
-    picked files (see Changes below).
+  - `git/` reads `git status` and the change request's commits, commits
+    picked files (see Changes below), and reads a file as main holds it
+    (see Diff).
 - `src/`: the React UI.
   - `api/` holds the clients for the server.
   - `editor/` is the note editor: Visual and Source modes, save status and
@@ -74,6 +75,7 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `changes/` is the Changes view, the suggested commit message, the
     change marks on the page tree and the reminder on leaving a change
     request.
+  - `diff/` is a file's diff against main in the main pane (see Diff).
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
   - `plugins/` holds the editor plugins (see below).
@@ -118,6 +120,8 @@ another one.
 | `GET /api/changes` | What `git status` says changed under `content/notes` and `public/notes`, only files the path policy allows: `{ branch, files: [{ path, status: "M" \| "A" \| "D" \| "R", from? }] }` (see Changes) |
 | `POST /api/changes` | Takes JSON `{ message, paths }` and commits those files, and only them, on the worktree's branch; answers the commit `{ sha, date, message, files: [{ status, path }] }`. Refuses an empty message, a path with no change, and `main` or a detached HEAD. |
 | `GET /api/changes/history` | The change request's commits, newest first: `{ base, commits }`, where `base` is `origin/main` (else `main`) |
+| `GET /api/changes/diff?path=…[&from=…]` | The file against main (see Diff): `{ path, from?, base, status: "same" \| "M" \| "A" \| "D" \| "R", before, after }`, each side `{ kind: "text", text, size }`, `{ kind: "binary", size }` (an asset that is not SVG or HTML, or text over 2 MB) or `null` where the file is missing. `base` is the merge base of `origin/main` (else `main`) and `HEAD`, or `null` without one; `from` reads main under a renamed file's old name. |
+| `GET /api/changes/blob?path=…[&base=<sha>]` | The file's bytes as commit `base` (the diff's own base, else the merge base now) holds it, for an image's before side; 404 when it has none. Served like an asset, with `Content-Security-Policy: sandbox`. |
 | any other `/api/…` | `404` with a JSON `{ error }`, never the app's page (see below) |
 | `/__fde_sync` (websocket) | The fumadocs-editor sync server for `content/notes`. It reads `.mdx` only, writes only notes that already exist (no page or folder creation; that goes through the file API), and merges changes made on disk into open documents. Known gap: its tree `delete` command still removes an existing note, without updating `meta.yaml` or checking the mtime, because the scope cannot tell it apart from a save on the same path. Don't wire the editor's tree delete until upstream can authorize tree commands separately (fuma-nama/fumadocs-editor#24). |
 
@@ -458,7 +462,8 @@ The sidebar's Changes view commits from the Studio (#17). It lists what
 `git status` says changed in the worktree, under `content/notes` and
 `public/notes` and only files the path policy allows, grouped as Pages
 (notes and `meta.yaml`, shown as the folder's page order) and Assets, each
-with `M`, `A`, `D` or `R`. A note or an asset opens from its row. Every
+with `M`, `A`, `D` or `R`. Any row, and any file of a commit in History,
+opens the file's diff against main (see Diff). Every
 file starts picked, and so does a file that changes later; uncheck what
 should wait.
 
@@ -491,6 +496,32 @@ change, or on any folder whose `meta.yaml` changed; and `D` on a
 
 `LeaveNotice` reminds, without blocking, that a change request was left
 with uncommitted files; the change request switcher (#16) shows it.
+
+## Diff
+
+A file picked in the Changes view opens in the main pane against main
+(#18, `src/diff`): what main held at the merge base, where the change
+request left it, against what the worktree holds now, committed or not.
+Commits main gained since are not this work, so they never show as undone.
+The bar names the file (both paths for a rename) with its status, and
+**Open in editor** opens a note or an asset that is still there.
+
+- **Rendered**, for a note: its changed frontmatter keys, old over new, then
+  its blocks as the editor renders them. Both sides are parsed with the
+  editor's syntax and their top-level blocks matched by text
+  (`src/diff/diff-blocks.ts`); between two unchanged blocks, what main had
+  shows struck through in red over what replaced it in green. Each run is
+  rendered from its own side's text, read only. An unchanged stretch keeps
+  one block at each end and folds the rest behind a button. A side that
+  does not parse offers Source.
+- **Source**: the raw text in CodeMirror's merge view, unchanged lines
+  folded; side by side from 720px, one column below.
+- A `meta.yaml` (and an HTML asset) has Source only. An image shows main and
+  now side by side with their sizes and dimensions, an SVG has Source too;
+  another asset shows its sizes.
+
+The diff loads again whenever the changes do. The URL is `?diff=<path>`
+(with `&from=<old path>` for a rename), so back and forward work.
 
 ## Lint
 

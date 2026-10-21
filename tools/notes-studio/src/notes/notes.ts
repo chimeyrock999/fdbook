@@ -21,21 +21,31 @@ export function noteFromUrl(search: string): string | null {
   return path !== null && isNote(path) ? path : null;
 }
 
-// What the main pane shows: a note or an asset, by worktree path.
-export type Page = { kind: 'note' | 'asset'; path: string };
+// What the main pane shows: a note, an asset, or a file's diff against main
+// (renamed `from` an old path), by worktree path.
+export type Page = { kind: 'note' | 'asset'; path: string } | { kind: 'diff'; path: string; from?: string };
 
 // The page to open from the URL: `?path=` names a note, `?asset=` a file
-// under public/notes.
+// under public/notes, `?diff=` (with `&from=` for a rename) any file the
+// Studio may touch. The server's own lexical check, so the page opens only
+// what it serves.
 export function pageFromUrl(search: string): Page | null {
   const note = noteFromUrl(search);
   if (note !== null) return { kind: 'note', path: note };
-  const asset = new URLSearchParams(search).get('asset');
-  // The server's own lexical check, so the page opens only what it serves.
-  return asset !== null && classifyPath(asset) === 'asset' ? { kind: 'asset', path: asset } : null;
+  const params = new URLSearchParams(search);
+  const asset = params.get('asset');
+  if (asset !== null && classifyPath(asset) === 'asset') return { kind: 'asset', path: asset };
+  const diff = params.get('diff');
+  if (diff === null || classifyPath(diff) === null) return null;
+  const from = params.get('from');
+  return from !== null && classifyPath(from) !== null ? { kind: 'diff', path: diff, from } : { kind: 'diff', path: diff };
 }
 
 // The query that opens `page`, the inverse of pageFromUrl.
-export const pageQuery = (page: Page) => `?${page.kind === 'note' ? 'path' : 'asset'}=${encodeURIComponent(page.path)}`;
+export function pageQuery(page: Page) {
+  if (page.kind !== 'diff') return `?${page.kind === 'note' ? 'path' : 'asset'}=${encodeURIComponent(page.path)}`;
+  return `?${new URLSearchParams({ diff: page.path, ...(page.from === undefined ? {} : { from: page.from }) }).toString()}`;
+}
 
 // The note's page on the site, as fumadocs slugs it under `docsRoute`
 // (lib/shared.ts, which reads process.env and so is not imported here): an

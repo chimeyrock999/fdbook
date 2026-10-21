@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChangedFile, Changes, ChangesClient, Commit, History } from '../api/changes';
 import { plural } from '../assets/asset-changes';
 import { MAIN_BRANCH } from '../../server/git/branch';
+import { classifyPath } from '../../server/security/asset-types';
 import { labelOf, shortPath, timeAgo } from './labels';
 import { CHANGE_NAME } from './marks';
 import { suggestMessage } from './message';
@@ -19,11 +20,12 @@ function blockedBy({ branch, unsaved, picked, message }: { branch: string | null
   return null;
 }
 
-function FileGroup({ name, files, excluded, titles, onToggle, onToggleAll, onOpen }: {
+function FileGroup({ name, files, excluded, titles, current, onToggle, onToggleAll, onOpen }: {
   name: string;
   files: ChangedFile[];
   excluded: Set<string>;
   titles: Map<string, string>;
+  current: string | null;
   onToggle: (path: string, picked: boolean) => void;
   onToggleAll: (files: ChangedFile[], picked: boolean) => void;
   onOpen: (file: ChangedFile) => void;
@@ -44,11 +46,11 @@ function FileGroup({ name, files, excluded, titles, onToggle, onToggleAll, onOpe
         {files.map((file) => {
           const label = labelOf(file, titles);
           return (
-            <li key={file.path} className="studio-changes-file" data-change={file.status} title={file.from === undefined ? file.path : `${file.from} → ${file.path}`}>
+            <li key={file.path} className="studio-changes-file" data-change={file.status} aria-current={file.path === current || undefined} title={file.from === undefined ? file.path : `${file.from} → ${file.path}`}>
               <input type="checkbox" aria-label={`Commit ${shortPath(file.path)}`} checked={!excluded.has(file.path)} onChange={(event) => { onToggle(file.path, event.target.checked); }} />
               <span className="studio-changes-what">
-                {/* A note or an asset opens from here; a deleted file or a meta.yaml does not. */}
-                <button type="button" className="studio-changes-name" onClick={() => { onOpen(file); }} disabled={file.status === 'D' || file.path.endsWith('/meta.yaml')}>
+                {/* Opens the file's diff against main. */}
+                <button type="button" className="studio-changes-name" onClick={() => { onOpen(file); }}>
                   {label}
                 </button>
                 <small>{file.from === undefined ? shortPath(file.path) : `${shortPath(file.from)} → ${shortPath(file.path)}`}</small>
@@ -62,7 +64,7 @@ function FileGroup({ name, files, excluded, titles, onToggle, onToggleAll, onOpe
   );
 }
 
-function CommitItem({ commit, open, onToggle }: { commit: Commit; open: boolean; onToggle: () => void }) {
+function CommitItem({ commit, open, onToggle, onOpen }: { commit: Commit; open: boolean; onToggle: () => void; onOpen: (file: ChangedFile) => void }) {
   return (
     <li className="studio-changes-commit">
       <button type="button" aria-expanded={open} onClick={onToggle}>
@@ -77,7 +79,16 @@ function CommitItem({ commit, open, onToggle }: { commit: Commit; open: boolean;
       {open && (
         <ul className="studio-changes-commit-files">
           {commit.files.map((file) => (
-            <li key={file.path}><b className="studio-change-mark" data-change={file.status}>{file.status}</b> {shortPath(file.path)}</li>
+            <li key={file.path}>
+              {/* A commit made in a terminal may touch files the Studio does not. */}
+              {classifyPath(file.path) === null ? (
+                <span><b className="studio-change-mark" data-change={file.status}>{file.status}</b> {file.path}</span>
+              ) : (
+                <button type="button" title={`Compare ${file.path} with main`} onClick={() => { onOpen(file); }}>
+                  <b className="studio-change-mark" data-change={file.status}>{file.status}</b> {shortPath(file.path)}
+                </button>
+              )}
+            </li>
           ))}
         </ul>
       )}
@@ -90,8 +101,9 @@ function CommitItem({ commit, open, onToggle }: { commit: Commit; open: boolean;
 // picked, files that appear later too, and an unchecked file stays unchecked
 // until it leaves the list; the message follows the picked files
 // (suggestMessage) until it is edited. Commit waits while the open note has
-// edits not saved yet (`unsaved`), as a rename does.
-export function ChangesView({ client, changes, history, error, titles, unsaved, onOpen, onCommitted }: {
+// edits not saved yet (`unsaved`), as a rename does. A file, listed or in a
+// commit, opens its diff against main (#18); `current` is the one open.
+export function ChangesView({ client, changes, history, error, titles, unsaved, current = null, onOpen, onCommitted }: {
   client: ChangesClient;
   changes: Changes | null;
   history: History | null;
@@ -99,7 +111,8 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
   // Titles from the page tree, by worktree path (titlesOf).
   titles: Map<string, string>;
   unsaved: string | null;
-  // Opens a changed note or asset.
+  current?: string | null;
+  // Opens a file's diff against main.
   onOpen: (file: ChangedFile) => void;
   onCommitted: () => Promise<void>;
 }) {
@@ -213,9 +226,9 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
             </button>
             {whyLine}
           </div>
-          <FileGroup name="Pages" files={pages} excluded={excluded} titles={titles} onOpen={onOpen}
+          <FileGroup name="Pages" files={pages} excluded={excluded} titles={titles} current={current} onOpen={onOpen}
             onToggle={(path, pick) => { toggle([path], pick); }} onToggleAll={(group, pick) => { toggle(group.map((file) => file.path), pick); }} />
-          <FileGroup name="Assets" files={assets} excluded={excluded} titles={titles} onOpen={onOpen}
+          <FileGroup name="Assets" files={assets} excluded={excluded} titles={titles} current={current} onOpen={onOpen}
             onToggle={(path, pick) => { toggle([path], pick); }} onToggleAll={(group, pick) => { toggle(group.map((file) => file.path), pick); }} />
         </>
       )}
@@ -228,7 +241,7 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
         {historyOpen && (
           <ul className="studio-changes-commits">
             {commits.map((each) => (
-              <CommitItem key={each.sha} commit={each} open={openCommit === each.sha} onToggle={() => { setOpenCommit(openCommit === each.sha ? null : each.sha); }} />
+              <CommitItem key={each.sha} commit={each} open={openCommit === each.sha} onToggle={() => { setOpenCommit(openCommit === each.sha ? null : each.sha); }} onOpen={onOpen} />
             ))}
           </ul>
         )}

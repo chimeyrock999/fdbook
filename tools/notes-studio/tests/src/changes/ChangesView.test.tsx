@@ -28,7 +28,7 @@ const titles = new Map([
 ]);
 const history: History = {
   base: 'origin/main',
-  commits: [{ sha: '8e41c2a0000000000000000000000000000000aa', date: new Date(Date.now() - 42 * 60_000).toISOString(), message: 'docs(notes): add watermarks', files: [{ status: 'A', path: 'content/notes/streaming/watermarks.mdx' }] }],
+  commits: [{ sha: '8e41c2a0000000000000000000000000000000aa', date: new Date(Date.now() - 42 * 60_000).toISOString(), message: 'docs(notes): add watermarks', files: [{ status: 'A', path: 'content/notes/streaming/watermarks.mdx' }, { status: 'M', path: 'package.json' }] }],
 };
 const made: Commit = { sha: '1234567890abcdef1234567890abcdef12345678', date: new Date().toISOString(), message: 'm', files: [{ status: 'M', path: 'x' }] };
 
@@ -144,25 +144,30 @@ describe('ChangesView', () => {
     expect(message().value).toBe('docs(notes): update 3 pages');
   });
 
-  it('opens notes and assets, not deleted files or meta.yaml', async () => {
-    const { onOpen } = setup();
-    await userEvent.click(screen.getByRole('button', { name: 'Watermark and late events' }));
-    expect(onOpen).toHaveBeenCalledWith(files[2]);
-    await userEvent.click(screen.getByRole('button', { name: 'timeline.png' }));
-    expect(onOpen).toHaveBeenCalledWith(files[4]);
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'rpc-and-threads' }).disabled).toBe(true);
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Page order of Streaming' }).disabled).toBe(true);
+  it('opens the diff of any listed file, deleted ones and meta.yaml too, and marks the open one', async () => {
+    const { onOpen, view } = setup();
+    for (const [name, file] of [['Watermark and late events', files[2]], ['timeline.png', files[4]], ['rpc-and-threads', files[3]], ['Page order of Streaming', files[1]]] as const) {
+      await userEvent.click(screen.getByRole('button', { name }));
+      expect(onOpen).toHaveBeenLastCalledWith(file);
+    }
+    view.rerender(<ChangesView client={{} as ChangesClient} changes={{ branch: 'cr/sinks', files }} history={history} error={null} titles={titles} unsaved={null} current={files[2].path} onOpen={onOpen} onCommitted={() => Promise.resolve()} />);
+    expect(screen.getByRole('button', { name: 'Watermark and late events' }).closest('li')?.getAttribute('aria-current')).toBe('true');
+    expect(screen.getByRole('button', { name: 'timeline.png' }).closest('li')?.hasAttribute('aria-current')).toBe(false);
   });
 
   it('lists the change request commits with their files', async () => {
-    setup({ changes: { branch: 'cr/sinks', files: [] } });
+    const { onOpen } = setup({ changes: { branch: 'cr/sinks', files: [] } });
     expect(screen.getByText(/No changes to commit/).textContent).toBe('No changes to commit on cr/sinks.');
     expect(screen.getByText('1 commit since origin/main')).toBeTruthy();
     const item = screen.getByRole('button', { name: /docs\(notes\): add watermarks/ });
     expect(item.textContent).toContain('42 min ago');
     expect(item.textContent).toContain('8e41c2a');
     await userEvent.click(item);
-    expect(screen.getByText('streaming/watermarks.mdx')).toBeTruthy();
+    // A commit's file opens its diff against main, too.
+    await userEvent.click(screen.getByRole('button', { name: 'A streaming/watermarks.mdx' }));
+    expect(onOpen).toHaveBeenCalledWith({ status: 'A', path: 'content/notes/streaming/watermarks.mdx' });
+    // A file the Studio does not touch (a commit made in a terminal) is only named.
+    expect(screen.getByText('package.json').closest('button')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: /History/ }));
     expect(screen.queryByRole('button', { name: /docs\(notes\): add watermarks/ })).toBeNull();
   });

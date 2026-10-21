@@ -45,6 +45,19 @@ describe('note helpers', () => {
     }
   });
 
+  it('reads a diff to open: ?diff= for any file the Studio touches, &from= for its old name', () => {
+    expect(pageFromUrl('?diff=content%2Fnotes%2Fa%2Fmeta.yaml')).toEqual({ kind: 'diff', path: 'content/notes/a/meta.yaml' });
+    expect(pageFromUrl('?diff=public/notes/a.png')).toEqual({ kind: 'diff', path: 'public/notes/a.png' });
+    expect(pageFromUrl('?diff=content/notes/b.mdx&from=content/notes/a.mdx')).toEqual({ kind: 'diff', path: 'content/notes/b.mdx', from: 'content/notes/a.mdx' });
+    // An old name the Studio would not touch is left out, not followed.
+    expect(pageFromUrl('?diff=content/notes/b.mdx&from=package.json')).toEqual({ kind: 'diff', path: 'content/notes/b.mdx' });
+    expect(pageFromUrl('?diff=package.json')).toBeNull();
+    expect(pageFromUrl('?diff=content/notes/../package.json')).toBeNull();
+    for (const page of [{ kind: 'diff', path: 'content/notes/a b/c#d.mdx' }, { kind: 'diff', path: 'content/notes/n&w.mdx', from: 'content/notes/old.mdx' }] as const) {
+      expect(pageFromUrl(pageQuery(page))).toEqual(page);
+    }
+  });
+
   it('maps a note to its page on the site', () => {
     expect(noteRoute('content/notes/index.mdx')).toBe('/notes');
     expect(noteRoute('content/notes/database/index.mdx')).toBe('/notes/database');
