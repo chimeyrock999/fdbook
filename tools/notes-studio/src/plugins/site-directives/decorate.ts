@@ -139,13 +139,20 @@ function accordionCards(view: EditorView, getPos: () => number | undefined, item
 
     // Written as typing pauses and when the focus leaves. Each write rebuilds
     // the cards from the new source, so the caret moves on to the new body
-    // (or to the body the focus was going to).
+    // (or to the body the focus was going to). Never during an IME
+    // composition (Telex, VNI): the rebuild would break it and duplicate
+    // the text; it is written when the composition ends.
     let written = item.body;
+    let composing = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const later = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { write(null); }, WRITE_MS);
+    };
     const write = (next: Element | null) => {
       clearTimeout(timer);
       timer = undefined;
-      if (source.value === written || !view.editable) return;
+      if (composing || source.value === written || !view.editable) return;
       const pos = getPos();
       const node = pos === undefined ? null : view.state.doc.nodeAt(pos);
       if (pos === undefined || node?.type.name !== 'verbatim') return;
@@ -164,9 +171,16 @@ function accordionCards(view: EditorView, getPos: () => number | undefined, item
         rebuilt.scrollTop = scrollTop;
       }
     };
-    source.addEventListener('input', () => {
+    source.addEventListener('compositionstart', () => {
+      composing = true;
       clearTimeout(timer);
-      timer = setTimeout(() => { write(null); }, WRITE_MS);
+    });
+    source.addEventListener('compositionend', () => {
+      composing = false;
+      later();
+    });
+    source.addEventListener('input', (event) => {
+      if (!composing && !event.isComposing) later();
     });
     source.addEventListener('focusout', (event) => {
       const next = event.relatedTarget;

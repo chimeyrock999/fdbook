@@ -108,6 +108,29 @@ describe('accordion cards', () => {
     expect(value(live)).toContain('\nOneXYZ.\n');
   });
 
+  // Vietnamese is typed through an IME (Telex, VNI): a write in the middle of
+  // a composition would rebuild the textarea under it and duplicate the text.
+  it('waits for an IME composition to end before writing', async () => {
+    const { container, editor: live } = mount();
+    await userEvent.click(defined(container.querySelector<HTMLElement>('button.studio-accordion-head')));
+    const first = defined(container.querySelector('textarea'));
+    first.focus();
+    first.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    first.value = 'One. tu';
+    first.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }));
+    await wait(300);
+    first.value = 'One. tư';
+    first.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }));
+    first.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+    await wait(300);
+    expect(value(live)).toContain('\nOne.\n');
+    expect(first.isConnected).toBe(true);
+    first.value = 'One. tươi';
+    first.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: 'tươi' }));
+    await wait(300);
+    expect(value(live)).toContain('\nOne. tươi\n');
+  });
+
   // Typing in a body, then picking another note: the write happens on the
   // way out and must be saved before the note closes.
   it('saves a body written just before the note closes', async () => {
