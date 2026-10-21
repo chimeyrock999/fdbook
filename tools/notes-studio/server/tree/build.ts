@@ -4,6 +4,7 @@ import type * as PageTree from 'fumadocs-core/page-tree';
 import { loader } from 'fumadocs-core/source';
 import { parse } from 'yaml';
 import { listEditableFiles } from '../files/store.ts';
+import { siteIconNames } from '../icons/names.ts';
 import { joinPath } from '../lint/rules/links.ts';
 import { NOTES_DIR } from '../security/paths.ts';
 import type { Hidden, TreeFolder, TreeNode } from './types.ts';
@@ -55,13 +56,14 @@ export async function readNotesContent(root: string): Promise<NotesContent> {
 
 const dirOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
 
-function makeContext({ pages, metas, mtimes = new Map() }: NotesContent) {
+// `icons`: the site's icon names; null keeps every name.
+function makeContext({ pages, metas, mtimes = new Map() }: NotesContent, icons: ReadonlySet<string> | null) {
   const folders = new Set<string>();
   for (const path of [...pages.keys(), ...metas.keys()]) {
     for (let dir = dirOf(path); dir !== ''; dir = dirOf(dir)) folders.add(dir);
   }
   const pageAt = (path: string) => (pages.has(`${path}.mdx`) ? `${path}.mdx` : path.endsWith('.mdx') && pages.has(path) ? path : null);
-  return { pages, metas, mtimes, folders, pageAt };
+  return { pages, metas, mtimes, folders, pageAt, icons };
 }
 
 type Context = ReturnType<typeof makeContext>;
@@ -86,6 +88,15 @@ function resolveEntry(context: Context, folder: string, item: string): string | 
 // Node names are React nodes in fumadocs; the loader makes them strings.
 const nameOf = (node: { name?: unknown }) => (typeof node.name === 'string' ? node.name : '');
 
+// Without lucideIconsPlugin (lib/source.ts has it) an icon stays the name
+// written in frontmatter or meta.yaml. A folder's is its meta.yaml `icon`,
+// else its index page's, as the loader sets it. A name the site's lucide
+// does not have shows no icon there, so none here either.
+function iconName(context: Context, node: { icon?: unknown }) {
+  if (typeof node.icon !== 'string' || node.icon === '') return null;
+  return context.icons === null || context.icons.has(node.icon) ? node.icon : null;
+}
+
 function hiddenOf(data: Data | undefined): Hidden | null {
   return data?.visible === false ? 'visible-false' : null;
 }
@@ -94,7 +105,7 @@ function convertNode(context: Context, node: PageTree.Node, folder: string): Tre
   if (node.type === 'separator') return { kind: 'separator', id: '', entry: null, title: nameOf(node) };
   if (node.type === 'page') {
     if (node.$ref === undefined) return { kind: 'link', id: '', entry: null, title: nameOf(node), url: node.url };
-    return { kind: 'page', id: `page:${node.$ref}`, entry: null, title: nameOf(node), path: node.$ref, hidden: hiddenOf(context.pages.get(node.$ref)) };
+    return { kind: 'page', id: `page:${node.$ref}`, entry: null, title: nameOf(node), path: node.$ref, icon: iconName(context, node), hidden: hiddenOf(context.pages.get(node.$ref)) };
   }
   return convertFolder(context, node, folder);
 }
@@ -126,6 +137,8 @@ function convertFolder(context: Context, node: PageTree.Folder | PageTree.Root, 
     meta,
     metaMtime: meta === null ? null : (context.mtimes.get(meta) ?? null),
     index: 'index' in node && node.index?.$ref !== undefined ? node.index.$ref : null,
+    defaultOpen: metaData?.defaultOpen === true,
+    icon: 'icon' in node ? iconName(context, node) : null,
     hidden: hiddenOf(metaData),
     children,
   };
@@ -205,8 +218,8 @@ function mergeFallback(context: Context, main: Map<string, TreeFolder>, into: Tr
   }
 }
 
-export function buildTree(content: NotesContent): TreeFolder {
-  const context = makeContext(content);
+export function buildTree(content: NotesContent, icons: ReadonlySet<string> | null = null): TreeFolder {
+  const context = makeContext(content, icons);
   const files = [
     ...[...content.pages].map(([path, data]) => ({ type: 'page' as const, path, data })),
     ...[...content.metas].map(([path, data]) => ({ type: 'meta' as const, path, data })),
@@ -219,5 +232,8 @@ export function buildTree(content: NotesContent): TreeFolder {
 }
 
 export async function loadTree(root: string) {
-  return buildTree(await readNotesContent(root));
+  // Without the names (lucide-react still installing) every name is kept;
+  // the UI draws the default icon for one it cannot find.
+  const names = await siteIconNames().catch(() => null);
+  return buildTree(await readNotesContent(root), names && new Set(names));
 }

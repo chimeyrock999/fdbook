@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { repoRoot } from '../../../server/config';
-import { insertEntry, metaTemplate, moveEntry, quote, readPages, replaceEntry } from '../../../server/tree/meta-edit';
+import { insertEntry, metaTemplate, moveEntry, quote, readPages, replaceEntry, setDefaultOpen } from '../../../server/tree/meta-edit';
 
 const real = (path: string) => readFileSync(join(repoRoot, 'content/notes', path), 'utf8');
 
@@ -76,8 +76,42 @@ describe('meta.yaml edits', () => {
     expect(() => moveEntry('pages: [a\n', 0, 0)).toThrow('does not parse');
   });
 
-  it('writes the meta.yaml of a new folder page', () => {
-    expect(metaTemplate('Raft "Consensus"', [])).toBe('title: "Raft \\"Consensus\\""\ndefaultOpen: true\npages: []\n');
-    expect(metaTemplate('Notes', ['a', 'b'])).toBe('title: "Notes"\ndefaultOpen: true\npages:\n  - "a"\n  - "b"\n');
+  it('writes the meta.yaml of a new folder, closed unless asked', () => {
+    expect(metaTemplate('Raft "Consensus"', [])).toBe('title: "Raft \\"Consensus\\""\ndefaultOpen: false\npages: []\n');
+    expect(metaTemplate('Notes', ['a', 'b'], true)).toBe('title: "Notes"\ndefaultOpen: true\npages:\n  - "a"\n  - "b"\n');
+  });
+
+  it('sets defaultOpen in place and keeps the rest of the file', () => {
+    // No final newline, a commented-out entry.
+    const text = real('data-platform/meta.yaml');
+    expect(setDefaultOpen(text, false)).toBe(text.replace('defaultOpen: true', 'defaultOpen: false'));
+    expect(setDefaultOpen(text, true)).toBe(text);
+    expect(setDefaultOpen('title: X\ndefaultOpen: no # site\npages: []\n', true)).toBe('title: X\ndefaultOpen: true # site\npages: []\n');
+  });
+
+  it('adds defaultOpen after the title, or first when there is none', () => {
+    expect(setDefaultOpen('title: X # name\nicon: Brain\npages: []\n', true)).toBe('title: X # name\ndefaultOpen: true\nicon: Brain\npages: []\n');
+    expect(setDefaultOpen('title: X', true)).toBe('title: X\ndefaultOpen: true');
+    expect(setDefaultOpen('pages:\n  - a\n', true)).toBe('defaultOpen: true\npages:\n  - a\n');
+    expect(setDefaultOpen('', true)).toBe('defaultOpen: true\n');
+  });
+
+  it('keeps comments where they are, an empty value a pair, and CRLF line ends', () => {
+    expect(setDefaultOpen('title: X\n\n# the order\npages: []\n', false)).toBe('title: X\ndefaultOpen: false\n\n# the order\npages: []\n');
+    expect(setDefaultOpen('title: X\ndefaultOpen:\npages: []\n', false)).toBe('title: X\ndefaultOpen: false\npages: []\n');
+    // An empty value with a comment after it: the comment stays a comment.
+    expect(setDefaultOpen('title: X\ndefaultOpen: # c\npages: []\n', true)).toBe('title: X\ndefaultOpen: true # c\npages: []\n');
+    expect(setDefaultOpen('defaultOpen:   # c\n', true)).toBe('defaultOpen: true   # c\n');
+    expect(readPages(setDefaultOpen('defaultOpen: # c\npages: [a]\n', true))).toEqual(['a']);
+    expect(setDefaultOpen('title: X\r\npages: []\r\n', true)).toBe('title: X\r\ndefaultOpen: true\r\npages: []\r\n');
+    expect(setDefaultOpen('title: X\r\n', true)).toBe('title: X\r\ndefaultOpen: true\r\n');
+    // A block title: the line goes before the next key.
+    expect(setDefaultOpen('title: |\n  Long\n  name\npages: []\n', true)).toBe('title: |\n  Long\n  name\ndefaultOpen: true\npages: []\n');
+  });
+
+  it('refuses a meta.yaml it cannot edit by line', () => {
+    expect(() => setDefaultOpen('pages: [a\n', true)).toThrow('does not parse');
+    expect(() => setDefaultOpen('{ title: X }\n', true)).toThrow('not a block map');
+    expect(() => setDefaultOpen('- a\n', true)).toThrow('not a block map');
   });
 });

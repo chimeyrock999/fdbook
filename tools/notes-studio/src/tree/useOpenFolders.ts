@@ -59,7 +59,8 @@ export function useOpenFolders(root: TreeFolder | null, active: string | null) {
       return next;
     });
   }, []);
-  const openFolder = useCallback((folder: TreeFolder) => {
+  // Takes an id, so a folder can be opened before the tree that holds it loads.
+  const openFolder = useCallback((folder: Pick<TreeFolder, 'id'>) => {
     setChoices((current) => {
       const next = { ...current, [folder.id]: true };
       store(next);

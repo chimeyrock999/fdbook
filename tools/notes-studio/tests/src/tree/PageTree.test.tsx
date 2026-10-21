@@ -6,24 +6,28 @@ import type { TreeAnswer, TreeClient, TreeFolder, TreeRequest } from '../../../s
 import { PageTree } from '../../../src/tree/PageTree';
 
 const root: TreeFolder = {
-  kind: 'folder', id: 'folder:', path: '', title: 'Notes', meta: 'meta.yaml', metaMtime: 10, index: null, hidden: null, entry: null,
+  kind: 'folder', id: 'folder:', path: '', title: 'Notes', meta: 'meta.yaml', metaMtime: 10, index: null, defaultOpen: true, icon: null, hidden: null, entry: null,
   children: [
     {
       kind: 'folder', id: 'folder:guide', path: 'guide', title: 'Guide', meta: 'guide/meta.yaml', metaMtime: 20, index: 'guide/index.mdx',
-      hidden: null, entry: 0,
+      defaultOpen: true, icon: 'TreePine', hidden: null, entry: 0,
       children: [
-        { kind: 'page', id: 'page:guide/one.mdx', path: 'guide/one.mdx', title: 'One', entry: 0, hidden: null },
-        { kind: 'page', id: 'page:guide/two.mdx', path: 'guide/two.mdx', title: 'Two', entry: 1, hidden: null },
+        { kind: 'page', id: 'page:guide/one.mdx', path: 'guide/one.mdx', title: 'One', icon: 'NotALucideIcon', entry: 0, hidden: null },
+        { kind: 'page', id: 'page:guide/two.mdx', path: 'guide/two.mdx', title: 'Two', icon: 'Sprout', entry: 1, hidden: null },
         { kind: 'missing', id: 'missing:guide/meta.yaml:2', entry: 2, value: 'gone', meta: 'guide/meta.yaml' },
-        { kind: 'page', id: 'page:guide/rest.mdx', path: 'guide/rest.mdx', title: 'From rest', entry: null, hidden: null },
+        { kind: 'page', id: 'page:guide/rest.mdx', path: 'guide/rest.mdx', title: 'From rest', icon: null, entry: null, hidden: null },
       ],
     },
     { kind: 'separator', id: 'separator:meta.yaml:1', entry: 1, title: 'Later' },
-    { kind: 'page', id: 'page:draft.mdx', path: 'draft.mdx', title: 'Draft', entry: null, hidden: 'unlisted' },
+    { kind: 'page', id: 'page:draft.mdx', path: 'draft.mdx', title: 'Draft', icon: null, entry: null, hidden: 'unlisted' },
     {
       kind: 'folder', id: 'folder:old', path: 'old', title: 'Old', meta: 'old/meta.yaml', metaMtime: 30, index: null,
-      hidden: 'visible-false', entry: null,
-      children: [{ kind: 'page', id: 'page:old/x.mdx', path: 'old/x.mdx', title: 'X', entry: 0, hidden: null }],
+      defaultOpen: false, icon: null, hidden: 'visible-false', entry: null,
+      children: [{ kind: 'page', id: 'page:old/x.mdx', path: 'old/x.mdx', title: 'X', icon: null, entry: 0, hidden: null }],
+    },
+    {
+      kind: 'folder', id: 'folder:loose', path: 'loose', title: 'Loose', meta: null, metaMtime: null, index: null,
+      defaultOpen: false, icon: null, hidden: null, entry: null, children: [],
     },
   ],
 };
@@ -59,6 +63,18 @@ describe('PageTree', () => {
     expect(screen.getByTitle(/No meta.yaml lists it/)).toBeTruthy();
     // `Old` is closed until opened; Guide is open because the open note is in it.
     expect(screen.queryByRole('button', { name: 'X' })).toBeNull();
+  });
+
+  it('draws the icons the site shows, else the default ones', () => {
+    setup();
+    const iconIn = (name: string) => screen.getByRole('button', { name }).querySelector('svg')?.getAttribute('class') ?? '';
+    // Drawn at once: no icon list to fetch.
+    expect(iconIn('Guide')).toContain('lucide-tree-pine');
+    expect(iconIn('Two')).toContain('lucide-sprout');
+    // A name the site does not know, and no icon at all.
+    expect(iconIn('One')).toContain('lucide-file-text');
+    expect(iconIn('Draft')).toContain('lucide-file-text');
+    expect(iconIn('Loose')).toContain('lucide-folder');
   });
 
   it('starts folders closed, whatever the site would open', async () => {
@@ -133,9 +149,112 @@ describe('PageTree', () => {
     expect(within(dialog).getByLabelText<HTMLInputElement>('Slug').value).toBe('raft-consensus');
     expect(await within(dialog).findByText('+ guide/raft-consensus.mdx')).toBeTruthy();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
-    expect(change).toHaveBeenLastCalledWith({ op: 'create', parent: 'guide', slug: 'raft-consensus', title: 'Raft Consensus', kind: 'page', after: 0 });
+    expect(change).toHaveBeenLastCalledWith({ op: 'create', parent: 'guide', slug: 'raft-consensus', title: 'Raft Consensus', kind: 'page', defaultOpen: false, after: 0 });
     await waitFor(() => { expect(onOpen).toHaveBeenCalledWith('guide/raft-consensus.mdx'); });
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('creates a plain folder, then opens it and focuses its row', async () => {
+    const { client, change } = fakeClient(() => ({
+      changes: [{ type: 'add', path: 'guide/raft/meta.yaml' }, { type: 'change', path: 'guide/meta.yaml', detail: 'adds "raft"' }],
+      open: null,
+      created: 'guide/raft',
+    }));
+    const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+    const { rerender } = render(<PageTree root={root} {...props} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Guide' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'New page here' }));
+    const dialog = screen.getByRole('dialog', { name: 'New page in Guide' });
+    // Only folders have a defaultOpen to set.
+    expect(within(dialog).queryByLabelText(/Open by default/)).toBeNull();
+    await userEvent.click(within(dialog).getByRole('radio', { name: /meta\.yaml/ }));
+    expect(screen.getByRole('dialog', { name: 'New folder in Guide' })).toBe(dialog);
+    expect(within(dialog).getByLabelText<HTMLInputElement>(/Open by default/).checked).toBe(false);
+    await userEvent.type(within(dialog).getByLabelText('Title'), 'Raft');
+    expect(within(dialog).getByRole('radio', { name: /meta\.yaml/ }).closest('label')?.textContent).toContain('raft/meta.yaml');
+    expect(await within(dialog).findByText('+ guide/raft/meta.yaml')).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    expect(change).toHaveBeenLastCalledWith({ op: 'create', parent: 'guide', slug: 'raft', title: 'Raft', kind: 'plain-folder', defaultOpen: false, after: null });
+    expect((await screen.findByRole('status')).textContent).toBe('Created guide/raft/.');
+    expect(props.onOpen).not.toHaveBeenCalled();
+    expect(props.onChanged).toHaveBeenCalled();
+    // The reloaded tree holds the folder: it is open, with Guide, and has focus.
+    const guide = root.children[0] as TreeFolder;
+    const raft: TreeFolder = { ...guide, id: 'folder:guide/raft', path: 'guide/raft', title: 'Raft', meta: 'guide/raft/meta.yaml', index: null, defaultOpen: false, icon: null, entry: 2, children: [] };
+    rerender(<PageTree root={{ ...root, children: [{ ...guide, children: [...guide.children, raft] }, ...root.children.slice(1)] }} {...props} />);
+    expect(screen.getByRole('button', { name: 'Collapse Raft' }).getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Raft' }));
+  });
+
+  it('does not move focus later when the filter hides the new folder', async () => {
+    const { client } = fakeClient(() => ({ changes: [{ type: 'add', path: 'raft/meta.yaml' }], open: null, created: 'raft' }));
+    const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+    const { rerender } = render(<PageTree root={root} {...props} />);
+    await userEvent.type(screen.getByLabelText('Filter notes'), 'guide');
+    await userEvent.click(screen.getByRole('button', { name: 'New page' }));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('radio', { name: /meta\.yaml/ }));
+    await userEvent.type(within(dialog).getByLabelText('Title'), 'Raft');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await screen.findByRole('status');
+    const raft: TreeFolder = { ...(root.children[3] as TreeFolder), id: 'folder:raft', path: 'raft', title: 'Raft', meta: 'raft/meta.yaml', hidden: null, children: [] };
+    const next = { ...root, children: [...root.children, raft] };
+    rerender(<PageTree root={next} {...props} />);
+    await userEvent.clear(screen.getByLabelText('Filter notes'));
+    screen.getByRole('button', { name: 'Guide' }).focus();
+    // Any later reload: the reveal was spent on the tree that held the folder.
+    rerender(<PageTree root={{ ...next }} {...props} />);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Guide' }));
+  });
+
+  it('spends the focus on the first reload, even one without the new folder', async () => {
+    const { client } = fakeClient(() => ({ changes: [{ type: 'add', path: 'raft/meta.yaml' }], open: null, created: 'raft' }));
+    const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+    const { rerender } = render(<PageTree root={root} {...props} />);
+    await userEvent.click(screen.getByRole('button', { name: 'New page' }));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('radio', { name: /meta\.yaml/ }));
+    await userEvent.type(within(dialog).getByLabelText('Title'), 'Raft');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await screen.findByRole('status');
+    // A reload that does not hold it yet (another change raced it), then one that does.
+    rerender(<PageTree root={{ ...root }} {...props} />);
+    screen.getByRole('button', { name: 'Guide' }).focus();
+    const raft: TreeFolder = { ...(root.children[3] as TreeFolder), id: 'folder:raft', path: 'raft', title: 'Raft', meta: 'raft/meta.yaml', hidden: null, children: [] };
+    rerender(<PageTree root={{ ...root, children: [...root.children, raft] }} {...props} />);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Guide' }));
+  });
+
+  it('creates a folder page open by default when asked', async () => {
+    const { change } = setup((_request, dryRun) => ({ changes: [{ type: 'add', path: 'raft/index.mdx' }], open: dryRun ? null : 'raft/index.mdx' }));
+    await userEvent.click(screen.getByRole('button', { name: 'New page' }));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('radio', { name: /index\.mdx/ }));
+    expect(dialog.getAttribute('aria-label')).toBe('New folder page in Notes');
+    await userEvent.type(within(dialog).getByLabelText('Title'), 'Raft');
+    await userEvent.click(within(dialog).getByLabelText(/Open by default/));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    expect(change).toHaveBeenLastCalledWith({ op: 'create', parent: '', slug: 'raft', title: 'Raft', kind: 'folder-page', defaultOpen: true, after: null });
+  });
+
+  it('sets defaultOpen from the folder menu', async () => {
+    const { change, onChanged } = setup(() => ({ changes: [{ type: 'change', path: 'guide/meta.yaml', detail: 'defaultOpen: false' }], open: null }));
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Guide' }));
+    const item = within(screen.getByRole('menu')).getByRole('menuitemcheckbox', { name: 'Open by default on the site' });
+    expect(item.getAttribute('aria-checked')).toBe('true');
+    await userEvent.click(item);
+    expect(change).toHaveBeenCalledWith({ op: 'set-open', folder: 'guide', defaultOpen: false, baseMtime: 20 });
+    expect((await screen.findByRole('status')).textContent).toBe('Saved defaultOpen: false in guide/meta.yaml.');
+    expect(onChanged).toHaveBeenCalled();
+    // A folder without meta.yaml has nowhere to keep it.
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Loose' }));
+    const menu = screen.getByRole('menu');
+    expect(within(menu).getByRole<HTMLButtonElement>('menuitemcheckbox', { name: 'Open by default on the site' }).disabled).toBe(true);
+    expect(menu.textContent).toContain('No meta.yaml');
+    // Pages have no such item.
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for One' }));
+    expect(within(screen.getByRole('menu')).queryByRole('menuitemcheckbox')).toBeNull();
   });
 
   it('shows why a create would be refused', async () => {

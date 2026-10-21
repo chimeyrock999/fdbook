@@ -74,19 +74,83 @@ describe('tree API', () => {
     });
 
     it('creates a folder page; a parent without meta.yaml lists it by itself', async () => {
-      const response = await post({ op: 'create', parent: 'data-modeling', slug: 'data-vault', title: 'Data Vault', kind: 'folder' });
+      const response = await post({ op: 'create', parent: 'data-modeling', slug: 'data-vault', title: 'Data Vault', kind: 'folder-page', defaultOpen: true });
       expect(response.status).toBe(200);
       expect((json(response) as Answer).changes.map((change) => change.path)).toEqual(['data-modeling/data-vault/index.mdx', 'data-modeling/data-vault/meta.yaml']);
       expect(await text('data-modeling/data-vault/meta.yaml')).toBe('title: "Data Vault"\ndefaultOpen: true\npages: []\n');
       expect(await exists('data-modeling/meta.yaml')).toBe(false);
     });
 
+    it('shows a dry run of a plain folder: its meta.yaml and the parent entry', async () => {
+      const response = await post({ op: 'create', dryRun: true, parent: 'data-platform', slug: 'foo', title: 'Foo', kind: 'plain-folder', after: 0 });
+      expect(response.status).toBe(200);
+      expect(json(response)).toEqual({
+        changes: [
+          { type: 'add', path: 'data-platform/foo/meta.yaml' },
+          { type: 'change', path: 'data-platform/meta.yaml', detail: 'adds "foo"' },
+        ],
+        open: null,
+        created: 'data-platform/foo',
+      });
+      expect(await exists('data-platform/foo')).toBe(false);
+    });
+
+    it('creates a plain folder with only a meta.yaml, closed by default', async () => {
+      const meta = await text('data-platform/meta.yaml');
+      const response = await post({ op: 'create', parent: 'data-platform', slug: 'foo', title: 'Foo', kind: 'plain-folder', after: 0 });
+      expect(response.status).toBe(200);
+      expect((json(response) as Answer).open).toBeNull();
+      expect(await text('data-platform/foo/meta.yaml')).toBe('title: "Foo"\ndefaultOpen: false\npages: []\n');
+      expect(await exists('data-platform/foo/index.mdx')).toBe(false);
+      expect(await text('data-platform/meta.yaml')).toBe(meta.replace('  - "stacks-integration"\n', '  - "stacks-integration"\n  - "foo"\n'));
+      const platform = (await tree()).children.find((child) => child.kind === 'folder' && child.path === 'data-platform') as TreeFolder;
+      const foo = platform.children.find((child) => child.kind === 'folder' && child.path === 'data-platform/foo');
+      expect(foo).toMatchObject({ id: 'folder:data-platform/foo', entry: 1, title: 'Foo', index: null, hidden: null, defaultOpen: false, children: [] });
+    });
+
+    it('creates a page in the new folder and lists it there', async () => {
+      const response = await post({ op: 'create', parent: 'data-platform/foo', slug: 'bar', title: 'Bar' });
+      expect(response.status).toBe(200);
+      expect(await text('data-platform/foo/meta.yaml')).toBe('title: "Foo"\ndefaultOpen: false\npages:\n  - "bar"\n');
+      expect(await exists('data-platform/foo/bar.mdx')).toBe(true);
+    });
+
     it('refuses a taken name, a bad slug, `index` and an unknown folder', async () => {
       expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'mapreduce', title: 'x' })).status).toBe(409);
-      expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'raft', title: 'x', kind: 'folder' })).status).toBe(409);
+      const old = await post({ op: 'create', parent: 'distributed-systems', slug: 'x', title: 'x', kind: 'folder' });
+      expect([old.status, (json(old) as { error: string }).error]).toEqual([400, 'kind `folder` is now `folder-page`: reload the Studio']);
+      expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'raft', title: 'x', kind: 'folder-page' })).status).toBe(409);
+      expect((await post({ op: 'create', parent: 'data-platform', slug: 'foo', title: 'x', kind: 'page' })).status).toBe(409);
+      expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'raft', title: 'x', kind: 'plain-folder' })).status).toBe(409);
+      expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'Not A Slug', title: 'x', kind: 'plain-folder' })).status).toBe(400);
+      expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'x', title: 'x', kind: 'group' })).status).toBe(400);
       expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'Not A Slug', title: 'x' })).status).toBe(400);
       expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'index', title: 'x' })).status).toBe(400);
       expect((await post({ op: 'create', parent: 'nowhere', slug: 'x', title: 'x' })).status).toBe(404);
+    });
+  });
+
+  describe('set-open', () => {
+    it('sets defaultOpen in place, from the mtime it was read at', async () => {
+      const path = 'data-platform/meta.yaml';
+      const before = await text(path);
+      expect((await post({ op: 'set-open', folder: 'data-platform', defaultOpen: false, baseMtime: (await mtime(path)) - 1 })).status).toBe(409);
+      const response = await post({ op: 'set-open', folder: 'data-platform', defaultOpen: false, baseMtime: await mtime(path) });
+      expect(response.status).toBe(200);
+      expect(json(response)).toEqual({ changes: [{ type: 'change', path, detail: 'defaultOpen: false' }], open: null });
+      expect(await text(path)).toBe(before.replace('defaultOpen: true', 'defaultOpen: false'));
+      const platform = (await tree()).children.find((child) => child.kind === 'folder' && child.path === 'data-platform') as TreeFolder;
+      expect(platform.defaultOpen).toBe(false);
+    });
+
+    it('refuses a folder without meta.yaml, the root and an unknown folder', async () => {
+      expect((await post({ op: 'set-open', folder: 'data-modeling', defaultOpen: true, baseMtime: null })).status).toBe(409);
+      expect(await exists('data-modeling/meta.yaml')).toBe(false);
+      expect((await post({ op: 'set-open', folder: '', defaultOpen: true, baseMtime: await mtime('meta.yaml') })).status).toBe(400);
+      expect((await post({ op: 'set-open', folder: 'nowhere', defaultOpen: true, baseMtime: null })).status).toBe(404);
+      const missing = await post({ op: 'set-open', defaultOpen: true, baseMtime: null });
+      expect([missing.status, (json(missing) as { error: string }).error]).toEqual([400, 'folder must be a folder path']);
+      expect((await post({ op: 'set-open', folder: 'data-platform', defaultOpen: 'yes', baseMtime: await mtime('data-platform/meta.yaml') })).status).toBe(400);
     });
   });
 
@@ -97,7 +161,7 @@ describe('tree API', () => {
       expect((await post({ op: 'move', folder: 'data-platform', from: 1, to: 0, baseMtime: (await mtime(path)) - 1 })).status).toBe(409);
       const response = await post({ op: 'move', folder: 'data-platform', from: 1, to: 0, baseMtime: await mtime(path) });
       expect(response.status).toBe(200);
-      expect(await text(path)).toBe(before.replace('  - "stacks-integration"\n  - "data-quality"', '  - "data-quality"\n  - "stacks-integration"'));
+      expect(await text(path)).toBe(before.replace('  - "stacks-integration"\n  - "foo"', '  - "foo"\n  - "stacks-integration"'));
     });
 
     it('writes a meta.yaml for a folder that has none', async () => {

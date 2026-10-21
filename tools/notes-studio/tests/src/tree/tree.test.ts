@@ -3,16 +3,16 @@ import type { TreeFolder, TreeNode } from '../../../src/api/tree';
 import { dropIndex, filterTree, renamedPath, stepIndex, trailTo } from '../../../src/tree/tree';
 
 const page = (path: string, title: string, entry: number | null, hidden: 'unlisted' | null = null): TreeNode => ({
-  kind: 'page', id: `page:${path}`, path, title, entry, hidden,
+  kind: 'page', id: `page:${path}`, path, title, icon: null, entry, hidden,
 });
 
 const guide: TreeFolder = {
-  kind: 'folder', id: 'folder:guide', path: 'guide', title: 'Guide', meta: 'guide/meta.yaml', metaMtime: 1, index: 'guide/index.mdx',
+  kind: 'folder', id: 'folder:guide', path: 'guide', title: 'Guide', meta: 'guide/meta.yaml', metaMtime: 1, index: 'guide/index.mdx', defaultOpen: true, icon: null,
   hidden: null, entry: 1,
   children: [page('guide/one.mdx', 'One', 0), { kind: 'missing', id: 'm', entry: 1, value: 'gone', meta: 'guide/meta.yaml' }, page('guide/two.mdx', 'Two', 2), page('guide/loose.mdx', 'Loose', null, 'unlisted')],
 };
 const root: TreeFolder = {
-  kind: 'folder', id: 'folder:', path: '', title: 'Notes', meta: 'meta.yaml', metaMtime: 1, index: null, hidden: null, entry: null,
+  kind: 'folder', id: 'folder:', path: '', title: 'Notes', meta: 'meta.yaml', metaMtime: 1, index: null, defaultOpen: true, icon: null, hidden: null, entry: null,
   children: [page('a.mdx', 'Alpha', 0), guide, { kind: 'separator', id: 's', entry: 2, title: 'More' }],
 };
 
