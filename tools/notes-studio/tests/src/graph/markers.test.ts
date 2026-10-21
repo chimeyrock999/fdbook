@@ -135,7 +135,7 @@ describe('markerAt and updateMarker', () => {
     '',
     'Mixed <Keyword id="mixed" displayName="Mixed">**mi**xed</Keyword> marks.',
     '',
-    'Atom :keyword[**Registers**]{id="registers" displayName="Registers"} here.',
+    'Atom :keyword[Registers]{id="registers" displayName="Registers"} here.',
     '',
     '### Hadoop Overview :graph-meta{id="hadoop-overview" displayName="Hadoop"}',
     '',
@@ -186,7 +186,7 @@ describe('markerAt and updateMarker', () => {
       if (node.type.name === 'verbatimInline' && atom === -1) atom = pos;
     });
     expect(edit(atom, { id: 'registers', displayName: 'CPU registers', text: 'Registers' }, true)[4]).toBe(
-      'Atom :keyword[**Registers**]{id="registers" displayName="CPU registers"} here.',
+      'Atom :keyword[Registers]{id="registers" displayName="CPU registers"} here.',
     );
     expect(edit(atom, { id: 'regs', displayName: 'Regs', text: 'CPU [regs]' }, true)[4]).toBe(
       'Atom :keyword[CPU \\[regs\\]]{id="regs" displayName="Regs"} here.',
@@ -199,6 +199,43 @@ describe('markerAt and updateMarker', () => {
     expect(edit(at(state, 'id="grain"'), { id: 'grain-2', displayName: 'Grain', text: '' })[8]).toBe(
       'Self <GraphMeta id="grain-2" displayName="Grain" kind="keyword" /> marker.',
     );
+  });
+
+  function atomState(source: string) {
+    const opened = open(source);
+    let atom = -1;
+    opened.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'verbatimInline' && atom === -1) atom = pos;
+    });
+    return { ...opened, state: opened.state.apply(opened.state.tr.setSelection(NodeSelection.create(opened.state.doc, atom))) };
+  }
+
+  // Like a JSX keyword with mixed formatting: the label is read, never
+  // rewritten, so its Markdown stays.
+  it('keeps a directive label that holds Markdown', () => {
+    const { state, write } = atomState('Text :keyword[**Big** data]{id="big-data" displayName="Big data"} end.\n');
+    const marker = defined(markerAt(state));
+    expect(marker).toMatchObject({ text: 'Big data', content: null });
+    expect(write(state.apply(updateMarker(state, marker, { id: 'big', displayName: 'Big', text: 'Big data set' })).doc)).toBe(
+      'Text :keyword[**Big** data]{id="big" displayName="Big"} end.\n',
+    );
+  });
+
+  // A typed label is escaped so the site shows it as typed, and reads back
+  // as the same text.
+  it('escapes Markdown in a new directive label and reads it back', () => {
+    const typed = 'a*b* and `x` \\ y_z [1]';
+    const { state, write } = atomState(':keyword[data]{id="d" displayName="D"}\n');
+    const written = write(state.apply(updateMarker(state, defined(markerAt(state)), { id: 'd', displayName: 'D', text: typed })).doc);
+    expect(written).toBe(':keyword[a\\*b\\* and \\`x\\` \\\\ y\\_z \\[1\\]]{id="d" displayName="D"}\n');
+    const again = atomState(written);
+    expect(markerAt(again.state)).toMatchObject({ text: typed, content: { type: 'label' } });
+  });
+
+  // An attribute value cannot hold both quote kinds: double quotes become
+  // single ones (README, Graph markers).
+  it('quotes a value with both quote kinds by turning " into \'', () => {
+    expect(withAttributes('', { displayName: 'He said "it\'s"' })).toBe('displayName="He said \'it\'s\'"');
   });
 
   // The fields show the text without its outer spaces; unchanged, it is not

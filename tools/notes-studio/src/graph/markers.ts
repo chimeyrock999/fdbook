@@ -57,6 +57,22 @@ function uniformText(block: PmNode, from: number, to: number) {
   return uniform;
 }
 
+// Markdown that changes how a directive label reads: emphasis, code, the
+// label's own brackets and the escape itself.
+const LABEL_MARKUP = /[\\*_`[\]]/g;
+
+// A directive label as text: plain when it has no Markdown but escapes, so
+// it can be written back from the text; otherwise its text without the
+// emphasis marks, read only.
+function readLabel(label: string): { text: string; plain: boolean } {
+  const plain = !/(^|[^\\])(\\\\)*[*_`[\]]/.test(label) && !/(^|[^\\])(\\\\)*\\$/.test(label);
+  return plain ? { text: label.replace(/\\(.)/g, '$1').trim(), plain } : { text: plainLabel(label).trim(), plain };
+}
+
+function escapeLabel(text: string) {
+  return text.replace(LABEL_MARKUP, '\\$&');
+}
+
 // The markers in one textblock, in document order; `start` is the position
 // of its content.
 export function markersIn(block: PmNode, start: number): Marker[] {
@@ -82,13 +98,14 @@ export function markersIn(block: PmNode, start: number): Marker[] {
     if (!match) return;
     const attrs = match[3] ? attributes(match[3].slice(1, -1)) : {};
     const label = match.at(2);
+    const read = label === undefined ? null : readLabel(label);
     out.push({
       kind: KINDS[match[1]],
       source: { type: 'atom', pos: start + offset },
       extent: { from: start + offset, to: start + offset + child.nodeSize },
       attrs,
-      text: label === undefined ? '' : plainLabel(label).trim(),
-      content: label === undefined ? null : { type: 'label' },
+      text: read?.text ?? '',
+      content: read?.plain ? { type: 'label' } : null,
     });
   });
   out.sort((a, b) => a.extent.from - b.extent.from);
@@ -167,7 +184,8 @@ function sharedMarks(state: EditorState, from: number, to: number): readonly Mar
   return shared ?? [];
 }
 
-// A JSX or directive attribute value, quoted.
+// A JSX or directive attribute value, quoted. A value with both quote kinds
+// cannot be written as it is: its double quotes become single ones.
 function quote(value: string) {
   if (!value.includes('"')) return `"${value}"`;
   if (!value.includes("'")) return `'${value}'`;
@@ -203,7 +221,7 @@ function withTagAttributes(tag: string, values: Record<string, string>) {
 function withDirective(value: string, values: Record<string, string>, label?: string) {
   const match = TEXT_DIRECTIVE.exec(value);
   if (!match) return value;
-  const own = label === undefined ? match.at(2) : label.replace(/[[\]]/g, '\\$&');
+  const own = label === undefined ? match.at(2) : escapeLabel(label);
   const list = withAttributes(match[3] ? match[3].slice(1, -1) : '', values);
   return `:${match[1]}${own === undefined ? '' : `[${own}]`}{${list}}`;
 }

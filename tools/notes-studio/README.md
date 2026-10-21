@@ -164,8 +164,12 @@ Visual:
   marker as it is. A marker without an id (just inserted from `/`) opens
   them when the caret reaches it, and takes its id from the text as you
   type it.
-- Only the marker's own source changes. Keyword text with mixed formatting
-  is kept as it is; the fields then change only the id and displayName.
+- Only the marker's own source changes. Keyword text with mixed formatting,
+  or a `:keyword[…]` label with Markdown in it, is kept as it is; the fields
+  then change only the id and displayName. A label typed in the fields is
+  written with its Markdown characters escaped (`\*`, `` \` ``, `\[`), so
+  the site shows it as typed. A value with both `"` and `'` is saved with its
+  `"` turned into `'`.
 
 ## Page tree
 
