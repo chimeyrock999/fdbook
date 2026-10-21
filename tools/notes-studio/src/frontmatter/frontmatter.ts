@@ -117,8 +117,8 @@ export function writeFrontmatter(source: string, data: FrontmatterData): { sourc
   const after = doc.toString(options);
   if (block && after === before) return { source, issues };
 
-  const newline = block?.newline ?? '\n';
+  const newline = block?.newline ?? (source.includes('\r\n') ? '\r\n' : '\n');
   const yaml = after.replace(/\n$/, '').replace(/\n/g, newline);
-  if (!block) return { source: `---\n${yaml}\n---\n\n${source}`, issues };
+  if (!block) return { source: `---${newline}${yaml}${newline}---${newline}${newline}${source}`, issues };
   return { source: `---${newline}${yaml}${newline}---${newline}${source.slice(block.end)}`, issues };
 }

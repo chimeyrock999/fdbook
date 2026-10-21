@@ -79,6 +79,25 @@ describe('FrontmatterForm', () => {
     expect(writes.at(-1)).not.toContain('visible');
   });
 
+  it('lists only issues that no field shows in the summary', async () => {
+    render(<Harness initial={note.replace('title: "Streaming"', 'title: "Streaming"\nicon: 5')} onWrite={vi.fn()} />);
+    await userEvent.clear(screen.getAllByLabelText('id')[0]);
+    const summary = screen.getByText(/^icon: /);
+    expect(summary.textContent).not.toMatch(/graph\.id/);
+    expect(screen.getAllByText(/at least 1|too small/i)).toHaveLength(1);
+  });
+
+  // Off then on again ends where it started: `visible: true` stays.
+  it('keeps visible: true when the box is turned off and on again', async () => {
+    const source = note.replace('title: "Streaming"', 'title: "Streaming"\nvisible: true');
+    const writes: string[] = [];
+    render(<Harness initial={source} onWrite={(next) => writes.push(next)} />);
+    await userEvent.click(screen.getByRole('checkbox'));
+    expect(writes.at(-1)).toContain('visible: false');
+    await userEvent.click(screen.getByRole('checkbox'));
+    expect(writes.at(-1)).toBe(source);
+  });
+
   it('follows a change made elsewhere', async () => {
     render(<Harness initial={note} onWrite={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: 'disk change' }));

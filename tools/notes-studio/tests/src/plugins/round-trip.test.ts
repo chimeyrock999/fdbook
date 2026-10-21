@@ -1,8 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { glob } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createSyntax, parseMdxToDoc, serializeDocToMdx } from '@fumadocs-editor/core';
-import type { JSONContent } from '@tiptap/core';
+import { createSyntax, parseMdxToDoc, serializeDocToMdx, type ParsedDoc } from '@fumadocs-editor/core';
 import { describe, expect, it } from 'vitest';
 import { repoRoot } from '../../../server/config';
 import { editorConfig } from '../../../src/plugins';
@@ -11,6 +10,8 @@ import { editorConfig } from '../../../src/plugins';
 // note plus each plugin's own fixtures/*.mdx: parsing and serializing an
 // untouched document gives back the same bytes. A new plugin that would
 // rewrite a note fails here.
+type JSONContent = ParsedDoc['doc'];
+
 const syntax = createSyntax(editorConfig.components, editorConfig.syntax);
 const studioRoot = join(repoRoot, 'tools/notes-studio');
 

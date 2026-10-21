@@ -12,8 +12,16 @@ type Graph = NonNullable<NotesPageFrontmatter['graph']>;
 type Keyword = NonNullable<Graph['keywords']>[number];
 
 // `yaml` is the block the draft belongs to. A written draft also keeps the
-// block it replaced (`before`): see the effect below.
-type Draft = { yaml: string | null; before: string | null; data: FrontmatterData; issues: FrontmatterIssue[] };
+// block it replaced (`before`): see the effect below. `visible` is the key's
+// value when the form first read this block, so turning the box off and on
+// again restores it.
+type Draft = {
+  yaml: string | null;
+  before: string | null;
+  visible: unknown;
+  data: FrontmatterData;
+  issues: FrontmatterIssue[];
+};
 
 // The note's frontmatter as a form. Each change is checked against the shared
 // schema and written into the note's source only when it passes; until then
@@ -72,11 +80,14 @@ export function FrontmatterForm({
   const data: FrontmatterData = current?.data ?? (read.status === 'ok' ? read.data : {});
   const issues = current?.issues ?? (read.status === 'ok' ? read.issues : []);
   const issueAt = (path: string) => issues.find((issue) => issue.path === path)?.message;
+  // Issues no field shows, e.g. on keys the form does not edit.
+  const unshown = issues.filter((issue) => !KNOWN.test(issue.path));
+  const readVisible: unknown = current ? current.visible : read.status === 'ok' ? read.data.visible : undefined;
 
   const change = (next: FrontmatterData) => {
     const result = writeFrontmatter(source, next);
     if (result.issues.length === 0 && result.source !== source) onSource(result.source);
-    setDraft({ yaml: frontmatterText(result.source), before: yaml, data: next, issues: result.issues });
+    setDraft({ yaml: frontmatterText(result.source), before: yaml, visible: readVisible, data: next, issues: result.issues });
   };
   const set = (key: string, value: unknown) => {
     change({ ...data, [key]: value });
@@ -105,7 +116,9 @@ export function FrontmatterForm({
           <input
             type="checkbox"
             checked={data.visible !== false}
-            onChange={(event) => { set('visible', event.target.checked ? undefined : false); }}
+            onChange={(event) => {
+              set('visible', event.target.checked ? (readVisible === true ? true : undefined) : false);
+            }}
           />
         </label>
         {issueAt('visible') && <FieldError message={issueAt('visible')} />}
@@ -181,8 +194,8 @@ export function FrontmatterForm({
             </>
           )}
         </div>
-        {issues.some((issue) => !KNOWN.test(issue.path)) && (
-          <FieldError message={issues.map((issue) => `${issue.path || 'frontmatter'}: ${issue.message}`).join('; ')} />
+        {unshown.length > 0 && (
+          <FieldError message={unshown.map((issue) => `${issue.path || 'frontmatter'}: ${issue.message}`).join('; ')} />
         )}
       </fieldset>
       <p className="text-[11.5px] text-[var(--fde-muted-foreground)]">

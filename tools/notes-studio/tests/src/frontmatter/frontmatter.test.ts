@@ -127,6 +127,10 @@ describe('writeFrontmatter', () => {
     expect(result.source).toBe('---\ntitle: New\n---\n\n# Body\n');
   });
 
+  it('creates the block with the note\'s own line endings', () => {
+    expect(writeFrontmatter('# Body\r\n', { title: 'New' }).source).toBe('---\r\ntitle: New\r\n---\r\n\r\n# Body\r\n');
+  });
+
   it('keeps CRLF line endings', () => {
     const source = '---\r\ntitle: X\r\n---\r\nbody\r\n';
     expect(edit(source, (data) => ({ ...data, title: 'Y' })).source).toBe('---\r\ntitle: Y\r\n---\r\nbody\r\n');
