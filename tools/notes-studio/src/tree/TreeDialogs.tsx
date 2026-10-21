@@ -1,7 +1,9 @@
-import { useEffect, useState, type ReactNode, type SyntheticEvent } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
+import { createPortal } from 'react-dom';
 import type { TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
+import { makeOthersInert, trapFocus } from '../dialog-focus';
 import { slugify } from '../slug';
-import { slugOf } from './tree';
+import { renamedPath, slugOf } from './tree';
 
 const PREVIEW_MS = 200;
 
@@ -45,33 +47,47 @@ function Changes({ changes }: { changes: TreeChange[] }) {
             </>
           )}
           {change.type === 'move' && `${change.path} → ${change.to}`}
+          {change.type === 'keep' && (
+            <>
+              = {change.path} <span>{change.detail}</span>
+            </>
+          )}
         </li>
       ))}
     </ul>
   );
 }
 
+// A modal over the whole Studio: the rest of the page is inert while it is
+// open, so the note behind it cannot change, and Tab stays inside.
 function Dialog({ title, onClose, onSubmit, children }: { title: string; onClose: () => void; onSubmit: () => void; children: ReactNode }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [onClose]);
+  const layer = useRef<HTMLDivElement>(null);
+  useEffect(() => makeOthersInert(layer.current), []);
   const submit = (event: SyntheticEvent) => {
     event.preventDefault();
     onSubmit();
   };
-  return (
-    <div className="studio-dialog-back" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <form role="dialog" aria-modal="true" aria-label={title} className="studio-dialog" onSubmit={submit}>
+  return createPortal(
+    <div ref={layer} className="studio-dialog-back" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="studio-dialog"
+        onSubmit={submit}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            onClose();
+          }
+          if (event.key === 'Tab') trapFocus(event.currentTarget, event);
+        }}
+      >
         <h2 className="text-[15px] font-semibold">{title}</h2>
         {children}
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -148,9 +164,11 @@ export function CreateDialog({ client, parent, after, onDone, onClose }: {
 }
 
 // A new name for a page or folder, in the same folder.
-export function RenameDialog({ client, node, onDone, onClose }: {
+export function RenameDialog({ client, node, unsaved, onDone, onClose }: {
   client: TreeClient;
   node: Extract<TreeNode, { kind: 'page' | 'folder' }>;
+  // The open note while it has edits not on disk yet (see PageTree).
+  unsaved: string | null;
   onDone: (from: string, to: string) => void;
   onClose: () => void;
 }) {
@@ -158,12 +176,14 @@ export function RenameDialog({ client, node, onDone, onClose }: {
   const [failed, setFailed] = useState<string | null>(null);
   const slug = slugify(typed);
   const changed = slug !== '' && slug !== slugOf(node.path);
+  // Moving the file under the editor would drop its pending save.
+  const waiting = unsaved !== null && renamedPath(unsaved, node.path, node.path) !== null;
   const request: TreeRequest | null = changed ? { op: 'rename', path: node.path, slug } : null;
   const preview = usePreview(client, request);
   const dir = node.path.includes('/') ? `${node.path.slice(0, node.path.lastIndexOf('/'))}/` : '';
 
   const submit = () => {
-    if (request === null) return;
+    if (request === null || waiting) return;
     client.change(request).then(
       (answer) => {
         const move = answer.changes.find((change) => change.type === 'move');
@@ -190,9 +210,10 @@ export function RenameDialog({ client, node, onDone, onClose }: {
         </span>
       </div>
       <Preview preview={preview} failed={failed} />
+      {waiting && <p role="status" className="studio-tree-error">The open note has unsaved changes. Rename once it shows Saved.</p>}
       <div className="flex justify-end gap-2">
         <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
-        <button type="submit" className="studio-button studio-button-primary" disabled={!changed || preview?.error != null}>Rename</button>
+        <button type="submit" className="studio-button studio-button-primary" disabled={!changed || waiting || preview?.error != null}>Rename</button>
       </div>
     </Dialog>
   );

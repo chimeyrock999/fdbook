@@ -2,8 +2,8 @@ import { readFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { HttpError } from '../http.ts';
 import { listEditableFiles, statOrNull, writeAtomic } from '../files/store.ts';
-import { NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
-import { replaceSegment, rewriteLinks, type Rename } from './links.ts';
+import { ASSETS_DIR, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
+import { knownTargets, replaceSegment, rewriteLinks, type Rename } from './links.ts';
 import { insertEntry, metaTemplate, MetaEditError, moveEntry, pagesTemplate, readPages, replaceEntry } from './meta-edit.ts';
 import { slugify } from '../../src/slug.ts';
 import { pageTemplate } from './template.ts';
@@ -17,7 +17,9 @@ import type { TreeFolder, TreeNode } from './types.ts';
 export type TreeChange =
   | { type: 'add'; path: string }
   | { type: 'change'; path: string; detail: string }
-  | { type: 'move'; path: string; to: string };
+  | { type: 'move'; path: string; to: string }
+  // Left where it is: a page's images in public/notes (a worktree path).
+  | { type: 'keep'; path: string; detail: string };
 
 type Write = { path: string; content: string; baseMtime: number | null };
 
@@ -143,7 +145,9 @@ export async function planRename(root: string, tree: TreeFolder, request: Rename
 
   const writes: Write[] = [];
   const changes: TreeChange[] = [{ type: 'move', path, to }];
-  const files = (await listEditableFiles(root)).filter((file) => file.kind !== 'asset');
+  const all = await listEditableFiles(root);
+  const files = all.filter((file) => file.kind !== 'asset');
+  const known = knownTargets(files.filter((file) => file.kind === 'note').map((file) => file.path.slice(NOTES_DIR.length + 1)));
   // A file that does not hold the old name cannot point at it: skip the parse.
   const oldName = slugOf(path);
   const read = await Promise.all(
@@ -157,12 +161,18 @@ export async function planRename(root: string, tree: TreeFolder, request: Rename
     const { next, count, unit } =
       kind === 'meta'
         ? { ...metaError(() => renameEntries(content, dirOf(notesPath), change)), unit: ['entry', 'entries'] as const }
-        : { ...rewriteLinks(content, notesPath, change), unit: ['link', 'links'] as const };
+        : { ...rewriteLinks(content, notesPath, change, known), unit: ['link', 'links'] as const };
     if (next === content) continue;
     const detail = `${String(count)} ${count === 1 ? unit[0] : unit[1]}`;
     writes.push({ path: notesPath, content: next, baseMtime: mtimeMs });
     changes.push({ type: 'change', path: notesPath, detail });
   }
+  // The page's images stay in public/notes/<old path>/: a rename does not
+  // move assets yet. Their links are left as they are, so they keep working;
+  // the plan says so, for the dry run.
+  const images = `${ASSETS_DIR}/${path.replace(/\.mdx$/, '')}/`;
+  const kept = all.filter((file) => file.kind === 'asset' && file.path.startsWith(images)).length;
+  if (kept > 0) changes.push({ type: 'keep', path: images, detail: `${String(kept)} ${kept === 1 ? 'file stays' : 'files stay'}` });
   return { writes, move: { from: path, to }, changes, open: null };
 }
 

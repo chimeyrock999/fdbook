@@ -1,4 +1,4 @@
-import { readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadTree } from '../../../server/tree/build';
@@ -30,6 +30,17 @@ describe('applying a rename', () => {
     await writeFile(notes('distributed-systems/meta.yaml'), 'pages: []\n');
     await expect(applyPlan(worktree.root, plan)).rejects.toThrow('changed on disk');
     expect((await stat(notes('distributed-systems/mapreduce'))).isDirectory()).toBe(true);
+  });
+
+  it("says that the page's images stay where they are", async () => {
+    const images = join(worktree.root, 'public/notes/computer-systems/operating-systems/page-cache');
+    await mkdir(images, { recursive: true });
+    await writeFile(join(images, 'a.png'), Buffer.from([0x89, 0x50]));
+    await writeFile(join(images, 'b.svg'), '<svg/>');
+    const plan = await planRename(worktree.root, await loadTree(worktree.root), { path: 'computer-systems/operating-systems/page-cache.mdx', slug: 'os-cache' });
+    expect(plan.changes.at(-1)).toEqual({ type: 'keep', path: 'public/notes/computer-systems/operating-systems/page-cache/', detail: '2 files stay' });
+    await applyPlan(worktree.root, plan);
+    expect((await stat(join(images, 'a.png'))).isFile()).toBe(true);
   });
 
   it('writes a file inside the renamed folder at its new place', async () => {

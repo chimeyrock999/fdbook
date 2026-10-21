@@ -1,12 +1,22 @@
 import type { Definition, Link } from 'mdast';
 import { visit } from 'unist-util-visit';
 import { parseNote } from '../lint/lint.ts';
-import { pageUrl } from '../lint/rules/links.ts';
+import { joinPath, pageUrl } from '../lint/rules/links.ts';
 
 // A page or folder that gets a new name in the same folder. Paths are
 // relative to content/notes: `guide/intro.mdx` for a page, `guide` for a
 // folder.
 export type Rename = { from: string; to: string; folder: boolean };
+
+// The notes before the rename, and their URLs: only an href that reaches one
+// of them is rewritten. Anything else under the renamed path (an asset in
+// public/notes/<path>/, which does not move) keeps its href.
+export type Known = { pages: ReadonlySet<string>; urls: ReadonlySet<string> };
+
+export function knownTargets(pages: Iterable<string>): Known {
+  const set = new Set(pages);
+  return { pages: set, urls: new Set([...set].map(pageUrl)) };
+}
 
 const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 const dirSegments = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')).split('/') : []);
@@ -45,12 +55,21 @@ export function replaceSegment(start: string[], path: string, target: string, na
   return null;
 }
 
+function urlPath(path: string, notePath: string) {
+  try {
+    const pathname = decodeURIComponent(new URL(path, `http://site${pageUrl(notePath)}`).pathname);
+    return pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  } catch {
+    return null;
+  }
+}
+
 // The href with the renamed page or folder swapped in, or null when it does
-// not point there. Follows the lint's link rule (server/lint/rules/links.ts):
-// `./` and `../` are first files next to the note, then like any other
-// relative href a URL resolved against the page URL. `notePath` is the
-// note's path before the rename.
-export function rewriteHref(href: string, notePath: string, rename: Rename): string | null {
+// not reach a note there. Follows the lint's link rule
+// (server/lint/rules/links.ts): `./` and `../` are first files next to the
+// note, then like any other relative href a URL resolved against the page
+// URL. `notePath` is the note's path before the rename.
+export function rewriteHref(href: string, notePath: string, rename: Rename, known: Known): string | null {
   if (href === '' || href.startsWith('#') || href.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(href)) return null;
   const cut = href.search(/[?#]/);
   const path = cut === -1 ? href : href.slice(0, cut);
@@ -59,11 +78,15 @@ export function rewriteHref(href: string, notePath: string, rename: Rename): str
   const withSuffix = (next: string | null) => (next === null ? null : next + suffix);
 
   if (path.startsWith('./') || path.startsWith('../')) {
-    const file = replaceSegment(dirSegments(notePath), path, rename.from, name, !rename.folder);
+    const file = known.pages.has(joinPath(dirSegments(notePath).join('/'), decode(path)))
+      ? replaceSegment(dirSegments(notePath), path, rename.from, name, !rename.folder)
+      : null;
     if (file !== null) return file + suffix;
   }
   const fromUrl = (rename.folder ? `/notes/${rename.from}` : pageUrl(rename.from)).slice(1);
   const toName = rename.folder ? name : name.replace(/\.mdx$/, '');
+  const target = urlPath(path, notePath);
+  if (target === null || !known.urls.has(target)) return null;
   const urlDir = pageUrl(notePath).slice(1).split('/').slice(0, -1);
   return withSuffix(replaceSegment(path.startsWith('/') ? [] : urlDir, path, fromUrl, toName, !rename.folder));
 }
@@ -98,7 +121,7 @@ function destinationOf(node: Link | Definition, source: string): { start: number
 // or folder pointed at its new name, and how many changed. Only the changed
 // segment of each destination is rewritten; a note that does not parse is
 // left alone.
-export function rewriteLinks(source: string, notePath: string, rename: Rename): { next: string; count: number } {
+export function rewriteLinks(source: string, notePath: string, rename: Rename, known: Known): { next: string; count: number } {
   let tree;
   try {
     tree = parseNote(source);
@@ -110,7 +133,7 @@ export function rewriteLinks(source: string, notePath: string, rename: Rename): 
     if (node.type !== 'link' && node.type !== 'definition') return;
     const range = destinationOf(node, source);
     if (!range) return;
-    const next = rewriteHref(source.slice(range.start, range.end), notePath, rename);
+    const next = rewriteHref(source.slice(range.start, range.end), notePath, rename, known);
     if (next !== null) edits.push({ ...range, text: next });
   });
   let result = source;

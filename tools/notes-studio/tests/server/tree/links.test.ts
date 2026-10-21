@@ -1,46 +1,80 @@
 import { describe, expect, it } from 'vitest';
-import { replaceSegment, rewriteHref, rewriteLinks, type Rename } from '../../../server/tree/links';
+import { knownTargets, replaceSegment, rewriteHref, rewriteLinks, type Rename } from '../../../server/tree/links';
 
 const page: Rename = { from: 'computer-systems/operating-systems/page-cache.mdx', to: 'computer-systems/operating-systems/os-cache.mdx', folder: false };
 const folder: Rename = { from: 'distributed-systems/mapreduce', to: 'distributed-systems/map-reduce', folder: true };
 
+// The notes the links may reach.
+const known = knownTargets([
+  'index.mdx',
+  'computer-systems/index.mdx',
+  'computer-systems/operating-systems/page-cache.mdx',
+  'computer-systems/storage/wal.mdx',
+  'distributed-systems/rpc-and-threads.mdx',
+  'distributed-systems/mapreduce/index.mdx',
+  'distributed-systems/mapreduce/mit-65840-lab01.mdx',
+  'data-modeling/index.mdx',
+  'data-modeling/dimensional.mdx',
+  'pr/index.mdx',
+  'pr/post.mdx',
+  'pr/post/setup.mdx',
+]);
+
 describe('rewriteHref', () => {
   it('follows file links next to the note', () => {
-    expect(rewriteHref('./operating-systems/page-cache.mdx', 'computer-systems/index.mdx', page)).toBe('./operating-systems/os-cache.mdx');
-    expect(rewriteHref('../operating-systems/page-cache.mdx#flush', 'computer-systems/storage/wal.mdx', page)).toBe('../operating-systems/os-cache.mdx#flush');
-    expect(rewriteHref('./page-cache.mdx', 'computer-systems/index.mdx', page)).toBeNull();
+    expect(rewriteHref('./operating-systems/page-cache.mdx', 'computer-systems/index.mdx', page, known)).toBe('./operating-systems/os-cache.mdx');
+    expect(rewriteHref('../operating-systems/page-cache.mdx#flush', 'computer-systems/storage/wal.mdx', page, known)).toBe('../operating-systems/os-cache.mdx#flush');
+    expect(rewriteHref('./page-cache.mdx', 'computer-systems/index.mdx', page, known)).toBeNull();
   });
 
   it('follows /notes URLs and relative URLs', () => {
-    expect(rewriteHref('/notes/computer-systems/operating-systems/page-cache', 'index.mdx', page)).toBe('/notes/computer-systems/operating-systems/os-cache');
-    expect(rewriteHref('/notes/distributed-systems/mapreduce#yarn-components', 'a/b.mdx', folder)).toBe('/notes/distributed-systems/map-reduce#yarn-components');
-    expect(rewriteHref('/notes/distributed-systems/mapreduce/mit-65840-lab01/', 'a.mdx', folder)).toBe('/notes/distributed-systems/map-reduce/mit-65840-lab01/');
+    expect(rewriteHref('/notes/computer-systems/operating-systems/page-cache', 'index.mdx', page, known)).toBe('/notes/computer-systems/operating-systems/os-cache');
+    expect(rewriteHref('/notes/distributed-systems/mapreduce#yarn-components', 'a/b.mdx', folder, known)).toBe('/notes/distributed-systems/map-reduce#yarn-components');
+    expect(rewriteHref('/notes/distributed-systems/mapreduce/mit-65840-lab01/', 'a.mdx', folder, known)).toBe('/notes/distributed-systems/map-reduce/mit-65840-lab01/');
     // From distributed-systems/rpc-and-threads (URL /notes/distributed-systems/rpc-and-threads).
-    expect(rewriteHref('mapreduce?x=1', 'distributed-systems/rpc-and-threads.mdx', folder)).toBe('map-reduce?x=1');
-    expect(rewriteHref('/notes/distributed-systems/mapreduce-two', 'a.mdx', folder)).toBeNull();
+    expect(rewriteHref('mapreduce?x=1', 'distributed-systems/rpc-and-threads.mdx', folder, known)).toBe('map-reduce?x=1');
+    expect(rewriteHref('/notes/distributed-systems/mapreduce-two', 'a.mdx', folder, known)).toBeNull();
   });
 
   it('moves links inside a renamed folder only when they leave it and come back', () => {
-    expect(rewriteHref('./mit-65840-lab01.mdx', 'distributed-systems/mapreduce/index.mdx', folder)).toBeNull();
-    expect(rewriteHref('../mapreduce/mit-65840-lab01.mdx', 'distributed-systems/mapreduce/index.mdx', folder)).toBe('../map-reduce/mit-65840-lab01.mdx');
+    expect(rewriteHref('./mit-65840-lab01.mdx', 'distributed-systems/mapreduce/index.mdx', folder, known)).toBeNull();
+    expect(rewriteHref('../mapreduce/mit-65840-lab01.mdx', 'distributed-systems/mapreduce/index.mdx', folder, known)).toBe('../map-reduce/mit-65840-lab01.mdx');
   });
 
   it('leaves paths under the page name alone: assets and a folder of the same name', () => {
     const post: Rename = { from: 'pr/post.mdx', to: 'pr/renamed.mdx', folder: false };
     // Assets kept in public/notes/pr/post/ are not the page.
-    expect(rewriteHref('/notes/pr/post/big.jpg', 'pr/post.mdx', post)).toBeNull();
-    expect(rewriteHref('/notes/pr/post', 'pr/post.mdx', post)).toBe('/notes/pr/renamed');
-    expect(rewriteHref('/notes/pr/post/', 'pr/post.mdx', post)).toBe('/notes/pr/renamed/');
+    expect(rewriteHref('/notes/pr/post/big.jpg', 'pr/post.mdx', post, known)).toBeNull();
+    expect(rewriteHref('/notes/pr/post', 'pr/post.mdx', post, known)).toBe('/notes/pr/renamed');
+    expect(rewriteHref('/notes/pr/post/', 'pr/post.mdx', post, known)).toBe('/notes/pr/renamed/');
     // A folder pr/post/ next to the page pr/post.mdx.
-    expect(rewriteHref('./post/setup.mdx', 'pr/index.mdx', post)).toBeNull();
+    expect(rewriteHref('./post/setup.mdx', 'pr/index.mdx', post, known)).toBeNull();
     expect(replaceSegment(['pr'], 'post/setup', 'pr/post', 'renamed', true)).toBeNull();
     expect(replaceSegment(['pr'], 'post', 'pr/post', 'renamed', true)).toBe('renamed');
     expect(replaceSegment(['pr'], 'post/setup', 'pr/post', 'renamed')).toBe('renamed/setup');
   });
 
+  it('leaves assets under a renamed folder alone: they do not move', () => {
+    const modeling: Rename = { from: 'data-modeling', to: 'data-modeling-2', folder: true };
+    const source = [
+      'See [pdf](/notes/data-modeling/spec.pdf) and ![x][img] and ![y](/notes/data-modeling/a.png),',
+      'and [the page](/notes/data-modeling/dimensional) and [./ link](./data-modeling/dimensional.mdx).',
+      '',
+      '[img]: /notes/data-modeling/b.png',
+      '',
+    ].join('\n');
+    const { next, count } = rewriteLinks(source, 'index.mdx', modeling, known);
+    expect(count).toBe(2);
+    expect(next).toBe(
+      source
+        .replace('(/notes/data-modeling/dimensional)', '(/notes/data-modeling-2/dimensional)')
+        .replace('(./data-modeling/dimensional.mdx)', '(./data-modeling-2/dimensional.mdx)'),
+    );
+  });
+
   it('leaves anchors, other sites and other pages alone', () => {
     for (const href of ['#mapreduce', 'https://research.google.com/archive/mapreduce-osdi04.pdf', '//cdn/mapreduce', 'mailto:a@b', '']) {
-      expect(rewriteHref(href, 'distributed-systems/mapreduce/index.mdx', folder)).toBeNull();
+      expect(rewriteHref(href, 'distributed-systems/mapreduce/index.mdx', folder, known)).toBeNull();
     }
   });
 });
@@ -58,7 +92,7 @@ describe('rewriteLinks', () => {
       '[pc]: /notes/computer-systems/operating-systems/page-cache#top',
       '',
     ].join('\n');
-    const { next, count } = rewriteLinks(source, 'computer-systems/index.mdx', page);
+    const { next, count } = rewriteLinks(source, 'computer-systems/index.mdx', page, known);
     expect(count).toBe(3);
     expect(next).toBe(
       source
@@ -70,6 +104,6 @@ describe('rewriteLinks', () => {
 
   it('leaves a note that does not parse alone', () => {
     const source = '<div>\n[x](./operating-systems/page-cache.mdx)\n';
-    expect(rewriteLinks(source, 'computer-systems/index.mdx', page)).toEqual({ next: source, count: 0 });
+    expect(rewriteLinks(source, 'computer-systems/index.mdx', page, known)).toEqual({ next: source, count: 0 });
   });
 });

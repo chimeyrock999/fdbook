@@ -281,6 +281,7 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
         <RenameDialog
           client={client}
           node={dialog.node}
+          unsaved={unsaved}
           onClose={() => { setDialog(null); }}
           onDone={(from, to) => {
             setDialog(null);

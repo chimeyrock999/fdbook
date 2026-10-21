@@ -179,16 +179,17 @@ a move that fails writes nothing.
   meta.yaml entry that reached it (`a/b`, `!x`, `...x` included) and every
   Markdown link or link definition to it (`./`, `../` and `/notes/…`, anchors
   kept) points at the new name; only the changed path segment is rewritten.
-  For a page only links that end at it change: `/notes/a/page/x.png` (an
-  asset folder named after the page) and a folder `page/` next to
-  `page.mdx` keep their paths. JSX `href`s are not rewritten. A note open
+  Only links that reach a note change: `/notes/a/page/x.png` (an image in
+  the page's asset folder, which does not move) and a folder `page/` next
+  to `page.mdx` keep their paths. JSX `href`s are not rewritten. A note open
   in the editor follows the rename; renaming it, or its folder, waits until
   its edits are saved. The dialogs show what will be written (a dry run)
   before you confirm.
 
 A rename does not move the page's images: they stay in
-`public/notes/<old path>/` and the links to them keep working, while new
-images go to the folder of the new path (see Images). Rename and reorder do
+`public/notes/<old path>/`, the links to them keep working, and the dry run
+lists the folder as staying. New images go to the folder of the new path
+(see Images). Rename and reorder do
 not cover moving a page to another folder, deleting, or editing a folder's
 title, icon or `defaultOpen`.
 

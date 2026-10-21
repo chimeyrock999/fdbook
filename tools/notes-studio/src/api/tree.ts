@@ -26,7 +26,9 @@ export type TreeNode = TreeFolder | TreePage | TreeSeparator | TreeLink | TreeMi
 export type TreeChange =
   | { type: 'add'; path: string }
   | { type: 'change'; path: string; detail: string }
-  | { type: 'move'; path: string; to: string };
+  | { type: 'move'; path: string; to: string }
+  // Left where it is: a page's images in public/notes (a worktree path).
+  | { type: 'keep'; path: string; detail: string };
 
 export type TreeRequest =
   | { op: 'create'; parent: string; slug: string; title: string; kind: 'page' | 'folder'; after: number | null }

@@ -149,6 +149,29 @@ describe('PageTree', () => {
     expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: 'Rename…' }).disabled).toBe(false);
   });
 
+  it('keeps the rename dialog modal and waits for a save that starts while it is open', async () => {
+    const { client } = fakeClient(() => ({ changes: [{ type: 'move', path: 'guide/two.mdx', to: 'guide/2.mdx' }], open: null }));
+    const props = { root, client, active: 'guide/two.mdx', onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+    const { container, rerender } = render(<PageTree {...props} unsaved={null} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Two' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Rename…' }));
+    // The rest of the Studio (the editor too) cannot take focus or input.
+    expect(container.inert).toBe(true);
+    const dialog = screen.getByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText('File name'), '-b');
+    expect(await within(dialog).findByText('guide/two.mdx → guide/2.mdx')).toBeTruthy();
+    // Tab from the last button comes back to the first field.
+    within(dialog).getByRole('button', { name: 'Rename' }).focus();
+    await userEvent.tab();
+    expect(document.activeElement).toBe(within(dialog).getByLabelText('File name'));
+    rerender(<PageTree {...props} unsaved="guide/two.mdx" />);
+    expect(within(dialog).getByRole('status').textContent).toContain('unsaved changes');
+    expect(within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Rename' }).disabled).toBe(true);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(container.inert).toBe(false);
+  });
+
   it('opens the folders on the way once a reloaded tree holds the open note', () => {
     const { client } = fakeClient(() => ({ changes: [], open: null }));
     const props = { client, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
