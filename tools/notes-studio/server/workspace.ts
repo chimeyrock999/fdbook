@@ -7,6 +7,9 @@ import { createKeyedLock } from './files/store.ts';
 import { createChangesApi } from './git/api.ts';
 import { pathnameOf, sendJson, type Handler } from './http.ts';
 import { createLintApi } from './lint/api.ts';
+import { createPreviewApi } from './preview/api.ts';
+import { createBuildReader, ghCheckRun } from './preview/check-runs.ts';
+import type { PreviewOptions } from './preview/preview.ts';
 import { refuseUpgrade } from './routing.ts';
 import { createNotesSync } from './sync/notes-sync.ts';
 import { createTreeApi } from './tree/api.ts';
@@ -24,9 +27,14 @@ const refuseWrites: Handler = (request, response) => {
   return Promise.resolve(true);
 };
 
+// Without a server's own, a workspace reads builds through gh and has no
+// Pages project to name its preview after.
+const defaultPreview = (): PreviewOptions => ({ builds: createBuildReader(ghCheckRun), pagesProject: null });
+
 // The handlers of one worktree: file API and events, lint, page tree,
-// assets, changes (git status, commit, history), and the notes sync socket.
-export function createWorkspace(root: string, port: number, { readOnly = false } = {}) {
+// assets, changes (git status, commit, history), preview (push, build),
+// and the notes sync socket.
+export function createWorkspace(root: string, port: number, { readOnly = false, preview = defaultPreview() }: { readOnly?: boolean; preview?: PreviewOptions } = {}) {
   // Tree and asset changes both write notes: one at a time. A commit waits
   // for them too, so it never takes half of a rename. The lock is this
   // worktree's own: change requests never wait on each other.
@@ -41,6 +49,7 @@ export function createWorkspace(root: string, port: number, { readOnly = false }
     createTreeApi(root, notesLock),
     createAssetsApi(root, notesLock),
     createChangesApi(root, notesLock),
+    createPreviewApi(root, preview, { readOnly, lock: notesLock }),
   ];
   return {
     root,
@@ -66,7 +75,7 @@ const CR_PATH = /^\/cr\/([^/]+)(\/.*)$/;
 // `close`. The request goes on with the prefix taken off, to the
 // workspace's handlers, then to `shared` (what every workspace answers
 // alike: icons, and the JSON 404 for any other /api/ path).
-export function createWorkspaceRouter(port: number, resolve: (slug: string) => Promise<string | null>, shared: Handler[]) {
+export function createWorkspaceRouter(port: number, resolve: (slug: string) => Promise<string | null>, shared: Handler[], preview?: PreviewOptions) {
   // `workspace` stays undefined while the entry opens.
   type Entry = { ready: Promise<Workspace | null>; workspace?: Workspace | null };
   const open = new Map<string, Entry>();
@@ -80,7 +89,7 @@ export function createWorkspaceRouter(port: number, resolve: (slug: string) => P
     const drop = () => { if (open.get(slug) === entry) open.delete(slug); };
     entry.ready = resolve(slug).then(
       (root) => {
-        entry.workspace = root === null ? null : createWorkspace(root, port);
+        entry.workspace = root === null ? null : createWorkspace(root, port, { preview });
         if (entry.workspace === null) drop();
         return entry.workspace;
       },

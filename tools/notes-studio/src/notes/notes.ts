@@ -57,6 +57,14 @@ export function noteRoute(path: string) {
   return ['/notes', ...slugs.map(encodeURIComponent)].join('/');
 }
 
+// What the site serves for a worktree path: a note's page, a file under
+// public/ as it is (`/notes/…`), and the notes' home for anything else.
+export function siteRoute(path: string | null) {
+  if (path === null) return '/notes';
+  if (path.startsWith('public/')) return `/${path.slice('public/'.length).split('/').map(encodeURIComponent).join('/')}`;
+  return noteRoute(path);
+}
+
 // The site's dev server (`npm run dev` at the repo root) unless
 // STUDIO_SITE_URL names another.
 export function siteUrlFrom(configured: string | undefined) {
