@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import '@fumadocs-editor/ui/styles.css';
 @import './notes-theme.css';
+@import './notes-prose.css';
 
 /* The Studio chrome uses the editor's --fde-* tokens, which follow the
    system light/dark preference, so both always match. */
@@ -124,52 +125,5 @@
      still shows it). */
   .studio-visual [data-mdx-frontmatter] {
     display: none;
-  }
-
-  .studio-embed {
-    position: relative;
-    margin: 0;
-    border: 1px solid var(--fde-border);
-    border-radius: 10px;
-    background: var(--fde-card);
-    overflow: hidden;
-  }
-  .studio-embed-controls {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-  }
-  .studio-embed-bar {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    padding: 6px 10px;
-    font-size: 12px;
-    color: var(--fde-muted-foreground);
-    border-bottom: 1px solid var(--fde-border);
-  }
-  .studio-embed-tag {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    background: var(--fde-accent);
-    color: var(--fde-foreground);
-    padding: 1px 6px;
-    border-radius: 4px;
-  }
-  .studio-embed-src {
-    font-family: var(--font-mono);
-    overflow-wrap: anywhere;
-  }
-  .studio-embed-title {
-    display: block;
-    padding: 12px 14px 2px;
-    font-weight: 600;
-  }
-  .studio-embed-caption {
-    display: block;
-    padding: 2px 14px 12px;
-    font-size: 13px;
-    font-style: italic;
-    color: var(--fde-muted-foreground);
   }
 }

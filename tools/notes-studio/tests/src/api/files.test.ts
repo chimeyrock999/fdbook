@@ -1,7 +1,7 @@
 import { readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createFilesClient, FileConflictError } from '../../../src/api/files';
+import { createFilesClient, FileConflictError, publicAssetUrl } from '../../../src/api/files';
 import { startTestStudio, type TestStudio } from '../../support/studio';
 
 describe('files client', () => {
@@ -50,5 +50,18 @@ describe('files client', () => {
 
   it('surfaces the server error for a refused path', async () => {
     await expect(client.readFile('package.json')).rejects.toThrow(/not an editable path/);
+  });
+
+  // How the SvgDiagram plugin shows a site path such as /notes/….svg.
+  it('serves a site path under public/', async () => {
+    const url = publicAssetUrl('/notes/demo/pixel.png?v=1#x', studio.origin);
+    expect(url).toBe(`${studio.origin}/api/file?path=public%2Fnotes%2Fdemo%2Fpixel.png`);
+    const response = await fetch(url ?? '');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/png');
+    expect(publicAssetUrl('notes/demo/pixel.png')).toBe('/api/file?path=public%2Fnotes%2Fdemo%2Fpixel.png');
+    // The file API serves public/notes only.
+    expect([undefined, '', '/images/x.svg', 'https://cdn/notes/x.svg', '//cdn/x.svg'].map((src) => publicAssetUrl(src)))
+      .toEqual([null, null, null, null, null]);
   });
 });
