@@ -3,13 +3,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssetAnswer, AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
 import { assetChanged } from './api/asset-versions';
+import { createCrClient, type ChangeRequest, type Discard } from './api/crs';
 import { createFilesClient } from './api/files';
 import { createLintClient } from './api/lint';
 import { createTreeClient } from './api/tree';
+import { CURRENT_CR } from './api/workspace';
 import { movedTo } from './assets/asset-changes';
 import { AssetPage } from './assets/AssetPage';
 import { AssetsView } from './assets/AssetsView';
 import { useAssetList } from './assets/useAssetList';
+import { DiscardDialog, NewCrDialog } from './cr/CrDialogs';
+import { CrListPage } from './cr/CrListPage';
+import { CrPicker, EditMenu } from './cr/CrMenus';
+import { useCrs } from './cr/useCrs';
 import { NoteEditor, type SourcePlace } from './editor/NoteEditor';
 import { ASSETS_PREFIX } from './media/asset-names';
 import { useAssets } from './media/useAssets';
@@ -25,6 +31,9 @@ import { useTree } from './tree/useTree';
 // Below this width the sidebar is a drawer (see .studio-sidebar).
 const DRAWER_QUERY = '(max-width: 767px)';
 
+const samePage = (a: Page | null, b: Page) =>
+  a?.kind === b.kind && (a.kind === 'crs' || (b.kind !== 'crs' && a.path === b.path));
+
 export function App() {
   const files = useMemo(() => createFilesClient(), []);
   const lint = useMemo(() => createLintClient(), []);
@@ -32,6 +41,7 @@ export function App() {
   const { tree, error, reload } = useTree(treeClient, files);
   const assets = useAssets(files);
   const assetsClient = useMemo(() => createAssetsClient(), []);
+  const crClient = useMemo(() => createCrClient(), []);
   // A usage picked in the Assets view, to show in its note's Source; any
   // other way of opening a note drops it.
   const [place, setPlace] = useState<(SourcePlace & { note: string }) | null>(null);
@@ -42,6 +52,12 @@ export function App() {
   // The open note's autosave state, by path: a rename waits until it is saved.
   const [saved, setSaved] = useState<{ path: string; status: DocumentStatus } | null>(null);
   const unsaved = unsavedNote(active, saved);
+  const crs = useCrs(crClient, files, page?.kind === 'crs');
+  // With change requests, main is read only until one is opened (`?cr=`); a
+  // Studio over one worktree (enabled: false) edits it as it is.
+  const crMode = crs.list?.enabled === true;
+  const readOnly = CURRENT_CR === null && crs.list?.enabled !== false;
+  const [crDialog, setCrDialog] = useState<{ kind: 'new' } | { kind: 'discard'; cr: ChangeRequest } | null>(null);
   const sidebar = useSidebar();
   // Below 768px the sidebar is a drawer, open or not.
   const [drawer, setDrawer] = useState(false);
@@ -86,7 +102,7 @@ export function App() {
 
   const go = (next: Page) => {
     setDrawer(false);
-    if (next.kind === page?.kind && next.path === page.path) return;
+    if (samePage(page, next)) return;
     window.history.pushState(null, '', pageQuery(next));
     setPage(next);
   };
@@ -107,6 +123,25 @@ export function App() {
     setPage(next);
   };
 
+  // Another change request, or main, is another page load: every client on
+  // a page talks to one worktree (src/api/workspace.ts). What is open stays
+  // open. Not while the open note has edits not on disk yet: the load would
+  // drop them (the picker and the list wait, as a rename does).
+  const switchTo = (cr: string | null, next: Page | null = page) => {
+    if (unsaved !== null) return;
+    window.location.assign(pageQuery(next, cr));
+  };
+  const openList = () => {
+    setPlace(null);
+    go({ kind: 'crs' });
+  };
+  const discarded = (discard: Discard) => {
+    setCrDialog(null);
+    // Its edits went with it: nothing to wait for.
+    if (discard.slug === CURRENT_CR) window.location.assign(pageQuery({ kind: 'crs' }, null));
+    else void crs.reload();
+  };
+
   const placeSeq = useRef(0);
   const openUsage = (usage: AssetUsage) => {
     placeSeq.current += 1;
@@ -124,15 +159,19 @@ export function App() {
     setPage(next);
   };
 
+  const pagePath = page === null || page.kind === 'crs' ? null : page.path;
+
   return (
     <div className="flex h-dvh flex-col bg-[var(--fde-background)] text-[var(--fde-foreground)]">
       <header className="flex min-w-0 items-center gap-2.5 border-b border-[var(--fde-border)] px-3 py-2">
         <button type="button" className="studio-button md:hidden" onClick={() => { openView('notes'); }}>
           Notes
         </button>
-        <span className="font-semibold whitespace-nowrap">Notes Studio</span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)]">{page?.path ?? ''}</span>
-        {page && <OpenOnSite path={page.path} />}
+        <span className={`font-semibold whitespace-nowrap ${crMode ? 'max-md:hidden' : ''}`}>Notes Studio</span>
+        {crMode && <CrPicker list={crs.list} current={CURRENT_CR} waiting={unsaved !== null} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} onList={openList} />}
+        <span className={`min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)] ${crMode ? 'max-md:hidden' : ''}`}>{pagePath ?? ''}</span>
+        {crMode && CURRENT_CR === null && <EditMenu list={crs.list} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} />}
+        {pagePath !== null && <OpenOnSite path={pagePath} />}
       </header>
       <div className="relative flex min-h-0 flex-1">
         <Sidebar
@@ -142,6 +181,7 @@ export function App() {
           issues={issueCount}
           hasNote={active !== null}
           issuesRef={setIssuesSlot}
+          changeRequests={crMode ? { shown: page?.kind === 'crs', onOpen: openList } : null}
           assets={
             <AssetsView
               client={assetsClient}
@@ -149,6 +189,7 @@ export function App() {
               active={active}
               current={asset}
               unsaved={unsaved !== null}
+              readOnly={readOnly}
               onOpen={openAsset}
               onOpenUsage={openUsage}
               onChanged={assetChangedBy}
@@ -164,6 +205,7 @@ export function App() {
                 onOpen={(path) => { open(NOTES_PREFIX + path); }}
                 onRenamed={renamed}
                 unsaved={unsaved}
+                readOnly={readOnly}
                 onChanged={reload}
               />
             </>
@@ -187,11 +229,31 @@ export function App() {
             />
           </NoteGate>
         ) : asset ? (
-          <AssetPage client={assetsClient} list={assetList} path={asset} unsaved={unsaved !== null} onOpenUsage={openUsage} onChanged={assetChangedBy} />
+          <AssetPage client={assetsClient} list={assetList} path={asset} unsaved={unsaved !== null} readOnly={readOnly} onOpenUsage={openUsage} onChanged={assetChangedBy} />
+        ) : page?.kind === 'crs' && crMode ? (
+          <CrListPage
+            list={crs.list}
+            error={crs.error}
+            current={CURRENT_CR}
+            waiting={unsaved !== null}
+            onOpen={(cr) => { switchTo(cr, null); }}
+            onNew={() => { setCrDialog({ kind: 'new' }); }}
+            onDiscard={(cr) => { setCrDialog({ kind: 'discard', cr }); }}
+            onRefresh={() => { void crs.reload(true); }}
+          />
         ) : (
-          <p className="m-auto p-6 text-[13px] text-[var(--fde-muted-foreground)]">Pick a note to edit.</p>
+          <p className="m-auto p-6 text-[13px] text-[var(--fde-muted-foreground)]">{readOnly ? 'Pick a note to read.' : 'Pick a note to edit.'}</p>
         )}
       </div>
+      {crDialog?.kind === 'new' && (
+        <NewCrDialog
+          client={crClient}
+          taken={crs.list?.crs.map((cr) => cr.slug) ?? []}
+          onCreated={(cr) => { switchTo(cr.slug); }}
+          onClose={() => { setCrDialog(null); }}
+        />
+      )}
+      {crDialog?.kind === 'discard' && <DiscardDialog client={crClient} cr={crDialog.cr} onDone={discarded} onClose={() => { setCrDialog(null); }} />}
     </div>
   );
 }

@@ -20,11 +20,12 @@ const DOTS: Record<DocumentStatus, string> = {
 };
 
 // The autosave state of the open note; null while it opens.
-export function SaveStatus({ status }: { status: DocumentStatus | null }) {
+// `readOnly`: the note opened but cannot be written (main), so there is nothing to save.
+export function SaveStatus({ status, readOnly = false }: { status: DocumentStatus | null; readOnly?: boolean }) {
   return (
     <span role="status" className="inline-flex items-center gap-1.5 text-[12.5px] text-[var(--fde-muted-foreground)]">
-      <span aria-hidden className={`size-2 rounded-full ${status ? DOTS[status] : 'bg-[var(--fde-muted-foreground)]'}`} />
-      {status ? LABELS[status] : 'Opening…'}
+      <span aria-hidden className={`size-2 rounded-full ${status && !readOnly ? DOTS[status] : 'bg-[var(--fde-muted-foreground)]'}`} />
+      {readOnly ? 'Read only' : status ? LABELS[status] : 'Opening…'}
     </span>
   );
 }

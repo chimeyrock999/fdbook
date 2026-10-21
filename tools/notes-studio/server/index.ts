@@ -1,4 +1,4 @@
-import { parseStudioPort } from './config.ts';
+import { pagesProject, parseStudioPort, repoRoot, studioHome } from './config.ts';
 import { installProblem } from './deps.ts';
 
 // Each dependency must be installed as its package-lock.json pins: a pull
@@ -12,7 +12,10 @@ if (problem !== null) {
 const { startStudioServer } = await import('./studio-server.ts');
 
 try {
-  const studio = await startStudioServer({ port: parseStudioPort(process.env.STUDIO_PORT) });
+  const studio = await startStudioServer({
+    port: parseStudioPort(process.env.STUDIO_PORT),
+    changeRequests: { repo: repoRoot, home: studioHome(), pagesProject: pagesProject() },
+  });
   console.log(`Notes Studio: ${studio.url}`);
 } catch (error) {
   if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {

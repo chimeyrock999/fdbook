@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { createFilesClient } from '../api/files';
 import type { LintClient, LintIssue } from '../api/lint';
+import { workspaceSyncClient } from '../api/sync';
 import { frontmatterPathAt } from '../frontmatter/frontmatter';
 import type { FieldReveal } from '../frontmatter/MetadataStrip';
 import { useFrontmatter } from '../frontmatter/useFrontmatter';
@@ -64,6 +65,7 @@ export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
     <MdxEditor.Root
       sync={{
         path,
+        client: workspaceSyncClient(),
         onOpen: (opened) => {
           setWritable(opened.writable);
         },
@@ -84,6 +86,7 @@ export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
         opened={writable !== null}
         status={writable === null && status !== 'denied' && status !== 'offline' ? null : (status ?? 'synced')}
         locked={locked}
+        readOnly={writable === false}
         place={place}
         {...rest}
       />
@@ -94,7 +97,7 @@ export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
 // The plugins' decorations, one ProseMirror plugin for every editor.
 const decorations = decorationsPlugin(editorConfig.decorators);
 
-function EditorLayout({ notePath, assets, uploads, opened, status, locked, place, issuesSlot, onIssueCount, onShowIssues, onIssueShown, files, lint }: {
+function EditorLayout({ notePath, assets, uploads, opened, status, locked, readOnly, place, issuesSlot, onIssueCount, onShowIssues, onIssueShown, files, lint }: {
   notePath: string;
   place: SourcePlace | null;
   assets: readonly string[];
@@ -102,6 +105,7 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, place
   opened: boolean;
   status: DocumentStatus | null;
   locked: boolean;
+  readOnly: boolean;
 } & Panels & Clients) {
   const { mode, setMode, canShowVisual } = useEditorMode();
   const sync = useSyncStatus();
@@ -158,7 +162,7 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, place
     <div className="flex min-h-0 min-w-0 flex-1">
       <section ref={editor} aria-label="Editor" className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--fde-background)]">
         <div className="flex flex-wrap items-center gap-2.5 border-b border-[var(--fde-border)] px-4 py-2">
-          <SaveStatus status={status} />
+          <SaveStatus status={status} readOnly={readOnly} />
           <UploadNotice notice={uploads.notice} onDismiss={uploads.dismissNotice} />
           <IssuesChip state={lintState} onOpen={onShowIssues} />
           <span className="flex-1" />

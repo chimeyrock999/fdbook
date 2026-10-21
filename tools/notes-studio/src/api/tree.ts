@@ -3,6 +3,7 @@
 // content/notes.
 
 import { errorOf, readJson } from './json';
+import { API_BASE } from './workspace';
 
 export type Hidden = 'unlisted' | 'visible-false';
 
@@ -51,7 +52,7 @@ export type TreeRequest =
 // `created`: the page or folder a create added.
 export type TreeAnswer = { changes: TreeChange[]; open: string | null; created?: string };
 
-export function createTreeClient(base = '') {
+export function createTreeClient(base = API_BASE) {
   async function failed(response: Response): Promise<never> {
     throw await errorOf(response);
   }

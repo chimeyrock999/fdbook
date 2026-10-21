@@ -95,13 +95,15 @@ function FolderItems({ folder, nested = false, view }: { folder: AssetFolder; ne
 // reference follows) or deletes it (only once nothing uses it), and
 // `onChanged` hears what changed. `active` is the open note (a worktree
 // path); while it has edits not on disk yet (`unsaved`), rename and delete
-// wait, since the server only sees references that are saved.
-export function AssetsView({ client, list, active, current, unsaved, onOpen, onOpenUsage, onChanged }: {
+// wait, since the server only sees references that are saved. `readOnly`
+// (main) leaves only Open in the row menu.
+export function AssetsView({ client, list, active, current, unsaved, readOnly = false, onOpen, onOpenUsage, onChanged }: {
   client: AssetsClient;
   list: ReturnType<typeof useAssetList>;
   active: string | null;
   current: string | null;
   unsaved: boolean;
+  readOnly?: boolean;
   onOpen: (path: string) => void;
   onOpenUsage: (usage: AssetUsage) => void;
   onChanged: (answer: AssetAnswer) => void;
@@ -196,14 +198,18 @@ export function AssetsView({ client, list, active, current, unsaved, onOpen, onO
           <button type="button" role="menuitem" onClick={() => { setMenu(null); onOpen(menu.asset.path); }}>
             <PanelRight size={14} /> Open
           </button>
-          <button type="button" role="menuitem" disabled={unsaved} onClick={() => { setMenu(null); setDialog({ kind: 'rename', asset: menu.asset }); }}>
-            <Pencil size={14} /> Rename…
-          </button>
-          <hr />
-          <button type="button" role="menuitem" className="studio-menu-danger" disabled={unsaved} onClick={() => { setMenu(null); setDialog({ kind: 'delete', asset: menu.asset }); }}>
-            <Trash2 size={14} /> Delete…
-          </button>
-          {unsaved && <p className="studio-menu-hint">The open note has unsaved changes. Rename or delete once it shows Saved.</p>}
+          {!readOnly && (
+            <>
+              <button type="button" role="menuitem" disabled={unsaved} onClick={() => { setMenu(null); setDialog({ kind: 'rename', asset: menu.asset }); }}>
+                <Pencil size={14} /> Rename…
+              </button>
+              <hr />
+              <button type="button" role="menuitem" className="studio-menu-danger" disabled={unsaved} onClick={() => { setMenu(null); setDialog({ kind: 'delete', asset: menu.asset }); }}>
+                <Trash2 size={14} /> Delete…
+              </button>
+              {unsaved && <p className="studio-menu-hint">The open note has unsaved changes. Rename or delete once it shows Saved.</p>}
+            </>
+          )}
         </div>
       )}
       {dialog?.kind === 'rename' && listed && (
