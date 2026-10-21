@@ -4,6 +4,7 @@ import { createLintClient } from './api/lint';
 import { NoteEditor } from './editor/NoteEditor';
 import { NoteGate } from './notes/NoteGate';
 import { NoteList } from './notes/NoteList';
+import { OpenOnSite } from './notes/OpenOnSite';
 import { noteFromUrl, syncPath } from './notes/notes';
 import { useNotes } from './notes/useNotes';
 
@@ -36,6 +37,7 @@ export function App() {
         </button>
         <span className="font-semibold whitespace-nowrap">Notes Studio</span>
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)]">{active ?? ''}</span>
+        {active && <OpenOnSite path={active} />}
         {active && (
           <button type="button" className="studio-button lg:hidden" onClick={() => { setDrawer('panel'); }}>
             Panel

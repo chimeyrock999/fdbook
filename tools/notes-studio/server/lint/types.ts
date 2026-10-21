@@ -6,6 +6,7 @@ export type LintRule =
   | 'directive-unclosed'
   | 'directive-nesting'
   | 'callout-type'
+  | 'callout-style'
   | 'accordion-kind'
   | 'link-broken'
   | 'asset-missing'
