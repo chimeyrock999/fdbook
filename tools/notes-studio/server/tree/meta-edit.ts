@@ -138,6 +138,16 @@ export function metaTemplate(title: string, pages: string[], open = false) {
 // when the title is a block scalar; first when there is no title). New
 // lines end like the file's.
 export function setDefaultOpen(text: string, open: boolean) {
+  const next = writeDefaultOpen(text, open);
+  // The edit is by text: refuse a result that does not read back as asked.
+  const data: unknown = parse(next);
+  if (typeof data !== 'object' || data === null || (data as Record<string, unknown>).defaultOpen !== open) {
+    throw new MetaEditError('could not set defaultOpen in this meta.yaml: edit it by hand');
+  }
+  return next;
+}
+
+function writeDefaultOpen(text: string, open: boolean) {
   const doc = parseDocument(text);
   if (doc.errors.length > 0) throw new MetaEditError(`meta.yaml does not parse: ${doc.errors[0]?.message ?? ''}`);
   const value = String(open);
@@ -152,11 +162,12 @@ export function setDefaultOpen(text: string, open: boolean) {
   if (current !== -1) {
     const node = items[current].value;
     if (node !== null && !isScalar(node)) throw new MetaEditError('defaultOpen is not a value');
-    // `defaultOpen:` with no value: write after the key, with its space.
+    // `defaultOpen:` with no value: write right after the colon, so the
+    // space before a comment that follows stays.
     if (node === null || node.range[0] === node.range[1]) {
       const key = items[current].key as Scalar;
       const colon = text.indexOf(':', key.range?.[1] ?? 0) + 1;
-      return splice(text, [{ start: colon, end: node?.range[1] ?? colon, text: ` ${value}` }]);
+      return splice(text, [{ start: colon, end: colon, text: ` ${value}` }]);
     }
     return splice(text, [{ start: node.range[0], end: node.range[1], text: value }]);
   }

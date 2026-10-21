@@ -4,10 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TreeAnswer, TreeClient, TreeFolder, TreeRequest } from '../../../src/api/tree';
 import { PageTree } from '../../../src/tree/PageTree';
-import { NOTE_ICON_NAMES } from '@site/lib/notes-icons';
-
-// The server's list of the site's icon names (server/icons/api.ts).
-vi.mock('../../../src/api/icons', () => ({ fetchIconNames: () => Promise.resolve(NOTE_ICON_NAMES) }));
 
 const root: TreeFolder = {
   kind: 'folder', id: 'folder:', path: '', title: 'Notes', meta: 'meta.yaml', metaMtime: 10, index: null, defaultOpen: true, icon: null, hidden: null, entry: null,
@@ -69,10 +65,11 @@ describe('PageTree', () => {
     expect(screen.queryByRole('button', { name: 'X' })).toBeNull();
   });
 
-  it('draws the icons the site shows, else the default ones', async () => {
+  it('draws the icons the site shows, else the default ones', () => {
     setup();
     const iconIn = (name: string) => screen.getByRole('button', { name }).querySelector('svg')?.getAttribute('class') ?? '';
-    await waitFor(() => { expect(iconIn('Guide')).toContain('lucide-tree-pine'); });
+    // Drawn at once: no icon list to fetch.
+    expect(iconIn('Guide')).toContain('lucide-tree-pine');
     expect(iconIn('Two')).toContain('lucide-sprout');
     // A name the site does not know, and no icon at all.
     expect(iconIn('One')).toContain('lucide-file-text');
@@ -161,6 +158,7 @@ describe('PageTree', () => {
     const { client, change } = fakeClient(() => ({
       changes: [{ type: 'add', path: 'guide/raft/meta.yaml' }, { type: 'change', path: 'guide/meta.yaml', detail: 'adds "raft"' }],
       open: null,
+      created: 'guide/raft',
     }));
     const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
     const { rerender } = render(<PageTree root={root} {...props} />);
@@ -176,7 +174,7 @@ describe('PageTree', () => {
     expect(within(dialog).getByRole('radio', { name: /meta\.yaml/ }).closest('label')?.textContent).toContain('raft/meta.yaml');
     expect(await within(dialog).findByText('+ guide/raft/meta.yaml')).toBeTruthy();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
-    expect(change).toHaveBeenLastCalledWith({ op: 'create', parent: 'guide', slug: 'raft', title: 'Raft', kind: 'folder', defaultOpen: false, after: null });
+    expect(change).toHaveBeenLastCalledWith({ op: 'create', parent: 'guide', slug: 'raft', title: 'Raft', kind: 'plain-folder', defaultOpen: false, after: null });
     expect((await screen.findByRole('status')).textContent).toBe('Created guide/raft/.');
     expect(props.onOpen).not.toHaveBeenCalled();
     expect(props.onChanged).toHaveBeenCalled();
@@ -189,7 +187,7 @@ describe('PageTree', () => {
   });
 
   it('does not move focus later when the filter hides the new folder', async () => {
-    const { client } = fakeClient(() => ({ changes: [{ type: 'add', path: 'raft/meta.yaml' }], open: null }));
+    const { client } = fakeClient(() => ({ changes: [{ type: 'add', path: 'raft/meta.yaml' }], open: null, created: 'raft' }));
     const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
     const { rerender } = render(<PageTree root={root} {...props} />);
     await userEvent.type(screen.getByLabelText('Filter notes'), 'guide');
@@ -206,6 +204,24 @@ describe('PageTree', () => {
     screen.getByRole('button', { name: 'Guide' }).focus();
     // Any later reload: the reveal was spent on the tree that held the folder.
     rerender(<PageTree root={{ ...next }} {...props} />);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Guide' }));
+  });
+
+  it('spends the focus on the first reload, even one without the new folder', async () => {
+    const { client } = fakeClient(() => ({ changes: [{ type: 'add', path: 'raft/meta.yaml' }], open: null, created: 'raft' }));
+    const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+    const { rerender } = render(<PageTree root={root} {...props} />);
+    await userEvent.click(screen.getByRole('button', { name: 'New page' }));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('radio', { name: /meta\.yaml/ }));
+    await userEvent.type(within(dialog).getByLabelText('Title'), 'Raft');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await screen.findByRole('status');
+    // A reload that does not hold it yet (another change raced it), then one that does.
+    rerender(<PageTree root={{ ...root }} {...props} />);
+    screen.getByRole('button', { name: 'Guide' }).focus();
+    const raft: TreeFolder = { ...(root.children[3] as TreeFolder), id: 'folder:raft', path: 'raft', title: 'Raft', meta: 'raft/meta.yaml', hidden: null, children: [] };
+    rerender(<PageTree root={{ ...root, children: [...root.children, raft] }} {...props} />);
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Guide' }));
   });
 

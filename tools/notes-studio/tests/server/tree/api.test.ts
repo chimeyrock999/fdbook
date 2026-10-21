@@ -82,7 +82,7 @@ describe('tree API', () => {
     });
 
     it('shows a dry run of a plain folder: its meta.yaml and the parent entry', async () => {
-      const response = await post({ op: 'create', dryRun: true, parent: 'data-platform', slug: 'foo', title: 'Foo', kind: 'folder', after: 0 });
+      const response = await post({ op: 'create', dryRun: true, parent: 'data-platform', slug: 'foo', title: 'Foo', kind: 'plain-folder', after: 0 });
       expect(response.status).toBe(200);
       expect(json(response)).toEqual({
         changes: [
@@ -90,13 +90,14 @@ describe('tree API', () => {
           { type: 'change', path: 'data-platform/meta.yaml', detail: 'adds "foo"' },
         ],
         open: null,
+        created: 'data-platform/foo',
       });
       expect(await exists('data-platform/foo')).toBe(false);
     });
 
     it('creates a plain folder with only a meta.yaml, closed by default', async () => {
       const meta = await text('data-platform/meta.yaml');
-      const response = await post({ op: 'create', parent: 'data-platform', slug: 'foo', title: 'Foo', kind: 'folder', after: 0 });
+      const response = await post({ op: 'create', parent: 'data-platform', slug: 'foo', title: 'Foo', kind: 'plain-folder', after: 0 });
       expect(response.status).toBe(200);
       expect((json(response) as Answer).open).toBeNull();
       expect(await text('data-platform/foo/meta.yaml')).toBe('title: "Foo"\ndefaultOpen: false\npages: []\n');
@@ -116,10 +117,12 @@ describe('tree API', () => {
 
     it('refuses a taken name, a bad slug, `index` and an unknown folder', async () => {
       expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'mapreduce', title: 'x' })).status).toBe(409);
-      expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'raft', title: 'x', kind: 'folder' })).status).toBe(409);
+      const old = await post({ op: 'create', parent: 'distributed-systems', slug: 'x', title: 'x', kind: 'folder' });
+      expect([old.status, (json(old) as { error: string }).error]).toEqual([400, 'kind `folder` is now `folder-page`: reload the Studio']);
       expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'raft', title: 'x', kind: 'folder-page' })).status).toBe(409);
       expect((await post({ op: 'create', parent: 'data-platform', slug: 'foo', title: 'x', kind: 'page' })).status).toBe(409);
-      expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'Not A Slug', title: 'x', kind: 'folder' })).status).toBe(400);
+      expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'raft', title: 'x', kind: 'plain-folder' })).status).toBe(409);
+      expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'Not A Slug', title: 'x', kind: 'plain-folder' })).status).toBe(400);
       expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'x', title: 'x', kind: 'group' })).status).toBe(400);
       expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'Not A Slug', title: 'x' })).status).toBe(400);
       expect((await post({ op: 'create', parent: 'distributed-systems', slug: 'index', title: 'x' })).status).toBe(400);

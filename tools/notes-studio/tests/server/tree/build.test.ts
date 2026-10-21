@@ -2,7 +2,7 @@ import type * as PageTree from 'fumadocs-core/page-tree';
 import { loader } from 'fumadocs-core/source';
 import { describe, expect, it } from 'vitest';
 import { repoRoot } from '../../../server/config';
-import { buildTree, readNotesContent, type NotesContent } from '../../../server/tree/build';
+import { buildTree, loadTree, readNotesContent, type NotesContent } from '../../../server/tree/build';
 import type { TreeFolder, TreeNode } from '../../../server/tree/types';
 
 // One line per node, indented by depth: what the tests compare.
@@ -45,7 +45,8 @@ describe('page tree on content/notes', () => {
         if (node.kind === 'folder') walk(node.children);
       }
     };
-    walk(buildTree(await readNotesContent(repoRoot)).children);
+    // loadTree: with the site's icon names, as the Studio serves it.
+    walk((await loadTree(repoRoot)).children);
     expect(icons).toEqual({
       'index.mdx': 'Brain',
       'data-platform': 'TreePine',
@@ -139,6 +140,11 @@ describe('page tree syntax', () => {
       { 'b/meta.yaml': { title: 'B', icon: 'TreePine' } },
     ));
     expect(['a', 'b', 'c', 'c/x.mdx', 'd.mdx'].map((path) => (find(tree, path) as { icon: string | null }).icon)).toEqual(['Sprout', 'TreePine', null, 'Leaf', null]);
+  });
+
+  it('drops an icon name the site does not have', () => {
+    const tree = buildTree(content({ 'a.mdx': { title: 'A', icon: 'Sprout' }, 'b.mdx': { title: 'B', icon: 'NotALucideIcon' } }, {}), new Set(['Sprout']));
+    expect(['a.mdx', 'b.mdx'].map((path) => (find(tree, path) as { icon: string | null }).icon)).toEqual(['Sprout', null]);
   });
 
   it('follows separators, links, rest, extract, exclude and nested entries', () => {

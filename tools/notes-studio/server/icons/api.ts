@@ -1,10 +1,8 @@
 import { HttpError, pathnameOf, sendJson, type Handler } from '../http.ts';
+import { siteIconNames } from './names.ts';
 
-// GET /api/icons: the lucide names a note's `icon` can take. Node loads
-// lib/notes-icons.ts with the site's own lucide-react; in the browser, Vite
-// would hand it the Studio's, a newer set with other names.
+// GET /api/icons: the lucide names a note's `icon` can take (names.ts).
 export function createIconsApi(): Handler {
-  let names: Promise<readonly string[]> | null = null;
   return async (request, response) => {
     if (pathnameOf(request) !== '/api/icons') return false;
     try {
@@ -12,12 +10,7 @@ export function createIconsApi(): Handler {
         response.setHeader('Allow', 'GET');
         throw new HttpError(405, 'method not allowed');
       }
-      names ??= import('../../../../lib/notes-icons.ts').then((module) => module.NOTE_ICON_NAMES);
-      // A failed load (lucide-react still installing) is tried again.
-      names.catch(() => {
-        names = null;
-      });
-      sendJson(response, 200, { names: await names });
+      sendJson(response, 200, { names: await siteIconNames() });
     } catch (error) {
       sendJson(response, error instanceof HttpError ? error.status : 500, { error: (error as Error).message });
     }

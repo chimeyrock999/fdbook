@@ -99,6 +99,10 @@ describe('meta.yaml edits', () => {
   it('keeps comments where they are, an empty value a pair, and CRLF line ends', () => {
     expect(setDefaultOpen('title: X\n\n# the order\npages: []\n', false)).toBe('title: X\ndefaultOpen: false\n\n# the order\npages: []\n');
     expect(setDefaultOpen('title: X\ndefaultOpen:\npages: []\n', false)).toBe('title: X\ndefaultOpen: false\npages: []\n');
+    // An empty value with a comment after it: the comment stays a comment.
+    expect(setDefaultOpen('title: X\ndefaultOpen: # c\npages: []\n', true)).toBe('title: X\ndefaultOpen: true # c\npages: []\n');
+    expect(setDefaultOpen('defaultOpen:   # c\n', true)).toBe('defaultOpen: true   # c\n');
+    expect(readPages(setDefaultOpen('defaultOpen: # c\npages: [a]\n', true))).toEqual(['a']);
     expect(setDefaultOpen('title: X\r\npages: []\r\n', true)).toBe('title: X\r\ndefaultOpen: true\r\npages: []\r\n');
     expect(setDefaultOpen('title: X\r\n', true)).toBe('title: X\r\ndefaultOpen: true\r\n');
     // A block title: the line goes before the next key.

@@ -34,7 +34,7 @@ export function createTreeApi(root: string, lock = createKeyedLock()): Handler {
   }
 
   async function change(body: Body) {
-    const answer = (planned: Plan) => ({ changes: planned.changes, open: planned.open });
+    const answer = (planned: Plan) => ({ changes: planned.changes, open: planned.open, ...(planned.created === undefined ? {} : { created: planned.created }) });
     // A dry run only reads, so it does not wait behind the changes.
     if (body.dryRun === true) return answer(await plan(await loadTree(root), body));
     return lock('notes', async () => {

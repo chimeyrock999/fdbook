@@ -37,7 +37,7 @@ export type TreeChange =
 
 // A page `x.mdx`, a folder page `x/index.mdx` with `x/meta.yaml`, or a
 // folder with only `x/meta.yaml`.
-export type CreateKind = 'page' | 'folder-page' | 'folder';
+export type CreateKind = 'page' | 'folder-page' | 'plain-folder';
 
 export type TreeRequest =
   | { op: 'create'; parent: string; slug: string; title: string; kind: CreateKind; defaultOpen: boolean; after: number | null }
@@ -45,7 +45,8 @@ export type TreeRequest =
   | { op: 'move'; folder: string; from: number; to: number; baseMtime: number | null }
   | { op: 'set-open'; folder: string; defaultOpen: boolean; baseMtime: number | null };
 
-export type TreeAnswer = { changes: TreeChange[]; open: string | null };
+// `created`: the page or folder a create added.
+export type TreeAnswer = { changes: TreeChange[]; open: string | null; created?: string };
 
 export function createTreeClient(base = '') {
   async function failed(response: Response): Promise<never> {

@@ -29,6 +29,8 @@ export type Plan = {
   changes: TreeChange[];
   // The note to open afterwards.
   open: string | null;
+  // Set by a create: the page or folder it adds.
+  created?: string;
 };
 
 const slugOf = (path: string) => path.slice(path.lastIndexOf('/') + 1).replace(/\.mdx$/, '');
@@ -93,7 +95,7 @@ function metaError<T>(task: () => T): T {
 
 export type CreateRequest = { parent: string; slug: unknown; title: unknown; kind: unknown; defaultOpen: unknown; after: unknown };
 
-const CREATE_KINDS = ['page', 'folder-page', 'folder'] as const;
+const CREATE_KINDS = ['page', 'folder-page', 'plain-folder'] as const;
 
 // A page `<parent>/<slug>.mdx`, a folder page `<parent>/<slug>/index.mdx`
 // with its own meta.yaml, or a plain folder with only `<slug>/meta.yaml`,
@@ -104,13 +106,16 @@ const CREATE_KINDS = ['page', 'folder-page', 'folder'] as const;
 export async function planCreate(root: string, tree: TreeFolder, request: CreateRequest): Promise<Plan> {
   const parent = findFolder(tree, request.parent);
   const kind = request.kind ?? 'page';
-  if (!CREATE_KINDS.some((each) => each === kind)) throw new HttpError(400, 'kind must be page, folder-page or folder');
+  // `folder` meant a folder page before plain folders came: a page loaded
+  // before then would get the wrong kind, so it is refused.
+  if (kind === 'folder') throw new HttpError(400, 'kind `folder` is now `folder-page`: reload the Studio');
+  if (!CREATE_KINDS.some((each) => each === kind)) throw new HttpError(400, 'kind must be page, folder-page or plain-folder');
   const slug = checkSlug(request.slug);
   const title = (typeof request.title === 'string' ? request.title.trim() : '') || slug;
   await checkFree(root, parent.path, slug);
 
   const folder = inDir(parent.path, slug);
-  const page = kind === 'page' ? inDir(parent.path, `${slug}.mdx`) : kind === 'folder-page' ? inDir(folder, 'index.mdx') : null;
+  const page: string | null = kind === 'page' ? inDir(parent.path, `${slug}.mdx`) : kind === 'folder-page' ? inDir(folder, 'index.mdx') : null;
   const writes: Write[] = page === null ? [] : [{ path: page, content: pageTemplate(slug, title), baseMtime: null }];
   if (kind !== 'page') writes.push({ path: inDir(folder, 'meta.yaml'), content: metaTemplate(title, [], request.defaultOpen === true), baseMtime: null });
 
@@ -129,6 +134,7 @@ export async function planCreate(root: string, tree: TreeFolder, request: Create
     move: null,
     changes: writes.map((write) => (write.baseMtime === null ? { type: 'add', path: write.path } : { type: 'change', path: write.path, detail: `adds "${slug}"` })),
     open: page,
+    created: kind === 'page' ? (page ?? folder) : folder,
   };
 }
 

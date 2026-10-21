@@ -107,7 +107,7 @@ function Preview({ preview, failed }: { preview: ReturnType<typeof usePreview>; 
 const KINDS: { kind: CreateKind; label: string; file: (slug: string) => string; title: string }[] = [
   { kind: 'page', label: 'Page', file: (slug) => `${slug}.mdx`, title: 'New page in' },
   { kind: 'folder-page', label: 'Folder page', file: (slug) => `${slug}/index.mdx`, title: 'New folder page in' },
-  { kind: 'folder', label: 'Folder', file: (slug) => `${slug}/meta.yaml`, title: 'New folder in' },
+  { kind: 'plain-folder', label: 'Folder', file: (slug) => `${slug}/meta.yaml`, title: 'New folder in' },
 ];
 
 // A new page, folder page or plain folder in `parent`, after entry `after`.
@@ -136,8 +136,8 @@ export function CreateDialog({ client, parent, after, onDone, onClose }: {
     if (request === null) return;
     client.change(request).then(
       (answer) => {
-        // A plain folder has no note to open; it is where the request put it.
-        onDone(kind === 'folder' || answer.open === null ? { folder: parent.path === '' ? finalSlug : `${parent.path}/${finalSlug}` } : { open: answer.open });
+        // A plain folder has no note to open: the server says where it is.
+        onDone(answer.open === null ? { folder: answer.created ?? '' } : { open: answer.open });
       },
       (reason: unknown) => { setFailed(reason instanceof Error ? reason.message : String(reason)); },
     );
