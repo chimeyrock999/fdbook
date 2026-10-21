@@ -181,7 +181,7 @@ describe('CrListPage', () => {
     const current = screen.getByRole('listitem', { name: 'Driver Notes' });
     // The open one says so, with no button to open it again.
     expect(within(current).queryByRole('button', { name: /^Open/ })).toBeNull();
-    expect(within(current).getByText('Open now')).toBeTruthy();
+    expect(within(current).getByText('Current')).toBeTruthy();
     expect(within(current).getByRole('button', { name: 'Discard Driver Notes' })).toBeTruthy();
     await userEvent.click(within(screen.getByRole('listitem', { name: 'Uc Grants' })).getByRole('button', { name: 'Open' }));
     expect(onOpen).toHaveBeenCalledWith('uc-grants');

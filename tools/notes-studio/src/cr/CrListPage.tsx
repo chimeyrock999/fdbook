@@ -31,7 +31,7 @@ function Card({ cr, current, waiting, onOpen, onDiscard }: { cr: ChangeRequest; 
       <div className="studio-cr-card-ops">
         {current ? (
           <span className="studio-cr-here">
-            <Check size={13} aria-hidden /> Open now
+            <Check size={13} aria-hidden /> Current
           </span>
         ) : (
           <button type="button" className="studio-button" disabled={waiting} title={waiting ? WAIT_HINT : undefined} onClick={onOpen}>Open</button>

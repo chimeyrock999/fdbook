@@ -205,7 +205,7 @@ shows the name, status, branch, the notes changed against origin/main
 updated (its last commit, an uncommitted file, or its creation), the preview
 link once it is pushed (`https://cr-<slug>.<project>.pages.dev`, with the
 project from `STUDIO_PAGES_PROJECT`) and the pull request. The card of the
-change request the page shows says Open now instead of an Open button. It
+change request the page shows says Current instead of an Open button. It
 loads again when the window gets the focus back and when files change.
 
 **Discard** (on a card) asks first, listing what goes from this machine: the
