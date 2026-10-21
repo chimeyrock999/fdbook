@@ -1,5 +1,7 @@
 import { emptyComponent, type UiComponentSpec } from '@fumadocs-editor/ui';
 import { definePlugin } from '../plugin';
+import '../cards.css';
+import './embed.css';
 import { HtmlEmbed } from './HtmlEmbed';
 
 // <HtmlEmbed src="/notes/….html?embed=1" title="…" caption="…" /> from

@@ -39,18 +39,32 @@ function values(css: string) {
   return Object.fromEntries([...css.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
 }
 
+async function themes() {
+  const site = await readFile(join(repoRoot, 'app/notes/notes.css'), 'utf8');
+  const studio = await readFile(join(repoRoot, 'tools/notes-studio/src/notes-theme.css'), 'utf8');
+  return [
+    [values(block(site, '\n.notes-theme')), values(block(studio, '\n:root'))],
+    [values(block(site, '.dark .notes-theme')), values(block(studio, ':root:not(.light):not(.dark)'))],
+  ] as const;
+}
+
 describe('notes theme', () => {
   it('matches the site palette in light and dark', async () => {
-    const site = await readFile(join(repoRoot, 'app/notes/notes.css'), 'utf8');
-    const studio = await readFile(join(repoRoot, 'tools/notes-studio/src/notes-theme.css'), 'utf8');
-    const pairs = [
-      [values(block(site, '\n.notes-theme')), values(block(studio, '\n:root'))],
-      [values(block(site, '.dark .notes-theme')), values(block(studio, ':root:not(.light):not(.dark)'))],
-    ] as const;
+    const pairs = await themes();
     for (const [siteValues, studioValues] of pairs) {
       for (const [token, siteToken] of Object.entries(MAP)) {
         expect(studioValues[`--fde-${token}`], token).toBe(siteValues[siteToken]);
       }
+    }
+  });
+
+  // The component plugins (callout, graph objects, accordions, cards) draw
+  // with these site tokens under their own names.
+  it('copies the site tokens the component plugins use', async () => {
+    for (const [siteValues, studioValues] of await themes()) {
+      const copied = Object.entries(siteValues).filter(([name]) => /^--(garden|color-graph|color-callout)-/.test(name));
+      expect(copied.length).toBeGreaterThan(40);
+      for (const [name, value] of copied) expect(studioValues[name], name).toBe(value);
     }
   });
 });
