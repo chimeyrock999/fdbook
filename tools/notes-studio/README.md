@@ -61,6 +61,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     shows pages (see Page tree below).
   - `assets/` finds where notes use the files under `public/notes`, and
     renames and deletes them (see Assets below).
+  - `git/` reads `git status` and the change request's commits, and commits
+    picked files (see Changes below).
 - `src/`: the React UI.
   - `api/` holds the clients for the server; `workspace.ts` says which
     worktree the page edits (`?cr=`).
@@ -79,6 +81,9 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `assets/` is the Assets view, the asset page in the main pane, and the
     rename, replace and delete dialogs.
   - `tree/` is the page tree in the Notes view and its dialogs.
+  - `changes/` is the Changes view, the suggested commit message, the
+    change marks on the page tree and the reminder on leaving a change
+    request.
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
   - `plugins/` holds the editor plugins (see below).
@@ -122,6 +127,9 @@ without `changeRequests`, as the tests start it, edits the one worktree at
 | `GET /api/assets` | Every file under `public/notes` with where notes use it and the diagram sources that generate it: `{ assets: [{ path, mtimeMs, size, usages: [{ note, line, column, length, text, unsure }], sources: [{ path, line, text }] }] }` (see Assets) |
 | `POST /api/assets` | Takes JSON `{ op: "rename" \| "delete" \| "replace", path, name?, extension?, baseMtime, dryRun? }`, changes the asset and the notes that use it, and returns `{ changes, usages }`. With `dryRun` it writes nothing; a replace is a dry run only here. |
 | `PUT /api/assets?path=…&extension=…&baseMtime=…` | Replaces the asset's content with the raw bytes (`X-Studio-Write: 1`, up to 25 MB), at its path or, with another extension, at its name with that one, and returns `{ changes, usages, mtimeMs }` (see Assets) |
+| `GET /api/changes` | What `git status` says changed under `content/notes` and `public/notes`, only files the path policy allows: `{ branch, files: [{ path, status: "M" \| "A" \| "D" \| "R", from? }] }` (see Changes) |
+| `POST /api/changes` | Takes JSON `{ message, paths }` and commits those files, and only them, on the worktree's branch; answers the commit `{ sha, date, message, files: [{ status, path }] }`. Refuses an empty message, a path with no change, and a branch named `main` or a detached HEAD; read-only main answers `403` first. |
+| `GET /api/changes/history` | The change request's commits, newest first: `{ base, commits }`, where `base` is `origin/main` (else `main`) |
 | `GET /api/crs` | The change requests: `{ enabled, crs: [{ slug, name, branch, status, pushed, worktree, changedPages, uncommitted, updatedMs, previewUrl, pr }], taken, prError }`, `taken` being the slugs a new one cannot take; `?fresh=1` reads the pull requests again (see Change requests) |
 | `POST /api/crs` | Takes JSON `{ name }`, fetches origin, adds the branch and its worktree, and returns `{ cr }` |
 | `POST /api/crs/<slug>/discard` | Takes JSON `{ dryRun? }`, removes the worktree and the local branch, and returns `{ discard: { slug, branch, worktree, commits, uncommitted, pushed, pr } }`. With `dryRun` it removes nothing. |
@@ -264,8 +272,9 @@ through the notes sync socket:
 ## Sidebar
 
 The left side works like VS Code's. The activity bar holds the **Notes**
-view (the page tree), the **Assets** view (see Assets) and the **Issues**
-view (the open note's lint issues, with their count on the icon); picking
+view (the page tree), the **Assets** view (see Assets), the **Issues**
+view (the open note's lint issues, with their count on the icon) and the
+**Changes** view (see Changes, with the number of changed files); picking
 the open view again hides the sidebar, and so does the button at the foot of
 the bar. Drag the sidebar's right edge to resize it (220–480px), or focus
 the edge and use the arrow keys, Shift for bigger steps, Home and End for
@@ -516,6 +525,52 @@ notes are written). A note open in
 the editor merges the rewrite through its sync. While the open note has
 unsaved edits, rename, replace and delete wait for it: the server only sees
 what is on disk. The list is loaded only while the view or an asset page is shown.
+
+## Changes
+
+The sidebar's Changes view commits from the Studio (#17). It lists what
+`git status` says changed in the worktree, under `content/notes` and
+`public/notes` and only files the path policy allows, grouped as Pages
+(notes and `meta.yaml`, shown as the folder's page order) and Assets, each
+with `M`, `A`, `D` or `R`. A note or an asset opens from its row. Every
+file starts picked, and so does a file that changes later; uncheck what
+should wait.
+
+The commit message is required. It starts as a suggestion for the picked
+files (`src/changes/message.ts`): `docs(notes): update <slug>` for one page
+(`add`, `remove`, `rename a to b`), `update <folder> (3 pages)` for several
+in one folder, `reorder <folder>` for `meta.yaml` alone, `update assets of
+<folder>` for assets alone. Once edited, the message stays as written,
+`#` lines too, until **Use the suggestion**. An unchecked file stays
+unchecked until it leaves the list.
+
+**Commit** runs `git add` and `git commit` on the picked paths alone, so
+anything else, staged or not, stays as it was; a deletion or rename staged
+in a terminal commits too. A commit that fails (a hook, a missing
+`user.email`) stages nothing, and git's own reason shows under the button.
+It waits while the open note has edits not saved yet. Each change request
+commits in its own worktree, through its own `/cr/<slug>/api/changes`, one
+commit at a time with its tree and asset changes. Main is read only: the
+view lists its changes and history without the commit box, and the server
+refuses a commit there; a Studio over one worktree refuses one on a branch
+named `main` or a detached HEAD.
+
+**History** lists the change request's commits, those on `HEAD` and not on
+`origin/main` (or `main`), without merges: message, time, short sha, and
+its files when opened. The changes are read again when a note, `meta.yaml`
+or asset changes on disk; both, when the window comes back (a commit made in
+a terminal) and after each commit. Git takes no optional locks for these
+reads, so a git command in a terminal never meets the Studio's `index.lock`.
+
+The page tree marks the same changes: a note's status after its title,
+which takes the status's color; a dot on a closed folder that holds a
+change, or on any folder whose `meta.yaml` changed; and `D` on a
+`meta.yaml` entry whose page was deleted.
+
+Switching away from a change request with uncommitted files (the picker,
+the list, Edit) shows a reminder on the page the switch opens, with **Back
+to** that change request; it blocks nothing and goes after 8 seconds. A
+discard needs none: its dialog lists the uncommitted files it removes.
 
 ## Lint
 

@@ -2,6 +2,7 @@ import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssetAnswer, AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
+import { createChangesClient, type ChangedFile } from './api/changes';
 import { assetChanged } from './api/asset-versions';
 import { createCrClient, type ChangeRequest, type Discard } from './api/crs';
 import { createFilesClient } from './api/files';
@@ -12,6 +13,12 @@ import { movedTo } from './assets/asset-changes';
 import { AssetPage } from './assets/AssetPage';
 import { AssetsView } from './assets/AssetsView';
 import { useAssetList } from './assets/useAssetList';
+import { ChangesView } from './changes/ChangesView';
+import { leaveNotice, leftBehind, rememberLeave } from './changes/leave';
+import { LeaveNotice } from './changes/LeaveNotice';
+import { titlesOf } from './changes/labels';
+import { treeMarks } from './changes/marks';
+import { useChanges } from './changes/useChanges';
 import { DiscardDialog, NewCrDialog } from './cr/CrDialogs';
 import { CrListPage } from './cr/CrListPage';
 import { CrPicker, EditMenu } from './cr/CrMenus';
@@ -41,6 +48,10 @@ export function App() {
   const { tree, error, reload } = useTree(treeClient, files);
   const assets = useAssets(files);
   const assetsClient = useMemo(() => createAssetsClient(), []);
+  const changesClient = useMemo(() => createChangesClient(), []);
+  const git = useChanges(changesClient, files);
+  const marks = useMemo(() => (git.changes ? treeMarks(git.changes.files) : null), [git.changes]);
+  const titles = useMemo(() => titlesOf(tree), [tree]);
   const crClient = useMemo(() => createCrClient(), []);
   // A usage picked in the Assets view, to show in its note's Source; any
   // other way of opening a note drops it.
@@ -58,6 +69,10 @@ export function App() {
   const crMode = crs.list?.enabled === true;
   const readOnly = CURRENT_CR === null && crs.list?.enabled !== false;
   const [crDialog, setCrDialog] = useState<{ kind: 'new' } | { kind: 'discard'; cr: ChangeRequest } | null>(null);
+  // The change request the last page left with uncommitted files (switchTo).
+  const [left, setLeft] = useState(() => leftBehind(CURRENT_CR));
+  const dismissLeft = useCallback(() => { setLeft(null); }, []);
+  useEffect(() => { rememberLeave(null); }, []);
   const sidebar = useSidebar();
   // Below 768px the sidebar is a drawer, open or not.
   const [drawer, setDrawer] = useState(false);
@@ -114,6 +129,11 @@ export function App() {
     setPlace(null);
     go({ kind: 'asset', path });
   };
+  // A changed file picked in the Changes view.
+  const openChanged = (file: ChangedFile) => {
+    if (file.path.startsWith(NOTES_PREFIX)) open(file.path);
+    else openAsset(file.path);
+  };
   // The open asset moved with a rename or a replace: follow it without a new history entry.
   const assetChangedBy = (answer: AssetAnswer) => {
     const to = movedTo(answer);
@@ -129,6 +149,7 @@ export function App() {
   // drop them (the picker and the list wait, as a rename does).
   const switchTo = (cr: string | null, next: Page | null = page) => {
     if (unsaved !== null) return;
+    if (cr !== CURRENT_CR) rememberLeave(leaveNotice(git.changes, CURRENT_CR));
     window.location.assign(pageQuery(next, cr));
   };
   const openList = () => {
@@ -181,6 +202,20 @@ export function App() {
           issues={issueCount}
           hasNote={active !== null}
           issuesRef={setIssuesSlot}
+          changeCount={git.changes?.files.length ?? 0}
+          changes={
+            <ChangesView
+              client={changesClient}
+              changes={git.changes}
+              history={git.history}
+              error={git.error}
+              titles={titles}
+              unsaved={unsaved}
+              onOpen={openChanged}
+              readOnly={readOnly}
+              onCommitted={git.reload}
+            />
+          }
           changeRequests={crMode ? { shown: page?.kind === 'crs', onOpen: openList } : null}
           assets={
             <AssetsView
@@ -205,6 +240,7 @@ export function App() {
                 onOpen={(path) => { open(NOTES_PREFIX + path); }}
                 onRenamed={renamed}
                 unsaved={unsaved}
+                marks={marks}
                 readOnly={readOnly}
                 onChanged={reload}
               />
@@ -244,6 +280,7 @@ export function App() {
         ) : (
           <p className="m-auto p-6 text-[13px] text-[var(--fde-muted-foreground)]">{readOnly ? 'Pick a note to read.' : 'Pick a note to edit.'}</p>
         )}
+        {left && <LeaveNotice notice={left} onBack={() => { switchTo(left.cr); }} onClose={dismissLeft} />}
       </div>
       {crDialog?.kind === 'new' && (
         <NewCrDialog

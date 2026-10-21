@@ -1,0 +1,28 @@
+import { describe, expect, it } from 'vitest';
+import type { ChangedFile } from '../../../src/api/changes';
+import { suggestMessage } from '../../../src/changes/message';
+
+const note = (path: string, status: ChangedFile['status'], from?: string): ChangedFile =>
+  ({ path: `content/notes/${path}`, status, ...(from === undefined ? {} : { from: `content/notes/${from}` }) });
+const asset = (path: string, status: ChangedFile['status'] = 'A'): ChangedFile => ({ path: `public/notes/${path}`, status });
+
+describe('suggestMessage', () => {
+  it.each([
+    ['one edited page', [note('k8s/driver-container-first-look.mdx', 'M')], 'docs(notes): update driver-container-first-look'],
+    ['one new page and its meta.yaml', [note('streaming/sinks.mdx', 'A'), note('streaming/meta.yaml', 'M')], 'docs(notes): add sinks'],
+    ['one deleted page', [note('streaming/old.mdx', 'D')], 'docs(notes): remove old'],
+    ['a folder page by its folder', [note('streaming/index.mdx', 'M')], 'docs(notes): update streaming'],
+    ['the home page', [note('index.mdx', 'M')], 'docs(notes): update notes home'],
+    ['a staged rename', [note('streaming/new.mdx', 'R', 'streaming/old.mdx')], 'docs(notes): rename old to new'],
+    ['a Studio rename (a delete and an add)', [note('streaming/old.mdx', 'D'), note('streaming/new.mdx', 'A'), note('streaming/meta.yaml', 'M')], 'docs(notes): rename old to new'],
+    ['pages in one folder', [note('streaming/a.mdx', 'M'), note('streaming/index.mdx', 'M')], 'docs(notes): update streaming (2 pages)'],
+    ['new pages in one folder', [note('streaming/a.mdx', 'A'), note('streaming/b.mdx', 'A')], 'docs(notes): add streaming (2 pages)'],
+    ['pages in several folders', [note('streaming/a.mdx', 'M'), note('database/b.mdx', 'A'), note('c.mdx', 'D')], 'docs(notes): update 3 pages'],
+    ['only meta.yaml', [note('streaming/meta.yaml', 'M'), note('meta.yaml', 'M')], 'docs(notes): reorder streaming, notes'],
+    ['only assets', [asset('streaming/a.png'), asset('streaming/b.svg', 'M')], 'docs(notes): update assets of streaming'],
+    ['a page with its images', [note('streaming/a.mdx', 'M'), asset('streaming/a.png')], 'docs(notes): update a'],
+    ['nothing', [], ''],
+  ])('%s', (_, files, message) => {
+    expect(suggestMessage(files)).toBe(message);
+  });
+});

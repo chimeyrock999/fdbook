@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Check, ChevronRight, ExternalLink, Eye, EyeOff, FileText, Folder, GripVertical, icons, Lock, MoreHorizontal, Pencil, Plus, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { createElement, useEffect, useRef, useState, type DragEvent } from 'react';
 import type { TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
+import { CHANGE_NAME, folderMarked, missingStatus, type TreeMarks } from '../changes/marks';
 import { CreateDialog, RenameDialog } from './TreeDialogs';
 import { dropIndex, filterTree, folderAt, movable, noteOf, renamedPath, stepIndex, titleOf } from './tree';
 import { useOpenFolders } from './useOpenFolders';
@@ -43,6 +44,7 @@ type View = {
   onDrop: (event: DragEvent, node: TreeNode, parent: TreeFolder) => void;
   openMenu: (menu: Menu) => void;
   readOnly: boolean;
+  marks: TreeMarks | null;
 };
 
 // The icon the site's sidebar shows. The server keeps only names the site's
@@ -51,12 +53,15 @@ type View = {
 const iconOf = (name: string | null): LucideIcon | undefined => (name === null ? undefined : (icons as Partial<Record<string, LucideIcon>>)[name]);
 
 function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; dim: boolean; view: View }) {
-  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu, readOnly } = view;
+  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu, readOnly, marks } = view;
   const hidden = 'hidden' in node ? node.hidden : null;
   const note = noteOf(node);
   const open = node.kind === 'folder' && (filtering || isOpen(node));
   const canMove = movable(node) && !filtering && !readOnly;
   const faded = dim || hidden !== null;
+  // Its git status (#17): the note's, or a missing entry's deleted page.
+  const change = marks === null ? null : node.kind === 'missing' ? missingStatus(marks, node) : note === null ? null : (marks.notes.get(note) ?? null);
+  const dot = marks !== null && node.kind === 'folder' && folderMarked(marks, node, open);
   const select = () => {
     if (node.kind === 'folder' && (node.index === null || note === active)) toggle(node);
     else if (note !== null) onOpen(note);
@@ -99,7 +104,7 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
             <ExternalLink size={16} /> <span className="truncate">{node.title}</span>
           </span>
         ) : (
-          <button type="button" className="studio-tree-label" title={node.path} data-path={node.path} onClick={select}>
+          <button type="button" className="studio-tree-label" title={node.path} data-path={node.path} data-change={change ?? undefined} onClick={select}>
             {createElement(iconOf(node.icon) ?? (node.kind === 'folder' ? Folder : FileText), { size: 16, 'aria-hidden': true })}
             <span className="truncate">{node.title}</span>
           </button>
@@ -109,6 +114,8 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
             <EyeOff size={11} /> hidden
           </span>
         )}
+        {dot && <span className="studio-tree-dot" title="Changes inside" />}
+        {change !== null && <span className="studio-change-mark" data-change={change} title={CHANGE_NAME[change]}>{change}</span>}
         {canMove ? (
           <span className="studio-tree-grip" aria-hidden="true"><GripVertical size={13} /></span>
         ) : !readOnly && node.entry === null && hidden !== 'unlisted' && node.kind !== 'missing' ? (
@@ -146,7 +153,7 @@ function Items({ folder, nested = false, dim, view }: { folder: TreeFolder; nest
 // site hides. Pages can be created, renamed, reordered, hidden and shown here; every change
 // goes through /api/tree. `active` and paths are relative to content/notes.
 // `readOnly` (main) shows the tree only: no new page, row menu or drag.
-export function PageTree({ root, client, active, unsaved = null, readOnly = false, onOpen, onRenamed, onChanged }: {
+export function PageTree({ root, client, active, unsaved = null, readOnly = false, marks = null, onOpen, onRenamed, onChanged }: {
   root: TreeFolder | null;
   client: TreeClient;
   active: string | null;
@@ -154,6 +161,8 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
   // folder) would move the file under the editor and lose them.
   unsaved?: string | null;
   readOnly?: boolean;
+  // The worktree's git changes, marked on the rows (src/changes/marks.ts).
+  marks?: TreeMarks | null;
   onOpen: (path: string) => void;
   onRenamed: (from: string, to: string) => void;
   // Reloads the tree; resolves whether the load set one.
@@ -232,7 +241,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
     setDrop(null);
   };
 
-  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu, readOnly };
+  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu, readOnly, marks };
   const menuNode = menu?.node ?? null;
   const movesUnsaved =
     unsaved !== null && (menuNode?.kind === 'page' || menuNode?.kind === 'folder') && renamedPath(unsaved, menuNode.path, menuNode.path) !== null;

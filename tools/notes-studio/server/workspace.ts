@@ -4,6 +4,7 @@ import { createAssetsApi } from './assets/api.ts';
 import { createFilesApi } from './files/api.ts';
 import { createFileEvents } from './files/events.ts';
 import { createKeyedLock } from './files/store.ts';
+import { createChangesApi } from './git/api.ts';
 import { pathnameOf, sendJson, type Handler } from './http.ts';
 import { createLintApi } from './lint/api.ts';
 import { refuseUpgrade } from './routing.ts';
@@ -24,9 +25,11 @@ const refuseWrites: Handler = (request, response) => {
 };
 
 // The handlers of one worktree: file API and events, lint, page tree,
-// assets, and the notes sync socket.
+// assets, changes (git status, commit, history), and the notes sync socket.
 export function createWorkspace(root: string, port: number, { readOnly = false } = {}) {
-  // Tree and asset changes both write notes: one at a time.
+  // Tree and asset changes both write notes: one at a time. A commit waits
+  // for them too, so it never takes half of a rename. The lock is this
+  // worktree's own: change requests never wait on each other.
   const notesLock = createKeyedLock();
   const fileEvents = createFileEvents(root);
   const sync = createNotesSync(root, port, { readOnly });
@@ -37,6 +40,7 @@ export function createWorkspace(root: string, port: number, { readOnly = false }
     createLintApi(root),
     createTreeApi(root, notesLock),
     createAssetsApi(root, notesLock),
+    createChangesApi(root, notesLock),
   ];
   return {
     root,

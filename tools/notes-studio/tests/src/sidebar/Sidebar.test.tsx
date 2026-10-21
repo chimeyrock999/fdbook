@@ -5,15 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Sidebar, type IssueCount } from '../../../src/sidebar/Sidebar';
 import { useSidebar } from '../../../src/sidebar/useSidebar';
 
-function Harness({ drawer = false, issues = null, hasNote = false, onCloseDrawer = () => undefined, changeRequests = null }: {
+function Harness({ drawer = false, issues = null, hasNote = false, onCloseDrawer = () => undefined, changeCount = 0, changeRequests = null }: {
   drawer?: boolean;
   issues?: IssueCount;
   hasNote?: boolean;
   onCloseDrawer?: () => void;
+  changeCount?: number;
   changeRequests?: { shown: boolean; onOpen: () => void } | null;
 }) {
   const state = useSidebar();
-  return <Sidebar state={state} drawer={drawer} onCloseDrawer={onCloseDrawer} issues={issues} hasNote={hasNote} notes={<p>tree</p>} assets={<p>asset list</p>} issuesRef={() => undefined} changeRequests={changeRequests} />;
+  return (
+    <Sidebar state={state} drawer={drawer} onCloseDrawer={onCloseDrawer} issues={issues} hasNote={hasNote} notes={<p>tree</p>} assets={<p>asset list</p>}
+      issuesRef={() => undefined} changes={<p>change list</p>} changeCount={changeCount} changeRequests={changeRequests} />
+  );
 }
 
 const stored = () => JSON.parse(localStorage.getItem('notes-studio:sidebar') ?? 'null') as unknown;
@@ -43,6 +47,19 @@ describe('Sidebar', () => {
     unmount();
     render(<Harness />);
     expect(screen.getByRole('button', { name: 'Assets' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('has a Changes view after Issues, with the number of changed files', async () => {
+    const { rerender } = render(<Harness changeCount={0} />);
+    const labels = [...screen.getByRole('navigation', { name: 'Sidebar views' }).querySelectorAll('button')].map((button) => button.getAttribute('aria-label'));
+    expect(labels.slice(0, 4)).toEqual(['Notes', 'Assets', 'Issues', 'Changes']);
+    expect(screen.getByRole('button', { name: 'Changes' }).querySelector('.studio-activity-count')).toBeNull();
+    rerender(<Harness changeCount={5} />);
+    const button = screen.getByRole('button', { name: 'Changes (5)' });
+    expect(button.querySelector('.studio-activity-count')?.textContent).toBe('5');
+    await userEvent.click(button);
+    expect(screen.getByText('change list').closest('.studio-pane-view')?.hasAttribute('hidden')).toBe(false);
+    expect(stored()).toMatchObject({ view: 'changes', shown: true });
   });
 
   it('switches views from the activity bar and folds on the open one, as VS Code does', async () => {
@@ -189,7 +206,7 @@ describe('Sidebar', () => {
     const onOpen = vi.fn();
     rerender(<Harness changeRequests={{ shown: false, onOpen }} />);
     const labels = [...screen.getByRole('navigation', { name: 'Sidebar views' }).querySelectorAll('button')].map((button) => button.getAttribute('aria-label'));
-    expect(labels).toEqual(['Notes', 'Assets', 'Issues', 'Change requests', 'Hide the sidebar']);
+    expect(labels).toEqual(['Notes', 'Assets', 'Issues', 'Changes', 'Change requests', 'Hide the sidebar']);
     await userEvent.click(screen.getByRole('button', { name: 'Change requests' }));
     expect(onOpen).toHaveBeenCalledOnce();
     rerender(<Harness changeRequests={{ shown: true, onOpen }} />);
