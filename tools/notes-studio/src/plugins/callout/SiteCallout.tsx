@@ -25,12 +25,16 @@ export function SiteCallout({ props, children, setProp, types }: ComponentRender
   const picker = useRef<HTMLSpanElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLSpanElement>(null);
+  // Whether the menu was opened from the keyboard: then the focus goes to
+  // the checked type.
+  const fromKeyboard = useRef(false);
 
   // The menu is drawn on document.body over the note (picker-menu.ts); a
   // press outside or Escape closes it, Escape back on the icon.
   useLayoutEffect(() => {
     if (!open || !menu.current || !picker.current || !button.current) return;
-    return floatMenu({ menu: menu.current, picker: picker.current, button: button.current }, () => { setOpen(false); });
+    const focus = fromKeyboard.current;
+    return floatMenu({ menu: menu.current, picker: picker.current, button: button.current, focus }, () => { setOpen(false); });
   }, [open]);
   const style = getCalloutVariables(semantic) as CSSProperties;
 
@@ -44,7 +48,11 @@ export function SiteCallout({ props, children, setProp, types }: ComponentRender
           aria-label={`Callout type: ${type}`}
           aria-haspopup="menu"
           aria-expanded={open}
-          onClick={(event) => { setOpen(!open && editable(event.currentTarget)); }}
+          onClick={(event) => {
+            // Enter and Space click with no press count.
+            fromKeyboard.current = event.detail === 0;
+            setOpen(!open && editable(event.currentTarget));
+          }}
         >
           <Icon size={18} aria-hidden />
           <ChevronDown size={10} className="studio-picker-chevron" aria-hidden />
