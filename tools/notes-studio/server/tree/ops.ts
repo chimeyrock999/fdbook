@@ -4,7 +4,7 @@ import { HttpError } from '../http.ts';
 import { listEditableFiles, statOrNull, writeAtomic } from '../files/store.ts';
 import { ASSETS_DIR, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 import { knownTargets, replaceSegment, rewriteLinks, type Rename } from './links.ts';
-import { insertEntry, metaTemplate, MetaEditError, moveEntry, pagesTemplate, readPages, replaceEntry } from './meta-edit.ts';
+import { insertEntry, metaTemplate, MetaEditError, moveEntry, pagesTemplate, readPages, replaceEntry, setDefaultOpen } from './meta-edit.ts';
 import { slugify } from '../../src/slug.ts';
 import { pageTemplate } from './template.ts';
 import type { TreeFolder, TreeNode } from './types.ts';
@@ -29,6 +29,8 @@ export type Plan = {
   changes: TreeChange[];
   // The note to open afterwards.
   open: string | null;
+  // Set by a create: the page or folder it adds.
+  created?: string;
 };
 
 const slugOf = (path: string) => path.slice(path.lastIndexOf('/') + 1).replace(/\.mdx$/, '');
@@ -91,21 +93,31 @@ function metaError<T>(task: () => T): T {
   }
 }
 
-export type CreateRequest = { parent: string; slug: unknown; title: unknown; folder: unknown; after: unknown };
+export type CreateRequest = { parent: string; slug: unknown; title: unknown; kind: unknown; defaultOpen: unknown; after: unknown };
 
-// A page `<parent>/<slug>.mdx`, or a folder page `<parent>/<slug>/index.mdx`
-// with its own meta.yaml, added to the parent's meta.yaml after entry
-// `after` (at the end when null). A parent without meta.yaml, without a
-// `pages` list or with `...` in it shows the page by itself.
+const CREATE_KINDS = ['page', 'folder-page', 'plain-folder'] as const;
+
+// A page `<parent>/<slug>.mdx`, a folder page `<parent>/<slug>/index.mdx`
+// with its own meta.yaml, or a plain folder with only `<slug>/meta.yaml`,
+// added to the parent's meta.yaml after entry `after` (at the end when
+// null). A parent without meta.yaml, without a `pages` list or with `...` in
+// it shows the new node by itself. A new folder is closed in the site's
+// sidebar unless `defaultOpen`.
 export async function planCreate(root: string, tree: TreeFolder, request: CreateRequest): Promise<Plan> {
   const parent = findFolder(tree, request.parent);
+  const kind = request.kind ?? 'page';
+  // `folder` meant a folder page before plain folders came: a page loaded
+  // before then would get the wrong kind, so it is refused.
+  if (kind === 'folder') throw new HttpError(400, 'kind `folder` is now `folder-page`: reload the Studio');
+  if (!CREATE_KINDS.some((each) => each === kind)) throw new HttpError(400, 'kind must be page, folder-page or plain-folder');
   const slug = checkSlug(request.slug);
   const title = (typeof request.title === 'string' ? request.title.trim() : '') || slug;
   await checkFree(root, parent.path, slug);
 
-  const page = request.folder === true ? inDir(inDir(parent.path, slug), 'index.mdx') : inDir(parent.path, `${slug}.mdx`);
-  const writes: Write[] = [{ path: page, content: pageTemplate(slug, title), baseMtime: null }];
-  if (request.folder === true) writes.push({ path: inDir(inDir(parent.path, slug), 'meta.yaml'), content: metaTemplate(title, []), baseMtime: null });
+  const folder = inDir(parent.path, slug);
+  const page: string | null = kind === 'page' ? inDir(parent.path, `${slug}.mdx`) : kind === 'folder-page' ? inDir(folder, 'index.mdx') : null;
+  const writes: Write[] = page === null ? [] : [{ path: page, content: pageTemplate(slug, title), baseMtime: null }];
+  if (kind !== 'page') writes.push({ path: inDir(folder, 'meta.yaml'), content: metaTemplate(title, [], request.defaultOpen === true), baseMtime: null });
 
   if (parent.meta !== null) {
     const meta = await readText(root, parent.meta);
@@ -122,6 +134,29 @@ export async function planCreate(root: string, tree: TreeFolder, request: Create
     move: null,
     changes: writes.map((write) => (write.baseMtime === null ? { type: 'add', path: write.path } : { type: 'change', path: write.path, detail: `adds "${slug}"` })),
     open: page,
+    created: kind === 'page' ? (page ?? folder) : folder,
+  };
+}
+
+export type SetOpenRequest = { folder: unknown; defaultOpen: unknown; baseMtime: unknown };
+
+// Sets `defaultOpen` in the folder's meta.yaml, which it must have: the
+// site's root folder has no open state.
+export async function planSetOpen(root: string, tree: TreeFolder, request: SetOpenRequest): Promise<Plan> {
+  if (typeof request.folder !== 'string') throw new HttpError(400, 'folder must be a folder path');
+  if (request.folder === '') throw new HttpError(400, 'the root folder is always open');
+  const folder = findFolder(tree, request.folder);
+  if (typeof request.defaultOpen !== 'boolean') throw new HttpError(400, 'defaultOpen must be true or false');
+  if (folder.meta === null) throw new HttpError(409, `${NOTES_DIR}/${inDir(folder.path, 'meta.yaml')} does not exist`);
+  const meta = await readText(root, folder.meta);
+  if (request.baseMtime !== meta.mtimeMs) throw new HttpError(409, `${NOTES_DIR}/${folder.meta} changed on disk`);
+  const content = metaError(() => setDefaultOpen(meta.content, request.defaultOpen as boolean));
+  if (content === meta.content) return { writes: [], move: null, changes: [], open: null };
+  return {
+    writes: [{ path: folder.meta, content, baseMtime: meta.mtimeMs }],
+    move: null,
+    changes: [{ type: 'change', path: folder.meta, detail: `defaultOpen: ${String(request.defaultOpen)}` }],
+    open: null,
   };
 }
 

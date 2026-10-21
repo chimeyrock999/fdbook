@@ -24,6 +24,17 @@ export function trailTo(folder: TreeFolder, note: string): TreeNode[] {
   return [];
 }
 
+// The folder at `path`, at any depth.
+export function folderAt(folder: TreeFolder, path: string): TreeFolder | null {
+  for (const child of folder.children) {
+    if (child.kind !== 'folder') continue;
+    if (child.path === path) return child;
+    const below = folderAt(child, path);
+    if (below) return below;
+  }
+  return null;
+}
+
 // The tree cut down to the nodes whose title or path holds `query`, with
 // the folders on the way to them. A folder that matches keeps all its
 // children. Separators, links and broken entries only show unfiltered.

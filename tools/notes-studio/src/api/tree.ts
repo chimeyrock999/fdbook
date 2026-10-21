@@ -15,10 +15,14 @@ export type TreeFolder = Base & {
   meta: string | null;
   metaMtime: number | null;
   index: string | null;
+  // meta.yaml's `defaultOpen`: whether the site's sidebar starts it open.
+  defaultOpen: boolean;
+  // The lucide icon name the site's sidebar shows (see iconOf in build.ts).
+  icon: string | null;
   hidden: Hidden | null;
   children: TreeNode[];
 };
-export type TreePage = Base & { kind: 'page'; title: string; path: string; hidden: Hidden | null };
+export type TreePage = Base & { kind: 'page'; title: string; path: string; icon: string | null; hidden: Hidden | null };
 export type TreeSeparator = Base & { kind: 'separator'; title: string };
 export type TreeLink = Base & { kind: 'link'; title: string; url: string };
 export type TreeMissing = Base & { kind: 'missing'; value: string; meta: string };
@@ -31,12 +35,18 @@ export type TreeChange =
   // Left where it is: a page's images in public/notes (a worktree path).
   | { type: 'keep'; path: string; detail: string };
 
-export type TreeRequest =
-  | { op: 'create'; parent: string; slug: string; title: string; kind: 'page' | 'folder'; after: number | null }
-  | { op: 'rename'; path: string; slug: string }
-  | { op: 'move'; folder: string; from: number; to: number; baseMtime: number | null };
+// A page `x.mdx`, a folder page `x/index.mdx` with `x/meta.yaml`, or a
+// folder with only `x/meta.yaml`.
+export type CreateKind = 'page' | 'folder-page' | 'plain-folder';
 
-export type TreeAnswer = { changes: TreeChange[]; open: string | null };
+export type TreeRequest =
+  | { op: 'create'; parent: string; slug: string; title: string; kind: CreateKind; defaultOpen: boolean; after: number | null }
+  | { op: 'rename'; path: string; slug: string }
+  | { op: 'move'; folder: string; from: number; to: number; baseMtime: number | null }
+  | { op: 'set-open'; folder: string; defaultOpen: boolean; baseMtime: number | null };
+
+// `created`: the page or folder a create added.
+export type TreeAnswer = { changes: TreeChange[]; open: string | null; created?: string };
 
 export function createTreeClient(base = '') {
   async function failed(response: Response): Promise<never> {

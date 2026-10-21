@@ -1,8 +1,8 @@
-import { ArrowDown, ArrowUp, ChevronRight, ExternalLink, EyeOff, FileText, Folder, GripVertical, Lock, MoreHorizontal, Pencil, Plus, TriangleAlert } from 'lucide-react';
-import { useEffect, useRef, useState, type DragEvent } from 'react';
-import type { TreeChange, TreeClient, TreeFolder, TreeNode } from '../api/tree';
+import { ArrowDown, ArrowUp, Check, ChevronRight, ExternalLink, EyeOff, FileText, Folder, GripVertical, icons, Lock, MoreHorizontal, Pencil, Plus, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { createElement, useEffect, useRef, useState, type DragEvent } from 'react';
+import type { TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
 import { CreateDialog, RenameDialog } from './TreeDialogs';
-import { dropIndex, filterTree, movable, noteOf, renamedPath, stepIndex, titleOf } from './tree';
+import { dropIndex, filterTree, folderAt, movable, noteOf, renamedPath, stepIndex, titleOf } from './tree';
 import { useOpenFolders } from './useOpenFolders';
 
 type Named = Extract<TreeNode, { kind: 'page' | 'folder' }>;
@@ -43,6 +43,11 @@ type View = {
   onDrop: (event: DragEvent, node: TreeNode, parent: TreeFolder) => void;
   openMenu: (menu: Menu) => void;
 };
+
+// The icon the site's sidebar shows. The server keeps only names the site's
+// lucide has (server/tree/build.ts); the Studio's lucide-react, already
+// loaded for the UI, still has every one. Null: Folder / FileText.
+const iconOf = (name: string | null): LucideIcon | undefined => (name === null ? undefined : (icons as Partial<Record<string, LucideIcon>>)[name]);
 
 function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; dim: boolean; view: View }) {
   const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu } = view;
@@ -93,8 +98,8 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
             <ExternalLink size={16} /> <span className="truncate">{node.title}</span>
           </span>
         ) : (
-          <button type="button" className="studio-tree-label" title={node.path} onClick={select}>
-            {node.kind === 'folder' ? <Folder size={16} /> : <FileText size={16} />}
+          <button type="button" className="studio-tree-label" title={node.path} data-path={node.path} onClick={select}>
+            {createElement(iconOf(node.icon) ?? (node.kind === 'folder' ? Folder : FileText), { size: 16, 'aria-hidden': true })}
             <span className="truncate">{node.title}</span>
           </button>
         )}
@@ -156,6 +161,19 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
   const [drop, setDrop] = useState<Drop | null>(null);
   const { isOpen, toggle, openFolder } = useOpenFolders(root, active);
   const menuRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  // A plain folder just created: its row takes focus on the next tree, the
+  // reload after the create, so its menu (New page here) is at hand. Only
+  // that once: if that tree lacks it, or the filter hides the row, a later
+  // reload does not take the focus from where the reader is.
+  const reveal = useRef<string | null>(null);
+
+  useEffect(() => {
+    const path = reveal.current;
+    reveal.current = null;
+    if (path === null || !root || !folderAt(root, path)) return;
+    navRef.current?.querySelector<HTMLElement>(`.studio-tree-label[data-path="${CSS.escape(path)}"]`)?.focus();
+  }, [root]);
 
   useEffect(() => {
     if (!menu) return;
@@ -171,13 +189,21 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
     };
   }, [menu]);
 
-  const move = (parent: TreeFolder, node: TreeNode, to: number | null) => {
+  // A change from the row menu, reported in the status line.
+  const send = (request: TreeRequest, report: (changes: TreeChange[]) => string) => {
     setMenu(null);
-    if (to === null || node.entry === null) return;
-    client.change({ op: 'move', folder: parent.path, from: node.entry, to, baseMtime: parent.metaMtime }).then(
-      (answer) => { setStatus({ text: said(answer.changes), error: false }); },
+    client.change(request).then(
+      (answer) => { setStatus({ text: report(answer.changes), error: false }); },
       (reason: unknown) => { setStatus({ text: reason instanceof Error ? reason.message : String(reason), error: true }); },
     ).finally(onChanged);
+  };
+
+  const move = (parent: TreeFolder, node: TreeNode, to: number | null) => {
+    if (to === null || node.entry === null) {
+      setMenu(null);
+      return;
+    }
+    send({ op: 'move', folder: parent.path, from: node.entry, to, baseMtime: parent.metaMtime }, said);
   };
 
   if (!root) return <p className="px-3 py-2 text-[12.5px] text-[var(--fde-muted-foreground)]">Loading notes…</p>;
@@ -204,7 +230,7 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
   const movesUnsaved =
     unsaved !== null && (menuNode?.kind === 'page' || menuNode?.kind === 'folder') && renamedPath(unsaved, menuNode.path, menuNode.path) !== null;
   return (
-    <nav aria-label="Page tree" className="flex min-h-0 flex-1 flex-col gap-2 p-2.5">
+    <nav ref={navRef} aria-label="Page tree" className="flex min-h-0 flex-1 flex-col gap-2 p-2.5">
       <div className="flex gap-1.5">
         <input
           type="search"
@@ -251,6 +277,24 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
             </button>
           )}
           {movesUnsaved && <p className="studio-menu-hint">The open note has unsaved changes. Rename once it shows Saved.</p>}
+          {menuNode.kind === 'folder' && (
+            <>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={menuNode.defaultOpen}
+                disabled={menuNode.meta === null}
+                onClick={() => {
+                  const defaultOpen = !menuNode.defaultOpen;
+                  send({ op: 'set-open', folder: menuNode.path, defaultOpen, baseMtime: menuNode.metaMtime }, (changes) =>
+                    changes.length === 0 ? 'Nothing to change.' : `Saved defaultOpen: ${String(defaultOpen)} in ${menuNode.meta ?? 'meta.yaml'}.`);
+                }}
+              >
+                <span className="studio-menu-check">{menuNode.defaultOpen && <Check size={14} />}</span> Open by default on the site
+              </button>
+              {menuNode.meta === null && <p className="studio-menu-hint">No meta.yaml: order the folder first, or add one.</p>}
+            </>
+          )}
           <hr />
           <button type="button" role="menuitem" disabled={filtering || stepIndex(menu.parent, menuNode, -1) === null} onClick={() => { move(menu.parent, menuNode, stepIndex(menu.parent, menuNode, -1)); }}>
             <ArrowUp size={14} /> Move up
@@ -268,12 +312,18 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
           parent={dialog.parent}
           after={dialog.after}
           onClose={() => { setDialog(null); }}
-          onDone={(open) => {
+          onDone={(created) => {
             openFolder(dialog.parent);
             setDialog(null);
-            setStatus({ text: `Created ${open ?? 'the page'}.`, error: false });
             onChanged();
-            if (open !== null) onOpen(open);
+            if ('open' in created) {
+              setStatus({ text: `Created ${created.open}.`, error: false });
+              onOpen(created.open);
+            } else {
+              openFolder({ id: `folder:${created.folder}` });
+              reveal.current = created.folder;
+              setStatus({ text: `Created ${created.folder}/.`, error: false });
+            }
           }}
         />
       )}
