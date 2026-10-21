@@ -151,7 +151,8 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
   unsaved?: string | null;
   onOpen: (path: string) => void;
   onRenamed: (from: string, to: string) => void;
-  onChanged: () => void;
+  // Reloads the tree; resolves whether the load set one.
+  onChanged: () => Promise<boolean>;
 }) {
   const [query, setQuery] = useState('');
   const [menu, setMenu] = useState<Menu | null>(null);
@@ -165,7 +166,8 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
   // A plain folder just created: its row takes focus on the next tree, the
   // reload after the create, so its menu (New page here) is at hand. Only
   // that once: if that tree lacks it, or the filter hides the row, a later
-  // reload does not take the focus from where the reader is.
+  // reload does not take the focus from where the reader is. A reload that
+  // fails sets no tree, so it drops the focus itself.
   const reveal = useRef<string | null>(null);
 
   useEffect(() => {
@@ -195,7 +197,7 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
     client.change(request).then(
       (answer) => { setStatus({ text: report(answer.changes), error: false }); },
       (reason: unknown) => { setStatus({ text: reason instanceof Error ? reason.message : String(reason), error: true }); },
-    ).finally(onChanged);
+    ).finally(() => { void onChanged(); });
   };
 
   const move = (parent: TreeFolder, node: TreeNode, to: number | null) => {
@@ -315,7 +317,7 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
           onDone={(created) => {
             openFolder(dialog.parent);
             setDialog(null);
-            onChanged();
+            const reloaded = onChanged();
             if ('open' in created) {
               setStatus({ text: `Created ${created.open}.`, error: false });
               onOpen(created.open);
@@ -323,6 +325,9 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
               openFolder({ id: `folder:${created.folder}` });
               reveal.current = created.folder;
               setStatus({ text: `Created ${created.folder}/.`, error: false });
+              void reloaded.then((loaded) => {
+                if (!loaded && reveal.current === created.folder) reveal.current = null;
+              });
             }
           }}
         />
@@ -336,7 +341,7 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
           onDone={(from, to) => {
             setDialog(null);
             setStatus({ text: `Renamed to ${to}.`, error: false });
-            onChanged();
+            void onChanged();
             onRenamed(from, to);
           }}
         />

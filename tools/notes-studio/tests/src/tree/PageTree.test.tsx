@@ -40,9 +40,12 @@ function fakeClient(answer: (request: TreeRequest, dryRun: boolean) => TreeAnswe
   return { client: { loadTree: () => Promise.resolve(root), change } as TreeClient, change };
 }
 
+// onChanged as useTree's reload: whether the next tree loaded.
+const loaded = (ok = true) => vi.fn(() => Promise.resolve(ok));
+
 function setup(answer: Parameters<typeof fakeClient>[0] = () => ({ changes: [], open: null })) {
   const { client, change } = fakeClient(answer);
-  const props = { onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+  const props = { onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: loaded() };
   render(<PageTree root={root} client={client} active="guide/two.mdx" {...props} />);
   return { change, ...props };
 }
@@ -79,7 +82,7 @@ describe('PageTree', () => {
 
   it('starts folders closed, whatever the site would open', async () => {
     const { client } = fakeClient(() => ({ changes: [], open: null }));
-    render(<PageTree root={root} client={client} active={null} onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={vi.fn()} />);
+    render(<PageTree root={root} client={client} active={null} onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={loaded()} />);
     expect(screen.getByRole('button', { name: 'Expand Guide' }).getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('button', { name: 'One' })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Expand Guide' }));
@@ -160,7 +163,7 @@ describe('PageTree', () => {
       open: null,
       created: 'guide/raft',
     }));
-    const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+    const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: loaded() };
     const { rerender } = render(<PageTree root={root} {...props} />);
     await userEvent.click(screen.getByRole('button', { name: 'Actions for Guide' }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'New page here' }));
@@ -188,7 +191,7 @@ describe('PageTree', () => {
 
   it('does not move focus later when the filter hides the new folder', async () => {
     const { client } = fakeClient(() => ({ changes: [{ type: 'add', path: 'raft/meta.yaml' }], open: null, created: 'raft' }));
-    const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+    const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: loaded() };
     const { rerender } = render(<PageTree root={root} {...props} />);
     await userEvent.type(screen.getByLabelText('Filter notes'), 'guide');
     await userEvent.click(screen.getByRole('button', { name: 'New page' }));
@@ -209,7 +212,7 @@ describe('PageTree', () => {
 
   it('spends the focus on the first reload, even one without the new folder', async () => {
     const { client } = fakeClient(() => ({ changes: [{ type: 'add', path: 'raft/meta.yaml' }], open: null, created: 'raft' }));
-    const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+    const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: loaded() };
     const { rerender } = render(<PageTree root={root} {...props} />);
     await userEvent.click(screen.getByRole('button', { name: 'New page' }));
     const dialog = screen.getByRole('dialog');
@@ -220,6 +223,24 @@ describe('PageTree', () => {
     // A reload that does not hold it yet (another change raced it), then one that does.
     rerender(<PageTree root={{ ...root }} {...props} />);
     screen.getByRole('button', { name: 'Guide' }).focus();
+    const raft: TreeFolder = { ...(root.children[3] as TreeFolder), id: 'folder:raft', path: 'raft', title: 'Raft', meta: 'raft/meta.yaml', hidden: null, children: [] };
+    rerender(<PageTree root={{ ...root, children: [...root.children, raft] }} {...props} />);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Guide' }));
+  });
+
+  it('drops the focus when the reload after the create fails', async () => {
+    const { client } = fakeClient(() => ({ changes: [{ type: 'add', path: 'raft/meta.yaml' }], open: null, created: 'raft' }));
+    const props = { client, active: null, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: loaded(false) };
+    const { rerender } = render(<PageTree root={root} {...props} />);
+    await userEvent.click(screen.getByRole('button', { name: 'New page' }));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('radio', { name: /meta\.yaml/ }));
+    await userEvent.type(within(dialog).getByLabelText('Title'), 'Raft');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await screen.findByRole('status');
+    await waitFor(() => { expect(props.onChanged).toHaveBeenCalled(); });
+    screen.getByRole('button', { name: 'Guide' }).focus();
+    // A much later reload (a file event) that holds the folder.
     const raft: TreeFolder = { ...(root.children[3] as TreeFolder), id: 'folder:raft', path: 'raft', title: 'Raft', meta: 'raft/meta.yaml', hidden: null, children: [] };
     rerender(<PageTree root={{ ...root, children: [...root.children, raft] }} {...props} />);
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Guide' }));
@@ -268,7 +289,7 @@ describe('PageTree', () => {
 
   it('waits for the open note to be saved before renaming it or its folder', async () => {
     const { client } = fakeClient(() => ({ changes: [], open: null }));
-    render(<PageTree root={root} client={client} active="guide/two.mdx" unsaved="guide/two.mdx" onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={vi.fn()} />);
+    render(<PageTree root={root} client={client} active="guide/two.mdx" unsaved="guide/two.mdx" onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={loaded()} />);
     for (const name of ['Two', 'Guide']) {
       await userEvent.click(screen.getByRole('button', { name: `Actions for ${name}` }));
       expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: 'Rename…' }).disabled).toBe(true);
@@ -281,7 +302,7 @@ describe('PageTree', () => {
 
   it('keeps the rename dialog modal and waits for a save that starts while it is open', async () => {
     const { client } = fakeClient(() => ({ changes: [{ type: 'move', path: 'guide/two.mdx', to: 'guide/2.mdx' }], open: null }));
-    const props = { root, client, active: 'guide/two.mdx', onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+    const props = { root, client, active: 'guide/two.mdx', onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: loaded() };
     const { container, rerender } = render(<PageTree {...props} unsaved={null} />);
     await userEvent.click(screen.getByRole('button', { name: 'Actions for Two' }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'Rename…' }));
@@ -304,7 +325,7 @@ describe('PageTree', () => {
 
   it('opens the folders on the way once a reloaded tree holds the open note', () => {
     const { client } = fakeClient(() => ({ changes: [], open: null }));
-    const props = { client, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: vi.fn() };
+    const props = { client, onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: loaded() };
     // The note was just renamed into `old`, which is closed by default; the tree has not reloaded yet.
     const stale: TreeFolder = { ...root, children: root.children.filter((child) => child.id !== 'folder:old') };
     const { rerender } = render(<PageTree root={stale} active="old/x.mdx" {...props} />);
