@@ -53,7 +53,9 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `media/` saves pasted and dropped images under `public/notes` (see
     Images below).
   - `notes/` is the check that a note can be opened.
-  - `tree/` is the page tree in the left panel and its dialogs.
+  - `sidebar/` is the left sidebar: the activity bar (Notes, Issues), its
+    width and whether it is shown.
+  - `tree/` is the page tree in the Notes view and its dialogs.
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
   - `plugins/` holds the editor plugins (see below).
@@ -92,7 +94,14 @@ another one.
 | `POST /api/lint` | Takes JSON `{ path, content }` for a note and returns `{ path, issues }` (see Lint). Writes nothing. |
 | `GET /api/tree` | The page tree: `{ tree }` (see Page tree) |
 | `POST /api/tree` | Takes JSON `{ op: "create" \| "rename" \| "move", dryRun?, … }`, changes the tree and returns `{ changes, open }`. With `dryRun` it writes nothing. |
+| any other `/api/…` | `404` with a JSON `{ error }`, never the app's page (see below) |
 | `/__fde_sync` (websocket) | The fumadocs-editor sync server for `content/notes`. It reads `.mdx` only, writes only notes that already exist (no page or folder creation; that goes through the file API), and merges changes made on disk into open documents. Known gap: its tree `delete` command still removes an existing note, without updating `meta.yaml` or checking the mtime, because the scope cannot tell it apart from a save on the same path. Don't wire the editor's tree delete until upstream can authorize tree commands separately (fuma-nama/fumadocs-editor#24). |
+
+A Studio server keeps the code it started with, while the page reloads with
+every update. A server started before an update that added an endpoint used
+to answer it with the app's `index.html`; the API clients
+(`src/api/json.ts`) now say to restart `npm run studio` when an endpoint
+answers with a page instead of JSON.
 
 A save names the mtime it was edited from; `null` means a new file. If the
 file changed on disk since then, for example in Obsidian or by an agent, the
@@ -144,6 +153,20 @@ through the notes sync socket:
   `aria-label`; `tests/src/editor/drag-handle.test.ts` fails if a new editor
   version changes it).
 
+## Sidebar
+
+The left side works like VS Code's. The activity bar holds the **Notes**
+view (the page tree) and the **Issues** view (the open note's lint issues,
+with their count on the icon); picking the open view again hides the
+sidebar, and so does the button at the foot of the bar. Drag the sidebar's
+right edge to resize it (220–480px), or focus the edge and use the arrow
+keys, Shift for bigger steps, Home and End for the limits; double-click
+resets it to 284px. It never takes more than the window leaves the editor
+(420px); resizing starts from the width it shows. The view, the width and
+whether it is shown are kept in localStorage. Below 768px the sidebar is a
+drawer, opened from the header's Notes button or the toolbar's issue count,
+and its view takes up to 320px.
+
 ## Graph markers
 
 The graph markup of `components/graph-objects.tsx` is inserted and edited in
@@ -176,7 +199,7 @@ Visual:
 
 ## Page tree
 
-The left panel shows the notes as the site's sidebar does. The server runs
+The Notes view shows the notes as the site's sidebar does. The server runs
 the same fumadocs `loader()` as `lib/source.ts` over `content/notes`
 (`server/tree/build.ts`), so the order, separators (`---Label---`), links,
 nested entries (`a/b`), `...`, `z...a`, `...folder` and `!slug` all come out
@@ -189,6 +212,12 @@ as on the site. On top of that the tree shows:
 - **missing**: a `pages` entry that reaches no page or folder, at its place.
 - **Filter** keeps the pages and folders whose title or path matches, with
   the folders on the way to them.
+- Folders start closed, apart from the ones on the way to the open note, and
+  the tree remembers which ones you opened. meta.yaml's `defaultOpen` is for
+  the site's sidebar and is not read here: most folders set it, so the whole
+  tree would open at once.
+- Rows follow the site's sidebar: 34px high, 14px text, a guide line for
+  each nested level.
 
 Changes go through `POST /api/tree`, never through the notes sync, which
 cannot update meta.yaml. Each one is planned against the disk and applied
@@ -259,12 +288,12 @@ Renaming or deleting an existing asset is not supported yet.
 
 ## Lint
 
-The side panel lists the Issues; below 1024px it is a drawer opened from the
-header's Panel button. It shows what the site would get wrong in the open
-note, checked about 400ms after typing stops and again when another file
-changes on disk. The toolbar shows the count; picking an issue opens Source
-with the problem selected and marked, or, for one inside the frontmatter,
-focuses its field at the top of the note.
+The sidebar's Issues view (see Sidebar) shows what the site would get wrong
+in the open note, checked about 400ms after typing stops and again when
+another file changes on disk. The toolbar shows the count and opens the
+view; picking an issue opens Source with the problem selected and marked,
+or, for one inside the frontmatter, focuses its field at the top of the
+note.
 
 The rules live in `server/lint/` and follow what the site does, not a style
 guide: the site turns many mistakes into plain text or a placeholder instead

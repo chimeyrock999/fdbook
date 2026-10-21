@@ -108,10 +108,10 @@ describe('tree API', () => {
       ]);
       const response = await post({ op: 'move', folder: 'data-modeling', from: 0, to: 1, baseMtime: null });
       expect(response.status).toBe(200);
-      // Only the order: the title still comes from the index page and the folder stays closed by default.
+      // Only the order: the title still comes from the index page, and the site keeps the folder closed by default.
       expect(await text('data-modeling/meta.yaml')).toBe('pages:\n  - "dimensional-modeling"\n  - "data-vault"\n');
       const modelingAfter = (await tree()).children.find((child) => child.kind === 'folder' && child.path === 'data-modeling') as TreeFolder;
-      expect([modelingAfter.title, modelingAfter.defaultOpen]).toEqual([modeling.title, modeling.defaultOpen]);
+      expect(modelingAfter.title).toBe(modeling.title);
       expect((await post({ op: 'move', folder: 'data-modeling', from: 0, to: 1, baseMtime: null })).status).toBe(409);
     });
   });
