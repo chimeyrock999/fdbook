@@ -106,7 +106,8 @@ function checkKinds(node: Nodes, source: string, report: Report) {
     report({
       rule: 'accordion-kind',
       severity: 'error',
-      message: `Accordion kind \`${kind}\` is not one the site knows, so it gets no icon. Use one of: ${ACCORDION_KINDS.join(', ')}.`,
+      // components/accordion.tsx renders the kind's icon, which is undefined here.
+      message: `Accordion kind \`${kind}\` is not one the site knows, so the page fails to render (the accordion has no icon for it). Use one of: ${ACCORDION_KINDS.join(', ')}.`,
       ...headOf(node, source),
     });
   }

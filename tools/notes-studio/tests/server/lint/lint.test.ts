@@ -78,7 +78,9 @@ describe('callouts and accordions', () => {
 
   it('flags an unknown accordion kind, in a directive or JSX', () => {
     const source = '::::accordions\n:::accordion{title="Q" kind="faq"}\na\n:::\n::::\n\n<Accordions><Accordion title="A" kind="tips">x</Accordion></Accordions>\n';
-    expect(summary(lint(source))).toEqual(['accordion-kind@2', 'accordion-kind@7']);
+    const issues = lint(source);
+    expect(summary(issues)).toEqual(['accordion-kind@2', 'accordion-kind@7']);
+    expect(issues[0]?.message).toContain('the page fails to render');
   });
 });
 
@@ -107,6 +109,13 @@ describe('links', () => {
   it('flags a query on a relative .mdx link, which the site does not strip', () => {
     // source.resolveHref looks up `setup.mdx?tab=a` as a file name; the browser then gets /notes/guide/setup.mdx.
     expect(summary(lint('[x](./setup.mdx?tab=a) [y](./setup.mdx#a)\n'))).toEqual(['link-broken@1']);
+  });
+
+  it('decodes a relative link before the file lookup, as fumadocs does', () => {
+    // getPageByHref runs decodeURI on ./ and ../ links; micromark encodes `<./my note.mdx>`.
+    const pages = [...PAGES, 'guide/my note.mdx'];
+    expect(lint('[x](<./my note.mdx>) [y](./my%20note.mdx)\n', { pages })).toEqual([]);
+    expect(summary(lint('[x](<./other note.mdx>)\n', { pages }))).toEqual(['link-broken@1']);
   });
 
   it('checks link definitions too', () => {
