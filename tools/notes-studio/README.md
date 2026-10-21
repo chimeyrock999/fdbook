@@ -153,7 +153,10 @@ through the notes sync socket:
   `--fde-*` tokens in `src/notes-theme.css`, next to the site tokens the
   components draw with (`--garden-*`, `--color-graph-*`, `--color-callout-*`);
   a test fails when they drift. `src/notes-prose.css` copies the note page's
-  prose rules (`app/notes/notes.module.css`).
+  prose rules (`app/notes/notes.module.css`). The editor's block drag handle
+  is drawn as a grip (`src/editor/drag-handle.css`, found by its
+  `aria-label`; `tests/src/editor/drag-handle.test.ts` fails if a new editor
+  version changes it).
 
 ## Sidebar
 
@@ -412,9 +415,15 @@ Plugins today:
   as decorations: with the caret inside (or the atom selected) the source
   shows again. `<SectionTitle>` is a component.
 - `site-directives`: `::::accordions` groups as the site's accordion cards
-  (the body opens as MDX source and is written back as typing pauses, like
-  any other edit) and `::youtube` as a card. The MDX button shows the
-  block's source.
+  and `::youtube` as a card. On an accordion card the icon picks the item's
+  `kind` (from `ACCORDION_KINDS`), the title is edited in place on the head,
+  and the body opens as MDX source. Each is written back as typing pauses,
+  like any other edit, and rewrites only its own line or lines: a kind or
+  title keeps its quotes and its place, a title written as the `[label]`
+  stays there, and an empty title is not written. Titles show the text the
+  site shows (character references and label escapes decoded) and are
+  written so they read back the same. The MDX button shows the block's
+  source.
 - `site-inserts`: the `/` menu items for graph markers and directive
   blocks. The menu lists components, so each is a spec named
   `studio-insert-…` whose `insert` returns the site's syntax instead of a

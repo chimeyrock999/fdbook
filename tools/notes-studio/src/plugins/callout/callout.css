@@ -18,19 +18,16 @@
   position: relative;
   display: flex;
   align-items: center;
-  padding: 0.5625rem 0 0.5625rem 0.875rem;
+  padding: 0.5625rem 0 0.5625rem calc(0.875rem - 4px);
   background: var(--notes-callout-background);
   border-bottom: 1px solid var(--notes-callout-color);
   border-top-left-radius: 0.75rem;
 }
 .studio-callout-icon {
-  display: inline-flex;
   color: var(--notes-callout-title-color);
-  border-radius: 4px;
-  cursor: pointer;
 }
 .studio-callout .studio-callout-title {
-  padding: 0.5625rem 0.875rem 0.5625rem 0.5625rem;
+  padding: 0.5625rem 0.875rem 0.5625rem 0.4375rem;
   background: var(--notes-callout-background);
   border-bottom: 1px solid var(--notes-callout-color);
   border-top-right-radius: 0.75rem;
@@ -54,35 +51,4 @@
 }
 .studio-callout-body > :last-child {
   margin-bottom: 0;
-}
-.studio-callout-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 6px;
-  z-index: 20;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
-  width: 15rem;
-  padding: 4px;
-  border: 1px solid var(--fde-border);
-  border-radius: 8px;
-  background: var(--fde-popover);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 0.14);
-}
-.studio-callout-menu button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  border-radius: 5px;
-  font-size: 12px;
-  text-align: left;
-}
-.studio-callout-menu button span {
-  color: var(--fde-foreground);
-}
-.studio-callout-menu button:hover,
-.studio-callout-menu button[aria-checked='true'] {
-  background: var(--fde-muted);
 }

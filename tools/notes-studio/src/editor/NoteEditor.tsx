@@ -21,6 +21,7 @@ import { NoteHeader } from './NoteHeader';
 import type { RevealRequest } from './reveal';
 import { SourceEditor } from './SourceEditor';
 import { ConflictDialog, SaveStatus } from './SyncState';
+import './drag-handle.css';
 
 // The sidebar's Issues view: the editor fills `issuesSlot` and reports the
 // count for the activity bar. `onShowIssues` opens the view (the issues
