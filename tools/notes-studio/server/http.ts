@@ -31,3 +31,12 @@ export async function readBody(request: IncomingMessage, limit: number) {
 export function pathnameOf(request: IncomingMessage) {
   return new URL(request.url ?? '/', 'http://studio').pathname;
 }
+
+// Last in line: an /api/ path that no handler took. Without it Vite would
+// answer with index.html, which a client cannot tell apart from data.
+export const apiNotFound: Handler = (request, response) => {
+  const pathname = pathnameOf(request);
+  if (pathname !== '/api' && !pathname.startsWith('/api/')) return Promise.resolve(false);
+  sendJson(response, 404, { error: `no such Studio API: ${pathname}` });
+  return Promise.resolve(true);
+};

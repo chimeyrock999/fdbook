@@ -7,7 +7,7 @@ import { DEFAULT_STUDIO_PORT, repoRoot, STUDIO_HOST, studioRoot } from './config
 import { createFilesApi } from './files/api.ts';
 import { createFileEvents } from './files/events.ts';
 import { createKeyedLock } from './files/store.ts';
-import { pathnameOf } from './http.ts';
+import { apiNotFound, pathnameOf } from './http.ts';
 import { createIconsApi } from './icons/api.ts';
 import { createLintApi } from './lint/api.ts';
 import { createRequestListener, routeUpgrades } from './routing.ts';
@@ -64,7 +64,7 @@ export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = rep
   const fileEvents = createFileEvents(root);
   const notesSync = createNotesSync(root, boundPort);
 
-  server.on('request', createRequestListener(boundPort, [fileEvents.handle, filesApi, lintApi, treeApi, assetsApi, iconsApi], vite.middlewares));
+  server.on('request', createRequestListener(boundPort, [fileEvents.handle, filesApi, lintApi, treeApi, assetsApi, iconsApi, apiNotFound], vite.middlewares));
   routeUpgrades(server, boundPort, (viteHmr) => [
     {
       matches: (request) => pathnameOf(request) === SYNC_ENDPOINT,

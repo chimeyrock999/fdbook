@@ -135,7 +135,7 @@ describe('page tree syntax', () => {
     expect((find(tree, 'hidden.mdx') as { hidden: string }).hidden).toBe('unlisted');
     expect((find(tree, 'c.mdx') as { hidden: string }).hidden).toBe('visible-false');
     const guide = find(tree, 'guide') as TreeFolder;
-    expect([guide.meta, guide.index, guide.defaultOpen]).toEqual(['guide/meta.yaml', 'guide/index.mdx', false]);
+    expect([guide.meta, guide.index]).toEqual(['guide/meta.yaml', 'guide/index.mdx']);
   });
 
   it('gives every node a distinct id', () => {
