@@ -48,6 +48,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `frontmatter/` reads and writes a note's YAML frontmatter and holds the
     form.
   - `lint/` is the Issues tab and the issue count in the toolbar.
+  - `media/` saves pasted and dropped images under `public/notes` (see
+    Images below).
   - `notes/` is the note list and the check that a note can be opened.
   - `plugins/` holds the editor plugins (see below).
 - `tests/`: laid out like `server/` and `src/`. `tests/support/` holds the
@@ -131,6 +133,35 @@ through the notes sync socket:
   components draw with (`--garden-*`, `--color-graph-*`, `--color-callout-*`);
   a test fails when they drift. `src/notes-prose.css` copies the note page's
   prose rules (`app/notes/notes.module.css`).
+
+## Images
+
+Paste or drop an image in Visual, pick one from the `/` menu's Image item, or
+use Upload on a selected image's toolbar. A dialog asks for the file name
+first: the image's own name in kebab-case ASCII is offered, selected, and the
+extension stays as it is. A name already used in the page's folder cannot be
+saved, and Escape or Cancel writes nothing.
+
+- The file goes to the page's folder under `public/notes`:
+  `content/notes/a/b.mdx` uses `public/notes/a/b/`, and a folder's
+  `index.mdx` uses the folder (`public/notes/a/`).
+- The note gets `![alt](/notes/a/b/name.png)`, the path the site reads; the
+  editor fills the alt text from the original file name, so edit it in the
+  image toolbar. The editor shows `/notes/…` images through the file API.
+- The dialog keeps the focus while it is open: the editor inserts the image
+  where the caret was when it was pasted, so the note should not change
+  meanwhile.
+- Only images the site serves are saved (PNG, JPEG, WebP, GIF, AVIF, SVG, up
+  to 25 MB); anything else is refused with a notice beside the save status.
+  The save is a new file only, so a name taken meanwhile is refused, never
+  overwritten.
+- In Source, typing `src="` or an image's `](` suggests the assets under
+  `public/notes`, those of the open page first. `HtmlEmbed` and `::html`
+  suggest `.html` files, `SvgDiagram`, `::svg` and `::diagram` suggest `.svg`,
+  images suggest images. The page's own folder ranks first, then the folder
+  the note sits in, where many notes keep their assets.
+
+Renaming or deleting an existing asset is not supported yet.
 
 ## Lint
 

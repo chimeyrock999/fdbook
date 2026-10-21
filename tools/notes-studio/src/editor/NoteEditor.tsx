@@ -1,6 +1,6 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { MdxEditor, useEditorMode, useSourceText, useSyncStatus } from '@fumadocs-editor/ui';
-import { useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type { createFilesClient } from '../api/files';
 import type { LintClient, LintIssue } from '../api/lint';
 import { frontmatterPathAt } from '../frontmatter/frontmatter';
@@ -8,7 +8,10 @@ import type { FieldReveal } from '../frontmatter/MetadataStrip';
 import { useFrontmatter } from '../frontmatter/useFrontmatter';
 import { IssuesChip, IssuesPanel } from '../lint/IssuesPanel';
 import { useLint } from '../lint/useLint';
+import { UploadNotice } from '../media/UploadNotice';
+import { useAssetUploads } from '../media/useAssetUploads';
 import { NOTES_PREFIX } from '../notes/notes';
+import { assetCompletion } from './asset-completion';
 import { editorConfig } from '../plugins';
 import { decorationsPlugin, useEditorPlugin } from './decorations';
 import { NoteHeader } from './NoteHeader';
@@ -26,8 +29,12 @@ const DRAWER_QUERY = '(max-width: 1023px)';
 // changes made on disk, and the conflict choice when both sides edited the
 // same block. `path` is relative to content/notes; the caller remounts this
 // per path. The frontmatter is edited in the note header; the side panel
-// holds the lint issues.
-export function NoteEditor({ path, ...rest }: { path: string } & Panels & Clients) {
+// holds the lint issues. Pasted, dropped and picked images are saved in the
+// note's folder under public/notes, under a name asked for first; `assets`
+// lists public/notes (useAssets), for the name check and Source.
+export function NoteEditor({ path, assets, ...rest }: { path: string; assets: readonly string[] } & Panels & Clients) {
+  const notePath = `${NOTES_PREFIX}${path}`;
+  const uploads = useAssetUploads(rest.files, notePath, assets);
   // Null until the server sent the file. A denied open never reports it, so
   // the status, not `writable` alone, decides whether editing is allowed.
   const [writable, setWritable] = useState<boolean | null>(null);
@@ -44,10 +51,13 @@ export function NoteEditor({ path, ...rest }: { path: string } & Panels & Client
       }}
       components={editorConfig.components}
       syntax={editorConfig.syntax}
+      media={uploads.media}
       editable={!locked}
     >
       <EditorLayout
-        notePath={`${NOTES_PREFIX}${path}`}
+        notePath={notePath}
+        assets={assets}
+        uploads={uploads}
         opened={writable !== null}
         status={writable === null && status !== 'denied' && status !== 'offline' ? null : (status ?? 'synced')}
         locked={locked}
@@ -60,8 +70,10 @@ export function NoteEditor({ path, ...rest }: { path: string } & Panels & Client
 // The plugins' decorations, one ProseMirror plugin for every editor.
 const decorations = decorationsPlugin(editorConfig.decorators);
 
-function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel, onClosePanel, files, lint }: {
+function EditorLayout({ notePath, assets, uploads, opened, status, locked, panelOpen, onOpenPanel, onClosePanel, files, lint }: {
   notePath: string;
+  assets: readonly string[];
+  uploads: ReturnType<typeof useAssetUploads>;
   opened: boolean;
   status: DocumentStatus | null;
   locked: boolean;
@@ -75,6 +87,7 @@ function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel
   const [field, setField] = useState<FieldReveal | null>(null);
   const editor = useRef<HTMLElement>(null);
   useEditorPlugin(editor, decorations);
+  const completion = useMemo(() => assetCompletion(assets, notePath), [assets, notePath]);
   // Only once the server sent the note: before that (still opening, denied,
   // offline) the text is empty, and an empty note would pass as clean.
   const lintState = useLint(lint, files, notePath, opened ? source.value : null);
@@ -104,6 +117,7 @@ function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel
       <section ref={editor} aria-label="Editor" className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--fde-background)]">
         <div className="flex flex-wrap items-center gap-2.5 border-b border-[var(--fde-border)] px-4 py-2">
           <SaveStatus status={status} />
+          <UploadNotice notice={uploads.notice} onDismiss={uploads.dismissNotice} />
           <IssuesChip state={lintState} onOpen={openIssues} />
           <span className="flex-1" />
           <div role="tablist" aria-label="Mode" className="inline-flex rounded-lg border border-[var(--fde-border)] bg-[var(--fde-card)] p-0.5">
@@ -129,7 +143,7 @@ function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel
             </div>
           </div>
         ) : (
-          <SourceEditor reveal={reveal} />
+          <SourceEditor reveal={reveal} completion={completion} />
         )}
       </section>
       <aside className={`studio-panel ${panelOpen ? 'studio-drawer-open' : ''}`} aria-label="Side panel">
@@ -148,6 +162,7 @@ function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel
         </div>
       </aside>
       {panelOpen && <button type="button" aria-label="Close panel" className="studio-scrim lg:hidden" onClick={onClosePanel} />}
+      {uploads.dialog}
       {status === 'conflict' && sync && <ConflictDialog onKeepMine={sync.keepMine} onTakeDisk={sync.takeDisk} />}
     </div>
   );

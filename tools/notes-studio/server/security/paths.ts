@@ -1,30 +1,14 @@
 import { lstatSync } from 'node:fs';
 import { join } from 'node:path';
+import { ASSET_TYPES, ASSETS_DIR, extensionOf } from './asset-types.ts';
+
+export { ASSET_TYPES, ASSETS_DIR, extensionOf };
 
 // The only files the Studio may touch, as worktree-relative posix paths.
 // Every surface (file API, file events, notes sync) asks this one module.
 export const NOTES_DIR = 'content/notes';
-export const ASSETS_DIR = 'public/notes';
 
 export type PathKind = 'note' | 'meta' | 'asset';
-
-export const ASSET_TYPES: Record<string, string> = {
-  avif: 'image/avif',
-  gif: 'image/gif',
-  glb: 'model/gltf-binary',
-  html: 'text/html; charset=utf-8',
-  jpeg: 'image/jpeg',
-  jpg: 'image/jpeg',
-  pdf: 'application/pdf',
-  png: 'image/png',
-  svg: 'image/svg+xml',
-  webp: 'image/webp',
-};
-
-export function extensionOf(path: string) {
-  const name = path.slice(path.lastIndexOf('/') + 1);
-  return name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '';
-}
 
 // Lexical check only: no `..`, `.`, empty or hidden segments (`.obsidian`,
 // temp files), no backslashes or NUL, and a known name under a known area.

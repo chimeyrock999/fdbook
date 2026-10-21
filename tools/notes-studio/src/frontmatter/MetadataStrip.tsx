@@ -5,6 +5,7 @@ import { FieldError, IdName, KeywordChips } from './fields';
 import type { FrontmatterData, FrontmatterIssue } from './frontmatter';
 import { IconPicker, NoteIcon } from './IconPicker';
 import { useNoteIcons } from './note-icons';
+import { slugify } from '../slug';
 
 type Graph = NonNullable<NotesPageFrontmatter['graph']>;
 
@@ -275,16 +276,6 @@ function chipAt(path: string): OpenChip | null {
 }
 
 const plural = (n: number, word: string) => `${String(n)} ${word}${n === 1 ? '' : 's'}`;
-
-function slugify(text: string) {
-  return text
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/đ/gi, 'd')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
 
 function Group({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (

@@ -1,3 +1,4 @@
+import { autocompletion, type CompletionSource } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { yamlFrontmatter } from '@codemirror/lang-yaml';
@@ -39,21 +40,27 @@ const theme = EditorView.theme({
   },
   '.cm-cursor': { borderLeftColor: 'var(--fde-foreground)' },
   '.cm-panels': { backgroundColor: 'var(--fde-card)', color: 'var(--fde-foreground)' },
+  '.cm-tooltip': { backgroundColor: 'var(--fde-popover)', color: 'var(--fde-popover-foreground)', border: '1px solid var(--fde-border)', borderRadius: '8px' },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul': { fontFamily: 'var(--font-mono)', fontSize: '12.5px', maxWidth: 'min(40rem, 90vw)', padding: '4px' },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul > li': { borderRadius: '5px', padding: '2px 8px' },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--fde-accent)', color: 'var(--fde-accent-foreground)' },
+  '.cm-completionDetail': { fontFamily: 'var(--font-sans)', fontStyle: 'normal', fontSize: '11.5px', color: 'var(--fde-muted-foreground)', marginLeft: '10px' },
 });
 
 const locked = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
 
 // The note's MDX in CodeMirror 6, bound to the editor's source text: typing
 // here parses back into the document once it parses; visual edits and disk
-// changes arrive as new text. `reveal` selects a range (a lint issue).
-export function SourceEditor({ reveal = null }: { reveal?: RevealRequest | null }) {
+// changes arrive as new text. `reveal` selects a range (a lint issue);
+// `completion` suggests values as they are typed (asset paths).
+export function SourceEditor({ reveal = null, completion = null }: { reveal?: RevealRequest | null; completion?: CompletionSource | null }) {
   const { value, onChange, error, readOnly } = useSourceText();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const editable = useRef(new Compartment());
-  const latest = useRef({ onChange, value, readOnly });
+  const latest = useRef({ onChange, value, readOnly, completion });
   useLayoutEffect(() => {
-    latest.current = { onChange, value, readOnly };
+    latest.current = { onChange, value, readOnly, completion };
   });
 
   useEffect(() => {
@@ -70,6 +77,7 @@ export function SourceEditor({ reveal = null }: { reveal?: RevealRequest | null 
           highlightSelectionMatches(),
           revealField,
           search({ top: true }),
+          autocompletion({ override: [(context) => latest.current.completion?.(context) ?? null], icons: false }),
           keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
           yamlFrontmatter({ content: markdown() }),
           syntaxHighlighting(highlight),
