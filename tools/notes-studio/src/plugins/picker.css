@@ -34,6 +34,7 @@
   position: fixed;
   z-index: 20;
   display: grid;
+  /* Two columns: COLUMNS in picker-menu.ts, for the arrow keys. */
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 2px;
   width: 15rem;

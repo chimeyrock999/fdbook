@@ -238,7 +238,8 @@ function kindPicker(cards: Cards, item: AccordionItem, index: number) {
   register(cards, button, key);
 
   let close: (() => void) | null = null;
-  const open = () => {
+  // `focus`: opened from the keyboard, so the focus goes to the checked kind.
+  const open = (focus: boolean) => {
     const menu = element('span', 'studio-picker-menu');
     menu.setAttribute('role', 'menu');
     for (const kind of ACCORDION_KINDS) {
@@ -257,7 +258,7 @@ function kindPicker(cards: Cards, item: AccordionItem, index: number) {
     // Drawn on document.body over the note (picker-menu.ts).
     document.body.append(menu);
     button.setAttribute('aria-expanded', 'true');
-    const stop = floatMenu({ menu, picker, button }, () => { close?.(); });
+    const stop = floatMenu({ menu, picker, button, focus }, () => { close?.(); });
     close = () => {
       closers.get(cards.root)?.delete(closing);
       stop();
@@ -269,9 +270,10 @@ function kindPicker(cards: Cards, item: AccordionItem, index: number) {
     const all = closers.get(cards.root) ?? new Set<() => void>();
     closers.set(cards.root, all.add(closing));
   };
-  button.addEventListener('click', () => {
+  button.addEventListener('click', (event) => {
     if (close) close();
-    else if (view.editable) open();
+    // Enter and Space click with no press count.
+    else if (view.editable) open(event.detail === 0);
   });
   picker.append(button);
   return picker;
