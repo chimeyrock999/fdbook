@@ -103,18 +103,24 @@ Pick a note in the list (or open `?path=content/notes/…mdx`). The editor is
 through the notes sync socket:
 
 - **Visual** edits blocks in place and looks like the note page: the
-  frontmatter title and description on top (a click opens the panel's
-  Frontmatter tab), the site's prose, callouts, code frames, keywords and accordions
-  (see Plugins). Type `/` for the block and component menu. Blocks you don't
-  touch are written back byte for byte. Syntax that no plugin understands
-  shows as source and still round-trips.
+  frontmatter title and description on top, the site's prose, callouts, code
+  frames, keywords and accordions (see Plugins). Type `/` for the block and
+  component menu. Blocks you don't touch are written back byte for byte.
+  Syntax that no plugin understands shows as source and still round-trips.
 - **Source** is CodeMirror 6 over the whole MDX file. Text that does not parse
   stays in Source until it is fixed.
-- **Frontmatter** (a tab of the side panel) edits title, description, visible and
-  graph. Every change is checked against `notesPageSchema`
-  (`lib/notes-schema.ts`) and written only when it passes. Only the edited
-  values change; comments, key order, quoting and other keys stay. Visual
-  hides the YAML block; Source shows it.
+- **Frontmatter** is edited at the top of the note in Visual. The title and
+  description are typed in place (Enter moves on to the next line, then the
+  body). The strip under them sums up the rest (icon, Hidden, graph id,
+  keyword and section counts, errors) and opens to edit it: the icon, from
+  the lucide names the site knows (`lib/notes-icons.ts`); whether the page
+  is shown on the site (off writes `visible: false`); the graph's id and
+  displayName; keywords as chips; sections with their keywords. Other keys
+  show read-only. Every change is checked against `notesPageSchema`
+  (`lib/notes-schema.ts`), written only when it passes, and the issues show
+  next to the field. Only the edited values change; comments, key order,
+  quoting and other keys stay. A locked note shows it read-only. Visual hides
+  the YAML block; Source shows it.
 - **Saving** is automatic: edits go to the file in the worktree (no commit).
   `Cmd/Ctrl-S` saves at once. Changes made on disk (Obsidian, an agent) are
   merged into the open note. If the same block changed on both sides, a
@@ -128,11 +134,12 @@ through the notes sync socket:
 
 ## Lint
 
-The side panel has two tabs, Frontmatter and Issues; below 1024px it is a
-drawer opened from the header's Panel button. Issues lists what the site
-would get wrong in the open note, checked about 400ms after typing stops and
-again when another file changes on disk. The toolbar shows the count;
-picking an issue opens Source with the problem selected and marked.
+The side panel lists the Issues; below 1024px it is a drawer opened from the
+header's Panel button. It shows what the site would get wrong in the open
+note, checked about 400ms after typing stops and again when another file
+changes on disk. The toolbar shows the count; picking an issue opens Source
+with the problem selected and marked, or, for one inside the frontmatter,
+focuses its field at the top of the note.
 
 The rules live in `server/lint/` and follow what the site does, not a style
 guide: the site turns many mistakes into plain text or a placeholder instead
