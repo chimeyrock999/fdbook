@@ -72,8 +72,8 @@
    and does not let you edit (a diagram preview, a control) keeps the
    editor's own look: an element whose nearest contenteditable is false,
    outside the Studio's own components (their `studio-*` classes). */
-.studio-prose.notes-prose [contenteditable='false'] :is(h1, h2, h3, h4, p, ul, ol, li, table, thead, tbody, tr, th, td, code, pre, kbd, blockquote, a):not([contenteditable='false'] [contenteditable='true'] *, [class*='studio-'] *),
-.studio-prose.notes-prose [contenteditable='false'] li:not([contenteditable='false'] [contenteditable='true'] *, [class*='studio-'] *)::before {
+.studio-prose.notes-prose [contenteditable='false'] :is(h1, h2, h3, h4, p, ul, ol, li, table, thead, tbody, tr, th, td, code, pre, kbd, blockquote, a):not([contenteditable='false'] [contenteditable='true'] *, .studio-prose [class*='studio-'] *),
+.studio-prose.notes-prose [contenteditable='false'] li:not([contenteditable='false'] [contenteditable='true'] *, .studio-prose [class*='studio-'] *)::before {
   all: revert-layer;
 }
 
