@@ -131,6 +131,8 @@ export function DiffPage({ client, target, revision, titles, onOpen, onBack }: {
   // A file still there opens in the editor or on its asset page; a meta.yaml has neither.
   const editable = (diff?.after ?? null) !== null && !target.path.endsWith('/meta.yaml');
   const status = diff?.status ?? null;
+  // The old name the server read main under: asked for, or a rename it found.
+  const from = diff?.from ?? target.from;
 
   return (
     <section className="studio-diff-page" aria-label={`Diff of ${title}`}>
@@ -145,7 +147,7 @@ export function DiffPage({ client, target, revision, titles, onOpen, onBack }: {
               <span className="studio-diff-chip" data-change={status} title={CHANGE_NAME[status]}>{status}</span>
             )}
           </h1>
-          <span>{target.from === undefined ? target.path : `${target.from} → ${target.path}`}</span>
+          <span>{from === undefined ? target.path : `${from} → ${target.path}`}</span>
         </div>
         {modes.length > 1 && (
           <div role="tablist" aria-label="Diff mode" className="inline-flex rounded-lg border border-[var(--fde-border)] bg-[var(--fde-card)] p-0.5">

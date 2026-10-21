@@ -126,6 +126,11 @@ describe('DiffPage', () => {
     expect(loadDiff).toHaveBeenCalledWith('content/notes/spark/adaptive.mdx', NOTE);
   });
 
+  it('names a rename the server found, though the request had no old name', async () => {
+    setup({ path: 'content/notes/spark/adaptive.mdx', from: NOTE, base: BASE, status: 'R', before: text(before), after: text(after) }, { path: 'content/notes/spark/adaptive.mdx' });
+    expect(await screen.findByText(`${NOTE} → content/notes/spark/adaptive.mdx`)).toBeTruthy();
+  });
+
   it('loads again when the changes do, and goes back to the list', async () => {
     const { loadDiff, client, titles, view, onBack, onOpen } = setup(noteDiff);
     await screen.findByText(/Against main/);
