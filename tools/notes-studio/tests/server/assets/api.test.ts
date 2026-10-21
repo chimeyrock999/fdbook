@@ -180,7 +180,9 @@ describe('assets API', () => {
       const plan = await planAssetRename(studio.root, { path: asset, name: 'locked', baseMtime: await mtime(asset) });
       await chmod(file('content/notes/zz-a-locked'), 0o555);
       try {
-        await expect(applyAssetPlan(studio.root, plan)).rejects.toMatchObject({ status: 500, message: expect.stringContaining('nothing was changed') });
+        const failure: unknown = await applyAssetPlan(studio.root, plan).then(() => null, (error: unknown) => error);
+        expect(failure).toMatchObject({ status: 500 });
+        expect((failure as Error).message).toContain('nothing was changed');
       } finally {
         await chmod(file('content/notes/zz-a-locked'), 0o755);
       }
