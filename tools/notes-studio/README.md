@@ -158,9 +158,11 @@ with their count on the icon); picking the open view again hides the
 sidebar, and so does the button at the foot of the bar. Drag the sidebar's
 right edge to resize it (220–480px), or focus the edge and use the arrow
 keys, Shift for bigger steps, Home and End for the limits; double-click
-resets it to 284px. The view, the width and whether it is shown are kept in
-localStorage. Below 768px the sidebar is a drawer, opened from the header's
-Notes button or the toolbar's issue count.
+resets it to 284px. It never takes more than the window leaves the editor
+(420px); resizing starts from the width it shows. The view, the width and
+whether it is shown are kept in localStorage. Below 768px the sidebar is a
+drawer, opened from the header's Notes button or the toolbar's issue count,
+and its view takes up to 320px.
 
 ## Graph markers
 

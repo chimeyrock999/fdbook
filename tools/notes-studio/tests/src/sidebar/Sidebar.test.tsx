@@ -87,6 +87,37 @@ describe('Sidebar', () => {
     expect(pane().style.width).toBe('284px');
   });
 
+  it('shows and resizes within what the window leaves the editor', () => {
+    const innerWidth = window.innerWidth;
+    try {
+      // 900px leaves 900 - 44 - 420 = 436px for the sidebar.
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 900 });
+      localStorage.setItem('notes-studio:sidebar', JSON.stringify({ view: 'notes', shown: true, width: 480 }));
+      render(<Harness />);
+      expect(pane().style.width).toBe('436px');
+      expect(separator().getAttribute('aria-valuenow')).toBe('436');
+      expect(separator().getAttribute('aria-valuemax')).toBe('436');
+      // The first key press moves what is shown.
+      fireEvent.keyDown(separator(), { key: 'ArrowLeft' });
+      expect(pane().style.width).toBe('420px');
+      fireEvent.keyDown(separator(), { key: 'End' });
+      expect(stored()).toMatchObject({ width: 436 });
+      // A drag past the edge stops there too.
+      fireEvent.pointerDown(separator(), { button: 0, pointerId: 1 });
+      fireEvent.pointerMove(separator(), { clientX: 700, pointerId: 1 });
+      fireEvent.pointerUp(separator(), { pointerId: 1 });
+      expect(stored()).toMatchObject({ width: 436 });
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: innerWidth });
+    }
+  });
+
+  it("leaves a phone drawer's width to the stylesheet", () => {
+    localStorage.setItem('notes-studio:sidebar', JSON.stringify({ view: 'notes', shown: true, width: 220 }));
+    render(<Harness drawer />);
+    expect(pane().style.width).toBe('');
+  });
+
   it('drags the edge with the main button only, and saves the width once at the end', () => {
     render(<Harness />);
     fireEvent.pointerDown(separator(), { button: 2, pointerId: 1 });

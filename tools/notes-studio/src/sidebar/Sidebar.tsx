@@ -1,5 +1,5 @@
 import { CircleAlert, FolderTree, PanelLeft } from 'lucide-react';
-import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { clampWidth, SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, type Sidebar as SidebarState, type SidebarView } from './useSidebar';
 
 // The open note's issue count for the activity bar, or null with no note.
@@ -7,6 +7,26 @@ export type IssueCount = { count: number; errors: boolean } | null;
 
 const STEP = 16;
 const BIG_STEP = 48;
+// The activity bar, and the room the editor keeps beside the sidebar.
+const ACTIVITY_WIDTH = 44;
+const EDITOR_MIN = 420;
+
+// The widest the sidebar can be in this window. The stored width is a
+// preference: the sidebar shows at most this, and resizing starts from what
+// it shows.
+function widthCap() {
+  return Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, window.innerWidth - ACTIVITY_WIDTH - EDITOR_MIN));
+}
+
+function useWidthCap() {
+  const [cap, setCap] = useState(widthCap);
+  useEffect(() => {
+    const onResize = () => { setCap(widthCap()); };
+    window.addEventListener('resize', onResize);
+    return () => { window.removeEventListener('resize', onResize); };
+  }, []);
+  return cap;
+}
 
 // The left side of the Studio, as in VS Code: an activity bar with the Notes
 // and Issues views and, at its foot, the button that hides the sidebar; then
@@ -28,6 +48,9 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
 }) {
   const pane = useRef<HTMLDivElement>(null);
   const shown = state.shown || drawer;
+  const cap = useWidthCap();
+  const width = Math.min(state.width, cap);
+  const fit = (next: number) => Math.min(cap, clampWidth(next));
 
   // The drag sets the pane's width directly and saves it once at the end,
   // so moving the pointer neither re-renders the Studio nor writes storage.
@@ -39,14 +62,14 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
     const handle = event.currentTarget;
     handle.setPointerCapture(event.pointerId);
     handle.dataset.dragging = '';
-    let width = state.width;
+    let dragged = width;
     const move = (next: globalThis.PointerEvent) => {
-      width = clampWidth(next.clientX - left);
-      element.style.width = `${String(width)}px`;
-      handle.setAttribute('aria-valuenow', String(width));
+      dragged = fit(next.clientX - left);
+      element.style.width = `${String(dragged)}px`;
+      handle.setAttribute('aria-valuenow', String(dragged));
     };
     const stop = () => {
-      state.resize(width);
+      state.resize(dragged);
       delete handle.dataset.dragging;
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', stop);
@@ -59,10 +82,10 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
 
   const resizeByKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = event.shiftKey ? BIG_STEP : STEP;
-    const next = { ArrowLeft: state.width - step, ArrowRight: state.width + step, Home: SIDEBAR_MIN, End: SIDEBAR_MAX }[event.key];
+    const next = { ArrowLeft: width - step, ArrowRight: width + step, Home: SIDEBAR_MIN, End: cap }[event.key];
     if (next === undefined) return;
     event.preventDefault();
-    state.resize(next);
+    state.resize(fit(next));
   };
 
   const viewButton = (view: SidebarView, label: string, icon: ReactNode, badge?: ReactNode) => (
@@ -103,7 +126,8 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
           <PanelLeft size={18} strokeWidth={1.8} />
         </button>
       </nav>
-      <div ref={pane} className="studio-pane" style={{ width: state.width }} hidden={!shown}>
+      {/* A phone's drawer sizes the view itself (see .studio-pane). */}
+      <div ref={pane} className="studio-pane" style={drawer ? undefined : { width }} hidden={!shown}>
         <div className="studio-pane-view" hidden={state.view !== 'notes'}>
           {notes}
         </div>
@@ -117,8 +141,8 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
           aria-orientation="vertical"
           aria-label="Resize the sidebar"
           aria-valuemin={SIDEBAR_MIN}
-          aria-valuemax={SIDEBAR_MAX}
-          aria-valuenow={state.width}
+          aria-valuemax={cap}
+          aria-valuenow={width}
           tabIndex={0}
           title="Drag to resize, double-click to reset"
           className="studio-resize"
