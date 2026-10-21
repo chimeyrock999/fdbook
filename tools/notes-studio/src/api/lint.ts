@@ -1,6 +1,8 @@
 // Client for the Studio lint (server/lint/api.ts). Types mirror
 // server/lint/types.ts.
 
+import { errorOf, readJson } from './json';
+
 export type LintSeverity = 'error' | 'warning';
 export type LintPoint = { line: number; column: number; offset: number };
 export type LintIssue = { rule: string; severity: LintSeverity; message: string; start: LintPoint; end: LintPoint };
@@ -15,11 +17,8 @@ export function createLintClient(base = '') {
         body: JSON.stringify({ path, content }),
         signal,
       });
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? `HTTP ${String(response.status)}`);
-      }
-      return ((await response.json()) as { issues: LintIssue[] }).issues;
+      if (!response.ok) throw await errorOf(response);
+      return (await readJson<{ issues: LintIssue[] }>(response)).issues;
     },
   };
 }

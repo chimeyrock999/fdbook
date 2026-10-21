@@ -7,40 +7,61 @@
   gap: 0.5rem;
   margin-block: 1rem;
 }
+/* Not overflow: hidden, which would clip the kind menu: the head and the
+   body round their own corners. */
 .studio-accordion {
-  overflow: hidden;
   border: 1px solid var(--acc-border);
   border-radius: 10px;
 }
 .studio-accordion-head {
   display: flex;
-  width: 100%;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.625rem 0.75rem;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem 0.5rem 0.5rem;
+  border-radius: 9px;
   background: var(--acc-tint);
-  text-align: left;
-  cursor: pointer;
 }
-.studio-accordion-head svg {
+.studio-accordion.is-open .studio-accordion-head {
+  border-radius: 9px 9px 0 0;
+}
+.studio-accordion-kind {
   flex: none;
   color: var(--acc-title);
 }
+/* An input that reads as the title; its border shows on hover and focus. */
 .studio-accordion-title {
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fde-foreground);
   font-size: 0.84375rem;
   font-weight: 600;
   line-height: 1.5;
 }
+.studio-accordion-title:hover:not(:read-only) {
+  border-color: var(--acc-border);
+}
+.studio-accordion-title:focus:not(:read-only) {
+  border-color: var(--acc-line);
+  background: var(--fde-background);
+  outline: none;
+}
 .studio-accordion-state {
   flex: none;
+  padding: 4px 6px;
+  border-radius: 5px;
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--acc-title);
+  cursor: pointer;
+}
+.studio-accordion-state:hover {
+  background: color-mix(in oklab, currentColor 12%, transparent);
 }
 .studio-accordion-body {
   border-top: 1px solid var(--acc-line);
@@ -51,6 +72,7 @@
   resize: vertical;
   border: 0;
   padding: 0.75rem 0.9375rem;
+  border-radius: 0 0 9px 9px;
   background: var(--garden-code-bg);
   color: var(--fde-foreground);
   font: 12.5px/1.6 var(--font-mono);

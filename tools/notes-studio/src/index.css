@@ -270,68 +270,143 @@
     outline-offset: 1px;
   }
 
-  /* Panels: notes | editor | side panel (lint issues) on desktop.
-     Below 1024px the side panel becomes a drawer; below 768px the notes do
-     too. */
-  .studio-notes,
-  .studio-panel {
+  /* Layout: sidebar (activity bar + the open view) | editor. The view's
+     width is set inline (it can be resized). Below 768px the sidebar is a
+     drawer. */
+  .studio-sidebar {
+    display: flex;
+    flex: none;
     min-height: 0;
-    overflow: auto;
     background: var(--fde-card);
   }
-  .studio-notes {
-    width: 268px;
+  .studio-activity {
+    display: flex;
     flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    width: 44px;
+    padding: 8px 0;
     border-right: 1px solid var(--fde-border);
   }
-  .studio-panel {
-    width: 300px;
-    flex: none;
+  .studio-activity-button {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-activity-button:hover {
+    color: var(--fde-foreground);
+    background: var(--fde-accent);
+  }
+  .studio-activity-button[aria-pressed='true'] {
+    color: var(--fde-foreground);
+  }
+  /* The open view, marked like VS Code's activity bar. */
+  .studio-activity-button:not(.studio-activity-bottom)[aria-pressed='true']::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: -4px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--fde-primary);
+  }
+  .studio-activity-bottom {
+    margin-top: auto;
+  }
+  .studio-activity-count {
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    border-radius: 8px;
+    background: var(--fde-warning);
+    color: var(--fde-background);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    line-height: 15px;
+    text-align: center;
+  }
+  .studio-activity-count[data-errors] {
+    background: var(--fde-error);
+  }
+  .studio-pane {
+    position: relative;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    border-left: 1px solid var(--fde-border);
-  }
-  .studio-panel-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--fde-border);
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .studio-panel-body {
     min-height: 0;
+    border-right: 1px solid var(--fde-border);
+  }
+  .studio-pane-view {
+    display: flex;
     flex: 1;
+    flex-direction: column;
+    min-height: 0;
     overflow: auto;
-    padding: 12px 14px 20px;
   }
-  @media (max-width: 1023px) {
-    .studio-panel {
-      display: none;
-    }
+  .studio-pane-head {
+    padding: 12px 12px 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
   }
-  @media (max-width: 767px) {
-    .studio-notes {
-      display: none;
-    }
+  .studio-resize {
+    position: absolute;
+    top: 0;
+    right: -5px;
+    bottom: 0;
+    z-index: 5;
+    width: 10px;
+    cursor: col-resize;
+    touch-action: none;
   }
-  .studio-drawer-open {
-    display: block;
+  .studio-resize::after {
+    content: '';
     position: absolute;
     top: 0;
     bottom: 0;
-    z-index: 40;
-    width: min(320px, 88%);
-    box-shadow: 0 0 30px rgb(0 0 0 / 0.2);
+    left: 4px;
+    width: 2px;
+    border-radius: 1px;
   }
-  .studio-notes.studio-drawer-open {
-    left: 0;
+  .studio-resize:hover::after,
+  .studio-resize:focus-visible::after,
+  .studio-resize[data-dragging]::after {
+    background: var(--fde-info);
   }
-  .studio-panel.studio-drawer-open {
-    display: flex;
-    right: 0;
+  .studio-resize:focus-visible {
+    outline: none;
+  }
+  @media (max-width: 767px) {
+    .studio-sidebar {
+      display: none;
+    }
+    .studio-sidebar.studio-drawer-open {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 40;
+      display: flex;
+      max-width: 92%;
+      box-shadow: 0 0 30px rgb(0 0 0 / 0.2);
+    }
+    .studio-pane {
+      width: min(320px, calc(92vw - 44px));
+    }
+    .studio-resize {
+      display: none;
+    }
   }
   .studio-scrim {
     position: absolute;
@@ -366,12 +441,24 @@
   .studio-icon-button:hover {
     color: var(--fde-foreground);
   }
+  /* Spacing follows the site's sidebar (fumadocs-ui): 34px rows, 14px text,
+     16px icons 8px from the label, a guide line per nested level. */
+  .studio-tree-group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .studio-tree-nested {
+    margin: 2px 0 0 12px;
+    padding-left: 8px;
+    border-left: 1px solid var(--fde-border);
+  }
   .studio-tree-row {
     display: flex;
     align-items: center;
-    gap: 3px;
-    min-height: 28px;
-    padding-right: 2px;
+    gap: 4px;
+    min-height: 34px;
+    padding: 0 2px 0 4px;
     border-radius: 6px;
   }
   .studio-tree-row:hover,
@@ -407,12 +494,12 @@
   .studio-tree-label {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     min-width: 0;
     flex: 1;
-    padding: 4px 2px;
+    padding: 6px 2px;
     text-align: left;
-    font-size: 13px;
+    font-size: 14px;
   }
   .studio-tree-label svg {
     flex: none;
