@@ -4,7 +4,7 @@ import type { MdxJsxFlowElement, MdxJsxTextElement } from 'mdast-util-mdx-jsx';
 import { visit } from 'unist-util-visit';
 import { parseNote } from '../lint/lint.ts';
 import { pageUrl } from '../lint/rules/links.ts';
-import { ASSET_TYPES, ASSETS_DIR, extensionOf, publicAsset } from '../security/asset-types.ts';
+import { ASSETS_DIR, extensionOf, isAssetExtension, publicAsset } from '../security/asset-types.ts';
 
 // References from a note to files under public/notes, found on the parsed
 // note so code blocks and the frontmatter never count. Each reference is
@@ -45,7 +45,7 @@ function urlAsset(href: string, notePath: string) {
 
 // `public/notes/…` for a file the Studio manages there, else null.
 function managed(asset: string | null) {
-  if (asset === null || !asset.startsWith('notes/') || !(extensionOf(asset) in ASSET_TYPES)) return null;
+  if (asset === null || !asset.startsWith('notes/') || !isAssetExtension(extensionOf(asset))) return null;
   return `public/${asset}`;
 }
 

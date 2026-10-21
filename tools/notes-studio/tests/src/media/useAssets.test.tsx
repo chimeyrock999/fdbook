@@ -28,7 +28,7 @@ function fakes() {
   };
 }
 
-const entry = (path: string, kind: FileEntry['kind'] = 'asset'): FileEntry => ({ path, kind, mtimeMs: 1 });
+const entry = (path: string, kind: FileEntry['kind'] = 'asset'): FileEntry => ({ path, kind, mtimeMs: 1, size: 1 });
 
 describe('useAssets', () => {
   it('lists assets only and follows the disk, including events that arrive while listing', async () => {

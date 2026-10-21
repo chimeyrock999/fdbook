@@ -1,16 +1,18 @@
-import { readFile, rename } from 'node:fs/promises';
+import { readFile, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { HttpError } from '../http.ts';
+import { buildTree, readNotesContent } from './build.ts';
 import { listEditableFiles, statOrNull, writeAtomic } from '../files/store.ts';
 import { ASSETS_DIR, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 import { knownTargets, replaceSegment, rewriteLinks, type Rename } from './links.ts';
 import { insertEntry, metaTemplate, MetaEditError, moveEntry, pagesTemplate, readPages, replaceEntry, setDefaultOpen } from './meta-edit.ts';
 import { slugify } from '../../src/slug.ts';
 import { pageTemplate } from './template.ts';
-import type { TreeFolder, TreeNode } from './types.ts';
+import { writeMetaVisible, writePageVisible } from './visible-edit.ts';
+import type { TreeFolder, TreeNode, TreePage } from './types.ts';
 
 // Page tree changes: create a page, rename a page or folder, move an entry
-// within its folder. Each is planned against the disk first (the files to
+// within its folder, hide or show a page or folder. Each is planned against the disk first (the files to
 // write, with the mtime each was read at), so a dry run can show it, then
 // applied. Paths are relative to content/notes.
 
@@ -18,6 +20,7 @@ export type TreeChange =
   | { type: 'add'; path: string }
   | { type: 'change'; path: string; detail: string }
   | { type: 'move'; path: string; to: string }
+  | { type: 'delete'; path: string }
   // Left where it is: a page's images in public/notes (a worktree path).
   | { type: 'keep'; path: string; detail: string };
 
@@ -25,6 +28,8 @@ type Write = { path: string; content: string; baseMtime: number | null };
 
 export type Plan = {
   writes: Write[];
+  // A file to remove, with the mtime it was read at.
+  remove?: { path: string; baseMtime: number };
   move: { from: string; to: string } | null;
   changes: TreeChange[];
   // The note to open afterwards.
@@ -236,6 +241,14 @@ function renameEntries(content: string, dir: string, change: Rename) {
   return { next, count };
 }
 
+// The names of a folder's children in their order, as a `pages` list for a
+// folder that has no meta.yaml yet.
+function listedNames(folder: TreeFolder) {
+  return folder.children
+    .filter((child): child is TreePage | TreeFolder => child.entry !== null && (child.kind === 'page' || child.kind === 'folder'))
+    .map((child) => slugOf(child.path));
+}
+
 export type MoveRequest = { folder: string; from: unknown; to: unknown; baseMtime: unknown };
 
 // Moves entry `from` of the folder's meta.yaml to index `to`. A folder
@@ -251,9 +264,7 @@ export async function planMove(root: string, tree: TreeFolder, request: MoveRequ
     return { writes: [{ path: folder.meta, content, baseMtime: meta.mtimeMs }], move: null, changes: [{ type: 'change', path: folder.meta, detail: 'new order' }], open: null };
   }
   if (request.baseMtime !== null) throw new HttpError(409, `${NOTES_DIR}/${inDir(folder.path, 'meta.yaml')} changed on disk`);
-  const names = folder.children
-    .filter((child) => child.entry !== null && (child.kind === 'page' || child.kind === 'folder'))
-    .map((child) => (child.kind === 'folder' || child.kind === 'page' ? child.path.slice(child.path.lastIndexOf('/') + 1).replace(/\.mdx$/, '') : ''));
+  const names = listedNames(folder);
   if (!(from >= 0 && from < names.length && to >= 0 && to < names.length)) throw new HttpError(409, 'no such entry');
   names.splice(to, 0, ...names.splice(from, 1));
   const path = inDir(folder.path, 'meta.yaml');
@@ -261,6 +272,74 @@ export async function planMove(root: string, tree: TreeFolder, request: MoveRequ
   // Only `pages`: the folder keeps its title from the index page and stays
   // closed by default, as it was without a meta.yaml.
   return { writes: [{ path, content: pagesTemplate(names), baseMtime: null }], move: null, changes: [{ type: 'add', path }], open: null };
+}
+
+export type VisibilityRequest = { path: unknown; visible: unknown };
+
+// Hides a page or folder from the site's sidebar (`visible: false` in its
+// frontmatter or meta.yaml), or shows it again (the key comes out). A
+// folder without meta.yaml gets one only to hide it, and loses it again
+// when shown, unless its order changed since. An unlisted node shown again
+// is also listed in its folder's `pages`: its `!name` entry becomes `name`,
+// or it is added at the end, as a create adds.
+export async function planVisibility(root: string, tree: TreeFolder, request: VisibilityRequest): Promise<Plan> {
+  const path = typeof request.path === 'string' ? request.path : '';
+  if (path === '' || path === 'index.mdx') throw new HttpError(400, 'the root page and folder are always shown');
+  if (typeof request.visible !== 'boolean') throw new HttpError(400, 'visible must be true or false');
+  const visible = request.visible;
+  const node = findNode(tree, (each) => (each.kind === 'page' || each.kind === 'folder') && each.path === path);
+  if (node?.kind !== 'page' && node?.kind !== 'folder') throw new HttpError(404, `no such page or folder: ${NOTES_DIR}/${path}`);
+
+  const plan: Plan = { writes: [], move: null, changes: [], open: null };
+  if (visible && node.hidden === 'unlisted') await listInParent(root, tree, path, plan);
+  const file = node.kind === 'folder' ? node.meta : node.path;
+  if (node.kind === 'folder' && file === null) {
+    if (!visible) {
+      const meta = inDir(path, 'meta.yaml');
+      guarded(root, meta);
+      // With its children listed, as a move would, so they can still be
+      // ordered: a meta.yaml without `pages` gives them no entries.
+      plan.writes.unshift({ path: meta, content: hiddenMeta(listedNames(node)), baseMtime: null });
+      plan.changes.unshift({ type: 'add', path: meta });
+    }
+  } else if (file !== null) {
+    const current = await readText(root, file);
+    const content = metaError(() => (node.kind === 'folder' ? writeMetaVisible : writePageVisible)(current.content, visible));
+    if (node.kind === 'folder' && visible && current.content === hiddenMeta(await namesWithoutMeta(root, file, path))) {
+      plan.remove = { path: file, baseMtime: current.mtimeMs };
+      plan.changes.unshift({ type: 'delete', path: file });
+    } else if (content !== current.content) {
+      plan.writes.unshift({ path: file, content, baseMtime: current.mtimeMs });
+      plan.changes.unshift({ type: 'change', path: file, detail: visible ? 'removes visible: false' : 'visible: false' });
+    }
+  }
+  return plan;
+}
+
+// The meta.yaml that hides a folder which had none.
+const hiddenMeta = (names: string[]) => `visible: false\n${pagesTemplate(names)}`;
+
+// The order the folder's children would have without its meta.yaml.
+async function namesWithoutMeta(root: string, meta: string, path: string) {
+  const content = await readNotesContent(root);
+  content.metas.delete(meta);
+  return listedNames(findFolder(buildTree(content), path));
+}
+
+// Puts the unlisted node at `path` in its folder's `pages`.
+async function listInParent(root: string, tree: TreeFolder, path: string, plan: Plan) {
+  const parent = findFolder(tree, dirOf(path));
+  if (parent.meta === null) return;
+  const meta = await readText(root, parent.meta);
+  const pages = metaError(() => readPages(meta.content)) ?? [];
+  const slug = slugOf(path);
+  // A page `x.mdx` next to a folder `x/`: the entry reaches the folder.
+  if (pages.includes(slug)) throw new HttpError(409, `"${slug}" in ${NOTES_DIR}/${parent.meta} already names another page or folder: rename one of them first`);
+  const excluded = pages.indexOf(`!${slug}`);
+  const content = excluded === -1 ? metaError(() => insertEntry(meta.content, slug, pages.length)) : metaError(() => replaceEntry(meta.content, excluded, slug));
+  if (content === null) return;
+  plan.writes.push({ path: parent.meta, content, baseMtime: meta.mtimeMs });
+  plan.changes.push({ type: 'change', path: parent.meta, detail: excluded === -1 ? `adds "${slug}"` : `"!${slug}" becomes "${slug}"` });
 }
 
 // Where `path` is after the plan's move.
@@ -273,9 +352,9 @@ function movedPath(path: string, move: Plan['move']) {
 // Writes the plan. Every file must still have the mtime it was planned
 // from, checked once for all and again just before each write. The page or
 // folder moves first, so a move that fails leaves everything as it was;
-// then each file is written atomically, at its place after the move. Not a
-// transaction: if a write fails, the ones before it stay written and the
-// error names the failed path.
+// then each file is written atomically, at its place after the move, and
+// the file to remove goes last. Not a transaction: if a write fails, the
+// ones before it stay written and the error names the failed path.
 export async function applyPlan(root: string, plan: Plan) {
   const check = async (path: string, baseMtime: number | null) => {
     const info = await statOrNull(guarded(root, path));
@@ -283,6 +362,7 @@ export async function applyPlan(root: string, plan: Plan) {
     return info;
   };
   for (const write of plan.writes) await check(write.path, write.baseMtime);
+  if (plan.remove) await check(plan.remove.path, plan.remove.baseMtime);
   if (plan.move) {
     if (!(await statOrNull(absolute(root, plan.move.from)))) throw new HttpError(409, `${NOTES_DIR}/${plan.move.from} is gone`);
     if (await statOrNull(absolute(root, plan.move.to))) throw new HttpError(409, `${NOTES_DIR}/${plan.move.to} already exists`);
@@ -296,5 +376,9 @@ export async function applyPlan(root: string, plan: Plan) {
     } catch (error) {
       throw new HttpError(500, `could not write ${NOTES_DIR}/${path}: ${(error as Error).message}`);
     }
+  }
+  if (plan.remove) {
+    await check(plan.remove.path, plan.remove.baseMtime);
+    await rm(guarded(root, plan.remove.path));
   }
 }

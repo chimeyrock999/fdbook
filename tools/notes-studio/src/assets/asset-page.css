@@ -1,0 +1,242 @@
+/* The asset page in the main pane (src/assets/AssetPage.tsx) and the
+   Replace dialog. Panels, usage rows and the filter pills come from
+   assets.css and index.css. */
+@layer components {
+  .studio-asset-page {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .studio-asset-page-note {
+    margin: auto;
+    padding: 24px;
+    font-size: 13px;
+    color: var(--fde-muted-foreground);
+    overflow-wrap: anywhere;
+  }
+  .studio-asset-page-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--fde-border);
+  }
+  .studio-asset-page-title {
+    display: grid;
+    min-width: 0;
+    flex: 1 1 200px;
+  }
+  .studio-asset-page-title h1,
+  .studio-asset-page-title span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-asset-page-title h1 {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .studio-asset-page-title span {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-asset-page-bar .studio-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .studio-button.studio-asset-delete:not(:disabled) {
+    color: var(--fde-error);
+  }
+  .studio-asset-page-body {
+    display: grid;
+    flex: 1;
+    align-content: start;
+    gap: 16px;
+    overflow: auto;
+    padding: 16px;
+  }
+  .studio-asset-preview {
+    overflow: hidden;
+    border: 1px solid var(--fde-border);
+    border-radius: 10px;
+    background: var(--fde-card);
+  }
+  .studio-asset-preview-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--fde-border);
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  /* A checkerboard, so transparent parts of an image show as such. */
+  .studio-asset-canvas {
+    --check: var(--fde-muted);
+    --canvas-height: min(55dvh, 520px);
+    display: grid;
+    place-items: center;
+    height: var(--canvas-height);
+    overflow: auto;
+    background-color: var(--fde-card);
+    background-image:
+      linear-gradient(45deg, var(--check) 25%, transparent 25%),
+      linear-gradient(-45deg, var(--check) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, var(--check) 75%),
+      linear-gradient(-45deg, transparent 75%, var(--check) 75%);
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    background-size: 16px 16px;
+  }
+  .studio-asset-canvas[data-drop] {
+    outline: 2px dashed var(--fde-primary);
+    outline-offset: -8px;
+  }
+  /* A percentage height does not resolve in the auto-sized grid row: fit
+     to the canvas height itself. */
+  .studio-asset-canvas img[data-zoom='fit'] {
+    max-width: 94%;
+    max-height: calc(var(--canvas-height) - 24px);
+  }
+  .studio-asset-canvas img[data-zoom='actual'] {
+    max-width: none;
+    /* Scrolls from its top-left corner instead of overflowing the centre. */
+    place-self: start;
+  }
+  .studio-asset-canvas iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: var(--fde-background);
+  }
+  .studio-asset-noview {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    padding: 16px;
+    font-size: 12.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-asset-info {
+    display: grid;
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    align-items: start;
+    gap: 16px;
+  }
+  @media (max-width: 1023px) {
+    .studio-asset-info {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  @media (max-width: 767px) {
+    .studio-asset-canvas {
+      --canvas-height: 240px;
+    }
+  }
+  .studio-asset-panel {
+    display: grid;
+    min-width: 0;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--fde-border);
+    border-radius: 10px;
+  }
+  .studio-asset-panel h2 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-asset-panel dl {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 12px;
+    font-size: 12.5px;
+  }
+  .studio-asset-panel dt {
+    color: var(--fde-muted-foreground);
+  }
+  .studio-asset-panel dd {
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .studio-asset-warn {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--fde-warning) 12%, transparent);
+    font-size: 12px;
+  }
+  .studio-asset-warn b {
+    color: var(--fde-warning);
+  }
+
+  /* The Replace dialog: the old file and the new one side by side. */
+  .studio-asset-pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+  }
+  .studio-asset-pair-arrow {
+    color: var(--fde-muted-foreground);
+  }
+  .studio-asset-side {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    background: var(--fde-background);
+  }
+  .studio-asset-side-empty {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    min-height: 120px;
+    padding: 8px;
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-asset-side-thumb {
+    display: grid;
+    place-items: center;
+    height: 110px;
+    background: var(--fde-muted);
+    color: var(--fde-muted-foreground);
+  }
+  .studio-asset-side-thumb img {
+    max-width: 92%;
+    max-height: 96px;
+  }
+  .studio-asset-side figcaption {
+    display: grid;
+    gap: 1px;
+    padding: 6px 8px;
+    font-size: 11.5px;
+  }
+  .studio-asset-side figcaption b {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .studio-asset-side figcaption span {
+    font-variant-numeric: tabular-nums;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-asset-drop {
+    padding: 10px;
+    border: 1px dashed var(--fde-border);
+    border-radius: 8px;
+    font-size: 12px;
+    text-align: center;
+    color: var(--fde-muted-foreground);
+    cursor: pointer;
+  }
+  .studio-asset-drop:focus-within {
+    outline: 2px solid var(--fde-info);
+    outline-offset: 1px;
+  }
+}

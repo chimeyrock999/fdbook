@@ -225,6 +225,27 @@ describe('tree API', () => {
     });
   });
 
+  describe('visibility', () => {
+    it('shows a dry run, then hides the page', async () => {
+      const path = 'distributed-systems/rpc-and-threads.mdx';
+      const before = await text(path);
+      const dry = await post({ op: 'visibility', dryRun: true, path, visible: false });
+      expect(dry.status).toBe(200);
+      expect((json(dry) as Answer).changes).toEqual([{ type: 'change', path, detail: 'visible: false' }]);
+      expect(await text(path)).toBe(before);
+      expect((await post({ op: 'visibility', path, visible: false })).status).toBe(200);
+      expect(await text(path)).toContain('\nvisible: false\n');
+      expect((await post({ op: 'visibility', path, visible: true })).status).toBe(200);
+      expect(await text(path)).toBe(before);
+    });
+
+    it('refuses the root page and a request without visible', async () => {
+      expect((await post({ op: 'visibility', path: 'index.mdx', visible: false })).status).toBe(400);
+      expect((await post({ op: 'visibility', path: 'distributed-systems' })).status).toBe(400);
+      expect((await post({ op: 'visibility', path: 'nothing.mdx', visible: false })).status).toBe(404);
+    });
+  });
+
   it('takes only JSON from this origin', async () => {
     expect((await post({ op: 'move' }, { 'Content-Type': 'text/plain' })).status).toBe(415);
     expect((await post({ op: 'move' }, { Origin: 'http://evil.example' })).status).toBe(403);
