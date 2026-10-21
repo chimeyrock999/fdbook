@@ -4,8 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NoteGate } from '../../../src/notes/NoteGate';
 import { NoteList } from '../../../src/notes/NoteList';
+import { OpenOnSite } from '../../../src/notes/OpenOnSite';
 import type { createFilesClient } from '../../../src/api/files';
-import { applyFileEvent, filterNotes, loadNotes, noteFromUrl, syncPath } from '../../../src/notes/notes';
+import { applyFileEvent, filterNotes, loadNotes, noteFromUrl, noteRoute, siteUrlFrom, syncPath } from '../../../src/notes/notes';
 
 const notes = [
   { path: 'content/notes/streaming/index.mdx', title: 'Streaming' },
@@ -21,6 +22,14 @@ describe('note helpers', () => {
     expect(noteFromUrl('?path=content/notes/meta.yaml')).toBeNull();
     expect(noteFromUrl('?path=package.json')).toBeNull();
     expect(noteFromUrl('')).toBeNull();
+  });
+
+  it('maps a note to its page on the site', () => {
+    expect(noteRoute('content/notes/index.mdx')).toBe('/notes');
+    expect(noteRoute('content/notes/database/index.mdx')).toBe('/notes/database');
+    expect(noteRoute('content/notes/database/wal.mdx')).toBe('/notes/database/wal');
+    expect(noteRoute('content/notes/(drafts)/spark/joins.mdx')).toBe('/notes/spark/joins');
+    expect(noteRoute('content/notes/a b/c#d.mdx')).toBe('/notes/a%20b/c%23d');
   });
 
   it('filters by title or path, ignoring case', () => {
@@ -83,6 +92,21 @@ describe('NoteList', () => {
     expect(onSelect).toHaveBeenCalledWith('content/notes/database/wal.mdx');
     await userEvent.type(screen.getByLabelText('Filter notes'), 'zzz');
     expect(screen.getByText(/No note matches/)).toBeTruthy();
+  });
+});
+
+describe('OpenOnSite', () => {
+  it("links to the note's page on the site, in a new tab", () => {
+    render(<OpenOnSite path="content/notes/database/index.mdx" siteUrl="http://127.0.0.1:3001/" />);
+    const link = screen.getByRole('link', { name: 'Open on site' });
+    expect(link.getAttribute('href')).toBe('http://127.0.0.1:3001/notes/database');
+    expect(link.getAttribute('target')).toBe('_blank');
+  });
+
+  it('defaults to the dev server on localhost:3000', () => {
+    expect(siteUrlFrom(undefined)).toBe('http://localhost:3000');
+    expect(siteUrlFrom('  ')).toBe('http://localhost:3000');
+    expect(siteUrlFrom(' http://127.0.0.1:3001 ')).toBe('http://127.0.0.1:3001');
   });
 });
 

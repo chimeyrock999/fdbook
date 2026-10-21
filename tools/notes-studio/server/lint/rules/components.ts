@@ -97,6 +97,16 @@ function checkKinds(node: Nodes, source: string, report: Report) {
         ...headOf(node, source),
       });
     }
+    // components/notes-callout.tsx spreads `style` into the CSS it sets; a
+    // string there (`style="warning"`) is no CSS and picks no type.
+    if (typeof attribute(node, 'style') === 'string') {
+      report({
+        rule: 'callout-style',
+        severity: 'error',
+        message: 'Callout `style` takes CSS (`style={{…}}`), not a string, so the site ignores it. To pick the look, use `type`.',
+        ...headOf(node, source),
+      });
+    }
     return;
   }
   const accordion = isJsx(node, ['Accordion']) || (node.type === 'containerDirective' && node.name === 'accordion') ? node : null;
