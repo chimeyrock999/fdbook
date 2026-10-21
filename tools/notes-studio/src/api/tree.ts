@@ -15,6 +15,8 @@ export type TreeFolder = Base & {
   meta: string | null;
   metaMtime: number | null;
   index: string | null;
+  // meta.yaml's `defaultOpen`: whether the site's sidebar starts it open.
+  defaultOpen: boolean;
   hidden: Hidden | null;
   children: TreeNode[];
 };
@@ -31,10 +33,15 @@ export type TreeChange =
   // Left where it is: a page's images in public/notes (a worktree path).
   | { type: 'keep'; path: string; detail: string };
 
+// A page `x.mdx`, a folder page `x/index.mdx` with `x/meta.yaml`, or a
+// folder with only `x/meta.yaml`.
+export type CreateKind = 'page' | 'folder-page' | 'folder';
+
 export type TreeRequest =
-  | { op: 'create'; parent: string; slug: string; title: string; kind: 'page' | 'folder'; after: number | null }
+  | { op: 'create'; parent: string; slug: string; title: string; kind: CreateKind; defaultOpen: boolean; after: number | null }
   | { op: 'rename'; path: string; slug: string }
-  | { op: 'move'; folder: string; from: number; to: number; baseMtime: number | null };
+  | { op: 'move'; folder: string; from: number; to: number; baseMtime: number | null }
+  | { op: 'set-open'; folder: string; defaultOpen: boolean; baseMtime: number | null };
 
 export type TreeAnswer = { changes: TreeChange[]; open: string | null };
 

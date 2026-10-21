@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
-import type { TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
+import type { CreateKind, TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
 import { makeOthersInert, trapFocus } from '../dialog-focus';
 import { slugify } from '../slug';
 import { renamedPath, slugOf } from './tree';
@@ -104,34 +104,44 @@ function Preview({ preview, failed }: { preview: ReturnType<typeof usePreview>; 
   );
 }
 
-// A new page or folder page in `parent`, after entry `after`.
+const KINDS: { kind: CreateKind; label: string; file: (slug: string) => string; title: string }[] = [
+  { kind: 'page', label: 'Page', file: (slug) => `${slug}.mdx`, title: 'New page in' },
+  { kind: 'folder-page', label: 'Folder page', file: (slug) => `${slug}/index.mdx`, title: 'New folder page in' },
+  { kind: 'folder', label: 'Folder', file: (slug) => `${slug}/meta.yaml`, title: 'New folder in' },
+];
+
+// A new page, folder page or plain folder in `parent`, after entry `after`.
+// `onDone` gets the note to open, or the new folder's path when the new node
+// is a plain folder.
 export function CreateDialog({ client, parent, after, onDone, onClose }: {
   client: TreeClient;
   parent: TreeFolder;
   after: number | null;
-  onDone: (open: string | null) => void;
+  onDone: (created: { open: string } | { folder: string }) => void;
   onClose: () => void;
 }) {
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState<string | null>(null);
-  const [kind, setKind] = useState<'page' | 'folder'>('page');
+  const [kind, setKind] = useState<CreateKind>('page');
+  const [defaultOpen, setDefaultOpen] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   // Typed freely; what is saved is its slug form.
   const shownSlug = slug ?? slugify(title);
   const finalSlug = slugify(shownSlug);
-  const request: TreeRequest | null = finalSlug === '' ? null : { op: 'create', parent: parent.path, slug: finalSlug, title, kind, after };
+  const request: TreeRequest | null =
+    finalSlug === '' ? null : { op: 'create', parent: parent.path, slug: finalSlug, title, kind, defaultOpen: kind !== 'page' && defaultOpen, after };
   const preview = usePreview(client, request);
 
   const submit = () => {
     if (request === null) return;
     client.change(request).then(
-      (answer) => { onDone(answer.open); },
+      (answer) => { onDone(answer.open === null ? { folder: parent.path === '' ? finalSlug : `${parent.path}/${finalSlug}` } : { open: answer.open }); },
       (reason: unknown) => { setFailed(reason instanceof Error ? reason.message : String(reason)); },
     );
   };
 
   return (
-    <Dialog title={`New page in ${parent.title}`} onClose={onClose} onSubmit={submit}>
+    <Dialog title={`${KINDS.find((each) => each.kind === kind)?.title ?? 'New page in'} ${parent.title}`} onClose={onClose} onSubmit={submit}>
       <label className="grid gap-1">
         <span className="studio-field-label">Title</span>
         <input className="studio-input" autoFocus value={title} onChange={(event) => { setTitle(event.target.value); setFailed(null); }} />
@@ -146,15 +156,22 @@ export function CreateDialog({ client, parent, after, onDone, onClose }: {
       </label>
       <fieldset className="studio-tree-kinds">
         <legend className="studio-field-label">Kind</legend>
-        <label>
-          <input type="radio" name="kind" checked={kind === 'page'} onChange={() => { setKind('page'); }} />
-          Page <small>{finalSlug || 'slug'}.mdx</small>
-        </label>
-        <label>
-          <input type="radio" name="kind" checked={kind === 'folder'} onChange={() => { setKind('folder'); }} />
-          Folder page <small>{finalSlug || 'slug'}/index.mdx</small>
-        </label>
+        {KINDS.map((each) => (
+          <label key={each.kind}>
+            <input type="radio" name="kind" checked={kind === each.kind} onChange={() => { setKind(each.kind); setFailed(null); }} />
+            {each.label} <small>{each.file(finalSlug || 'slug')}</small>
+          </label>
+        ))}
       </fieldset>
+      {kind !== 'page' && (
+        <label className="studio-tree-toggle">
+          <input type="checkbox" checked={defaultOpen} onChange={(event) => { setDefaultOpen(event.target.checked); }} />
+          <span>
+            Open by default on the site
+            <small>Writes <code>defaultOpen</code> in its meta.yaml. Change it later from the folder’s ⋯ menu.</small>
+          </span>
+        </label>
+      )}
       <Preview preview={preview} failed={failed} />
       <div className="flex justify-end gap-2">
         <button type="button" className="studio-button" onClick={onClose}>Cancel</button>

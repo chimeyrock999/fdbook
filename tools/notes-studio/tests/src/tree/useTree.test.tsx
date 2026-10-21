@@ -8,7 +8,7 @@ import { useTree } from '../../../src/tree/useTree';
 afterEach(cleanup);
 
 const folder = (title: string): TreeFolder => ({
-  kind: 'folder', id: 'folder:', path: '', title, meta: null, metaMtime: null, index: null, hidden: null, entry: null, children: [],
+  kind: 'folder', id: 'folder:', path: '', title, meta: null, metaMtime: null, index: null, defaultOpen: false, hidden: null, entry: null, children: [],
 });
 
 function Probe({ tree, files }: { tree: TreeClient; files: ReturnType<typeof createFilesClient> }) {

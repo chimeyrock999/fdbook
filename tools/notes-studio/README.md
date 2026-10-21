@@ -105,7 +105,7 @@ another one.
 | `GET /api/events` | Server-sent events: `{ type: "add" \| "change" \| "unlink", path, mtimeMs }` |
 | `POST /api/lint` | Takes JSON `{ path, content }` for a note and returns `{ path, issues }` (see Lint). Writes nothing. |
 | `GET /api/tree` | The page tree: `{ tree }` (see Page tree) |
-| `POST /api/tree` | Takes JSON `{ op: "create" \| "rename" \| "move", dryRun?, … }`, changes the tree and returns `{ changes, open }`. With `dryRun` it writes nothing. |
+| `POST /api/tree` | Takes JSON `{ op: "create" \| "rename" \| "move" \| "set-open", dryRun?, … }`, changes the tree and returns `{ changes, open }`. With `dryRun` it writes nothing. |
 | `GET /api/assets` | Every file under `public/notes` with where notes use it: `{ assets: [{ path, mtimeMs, usages: [{ note, line, column, length, text, unsure }] }] }` (see Assets) |
 | `POST /api/assets` | Takes JSON `{ op: "rename" \| "delete", path, name?, baseMtime, dryRun? }`, changes the asset and the notes that use it, and returns `{ changes, usages }`. With `dryRun` it writes nothing. |
 | any other `/api/…` | `404` with a JSON `{ error }`, never the app's page (see below) |
@@ -253,11 +253,20 @@ a move that fails writes nothing.
   one with only `pages`, in the new order, so its title (from the index
   page) and its closed-by-default state stay.
 - **New page** (the `+` button, or New page here / below in the row menu)
-  writes `slug.mdx`, or `slug/index.mdx` plus `slug/meta.yaml`, with the
-  frontmatter the notes use (title, description, graph), as the Obsidian
-  plugin wrote it. The slug is added to the parent's `pages` after the
-  chosen entry, unless the parent has no meta.yaml, no `pages`, or
-  `...`/`z...a`, which list it already.
+  writes a page `slug.mdx`, a folder page `slug/index.mdx` plus
+  `slug/meta.yaml`, or a plain folder with only `slug/meta.yaml` (no index
+  page: it opens and closes on click). A page gets the frontmatter the notes
+  use (title, description, graph), as the Obsidian plugin wrote it; a
+  folder's meta.yaml gets its title, `pages: []` and `defaultOpen: false`,
+  or `true` when the dialog's "Open by default on the site" is on. The slug
+  is added to the parent's `pages` after the chosen entry, unless the parent
+  has no meta.yaml, no `pages`, or `...`/`z...a`, which list it already. A
+  new plain folder opens in the tree and takes focus, so New page here is in
+  its row menu.
+- **Open by default on the site** (a folder's row menu) sets `defaultOpen`
+  in its meta.yaml, for the site's sidebar: the value is replaced where it
+  is, or a line is added after `title`. A folder without meta.yaml cannot
+  set it.
 - **Rename** gives a page or folder a new name in the same folder. Every
   meta.yaml entry that reached it (`a/b`, `!x`, `...x` included) and every
   Markdown link or link definition to it (`./`, `../` and `/notes/…`, anchors

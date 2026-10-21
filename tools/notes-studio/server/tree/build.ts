@@ -126,6 +126,7 @@ function convertFolder(context: Context, node: PageTree.Folder | PageTree.Root, 
     meta,
     metaMtime: meta === null ? null : (context.mtimes.get(meta) ?? null),
     index: 'index' in node && node.index?.$ref !== undefined ? node.index.$ref : null,
+    defaultOpen: metaData?.defaultOpen === true,
     hidden: hiddenOf(metaData),
     children,
   };

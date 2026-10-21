@@ -20,6 +20,8 @@ export type TreeFolder = Base & {
   // The mtime meta.yaml was read at: a move sends it back as baseMtime.
   metaMtime: number | null;
   index: string | null;
+  // meta.yaml's `defaultOpen`: whether the site's sidebar starts it open.
+  defaultOpen: boolean;
   hidden: Hidden | null;
   children: TreeNode[];
 };

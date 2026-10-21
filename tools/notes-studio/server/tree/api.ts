@@ -1,7 +1,7 @@
 import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '../http.ts';
 import { createKeyedLock } from '../files/store.ts';
 import { loadTree } from './build.ts';
-import { applyPlan, planCreate, planMove, planRename, type Plan } from './ops.ts';
+import { applyPlan, planCreate, planMove, planRename, planSetOpen, type Plan } from './ops.ts';
 import type { TreeFolder } from './types.ts';
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -9,7 +9,7 @@ const MAX_BODY_BYTES = 64 * 1024;
 type Body = Record<string, unknown>;
 
 // GET /api/tree: the page tree. POST /api/tree with a JSON body
-// { op: 'create' | 'rename' | 'move', dryRun?, ... } changes it and answers
+// { op: 'create' | 'rename' | 'move' | 'set-open', dryRun?, ... } changes it and answers
 // { changes, open } (see server/tree/ops.ts); with dryRun it only answers.
 // Page tree changes go through here, never through the notes sync, which
 // cannot update meta.yaml. `lock` runs one change at a time, each planned
@@ -21,13 +21,15 @@ export function createTreeApi(root: string, lock = createKeyedLock()): Handler {
     const folder = typeof body.folder === 'string' ? body.folder : '';
     switch (body.op) {
       case 'create':
-        return planCreate(root, tree, { parent: typeof body.parent === 'string' ? body.parent : '', slug: body.slug, title: body.title, folder: body.kind === 'folder', after: body.after });
+        return planCreate(root, tree, { parent: typeof body.parent === 'string' ? body.parent : '', slug: body.slug, title: body.title, kind: body.kind, defaultOpen: body.defaultOpen, after: body.after });
       case 'rename':
         return planRename(root, tree, { path: body.path, slug: body.slug });
       case 'move':
         return planMove(root, tree, { folder, from: body.from, to: body.to, baseMtime: body.baseMtime });
+      case 'set-open':
+        return planSetOpen(root, tree, { folder, defaultOpen: body.defaultOpen, baseMtime: body.baseMtime });
       default:
-        throw new HttpError(400, 'op must be create, rename or move');
+        throw new HttpError(400, 'op must be create, rename, move or set-open');
     }
   }
 

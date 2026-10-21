@@ -124,12 +124,39 @@ export function replaceEntry(text: string, index: number, value: string) {
   return splice(text, [{ start: entry.start, end: entry.end, text: quote(value, entry.type) }]);
 }
 
-// The meta.yaml of a new folder page.
-export function metaTemplate(title: string, pages: string[]) {
-  const lines = [`title: ${JSON.stringify(title)}`, 'defaultOpen: true'];
+// The meta.yaml of a new folder, with or without an index page. It starts
+// closed in the site's sidebar unless `open`.
+export function metaTemplate(title: string, pages: string[], open = false) {
+  const lines = [`title: ${JSON.stringify(title)}`, `defaultOpen: ${String(open)}`];
   if (pages.length === 0) lines.push('pages: []');
   else lines.push('pages:', ...pages.map((page) => `  - ${JSON.stringify(page)}`));
   return `${lines.join('\n')}\n`;
+}
+
+// Sets `defaultOpen`: its value is replaced where it is, keeping a comment
+// after it, or a line is added after `title` (first when there is none).
+export function setDefaultOpen(text: string, open: boolean) {
+  const doc = parseDocument(text);
+  if (doc.errors.length > 0) throw new MetaEditError(`meta.yaml does not parse: ${doc.errors[0]?.message ?? ''}`);
+  const value = String(open);
+  if (doc.contents === null) return `${text}${text === '' || text.endsWith('\n') ? '' : '\n'}defaultOpen: ${value}\n`;
+  if (!isMap(doc.contents) || doc.contents.flow) throw new MetaEditError('meta.yaml is not a block map');
+  const items = doc.contents.items;
+  const at = (key: string) => items.findIndex((item) => isScalar(item.key) && item.key.value === key);
+  const current = at('defaultOpen');
+  if (current !== -1) {
+    const node = items[current].value;
+    if (!isScalar(node)) throw new MetaEditError('defaultOpen is not a value');
+    const [start, end] = node.range;
+    return splice(text, [{ start, end, text: value }]);
+  }
+  const line = `defaultOpen: ${value}`;
+  const next = at('title') + 1;
+  if (next === items.length) return `${text}${text.endsWith('\n') ? '' : '\n'}${line}${text.endsWith('\n') ? '\n' : ''}`;
+  const key = items[next].key;
+  if (!isScalar(key)) throw new MetaEditError('meta.yaml has a key that is not a string');
+  const start = lineStart(text, key.range[0]);
+  return splice(text, [{ start, end: start, text: `${line}\n` }]);
 }
 
 // A meta.yaml that only orders the folder's pages.
