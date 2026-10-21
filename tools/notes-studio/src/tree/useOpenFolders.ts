@@ -4,16 +4,19 @@ import { trailTo } from './tree';
 
 const STORAGE_KEY = 'notes-studio:tree-open';
 
-function readStored(): Record<string, boolean> {
+// Folder id to open; a folder the reader never toggled has no entry.
+type Choices = Partial<Record<string, boolean>>;
+
+function readStored(): Choices {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
-    return typeof value === 'object' && value !== null ? (value as Record<string, boolean>) : {};
+    return typeof value === 'object' && value !== null ? value : {};
   } catch {
     return {};
   }
 }
 
-function store(value: Record<string, boolean>) {
+function store(value: Choices) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
   } catch {
@@ -22,8 +25,10 @@ function store(value: Record<string, boolean>) {
 }
 
 // Which folders are open: the reader's own choice, kept in localStorage,
-// else the folder's `defaultOpen`. The folders on the way to a note open
-// when it becomes the open note, once, so the reader can still close them.
+// else closed. meta.yaml's `defaultOpen` is for the site's sidebar and is not
+// read here: most folders set it, and the whole tree would open at once. The
+// folders on the way to a note open when it becomes the open note, once, so
+// the reader can still close them.
 export function useOpenFolders(root: TreeFolder | null, active: string | null) {
   const [choices, setChoices] = useState(readStored);
   const revealed = useRef<string | null>(null);
@@ -37,7 +42,7 @@ export function useOpenFolders(root: TreeFolder | null, active: string | null) {
     revealed.current = active;
     const folders = trail.filter((node): node is TreeFolder => node.kind === 'folder');
     setChoices((current) => {
-      const closed = folders.filter((folder) => !(current[folder.id] ?? folder.defaultOpen));
+      const closed = folders.filter((folder) => current[folder.id] !== true);
       if (closed.length === 0) return current;
       const next = { ...current };
       for (const folder of closed) next[folder.id] = true;
@@ -46,10 +51,10 @@ export function useOpenFolders(root: TreeFolder | null, active: string | null) {
     });
   }, [root, active]);
 
-  const isOpen = useCallback((folder: TreeFolder) => choices[folder.id] ?? folder.defaultOpen, [choices]);
+  const isOpen = useCallback((folder: TreeFolder) => choices[folder.id] === true, [choices]);
   const toggle = useCallback((folder: TreeFolder) => {
     setChoices((current) => {
-      const next = { ...current, [folder.id]: !(current[folder.id] ?? folder.defaultOpen) };
+      const next = { ...current, [folder.id]: current[folder.id] !== true };
       store(next);
       return next;
     });

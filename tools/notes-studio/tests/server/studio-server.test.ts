@@ -36,6 +36,17 @@ describe('studio server', () => {
     expect(other.status).toBe(403);
   });
 
+  it('answers an unknown API path with JSON, not the app shell', async () => {
+    for (const path of ['/api/nothing', '/api', '/api/tree/extra']) {
+      const response = await fetch(new URL(path, studio.url));
+      expect(response.status).toBe(404);
+      expect(response.headers.get('content-type')).toContain('application/json');
+      expect(((await response.json()) as { error: string }).error).toBe(`no such Studio API: ${path}`);
+    }
+    // Paths that only start with "api" are still the app's.
+    expect((await fetch(new URL('/apis', studio.url))).headers.get('content-type')).toContain('text/html');
+  });
+
   it('rejects a busy port without leaving a server behind', async () => {
     const { port } = studio.server.address() as AddressInfo;
     await expect(startStudioServer({ port })).rejects.toMatchObject({ code: 'EADDRINUSE' });

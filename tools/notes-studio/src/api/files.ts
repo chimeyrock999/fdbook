@@ -1,5 +1,7 @@
 // Client for the Studio file API (server/files/api.ts, server/files/events.ts).
 
+import { errorOf, readJson } from './json';
+
 export type FileKind = 'note' | 'meta' | 'asset';
 export type TextFile = { path: string; content: string; mtimeMs: number };
 export type FileEntry = { path: string; kind: FileKind; mtimeMs: number };
@@ -22,8 +24,7 @@ export function createFilesClient(base = '') {
   const fileUrl = (path: string) => `${base}/api/file?path=${encodeURIComponent(path)}`;
 
   async function failed(response: Response): Promise<never> {
-    const body = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `HTTP ${String(response.status)}`);
+    throw await errorOf(response);
   }
 
   async function conflict(path: string, response: Response): Promise<never> {
@@ -38,13 +39,13 @@ export function createFilesClient(base = '') {
     async listFiles(): Promise<FileEntry[]> {
       const response = await fetch(`${base}/api/files`);
       if (!response.ok) return failed(response);
-      return ((await response.json()) as { files: FileEntry[] }).files;
+      return (await readJson<{ files: FileEntry[] }>(response)).files;
     },
 
     async readFile(path: string): Promise<TextFile> {
       const response = await fetch(fileUrl(path));
       if (!response.ok) return failed(response);
-      return (await response.json()) as TextFile;
+      return readJson<TextFile>(response);
     },
 
     // Saves a note or meta.yaml edited from `baseMtime` (null: a new file) and
@@ -57,7 +58,7 @@ export function createFilesClient(base = '') {
       });
       if (response.status === 409) return conflict(path, response);
       if (!response.ok) return failed(response);
-      return ((await response.json()) as { mtimeMs: number }).mtimeMs;
+      return (await readJson<{ mtimeMs: number }>(response)).mtimeMs;
     },
 
     async writeAsset(path: string, data: Blob, baseMtime: number | null): Promise<number> {
@@ -66,7 +67,7 @@ export function createFilesClient(base = '') {
       const response = await fetch(fileUrl(path), { method: 'PUT', headers, body: data });
       if (response.status === 409) return conflict(path, response);
       if (!response.ok) return failed(response);
-      return ((await response.json()) as { mtimeMs: number }).mtimeMs;
+      return (await readJson<{ mtimeMs: number }>(response)).mtimeMs;
     },
 
     // Follows file changes on disk. The Studio's own saves arrive too: compare

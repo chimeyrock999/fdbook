@@ -44,7 +44,7 @@ type View = {
   openMenu: (menu: Menu) => void;
 };
 
-function Row({ node, parent, depth, dim, view }: { node: TreeNode; parent: TreeFolder; depth: number; dim: boolean; view: View }) {
+function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; dim: boolean; view: View }) {
   const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu } = view;
   const hidden = 'hidden' in node ? node.hidden : null;
   const note = noteOf(node);
@@ -72,13 +72,12 @@ function Row({ node, parent, depth, dim, view }: { node: TreeNode; parent: TreeF
         data-drop={drop?.id === node.id ? drop.place : undefined}
         data-faded={faded || undefined}
         aria-current={note !== null && note === active ? 'page' : undefined}
-        style={{ paddingLeft: `${String(depth * 12 + 4)}px` }}
         onDragOver={(event) => { onDragOver(event, node, parent); }}
         onDrop={(event) => { onDrop(event, node, parent); }}
       >
         {node.kind === 'folder' ? (
           <button type="button" className="studio-tree-chevron" aria-expanded={open} aria-label={`${open ? 'Collapse' : 'Expand'} ${node.title}`} onClick={() => { toggle(node); }}>
-            <ChevronRight size={13} data-open={open || undefined} />
+            <ChevronRight size={14} data-open={open || undefined} />
           </button>
         ) : (
           <span className="studio-tree-chevron" />
@@ -91,11 +90,11 @@ function Row({ node, parent, depth, dim, view }: { node: TreeNode; parent: TreeF
           </span>
         ) : node.kind === 'link' ? (
           <span className="studio-tree-label" title={node.url}>
-            <ExternalLink size={14} /> <span className="truncate">{node.title}</span>
+            <ExternalLink size={16} /> <span className="truncate">{node.title}</span>
           </span>
         ) : (
           <button type="button" className="studio-tree-label" title={node.path} onClick={select}>
-            {node.kind === 'folder' ? <Folder size={14} /> : <FileText size={14} />}
+            {node.kind === 'folder' ? <Folder size={16} /> : <FileText size={16} />}
             <span className="truncate">{node.title}</span>
           </button>
         )}
@@ -121,15 +120,16 @@ function Row({ node, parent, depth, dim, view }: { node: TreeNode; parent: TreeF
           <MoreHorizontal size={14} />
         </button>
       </div>
-      {node.kind === 'folder' && open && <Items folder={node} depth={depth + 1} dim={faded} view={view} />}
+      {node.kind === 'folder' && open && <Items folder={node} nested dim={faded} view={view} />}
     </li>
   );
 }
 
-function Items({ folder, depth, dim, view }: { folder: TreeFolder; depth: number; dim: boolean; view: View }) {
+// A level of the tree; nested levels hang off a guide line, as on the site.
+function Items({ folder, nested = false, dim, view }: { folder: TreeFolder; nested?: boolean; dim: boolean; view: View }) {
   return (
-    <ul role="group" className="grid grid-cols-[minmax(0,1fr)]">
-      {folder.children.map((node) => <Row key={node.id} node={node} parent={folder} depth={depth} dim={dim} view={view} />)}
+    <ul role="group" className={nested ? 'studio-tree-group studio-tree-nested' : 'studio-tree-group'}>
+      {folder.children.map((node) => <Row key={node.id} node={node} parent={folder} dim={dim} view={view} />)}
     </ul>
   );
 }
@@ -221,7 +221,7 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
       {shown.children.length === 0 ? (
         <p className="px-2 text-[12.5px] text-[var(--fde-muted-foreground)]">No note matches “{query}”.</p>
       ) : (
-        <div className="min-h-0 overflow-auto"><Items folder={shown} depth={0} dim={false} view={view} /></div>
+        <div className="min-h-0 overflow-auto"><Items folder={shown} dim={false} view={view} /></div>
       )}
       {status && (
         <p role={status.error ? 'alert' : 'status'} className={status.error ? 'studio-tree-error' : 'studio-tree-status'}>
