@@ -7,8 +7,9 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "dev": "node server/index.ts",
+    "dev": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON server/index.ts",
     "lint": "eslint",
+    "notes:lint": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON server/lint/cli.ts",
     "test": "vitest run",
     "types:check": "tsc --noEmit"
   },
@@ -30,6 +31,12 @@
     "lucide-react": "^1.61.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "remark-directive": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-mdx": "^3.1.1",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.1.0",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
@@ -40,6 +47,7 @@
     "@testing-library/user-event": "^14.6.8",
     "@tiptap/core": "3.32.0",
     "@types/jsdom": "^30.0.0",
+    "@types/mdast": "^4.0.4",
     "@types/node": "^25.7.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

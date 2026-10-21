@@ -1,6 +1,7 @@
 import { NodeSelection, type EditorState } from '@tiptap/pm/state';
 import { Decoration, type EditorView } from '@tiptap/pm/view';
 import { Bug, CircleHelp, CirclePlay, Droplet, Leaf, Rat, Shovel, Sprout, Tag, type IconNode } from 'lucide';
+import { ACCORDION_KINDS, type AccordionKind } from '@site/lib/notes-syntax';
 import { icon } from '../icon';
 import { attributes } from '../source-attributes';
 import { parseAccordions, withAccordionBody, type AccordionItem } from './accordions';
@@ -10,8 +11,8 @@ import { parseAccordions, withAccordionBody, type AccordionItem } from './accord
 // (components/mdx/youtube.tsx). Each becomes a card over its hidden source;
 // the "MDX" button (or selecting the block) shows the source again.
 
-// accordion.tsx: icon and callout palette per kind.
-const KINDS: Partial<Record<string, { icon: IconNode; semantic: string }>> = {
+// accordion.tsx: icon and callout palette per kind (lib/notes-syntax.ts).
+const KINDS: Record<AccordionKind, { icon: IconNode; semantic: string }> = {
   question: { icon: CircleHelp, semantic: 'info' },
   'deep-dive': { icon: Shovel, semantic: 'example' },
   definition: { icon: Tag, semantic: 'note' },
@@ -21,6 +22,10 @@ const KINDS: Partial<Record<string, { icon: IconNode; semantic: string }>> = {
   danger: { icon: Rat, semantic: 'danger' },
   note: { icon: Droplet, semantic: 'note' },
 };
+
+function isAccordionKind(kind: string): kind is AccordionKind {
+  return (ACCORDION_KINDS as readonly string[]).includes(kind);
+}
 
 const YOUTUBE = /^::youtube(\{[\s\S]*\})\s*$/;
 
@@ -89,7 +94,7 @@ function accordionCards(view: EditorView, getPos: () => number | undefined, item
   const root = element('div', 'studio-accordions');
   root.contentEditable = 'false';
   items.forEach((item, index) => {
-    const kind = item.kind ? KINDS[item.kind] : undefined;
+    const kind = item.kind && isAccordionKind(item.kind) ? KINDS[item.kind] : undefined;
     const semantic = kind?.semantic ?? 'note';
     const card = element('div', 'studio-accordion');
     card.style.setProperty('--acc-title', `var(--color-callout-${semantic}-title)`);
