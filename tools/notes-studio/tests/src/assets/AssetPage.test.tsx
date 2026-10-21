@@ -207,6 +207,24 @@ describe('AssetPage', () => {
     expect(revoked).toContain(second);
   });
 
+  it('shows the dimensions of the file picked now, not of the one before', async () => {
+    setup(PICTURE.path);
+    await userEvent.click(button('Replace…'));
+    const dialog = screen.getByRole('dialog');
+    const side = () => within(dialog).getByRole('figure', { name: 'picked' });
+    await userEvent.upload(fileInput(dialog), new File(['a'], 'a.png', { type: 'image/png' }));
+    const image = side().querySelector('img') ?? document.createElement('img');
+    Object.defineProperty(image, 'naturalWidth', { value: 640 });
+    Object.defineProperty(image, 'naturalHeight', { value: 400 });
+    fireEvent.load(image);
+    expect(side().textContent).toContain('640 × 400');
+    await userEvent.upload(fileInput(dialog), new File(['b'], 'b.pdf', { type: 'application/pdf' }));
+    expect(side().textContent).toContain('b.pdf1 B');
+    expect(side().textContent).not.toContain('640 × 400');
+    await userEvent.upload(fileInput(dialog), new File(['c'], 'c.png', { type: 'image/png' }));
+    expect(side().textContent).not.toContain('640 × 400');
+  });
+
   it('lets the picked file go when the dialog unmounts without closing', async () => {
     const { rerender } = setup(PICTURE.path);
     await userEvent.click(button('Replace…'));

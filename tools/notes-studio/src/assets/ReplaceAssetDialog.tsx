@@ -39,6 +39,12 @@ function PickedImage({ file, onLoad }: { file: File; onLoad: (image: HTMLImageEl
 // file), its size and, for an image, its dimensions once it loaded.
 function Side({ label, name, source, size }: { label: string; name: string; source: string | File; size: number }) {
   const [box, setBox] = useState<string | null>(null);
+  const [boxFor, setBoxFor] = useState(source);
+  // Dimensions belong to the file they were read from: another one starts without.
+  if (source !== boxFor) {
+    setBoxFor(source);
+    setBox(null);
+  }
   const loaded = (image: HTMLImageElement) => { setBox(`${String(image.naturalWidth)} × ${String(image.naturalHeight)}`); };
   return (
     <figure className="studio-asset-side" aria-label={label}>
