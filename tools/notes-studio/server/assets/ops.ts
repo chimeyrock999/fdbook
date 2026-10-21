@@ -138,7 +138,7 @@ function guarded(root: string, path: unknown) {
 export async function checkAsset(root: string, path: string, baseMtime: unknown) {
   const info = await statOrNull(guarded(root, path));
   if (!info?.isFile()) throw new HttpError(404, `no such file: ${path}`);
-  if (typeof baseMtime !== 'number') throw new HttpError(400, 'baseMtime must be the mtime the asset was listed with');
+  if (typeof baseMtime !== 'number' || !Number.isFinite(baseMtime)) throw new HttpError(400, 'baseMtime must be the mtime the asset was listed with');
   if (info.mtimeMs !== baseMtime) throw new HttpError(409, `${path} changed on disk`);
   return info;
 }

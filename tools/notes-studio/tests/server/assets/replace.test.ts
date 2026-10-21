@@ -130,6 +130,8 @@ describe('assets API: replace', () => {
     const pixel = 'public/notes/demo/pixel.png';
     const baseMtime = await mtime(pixel);
     expect((await put({ path: pixel, extension: 'png', baseMtime: baseMtime - 1000 })).status).toBe(409);
+    expect((await put({ path: pixel, extension: 'png', baseMtime: 'abc' })).status).toBe(400);
+    expect((await put({ path: pixel, extension: 'png', baseMtime: '' })).status).toBe(400);
     await writeFile(file('public/notes/demo/pixel.webp'), 'taken');
     expect((await put({ path: pixel, extension: 'webp', baseMtime })).status).toBe(409);
     expect((await put({ path: 'content/notes/index.mdx', extension: 'png', baseMtime })).status).toBe(403);

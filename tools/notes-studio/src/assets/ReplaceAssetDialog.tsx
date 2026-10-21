@@ -1,5 +1,5 @@
 import { ArrowRight, FileCode } from 'lucide-react';
-import { useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { ASSET_TYPES, extensionOf, isAssetExtension, MAX_ASSET_BYTES } from '../../server/security/asset-types';
 import type { AssetAnswer, AssetInfo, AssetRequest, AssetsClient } from '../api/assets';
 import { useAssetUrl } from '../api/asset-versions';
@@ -21,15 +21,30 @@ function fileExtension(file: File) {
   return isAssetExtension(named) ? named : imageExtension(file);
 }
 
-// One side of the comparison: the file, its size and, for an image, its
-// dimensions once it loaded.
-function Side({ label, name, url, size }: { label: string; name: string; url: string | null; size: number }) {
+// The picked file as an image: a blob URL made and let go by one effect,
+// set on the element directly. StrictMode's second setup makes a fresh one,
+// and any unmount (the dialog closing, another asset or a note opening)
+// lets it go, so the file is not kept alive.
+function PickedImage({ file, onLoad }: { file: File; onLoad: (image: HTMLImageElement) => void }) {
+  const image = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    image.current?.setAttribute('src', url);
+    return () => { URL.revokeObjectURL(url); };
+  }, [file]);
+  return <img ref={image} alt="" onLoad={(event) => { onLoad(event.currentTarget); }} />;
+}
+
+// One side of the comparison: the file (the asset's URL, or the picked
+// file), its size and, for an image, its dimensions once it loaded.
+function Side({ label, name, source, size }: { label: string; name: string; source: string | File; size: number }) {
   const [box, setBox] = useState<string | null>(null);
+  const loaded = (image: HTMLImageElement) => { setBox(`${String(image.naturalWidth)} × ${String(image.naturalHeight)}`); };
   return (
     <figure className="studio-asset-side" aria-label={label}>
       <div className="studio-asset-side-thumb">
-        {url !== null && isImage(name) ? (
-          <img src={url} alt="" onLoad={(event) => { setBox(`${String(event.currentTarget.naturalWidth)} × ${String(event.currentTarget.naturalHeight)}`); }} />
+        {isImage(name) ? (
+          typeof source === 'string' ? <img src={source} alt="" onLoad={(event) => { loaded(event.currentTarget); }} /> : <PickedImage file={source} onLoad={loaded} />
         ) : (
           <FileCode size={28} aria-hidden />
         )}
@@ -55,16 +70,10 @@ export function ReplaceAssetDialog({ client, asset, initial, onDone, onClose }: 
   onDone: (answer: AssetAnswer & { mtimeMs: number }) => void;
   onClose: () => void;
 }) {
-  // The picked file and a URL its preview shows, made when it is picked and
-  // let go when another one is or the dialog closes (not in an effect,
-  // which StrictMode runs twice and would leave the preview revoked).
-  const [picked, setPicked] = useState(() => (initial === null ? null : { file: initial, url: URL.createObjectURL(initial) }));
-  const file = picked?.file ?? null;
-  const preview = picked?.url ?? null;
+  const [file, setFile] = useState<File | null>(initial);
   const [failed, setFailed] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const oldUrl = useAssetUrl(asset.path);
-
 
   const extension = file === null ? null : fileExtension(file);
   const refused =
@@ -78,13 +87,8 @@ export function ReplaceAssetDialog({ client, asset, initial, onDone, onClose }: 
 
   const pick = (next: File | undefined) => {
     if (next === undefined) return;
-    if (preview !== null) URL.revokeObjectURL(preview);
-    setPicked({ file: next, url: URL.createObjectURL(next) });
+    setFile(next);
     setFailed(null);
-  };
-  const close = () => {
-    if (preview !== null) URL.revokeObjectURL(preview);
-    onClose();
   };
   const drop = (event: DragEvent) => {
     event.preventDefault();
@@ -93,25 +97,22 @@ export function ReplaceAssetDialog({ client, asset, initial, onDone, onClose }: 
   const submit = () => {
     if (request === null || file === null || busy) return;
     setBusy(true);
-    client.replace(asset.path, request.extension, file, asset.mtimeMs).then((answer) => {
-      if (preview !== null) URL.revokeObjectURL(preview);
-      onDone(answer);
-    }, (reason: unknown) => {
+    client.replace(asset.path, request.extension, file, asset.mtimeMs).then(onDone, (reason: unknown) => {
       setBusy(false);
       setFailed(message(reason));
     });
   };
 
   return (
-    <Dialog title={`Replace “${nameOf(asset.path)}”`} onClose={close} onSubmit={submit}>
+    <Dialog title={`Replace “${nameOf(asset.path)}”`} onClose={onClose} onSubmit={submit}>
       <Pick asset={asset} />
       <div className="studio-asset-pair">
-        <Side label="now" name={nameOf(asset.path)} url={oldUrl} size={asset.size} />
+        <Side label="now" name={nameOf(asset.path)} source={oldUrl} size={asset.size} />
         <ArrowRight size={16} aria-hidden className="studio-asset-pair-arrow" />
         {file === null ? (
           <p className="studio-asset-side studio-asset-side-empty">No file picked yet.</p>
         ) : (
-          <Side key={preview ?? ''} label="picked" name={file.name} url={preview} size={file.size} />
+          <Side label="picked" name={file.name} source={file} size={file.size} />
         )}
       </div>
       <label className="studio-asset-drop" onDragOver={(event) => { event.preventDefault(); }} onDrop={drop}>
@@ -132,7 +133,7 @@ export function ReplaceAssetDialog({ client, asset, initial, onDone, onClose }: 
         planned && <Changes changes={planned.changes} />
       )}
       <div className="flex justify-end gap-2">
-        <button type="button" className="studio-button" onClick={close}>Cancel</button>
+        <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
         <button type="submit" className="studio-button studio-button-primary" disabled={request === null || planned?.error != null || busy}>
           {renames ? 'Replace and rename' : 'Replace'}
         </button>

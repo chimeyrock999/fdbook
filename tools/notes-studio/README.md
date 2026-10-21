@@ -429,8 +429,8 @@ If the first note cannot be written, the asset moves back (a replace that
 renames removes the new file instead, and the old one goes only once the
 notes are written). A note open in
 the editor merges the rewrite through its sync. While the open note has
-unsaved edits, rename and delete wait for it: the server only sees what is
-on disk. The list is loaded only while the view or an asset page is shown.
+unsaved edits, rename, replace and delete wait for it: the server only sees
+what is on disk. The list is loaded only while the view or an asset page is shown.
 
 ## Lint
 

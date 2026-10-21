@@ -47,4 +47,3 @@ export function movedTo(answer: AssetAnswer) {
   const first = answer.changes.at(0);
   return (first?.type === 'move' || first?.type === 'replace') && first.to !== first.path ? first.to : null;
 }
-

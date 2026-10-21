@@ -193,15 +193,30 @@ describe('AssetPage', () => {
     setup(PICTURE.path);
     await userEvent.click(button('Replace…'));
     const dialog = screen.getByRole('dialog');
+    const shown = () => within(dialog).getByRole('figure', { name: 'picked' }).querySelector('img')?.getAttribute('src') ?? '';
     await userEvent.upload(fileInput(dialog), new File(['a'], 'a.png', { type: 'image/png' }));
-    const first = within(dialog).getByRole('figure', { name: 'picked' }).querySelector('img')?.getAttribute('src') ?? '';
+    const first = shown();
+    expect(first).toMatch(/^blob:/);
     expect(revoked).not.toContain(first);
     await userEvent.upload(fileInput(dialog), new File(['b'], 'b.png', { type: 'image/png' }));
     expect(revoked).toContain(first);
-    const second = within(dialog).getByRole('figure', { name: 'picked' }).querySelector('img')?.getAttribute('src') ?? '';
+    const second = shown();
     expect(second).not.toBe(first);
+    expect(revoked).not.toContain(second);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(revoked).toContain(second);
+  });
+
+  it('lets the picked file go when the dialog unmounts without closing', async () => {
+    const { rerender } = setup(PICTURE.path);
+    await userEvent.click(button('Replace…'));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.upload(fileInput(dialog), new File(['a'], 'a.png', { type: 'image/png' }));
+    const url = within(dialog).getByRole('figure', { name: 'picked' }).querySelector('img')?.getAttribute('src') ?? '';
+    // Back or forward to another asset; a note opening unmounts the page the same way.
+    rerender(SPARE.path);
+    expect(revoked).toContain(url);
+    cleanup();
   });
 
   it('drops what was picked for one asset when another opens', async () => {

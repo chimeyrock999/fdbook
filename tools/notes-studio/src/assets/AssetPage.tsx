@@ -42,8 +42,9 @@ function Preview({ asset, zoom, onBox }: { asset: AssetInfo; zoom: 'fit' | 'actu
 // An asset opened in the main pane: its preview, size and dimensions, the
 // notes and lines that use it, the diagram sources that generate it, and
 // rename, replace and delete. `path` is its worktree path; `list` the
-// assets as listed (the page shows the asset as listed now). Rename and
-// delete wait while the open note is `unsaved`, as in the sidebar.
+// assets as listed (the page shows the asset as listed now). Rename,
+// replace and delete wait while the open note is `unsaved`, as in the
+// sidebar.
 // `onChanged` hears every change, so the URL can follow a move.
 export function AssetPage({ client, list, path, unsaved, onOpenUsage, onChanged }: {
   client: AssetsClient;
@@ -103,7 +104,7 @@ export function AssetPage({ client, list, path, unsaved, onOpenUsage, onChanged 
     const file = event.dataTransfer.files[0] as File | undefined;
     if (file && !generated && !unsaved) setDialog({ kind: 'replace', file });
   };
-  const waitHint = unsaved ? 'The open note has unsaved changes. Rename or delete once it shows Saved.' : undefined;
+  const waitHint = unsaved ? 'The open note has unsaved changes. Rename, replace or delete once it shows Saved.' : undefined;
   const deleteHint = generated ? 'A diagram generates it: change the diagram instead' : used > 0 ? `Still used ${plural(used, 'time')}` : waitHint;
 
   return (
