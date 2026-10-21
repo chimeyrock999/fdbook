@@ -82,15 +82,30 @@ function sourceButton(view: EditorView, getPos: () => number | undefined) {
   return button;
 }
 
-// Per editor: which accordions are open, and which body takes the focus back
-// once a write has rebuilt the cards.
-type CardState = { open: Set<string>; focus: string | null };
+// The editor's own serialize delay: a body is written like any other edit.
+const WRITE_MS = 250;
+
+// Per editor: which accordions are open, and the bodies drawn last, by group
+// position and item, so a write that rebuilds the cards can hand the caret
+// on to the new body.
+type CardState = { open: Set<string>; bodies: Map<string, HTMLTextAreaElement> };
 const states = new WeakMap<EditorView, CardState>();
 
+// The editor serializes 250ms after an edit, or at once when it blurs. A
+// body's textarea has already taken the focus from the editor, so a write
+// from it would wait, and closing the note in that time loses it. The blur
+// event (the editor is not focused) makes it serialize now.
+function serializeNow(view: EditorView) {
+  type Emitter = { emit: (event: 'blur', props: { editor: Emitter; event: FocusEvent; transaction: unknown }) => void };
+  const editor = (view.dom as HTMLElement & { editor?: Emitter }).editor;
+  editor?.emit('blur', { editor, event: new FocusEvent('blur'), transaction: view.state.tr });
+}
+
 function accordionCards(view: EditorView, getPos: () => number | undefined, items: AccordionItem[]) {
-  const state = states.get(view) ?? { open: new Set<string>(), focus: null };
+  const state = states.get(view) ?? { open: new Set<string>(), bodies: new Map<string, HTMLTextAreaElement>() };
   states.set(view, state);
-  const { open } = state;
+  const { open, bodies } = state;
+  const group = getPos();
   const root = element('div', 'studio-accordions');
   root.contentEditable = 'false';
   items.forEach((item, index) => {
@@ -120,24 +135,44 @@ function accordionCards(view: EditorView, getPos: () => number | undefined, item
     // The editor can be locked after the card was built.
     source.readOnly = !view.editable;
     source.addEventListener('focus', () => { source.readOnly = !view.editable; });
-    // Written when the focus leaves, not per keystroke: the cards are rebuilt
-    // from the new source after each write, so the body the focus went to
-    // gets it back.
-    source.addEventListener('focusout', (event) => {
-      if (source.value === item.body || !view.editable) return;
-      const next = event.relatedTarget;
-      state.focus = next instanceof HTMLTextAreaElement && root.contains(next) ? (next.dataset.accordion ?? null) : null;
+    if (group !== undefined) bodies.set(`${String(group)}|${id}`, source);
+
+    // Written as typing pauses and when the focus leaves. Each write rebuilds
+    // the cards from the new source, so the caret moves on to the new body
+    // (or to the body the focus was going to).
+    let written = item.body;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const write = (next: Element | null) => {
+      clearTimeout(timer);
+      timer = undefined;
+      if (source.value === written || !view.editable) return;
       const pos = getPos();
       const node = pos === undefined ? null : view.state.doc.nodeAt(pos);
       if (pos === undefined || node?.type.name !== 'verbatim') return;
+      written = source.value;
+      const { selectionStart, selectionEnd, selectionDirection, scrollTop } = source;
+      const keep = document.activeElement === source;
       const value = withAccordionBody(String(node.attrs.value), index, source.value);
       view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, value }));
+      serializeNow(view);
+      const target = keep ? id : next instanceof HTMLTextAreaElement ? next.dataset.accordion : undefined;
+      const rebuilt = target === undefined ? undefined : bodies.get(`${String(pos)}|${target}`);
+      if (!rebuilt || rebuilt === source || !rebuilt.isConnected) return;
+      rebuilt.focus();
+      if (keep) {
+        rebuilt.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
+        rebuilt.scrollTop = scrollTop;
+      }
+    };
+    source.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { write(null); }, WRITE_MS);
+    });
+    source.addEventListener('focusout', (event) => {
+      const next = event.relatedTarget;
+      write(next instanceof Element && root.contains(next) ? next : null);
     });
     body.append(source);
-    if (state.focus === id) {
-      state.focus = null;
-      requestAnimationFrame(() => { source.focus(); });
-    }
 
     const render = () => {
       const isOpen = open.has(id);

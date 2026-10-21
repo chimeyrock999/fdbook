@@ -49,7 +49,27 @@ const value = (live: Editor) => {
   return found;
 };
 const textareas = (container: HTMLElement) => [...container.querySelectorAll('textarea')];
-const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// What MdxEditor's store saves (attachEditor in @fumadocs-editor/ui): the
+// document 250ms after an update, or at once on the editor's blur. Closing
+// the note drops a pending save.
+function store(live: Editor) {
+  let saved = value(live);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  live.on('update', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { saved = value(live); }, 250);
+  });
+  live.on('blur', () => {
+    clearTimeout(timer);
+    saved = value(live);
+  });
+  return {
+    saved: () => saved,
+    close: () => { clearTimeout(timer); },
+  };
+}
 
 describe('accordion cards', () => {
   it('writes a body when the focus leaves and hands the focus on after the rebuild', async () => {
@@ -61,13 +81,45 @@ describe('accordion cards', () => {
     expect(value(live)).toContain('One.');
     await userEvent.click(defined(second));
     expect(value(live)).toContain(':::accordion{kind="question" title="First"}\nChanged.\n:::');
-    await frame();
     // The cards were rebuilt, both items are still open and the focus is in
     // the new second body.
     const rebuilt = textareas(container);
     expect(rebuilt[1]).not.toBe(second);
     expect(document.activeElement).toBe(rebuilt[1]);
     expect(container.querySelectorAll('[aria-expanded="true"]')).toHaveLength(2);
+  });
+
+  it('writes a body as typing pauses and keeps the caret in it', async () => {
+    const { container, editor: live } = mount();
+    await userEvent.click(defined(container.querySelector<HTMLElement>('button.studio-accordion-head')));
+    const first = defined(container.querySelector('textarea'));
+    await userEvent.click(first);
+    first.setSelectionRange(3, 3);
+    await userEvent.keyboard('XY');
+    expect(value(live)).toContain('\nOne.\n');
+    await wait(300);
+    expect(value(live)).toContain('\nOneXY.\n');
+    const rebuilt = defined(container.querySelector('textarea'));
+    expect(rebuilt).not.toBe(first);
+    expect(document.activeElement).toBe(rebuilt);
+    expect([rebuilt.selectionStart, rebuilt.selectionEnd]).toEqual([5, 5]);
+    await userEvent.keyboard('Z');
+    await wait(300);
+    expect(value(live)).toContain('\nOneXYZ.\n');
+  });
+
+  // Typing in a body, then picking another note: the write happens on the
+  // way out and must be saved before the note closes.
+  it('saves a body written just before the note closes', async () => {
+    const { container, editor: live } = mount();
+    const saving = store(live);
+    await userEvent.click(defined(container.querySelector<HTMLElement>('button.studio-accordion-head')));
+    const first = defined(container.querySelector('textarea'));
+    await userEvent.click(first);
+    await userEvent.keyboard('{End} Plus.');
+    first.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: document.body }));
+    saving.close();
+    expect(saving.saved()).toContain('\nOne. Plus.\n');
   });
 
   it('writes nothing into a locked note', async () => {

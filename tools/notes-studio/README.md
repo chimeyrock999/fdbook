@@ -203,11 +203,13 @@ Plugins today:
   as decorations: with the caret inside (or the atom selected) the source
   shows again. `<SectionTitle>` is a component.
 - `site-directives`: `::::accordions` groups as the site's accordion cards
-  (the body opens as MDX source and is written back on blur) and
-  `::youtube` as a card. The MDX button shows the block's source.
+  (the body opens as MDX source and is written back as typing pauses, like
+  any other edit) and `::youtube` as a card. The MDX button shows the
+  block's source.
 - `fumadocs-ui`: Cards, Steps, Tabs and Accordions.
-- `html-embed` and `svg-diagram`: cards. `SvgDiagram` shows a file under
-  `public/notes` through the file API and reads its props like the site
+- `html-embed` and `svg-diagram`: cards. `SvgDiagram` shows its inline
+  `svg` (as an image, so no script runs) or else a file under `public/notes`
+  through the file API, and reads its props like the site
   (`lib/mdx-props.ts`); a bare JSX boolean (`plate`) reaches the editor
   without a value, so write `plate="true"` to see it. `HtmlEmbed` shows no
   live page, since the file API serves HTML assets sandboxed without
