@@ -166,7 +166,11 @@ through the notes sync socket:
     (`.notes-prose`, `.notes-title`, `.notes-description`). The editor's
     stylesheet sits in a cascade layer so these rules win over it;
     `src/notes-prose.css` keeps only what the editor needs on top (the
-    header's text areas, the editor's code block frame);
+    header's text areas, the editor's code block frame, where its markup
+    differs from the page's). The site's prose is for the note's content:
+    what the editor draws and does not let you edit (a diagram preview's
+    labels, a control) keeps the editor's look, so a mermaid label is 16px
+    here, not the page's 0.875rem;
   - components: the callout's types, icons and variables come from
     `components/notes-callout.tsx`, Keyword and Tag from the class names
     `components/graph-objects.tsx` exports (Tailwind scans that file), the
