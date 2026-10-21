@@ -1,13 +1,14 @@
-// New pages are written like obsidian-plugin's page creation
-// (obsidian-plugin/src/services/page-creation.ts), so a note looks the same
-// whichever tool made it. tests/server/tree/template.test.ts compares the two.
-// One difference: a backslash in the title is escaped here, so the
-// double-quoted YAML string still parses.
+// A new page gets the frontmatter the notes use, as the retired Obsidian
+// plugin wrote it: title, an empty description, and graph metadata named
+// after the slug. The title is a double-quoted YAML string, with `\` and `"`
+// escaped. Slugs drop accents and turn `đ` into `d`, like the site's heading
+// slugs (source.config.ts).
 
 export function normalizeSlug(input: string): string {
   return input
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');

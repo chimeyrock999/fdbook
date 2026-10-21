@@ -122,3 +122,36 @@ export function writeFrontmatter(source: string, data: FrontmatterData): { sourc
   if (!block) return { source: `---${newline}${yaml}${newline}---${newline}${newline}${source}`, issues };
   return { source: `---${newline}${yaml}${newline}---${newline}${source.slice(block.end)}`, issues };
 }
+
+// The key path (`graph.keywords.1.id`) of the frontmatter value at `offset`
+// in the note, as validateFrontmatter names paths; '' between keys (a
+// comment, a blank line). Null outside the YAML text (the body, the `---`
+// lines) and when it does not parse: Source shows those places better.
+export function frontmatterPathAt(source: string, offset: number): string | null {
+  const block = findBlock(source);
+  // The YAML starts after `---` and its newline.
+  const at = offset - 3 - (block?.newline.length ?? 0);
+  if (!block || at < 0 || at > block.yaml.length) return null;
+  const doc = parse(block.yaml);
+  if (!doc) return null;
+  const path: string[] = [];
+  let node: unknown = doc.contents;
+  const holds = (item: unknown) => {
+    const range = (item as { range?: [number, number, number] } | null)?.range;
+    return range !== undefined && at >= range[0] && at <= range[1];
+  };
+  for (;;) {
+    if (isMap(node)) {
+      const pair = node.items.find((item) => holds(item.key) || holds(item.value));
+      if (!pair) break;
+      path.push(String(isScalar(pair.key) ? pair.key.value : pair.key));
+      node = pair.value;
+    } else if (isSeq(node)) {
+      const index = node.items.findIndex(holds);
+      if (index === -1) break;
+      path.push(String(index));
+      node = node.items[index];
+    } else break;
+  }
+  return path.join('.');
+}

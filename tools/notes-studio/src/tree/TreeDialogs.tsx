@@ -185,7 +185,7 @@ export function RenameDialog({ client, node, onDone, onClose }: {
           />
         </label>
         <span className="text-[11.5px] text-[var(--fde-muted-foreground)]">
-          URL: /notes/{dir}{slug}. Change the title in the Frontmatter tab.
+          URL: /notes/{dir}{slug}. Change the title at the top of the note.
         </span>
       </div>
       <Preview preview={preview} failed={failed} />

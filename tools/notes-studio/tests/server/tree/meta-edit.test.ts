@@ -76,7 +76,7 @@ describe('meta.yaml edits', () => {
     expect(() => moveEntry('pages: [a\n', 0, 0)).toThrow('does not parse');
   });
 
-  it('writes a new meta.yaml like obsidian-plugin', () => {
+  it('writes the meta.yaml of a new folder page', () => {
     expect(metaTemplate('Raft "Consensus"', [])).toBe('title: "Raft \\"Consensus\\""\ndefaultOpen: true\npages: []\n');
     expect(metaTemplate('Notes', ['a', 'b'])).toBe('title: "Notes"\ndefaultOpen: true\npages:\n  - "a"\n  - "b"\n');
   });

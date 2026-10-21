@@ -5,6 +5,7 @@ import { createLintClient } from './api/lint';
 import { createTreeClient } from './api/tree';
 import { NoteEditor } from './editor/NoteEditor';
 import { NoteGate } from './notes/NoteGate';
+import { OpenOnSite } from './notes/OpenOnSite';
 import { NOTES_PREFIX, noteFromUrl, syncPath } from './notes/notes';
 import { PageTree } from './tree/PageTree';
 import { renamedPath } from './tree/tree';
@@ -53,6 +54,7 @@ export function App() {
         </button>
         <span className="font-semibold whitespace-nowrap">Notes Studio</span>
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)]">{active ?? ''}</span>
+        {active && <OpenOnSite path={active} />}
         {active && (
           <button type="button" className="studio-button lg:hidden" onClick={() => { setDrawer('panel'); }}>
             Panel

@@ -124,7 +124,7 @@ export function replaceEntry(text: string, index: number, value: string) {
   return splice(text, [{ start: entry.start, end: entry.end, text: quote(value, entry.type) }]);
 }
 
-// A new meta.yaml, written like obsidian-plugin's serializeMetaYaml.
+// The meta.yaml of a new folder page.
 export function metaTemplate(title: string, pages: string[]) {
   const lines = [`title: ${JSON.stringify(title)}`, 'defaultOpen: true'];
   if (pages.length === 0) lines.push('pages: []');

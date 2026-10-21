@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TreeFolder, TreeNode } from '../../../src/api/tree';
 import { dropIndex, filterTree, normalizeSlug, renamedPath, stepIndex, trailTo } from '../../../src/tree/tree';
-import { normalizePageSlug } from '../../../../../obsidian-plugin/src/services/page-creation';
+import { normalizeSlug as serverSlug } from '../../../server/tree/template';
 
 const page = (path: string, title: string, entry: number | null, hidden: 'unlisted' | null = null): TreeNode => ({
   kind: 'page', id: `page:${path}`, path, title, entry, hidden,
@@ -53,7 +53,7 @@ describe('tree helpers', () => {
     expect(renamedPath('guide/intro/x.mdx', 'guide/intro.mdx', 'guide/start.mdx')).toBeNull();
   });
 
-  it('makes slugs like obsidian-plugin', () => {
-    for (const input of ['Raft Consensus', 'Ổn định', 'C++ & Go!']) expect(normalizeSlug(input)).toBe(normalizePageSlug(input));
+  it('makes slugs like the server', () => {
+    for (const input of ['Raft Consensus', 'Ổn định', 'C++ & Go!']) expect(normalizeSlug(input)).toBe(serverSlug(input));
   });
 });
