@@ -9,6 +9,7 @@ import { pathnameOf } from './http.ts';
 import { createIconsApi } from './icons/api.ts';
 import { createLintApi } from './lint/api.ts';
 import { createRequestListener, routeUpgrades } from './routing.ts';
+import { createTreeApi } from './tree/api.ts';
 import { createNotesSync } from './sync/notes-sync.ts';
 
 export type StudioServer = {
@@ -53,11 +54,12 @@ export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = rep
   }
   const filesApi = createFilesApi(root);
   const lintApi = createLintApi(root);
+  const treeApi = createTreeApi(root);
   const iconsApi = createIconsApi();
   const fileEvents = createFileEvents(root);
   const notesSync = createNotesSync(root, boundPort);
 
-  server.on('request', createRequestListener(boundPort, [fileEvents.handle, filesApi, lintApi, iconsApi], vite.middlewares));
+  server.on('request', createRequestListener(boundPort, [fileEvents.handle, filesApi, lintApi, treeApi, iconsApi], vite.middlewares));
   routeUpgrades(server, boundPort, (viteHmr) => [
     {
       matches: (request) => pathnameOf(request) === SYNC_ENDPOINT,
