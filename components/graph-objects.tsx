@@ -1,6 +1,15 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
+// The classes of <Keyword> and <Tag>, exported so the Notes Studio draws its
+// keyword decorations with the same ones (tools/notes-studio scans this file).
+// Bold inside a keyword keeps the keyword colour instead of the prose bold colour.
+export const keywordClassName =
+	"font-medium text-[var(--color-graph-primary)] underline decoration-dotted underline-offset-4 [&_strong]:text-inherit";
+const tagOnlyClassName =
+	"not-prose inline-flex items-center rounded-full border border-[var(--color-graph-primary-muted)] bg-[color-mix(in_oklab,var(--color-graph-primary-muted)_30%,transparent)] px-2.5 py-1 text-[0.75rem] font-medium text-[var(--color-graph-primary)] underline decoration-dotted underline-offset-4";
+export const tagClassName = cn(keywordClassName, tagOnlyClassName);
+
 type GraphObjectProps = {
 	id: string;
 	displayName: string;
@@ -48,11 +57,7 @@ export function Keyword({
 			id={id}
 			data-graph-id={id}
 			data-graph-display-name={displayName}
-			className={cn(
-				// Bold inside a keyword keeps the keyword colour instead of the prose bold colour.
-				"font-medium text-[var(--color-graph-primary)] underline decoration-dotted underline-offset-4 [&_strong]:text-inherit",
-				className,
-			)}
+			className={cn(keywordClassName, className)}
 			{...props}
 		>
 			{children}
@@ -72,10 +77,7 @@ export function Tag({
 		<Keyword
 			id={id}
 			displayName={displayName}
-			className={cn(
-				"not-prose inline-flex items-center rounded-full border border-[var(--color-graph-primary-muted)] bg-[color-mix(in_oklab,var(--color-graph-primary-muted)_30%,transparent)] px-2.5 py-1 text-[0.75rem] font-medium text-[var(--color-graph-primary)] underline decoration-dotted underline-offset-4",
-				className,
-			)}
+			className={cn(tagOnlyClassName, className)}
 			{...props}
 		>
 			{children}

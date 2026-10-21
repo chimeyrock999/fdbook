@@ -1,166 +1,45 @@
-/* The site's notes theme (`.notes-theme` and `.dark .notes-theme` in
-   app/notes/notes.css) mapped onto the editor's --fde-* tokens, so the
-   editor and the Studio chrome look like a note page, plus the site tokens
-   the component plugins draw with (--garden-*, --color-graph-*,
-   --color-callout-*). Tailwind on the site
-   does not scan tools/, so the values are copied; tests/src/notes-theme.test.ts
-   fails when they drift. */
+/* The site's notes theme (styles/notes-theme.css, on `body.notes-theme`, with
+   `.dark` on <html> following the system: index.html), mapped onto
+   the editor's --fde-* tokens, so the editor and the Studio chrome look like a
+   note page. The component plugins draw with the site tokens (--garden-*,
+   --color-graph-*, --color-callout-*) as they are. No value is copied here:
+   a change to the site's theme shows in the Studio. */
 @import '@fontsource/be-vietnam-pro/400.css';
 @import '@fontsource/be-vietnam-pro/500.css';
 @import '@fontsource/be-vietnam-pro/600.css';
 @import '@fontsource/be-vietnam-pro/700.css';
 @import '@fontsource/jetbrains-mono/400.css';
 @import '@fontsource/jetbrains-mono/500.css';
+@import '../../../styles/notes-theme.css';
 
+/* The site's faces come from next/font under these names. */
 :root {
-  --font-sans: 'Be Vietnam Pro', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-
-  /* light */
-  --fde-background: #f8f5ec;
-  --fde-foreground: #24402a;
-  --fde-muted: #ede8d6;
-  --fde-muted-foreground: #6c7f67;
-  --fde-popover: #fbf8ee;
-  --fde-popover-foreground: #24402a;
-  --fde-card: #fbf8ee;
-  --fde-card-foreground: #24402a;
-  --fde-border: #ded8c3;
-  --fde-primary: #4a7233;
-  --fde-primary-foreground: #fbf8ee;
-  --fde-secondary: #ede8d6;
-  --fde-secondary-foreground: #3d5a40;
-  --fde-accent: #e4edd5;
-  --fde-accent-foreground: #24402a;
-  --fde-ring: #6e9c4f;
-  --fde-info: #4e86a8;
-  --fde-idea: #b08a2e;
-  --fde-warning: #c2762f;
-  --fde-error: #b03c4e;
-  --fde-success: #6e9c4f;
-
-  /* site tokens the component plugins use, copied as they are */
-  --garden-accent: #6e9c4f;
-  --garden-accent-soft: #e4edd5;
-  --garden-accent-ink: #4a7233;
-  --garden-ink: #24402a;
-  --garden-ink-2: #3d5a40;
-  --garden-ink-soft: #6c7f67;
-  --garden-surface: #fbf8ee;
-  --garden-surface-2: #ede8d6;
-  --garden-line: #ded8c3;
-  --garden-line-soft: #e8e2d0;
-  --garden-code-bg: #fefdf8;
-  --garden-tint-soft: #eff1e3;
-  --garden-shadow: 0 1px 2px rgb(36 64 42 / 0.05);
-  --color-graph-primary: #5ea23e;
-  --color-graph-secondary: #4f8f35;
-  --color-graph-muted: #a0cb7c;
-  --color-graph-background: #edf2df;
-  --color-graph-primary-muted: rgb(94 162 62 / 0.34);
-  --color-callout-idea: #b08a2e;
-  --color-callout-example: #3f8c74;
-  --color-callout-info: #4e86a8;
-  --color-callout-note: #7a8c74;
-  --color-callout-warning: #c2762f;
-  --color-callout-caution: #b0552c;
-  --color-callout-danger: #b03c4e;
-  --color-callout-error: #b03c4e;
-  --color-callout-success: #6e9c4f;
-  --color-callout-idea-title: #8e6e1e;
-  --color-callout-example-title: #2e6b58;
-  --color-callout-info-title: #3e6d8a;
-  --color-callout-note-title: #5c6e58;
-  --color-callout-warning-title: #a05c1c;
-  --color-callout-caution-title: #8f401c;
-  --color-callout-danger-title: #932a3c;
-  --color-callout-error-title: #932a3c;
-  --color-callout-success-title: #4a7233;
-  --color-callout-idea-bg: rgb(176 138 46 / 0.08);
-  --color-callout-example-bg: rgb(63 140 116 / 0.07);
-  --color-callout-info-bg: rgb(78 134 168 / 0.07);
-  --color-callout-note-bg: rgb(122 140 116 / 0.07);
-  --color-callout-warning-bg: rgb(194 118 47 / 0.08);
-  --color-callout-caution-bg: rgb(176 85 44 / 0.08);
-  --color-callout-danger-bg: rgb(176 60 78 / 0.07);
-  --color-callout-error-bg: rgb(176 60 78 / 0.07);
-  --color-callout-success-bg: #e4edd5;
-  --color-callout-body-bg: #eff1e3;
-  --color-callout-separator-alpha: 0.9;
+  --font-garden-sans: 'Be Vietnam Pro';
+  --font-garden-mono: 'JetBrains Mono';
 }
 
-/* dark, with the editor's own selector so it wins over its defaults */
-@media (prefers-color-scheme: dark) {
-  :root:not(.light):not(.dark) {
-    --fde-background: #14201a;
-    --fde-foreground: #e8f0e1;
-    --fde-muted: #223021;
-    --fde-muted-foreground: #93a88d;
-    --fde-popover: #1b291f;
-    --fde-popover-foreground: #e8f0e1;
-    --fde-card: #1b291f;
-    --fde-card-foreground: #e8f0e1;
-    --fde-border: #2c3d2f;
-    --fde-primary: #b7dc8a;
-    --fde-primary-foreground: #14201a;
-    --fde-secondary: #223021;
-    --fde-secondary-foreground: #cbdcc2;
-    --fde-accent: #263524;
-    --fde-accent-foreground: #e8f0e1;
-    --fde-ring: #a9d07c;
-    --fde-info: #6fa9c8;
-    --fde-idea: #d2b25e;
-    --fde-warning: #d98f4f;
-    --fde-error: #cf6579;
-    --fde-success: #a9d07c;
-
-    /* site tokens the component plugins use, copied as they are */
-    --garden-accent: #a9d07c;
-    --garden-accent-soft: #263524;
-    --garden-accent-ink: #b7dc8a;
-    --garden-ink: #e8f0e1;
-    --garden-ink-2: #cbdcc2;
-    --garden-ink-soft: #93a88d;
-    --garden-surface: #1b291f;
-    --garden-surface-2: #223021;
-    --garden-line: #2c3d2f;
-    --garden-line-soft: #263528;
-    --garden-code-bg: #0a120d;
-    --garden-tint-soft: #1a261c;
-    --garden-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
-    --color-graph-primary: #a9d07c;
-    --color-graph-secondary: #b7dc8a;
-    --color-graph-muted: #6d8a63;
-    --color-graph-background: #1a261c;
-    --color-graph-primary-muted: rgb(169 208 124 / 0.4);
-    --color-callout-idea: #d2b25e;
-    --color-callout-example: #57b79b;
-    --color-callout-info: #6fa9c8;
-    --color-callout-note: #8ca286;
-    --color-callout-warning: #d98f4f;
-    --color-callout-caution: #ce7346;
-    --color-callout-danger: #cf6579;
-    --color-callout-error: #cf6579;
-    --color-callout-success: #a9d07c;
-    --color-callout-idea-title: #ebd08a;
-    --color-callout-example-title: #8fdcc6;
-    --color-callout-info-title: #a3cfe6;
-    --color-callout-note-title: #c3d4bc;
-    --color-callout-warning-title: #f2b784;
-    --color-callout-caution-title: #f0a87f;
-    --color-callout-danger-title: #f3a0ac;
-    --color-callout-error-title: #f3a0ac;
-    --color-callout-success-title: #b7dc8a;
-    --color-callout-idea-bg: rgb(235 208 138 / 0.07);
-    --color-callout-example-bg: rgb(143 220 198 / 0.07);
-    --color-callout-info-bg: rgb(163 207 230 / 0.07);
-    --color-callout-note-bg: rgb(195 212 188 / 0.06);
-    --color-callout-warning-bg: rgb(242 183 132 / 0.07);
-    --color-callout-caution-bg: rgb(240 168 127 / 0.07);
-    --color-callout-danger-bg: rgb(243 160 172 / 0.07);
-    --color-callout-error-bg: rgb(243 160 172 / 0.07);
-    --color-callout-success-bg: #263524;
-    --color-callout-body-bg: #1a261c;
-    --color-callout-separator-alpha: 0.5;
-  }
+/* On the element that holds the site tokens, so they resolve there and win
+   over the editor's own :root and .dark values. */
+.notes-theme {
+  --fde-background: var(--color-fd-background);
+  --fde-foreground: var(--color-fd-foreground);
+  --fde-muted: var(--color-fd-muted);
+  --fde-muted-foreground: var(--color-fd-muted-foreground);
+  --fde-popover: var(--color-fd-popover);
+  --fde-popover-foreground: var(--color-fd-popover-foreground);
+  --fde-card: var(--color-fd-card);
+  --fde-card-foreground: var(--color-fd-card-foreground);
+  --fde-border: var(--color-fd-border);
+  --fde-primary: var(--color-fd-primary);
+  --fde-primary-foreground: var(--color-fd-primary-foreground);
+  --fde-secondary: var(--color-fd-secondary);
+  --fde-secondary-foreground: var(--color-fd-secondary-foreground);
+  --fde-accent: var(--color-fd-accent);
+  --fde-accent-foreground: var(--color-fd-accent-foreground);
+  --fde-ring: var(--color-fd-ring);
+  --fde-info: var(--color-callout-info);
+  --fde-idea: var(--color-callout-idea);
+  --fde-warning: var(--color-callout-warning);
+  --fde-error: var(--color-callout-error);
+  --fde-success: var(--color-callout-success);
 }

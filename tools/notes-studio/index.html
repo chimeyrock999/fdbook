@@ -4,8 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Notes Studio</title>
+    <!-- The site's dark tokens and the editor's key off .dark (next-themes
+         sets it on the site). The Studio follows the system: set it before
+         the first paint and keep it in step. -->
+    <script>
+      {
+        const dark = matchMedia('(prefers-color-scheme: dark)');
+        const follow = () => { document.documentElement.classList.toggle('dark', dark.matches); };
+        follow();
+        dark.addEventListener('change', follow);
+      }
+    </script>
   </head>
-  <body>
+  <body class="notes-theme">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

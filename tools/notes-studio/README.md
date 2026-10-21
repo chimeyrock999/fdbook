@@ -157,13 +157,31 @@ through the notes sync socket:
   `Cmd/Ctrl-S` saves at once. Changes made on disk (Obsidian, an agent) are
   merged into the open note. If the same block changed on both sides, a
   dialog asks which version to keep.
-- Light and dark follow the system. Colours and fonts are the notes site's
-  (`.notes-theme` in `app/notes/notes.css`), copied onto the editor's
-  `--fde-*` tokens in `src/notes-theme.css`, next to the site tokens the
-  components draw with (`--garden-*`, `--color-graph-*`, `--color-callout-*`);
-  a test fails when they drift. `src/notes-prose.css` copies the note page's
-  prose rules (`app/notes/notes.module.css`). The editor's block drag handle
-  is drawn as a grip (`src/editor/drag-handle.css`, found by its
+- Light and dark follow the system (`.dark` on `<html>`, as next-themes sets it
+  on the site). The look is the site's own, imported rather than copied, so
+  a change on the site shows here with no Studio edit:
+  - colours and fonts: `styles/notes-theme.css` (`.notes-theme`), mapped onto
+    the editor's `--fde-*` tokens in `src/notes-theme.css`;
+  - prose, callouts, title and description: `styles/notes-prose.css`
+    (`.notes-prose`, `.notes-title`, `.notes-description`). The editor's
+    stylesheet sits in a cascade layer so these rules win over it;
+    `src/notes-prose.css` keeps only what the editor needs on top (the
+    header's text areas, the editor's code block frame, where its markup
+    differs from the page's). The site's prose is for the note's content:
+    what the editor draws and does not let you edit (a diagram preview's
+    labels, a control) keeps the editor's look, so a mermaid label is 16px
+    here, not the page's 0.875rem;
+  - components: the callout's types, icons and variables come from
+    `components/notes-callout.tsx`, Keyword and Tag from the class names
+    `components/graph-objects.tsx` exports (Tailwind scans that file), the
+    accordion's icons and palette from `lib/notes-accordion.ts`.
+
+  What the editor cannot import (the accordion card, SvgDiagram, YouTube,
+  HtmlEmbed, the code block frame) stays a copy in its plugin. The site marks
+  the parts each copy mirrors with `// studio-copy start: …` and
+  `// studio-copy end`; `tests/src/site-copies.test.ts` pins their hash and
+  fails when one of them changes, not on other edits to the file.
+- The editor's block drag handle is drawn as a grip (`src/editor/drag-handle.css`, found by its
   `aria-label`; `tests/src/editor/drag-handle.test.ts` fails if a new editor
   version changes it).
 
@@ -442,18 +460,19 @@ export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] })
 
 Plugins today:
 
-- `callout`: `<Callout>` and `:::type[title]` drawn like
-  `components/notes-callout.tsx`, with the site's types and an icon menu to
-  change them. The editor only parses the admonition names in core's
+- `callout`: `<Callout>` and `:::type[title]` drawn with the classes, icons
+  and variables of `components/notes-callout.tsx`, with the site's types and
+  an icon menu to change them. The editor only parses the admonition names in core's
   `ADMONITION_TYPES`, so the plugin adds the site's own (`example`,
   `caution`, `important`, `error`, from `lib/notes-syntax.ts`) to
   that object at load; `tests/src/plugins/callout.test.ts` fails if a new
   editor version stops reading it. A callout whose title has formatting, or
   that holds an accordion group, stays source (the editor's rule).
-- `graph-objects`: `<Keyword>`, `<Tag>`, `:keyword[…]` and `:tag[…]` in the
-  keyword style, `<GraphMeta/>` and `:graph-meta{…}` as a small marker, all
-  as decorations: with the caret inside (or the atom selected) the source
-  shows again. `<SectionTitle>` is a component.
+- `graph-objects`: `<Keyword>`, `<Tag>`, `:keyword[…]` and `:tag[…]` with the
+  classes of `components/graph-objects.tsx`, `<GraphMeta/>` and
+  `:graph-meta{…}` as a small marker, all as decorations: with the caret
+  inside (or the atom selected) the source shows again. `<SectionTitle>` is
+  a component, drawn as the heading its `as` names.
 - `site-directives`: `::::accordions` groups as the site's accordion cards
   and `::youtube` as a card. On an accordion card the icon picks the item's
   `kind` (from `ACCORDION_KINDS`), the title is edited in place on the head,

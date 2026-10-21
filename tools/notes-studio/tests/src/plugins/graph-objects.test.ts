@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { repoRoot } from '../../../server/config';
-import { decorateGraphObjects } from '../../../src/plugins/graph-objects/decorate';
+import { keywordClassName, tagClassName } from '@site/components/graph-objects';
+import { decorateGraphObjects, KEYWORD_CLASS, TAG_CLASS } from '../../../src/plugins/graph-objects/decorate';
 import { attributes } from '../../../src/plugins/source-attributes';
 import { defined, describeDecoration, editorState, nodesOf, withNode, withText } from '../../support/editor-state';
 import { realNotes } from '../../support/notes';
@@ -25,14 +26,22 @@ describe('source attributes', () => {
 });
 
 describe('graph object decorations', () => {
+  // The text takes the site's own classes, so a change to how
+  // components/graph-objects.tsx draws a keyword shows in the Studio.
+  it('styles keywords and tags with the classes of components/graph-objects.tsx', () => {
+    expect(KEYWORD_CLASS).toBe(`studio-keyword ${keywordClassName}`);
+    expect(TAG_CLASS).toBe(`studio-keyword studio-keyword-tag ${tagClassName}`);
+    expect(tagClassName.split(' ')).toEqual(expect.arrayContaining(['rounded-full', 'underline']));
+  });
+
   it('hides the tags of Keyword and Tag and styles their text', async () => {
     const state = editorState(await fixture());
     const found = decorations(state);
     const styled = found.filter((item) => item.class?.startsWith('studio-keyword'));
     expect(styled.map((item) => [item.class, textOf(state, item.from, item.to)])).toEqual([
-      ['studio-keyword', 'business process'],
-      ['studio-keyword studio-keyword-tag', 'fact'],
-      ['studio-keyword', 'process'],
+      [KEYWORD_CLASS, 'business process'],
+      [TAG_CLASS, 'fact'],
+      [KEYWORD_CLASS, 'process'],
     ]);
     const hidden = found.filter((item) => item.class === 'studio-hidden' && item.to - item.from > 1);
     expect(hidden.map((item) => textOf(state, item.from, item.to))).toEqual([
@@ -58,10 +67,10 @@ describe('graph object decorations', () => {
 
   it('shows the source while the caret is inside', async () => {
     const state = editorState(await fixture());
-    const keyword = defined(decorations(state).find((item) => item.class === 'studio-keyword'));
+    const keyword = defined(decorations(state).find((item) => item.class === KEYWORD_CLASS));
     const inside = decorations(withText(state, keyword.from + 2));
     expect(inside.find((item) => item.class === 'studio-hidden' && textOf(state, item.from, item.to).startsWith('<Keyword id="business'))).toBeUndefined();
-    expect(inside.filter((item) => item.class === 'studio-keyword')).toHaveLength(2);
+    expect(inside.filter((item) => item.class === KEYWORD_CLASS)).toHaveLength(2);
 
     // Right after a hidden closing tag a Backspace would delete it unseen.
     const closing = defined(decorations(state).find((item) => item.class === 'studio-hidden' && textOf(state, item.from, item.to) === '</Keyword>'));

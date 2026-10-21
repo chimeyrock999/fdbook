@@ -1,6 +1,7 @@
 import { NodeSelection, type EditorState } from '@tiptap/pm/state';
 import { Decoration, type EditorView } from '@tiptap/pm/view';
-import { Bug, ChevronDown, CircleDashed, CircleHelp, CirclePlay, Droplet, Leaf, Rat, Shovel, Sprout, Tag, type IconNode } from 'lucide';
+import { ChevronDown, CircleDashed, CirclePlay, icons, type IconNode } from 'lucide';
+import { accordionKindIcons, accordionKindSemantic, accordionKindVariables } from '@site/lib/notes-accordion';
 import { ACCORDION_KINDS, type AccordionKind } from '@site/lib/notes-syntax';
 import { icon } from '../icon';
 import { floatMenu } from '../picker-menu';
@@ -12,17 +13,12 @@ import { parseAccordions, withAccordionAttributes, withAccordionBody, type Accor
 // (components/mdx/youtube.tsx). Each becomes a card over its hidden source;
 // the "MDX" button (or selecting the block) shows the source again.
 
-// accordion.tsx: icon and callout palette per kind (lib/notes-syntax.ts).
-const KINDS: Record<AccordionKind, { icon: IconNode; semantic: string }> = {
-  question: { icon: CircleHelp, semantic: 'info' },
-  'deep-dive': { icon: Shovel, semantic: 'example' },
-  definition: { icon: Tag, semantic: 'note' },
-  example: { icon: Leaf, semantic: 'example' },
-  tip: { icon: Sprout, semantic: 'idea' },
-  warning: { icon: Bug, semantic: 'warning' },
-  danger: { icon: Rat, semantic: 'danger' },
-  note: { icon: Droplet, semantic: 'note' },
-};
+// The site's icon per kind (lib/notes-accordion.ts, lucide-react), drawn
+// here as plain DOM with the lucide icon of the same name.
+export function kindIcon(kind: AccordionKind): IconNode {
+  const name = accordionKindIcons[kind].displayName;
+  return name !== undefined && name in icons ? icons[name as keyof typeof icons] : CircleDashed;
+}
 
 function isAccordionKind(kind: string): kind is AccordionKind {
   return (ACCORDION_KINDS as readonly string[]).includes(kind);
@@ -236,8 +232,8 @@ function kindPicker(cards: Cards, item: AccordionItem, index: number) {
   button.setAttribute('aria-label', `Accordion kind: ${item.kind ?? 'none'}`);
   button.setAttribute('aria-haspopup', 'menu');
   button.setAttribute('aria-expanded', 'false');
-  const known = item.kind && isAccordionKind(item.kind) ? KINDS[item.kind] : undefined;
-  button.append(icon(known?.icon ?? CircleDashed, 17), chevron());
+  const known = item.kind && isAccordionKind(item.kind) ? kindIcon(item.kind) : CircleDashed;
+  button.append(icon(known, 17), chevron());
   const key = `${String(index)}:kind`;
   register(cards, button, key);
 
@@ -250,8 +246,8 @@ function kindPicker(cards: Cards, item: AccordionItem, index: number) {
       option.type = 'button';
       option.setAttribute('role', 'menuitemradio');
       option.setAttribute('aria-checked', String(kind === item.kind));
-      option.style.color = `var(--color-callout-${KINDS[kind].semantic}-title)`;
-      option.append(icon(KINDS[kind].icon, 14), element('span', '', kind));
+      option.style.color = `var(--color-callout-${accordionKindSemantic[kind]}-title)`;
+      option.append(icon(kindIcon(kind), 14), element('span', '', kind));
       option.addEventListener('click', () => {
         close?.();
         rewriteGroup(cards, (value) => withAccordionAttributes(value, index, { kind }), key);
@@ -303,13 +299,9 @@ function accordionCards(view: EditorView, getPos: () => number | undefined, item
   const { open } = state;
   replayClicks(cards, order);
   items.forEach((item, index) => {
-    const kind = item.kind && isAccordionKind(item.kind) ? KINDS[item.kind] : undefined;
-    const semantic = kind?.semantic ?? 'note';
+    const kind = item.kind && isAccordionKind(item.kind) ? item.kind : undefined;
     const card = element('div', 'studio-accordion');
-    card.style.setProperty('--acc-title', `var(--color-callout-${semantic}-title)`);
-    card.style.setProperty('--acc-line', `var(--color-callout-${semantic})`);
-    card.style.setProperty('--acc-tint', `var(--color-callout-${semantic}-bg)`);
-    card.style.setProperty('--acc-border', `color-mix(in oklab, var(--color-callout-${semantic}) 46%, var(--fde-border))`);
+    for (const [name, value] of Object.entries(accordionKindVariables(kind))) card.style.setProperty(name, value);
 
     const head = element('div', 'studio-accordion-head');
     const title = element('input', 'studio-accordion-title');

@@ -14,7 +14,7 @@ import { CALLOUT_TYPES, DIRECTIVE_TYPES } from './types';
 // a new editor version stops reading this object.
 for (const name of DIRECTIVE_TYPES) ADMONITION_TYPES[name] ??= 'info';
 
-const regions = { title: 'studio-callout-title', body: 'studio-callout-body' };
+const regions = { title: 'notes-callout-head notes-callout-title studio-callout-title', body: 'notes-callout-body studio-callout-body' };
 
 function withTypes(spec: UiComponentSpec, types: string[]): UiComponentSpec {
   return {

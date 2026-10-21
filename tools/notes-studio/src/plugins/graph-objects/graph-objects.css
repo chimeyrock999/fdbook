@@ -1,22 +1,5 @@
-/* Keyword and Tag from components/graph-objects.tsx. */
-.studio-keyword {
-  font-weight: 500;
-  color: var(--color-graph-primary);
-  text-decoration: underline dotted;
-  text-underline-offset: 4px;
-}
-.studio-keyword strong {
-  color: inherit;
-}
-.studio-keyword-tag {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--color-graph-primary-muted);
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--color-graph-primary-muted) 30%, transparent);
-  padding: 0.25rem 0.625rem;
-  font-size: 0.75rem;
-}
+/* Keyword and Tag draw with the classes of components/graph-objects.tsx
+   (decorate.ts). A directive's label is a widget; a click opens its source. */
 span.studio-keyword[title] {
   cursor: text;
 }
@@ -36,18 +19,4 @@ span.studio-keyword[title] {
   font-size: 0.875rem;
   font-weight: 400;
   cursor: pointer;
-}
-
-.studio-section-title {
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  font-size: 1.25rem;
-}
-.studio-section-title[data-level='h2'] {
-  font-size: 1.5rem;
-}
-.studio-section-title[data-level='h4'],
-.studio-section-title[data-level='h5'],
-.studio-section-title[data-level='h6'] {
-  font-size: 1.125rem;
 }

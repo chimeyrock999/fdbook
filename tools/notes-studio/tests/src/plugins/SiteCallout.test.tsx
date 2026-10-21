@@ -3,7 +3,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SiteCallout } from '../../../src/plugins/callout/SiteCallout';
-import { DIRECTIVE_TYPES, semanticType } from '../../../src/plugins/callout/types';
+import { getSemanticCalloutType } from '@site/components/notes-callout';
+import { DIRECTIVE_TYPES } from '../../../src/plugins/callout/types';
 import { defined } from '../../support/editor-state';
 
 afterEach(cleanup);
@@ -20,8 +21,8 @@ describe('SiteCallout', () => {
     );
 
   it('maps types onto the site palette like notes-callout.tsx', () => {
-    expect(['tip', 'idea'].map(semanticType)).toEqual(['idea', 'idea']);
-    expect(['caution', 'important', 'warn', 'warning', 'danger', 'error', 'nope'].map(semanticType))
+    expect(['tip', 'idea'].map(getSemanticCalloutType)).toEqual(['idea', 'idea']);
+    expect(['caution', 'important', 'warn', 'warning', 'danger', 'error', 'nope'].map(getSemanticCalloutType))
       .toEqual(['caution', 'caution', 'warning', 'warning', 'danger', 'danger', 'info']);
     const { container } = draw('warn');
     const root = defined(container.querySelector<HTMLElement>('.studio-callout'));
