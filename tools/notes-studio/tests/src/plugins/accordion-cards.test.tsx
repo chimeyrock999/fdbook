@@ -3,9 +3,11 @@ import type { Editor } from '@tiptap/core';
 import { cleanup, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { accordionKindVariables } from '@site/lib/notes-accordion';
+import { CircleDashed, icons } from 'lucide';
+import { accordionKindIcons, accordionKindVariables } from '@site/lib/notes-accordion';
 import { ACCORDION_KINDS } from '@site/lib/notes-syntax';
 import { decorationsPlugin, useEditorPlugin } from '../../../src/editor/decorations';
+import { kindIcon } from '../../../src/plugins/site-directives/decorate';
 import { editorConfig } from '../../../src/plugins';
 import { defined } from '../../support/editor-state';
 import { mountEditor } from '../../support/live-editor';
@@ -83,6 +85,16 @@ function store(live: Editor) {
 }
 
 describe('accordion cards', () => {
+  // The site's lucide-react icon per kind (lib/notes-accordion.ts), as the
+  // lucide icon of the same name.
+  it('draws each kind with the icon of the site', () => {
+    for (const kind of ACCORDION_KINDS) {
+      const name = defined(accordionKindIcons[kind].displayName, kind);
+      expect(kindIcon(kind), kind).toBe(icons[name as keyof typeof icons]);
+      expect(kindIcon(kind), kind).not.toBe(CircleDashed);
+    }
+  });
+
   it('colours each card with the site palette of its kind', () => {
     const { container } = mount();
     const cards = [...container.querySelectorAll<HTMLElement>('.studio-accordion')];

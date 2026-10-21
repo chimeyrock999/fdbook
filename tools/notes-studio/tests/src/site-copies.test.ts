@@ -1,45 +1,59 @@
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { repoRoot } from '../../server/config';
 
-// Site components the Studio cannot import (server code, fumadocs-ui, live
-// embeds the editor does not run), so a plugin draws its own copy. Each copy
-// is pinned to the site file it was made from: when that file changes, this
-// fails until the copy is checked against it and the hash is updated.
+// Site code the Studio cannot import (server reads, fumadocs-ui, live embeds
+// the editor does not run), so a plugin draws its own copy. The site marks
+// each part a copy mirrors with `// studio-copy start: …` and
+// `// studio-copy end`, and the hash of those parts is pinned here: when
+// one changes, this fails until the copy is checked against it and the hash
+// is updated. Edits elsewhere in the file leave it alone.
 const COPIES = [
-  {
-    site: 'components/accordion.tsx',
-    sha256: '2dd08eeca1aceedd1ac8cf207f8b2e95410651e5637bce87c4c982b24e52f4aa',
-    studio: ['src/plugins/site-directives/decorate.ts (kind icons)', 'src/plugins/site-directives/site-directives.css'],
-  },
-  {
-    site: 'components/mdx/svg-diagram.tsx',
-    sha256: '1519ee5d42bb270c3a315f37a9ca2f95af34b6bbfea0fb52c009744ed62a7e98',
-    studio: ['src/plugins/svg-diagram/SvgDiagram.tsx', 'src/plugins/svg-diagram/svg-diagram.css'],
-  },
-  {
-    site: 'components/mdx/youtube.tsx',
-    sha256: 'ecd1297764e1cb02b0b2b31fea3b19f5d566a782382ebc33b9aedbc773d81525',
-    studio: ['src/plugins/youtube/YouTube.tsx'],
-  },
-  {
-    site: 'components/mdx/html-embed.tsx',
-    sha256: 'b592acb9af47aa4ec4d6ccd7183893d6deeebd71407933e9cbe80199ef56c508',
-    studio: ['src/plugins/html-embed/HtmlEmbed.tsx'],
-  },
-  {
-    site: 'components/codeblock.tsx',
-    sha256: '10fa382036eab5fbb68df737b8d2f2c479a1105682f74a31c91b8ee419087360',
-    studio: ['src/notes-prose.css (code block frame)'],
-  },
+  { site: 'components/accordion.tsx', sha256: 'b829af8b610c34fa4e4d861c4027b4b0264684e5058e43c41646c10e70a21c0e' },
+  { site: 'components/codeblock.tsx', sha256: '55b86f2952bf791906e4fcae511b7b3d4260af763ac8acb14e9e463d6385d12b' },
+  { site: 'components/mdx/svg-diagram.tsx', sha256: '40a429227384ecd79acdcfb6e830c81d6c92eb20bd2cdca8932cd6ea7a8ca015' },
+  { site: 'components/mdx/youtube.tsx', sha256: '0d899e93e4320eac099755574130ae30c79249a04381865bb11f9a83ed4c7bca' },
+  { site: 'components/mdx/html-embed.tsx', sha256: '58eb89c3dac0c2cb5b628ad8c47f47052ee41eb97a458015720c901c0c0cb91a' },
 ];
 
+const START = /^\/\/ studio-copy start: the Notes Studio mirrors this in (tools\/notes-studio\/\S+)/;
+const END = '// studio-copy end';
+
+// The marked parts of a site file, and the Studio paths their markers name.
+function regions(source: string) {
+  const parts: string[] = [];
+  const studio: string[] = [];
+  let current: string[] | null = null;
+  for (const line of source.replace(/\r\n/g, '\n').split('\n')) {
+    const start = START.exec(line);
+    if (start) {
+      expect(current, 'a studio-copy region opens inside another').toBeNull();
+      current = [];
+      studio.push(start[1].replace(/[;,]$/, ''));
+    } else if (line === END) {
+      expect(current, 'a studio-copy end without a start').not.toBeNull();
+      parts.push((current ?? []).join('\n'));
+      current = null;
+    } else if (current && !line.startsWith('// tools/notes-studio/tests/src/site-copies.test.ts')) current.push(line);
+  }
+  expect(current, 'a studio-copy region is not closed').toBeNull();
+  return { parts, studio };
+}
+
 describe('site copies', () => {
-  it.each(COPIES)('$site has not changed since the Studio copied it', async ({ site, sha256, studio }) => {
-    const source = (await readFile(join(repoRoot, site), 'utf8')).replace(/\r\n/g, '\n');
-    const hash = createHash('sha256').update(source).digest('hex');
-    expect(hash, `${site} changed: check that ${studio.join(', ')} still match it, then set its sha256 here to ${hash}`).toBe(sha256);
+  it.each(COPIES)('the parts of $site the Studio copies have not changed', async ({ site, sha256 }) => {
+    const { parts, studio } = regions(await readFile(join(repoRoot, site), 'utf8'));
+    expect(parts.length, `${site} marks no studio-copy region`).toBeGreaterThan(0);
+    for (const path of studio) expect(existsSync(join(repoRoot, path)), path).toBe(true);
+    const hash = createHash('sha256').update(parts.join('\n\n')).digest('hex');
+    expect(hash, `${site} changed in a part the Studio copies: check ${[...new Set(studio)].join(', ')} against it, then set its sha256 here to ${hash}`).toBe(sha256);
+  });
+
+  it('reads only the marked parts', () => {
+    const { parts } = regions(['a', '// studio-copy start: the Notes Studio mirrors this in tools/notes-studio/src (x);', 'kept', '// studio-copy end', 'b'].join('\n'));
+    expect(parts).toEqual(['kept']);
   });
 });

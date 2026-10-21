@@ -170,12 +170,13 @@ through the notes sync socket:
   - components: the callout's types, icons and variables come from
     `components/notes-callout.tsx`, Keyword and Tag from the class names
     `components/graph-objects.tsx` exports (Tailwind scans that file), the
-    accordion palette from `lib/notes-accordion.ts`.
+    accordion's icons and palette from `lib/notes-accordion.ts`.
 
-  What the editor cannot import (the accordion's icons and card, SvgDiagram,
-  YouTube, HtmlEmbed, the code block frame) stays a copy in its plugin;
-  `tests/src/site-copies.test.ts` pins each copy to its site file and fails
-  when that file changes.
+  What the editor cannot import (the accordion card, SvgDiagram, YouTube,
+  HtmlEmbed, the code block frame) stays a copy in its plugin. The site marks
+  the parts each copy mirrors with `// studio-copy start: …` and
+  `// studio-copy end`; `tests/src/site-copies.test.ts` pins their hash and
+  fails when one of them changes, not on other edits to the file.
 - The editor's block drag handle is drawn as a grip (`src/editor/drag-handle.css`, found by its
   `aria-label`; `tests/src/editor/drag-handle.test.ts` fails if a new editor
   version changes it).

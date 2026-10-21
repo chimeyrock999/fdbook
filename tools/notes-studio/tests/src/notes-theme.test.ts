@@ -48,7 +48,10 @@ describe('notes theme', () => {
     }
   });
 
-  it('keeps the palette in the shared file only', async () => {
+  // The .notes-theme palette, which the Studio draws with. The site's own
+  // @theme and global .dark blocks still repeat the values for its Tailwind
+  // utilities: #72.
+  it('keeps the .notes-theme palette in the shared file only', async () => {
     const notes = await read('app/notes/notes.css');
     expect(notes).toContain("@import '../../styles/notes-theme.css';");
     expect(notes).not.toMatch(/(^|\n)(\.dark )?\.notes-theme \{[^}]*--color-callout-/);
@@ -59,9 +62,11 @@ describe('notes theme', () => {
     expect(site).toContain('.dark .notes-theme {');
     const html = await read('tools/notes-studio/index.html');
     expect(html).toContain('<body class="notes-theme">');
-    // Set before the first paint, so a dark system never flashes light.
+    // Set before the first paint, so a dark system never flashes light, and
+    // kept in step when the system switches.
     expect(html.indexOf("classList.toggle('dark'")).toBeGreaterThan(-1);
     expect(html.indexOf("classList.toggle('dark'")).toBeLessThan(html.indexOf('src/main.tsx'));
+    expect(html).toContain("addEventListener('change'");
   });
 });
 

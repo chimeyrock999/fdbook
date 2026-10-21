@@ -1,7 +1,7 @@
 import { NodeSelection, type EditorState } from '@tiptap/pm/state';
 import { Decoration, type EditorView } from '@tiptap/pm/view';
-import { Bug, ChevronDown, CircleDashed, CircleHelp, CirclePlay, Droplet, Leaf, Rat, Shovel, Sprout, Tag, type IconNode } from 'lucide';
-import { accordionKindSemantic, accordionKindVariables } from '@site/lib/notes-accordion';
+import { ChevronDown, CircleDashed, CirclePlay, icons, type IconNode } from 'lucide';
+import { accordionKindIcons, accordionKindSemantic, accordionKindVariables } from '@site/lib/notes-accordion';
 import { ACCORDION_KINDS, type AccordionKind } from '@site/lib/notes-syntax';
 import { icon } from '../icon';
 import { floatMenu } from '../picker-menu';
@@ -13,18 +13,12 @@ import { parseAccordions, withAccordionAttributes, withAccordionBody, type Accor
 // (components/mdx/youtube.tsx). Each becomes a card over its hidden source;
 // the "MDX" button (or selecting the block) shows the source again.
 
-// components/accordion.tsx: the icon per kind; the palette per kind is the
-// site's (lib/notes-accordion.ts).
-const KIND_ICONS: Record<AccordionKind, IconNode> = {
-  question: CircleHelp,
-  'deep-dive': Shovel,
-  definition: Tag,
-  example: Leaf,
-  tip: Sprout,
-  warning: Bug,
-  danger: Rat,
-  note: Droplet,
-};
+// The site's icon per kind (lib/notes-accordion.ts, lucide-react), drawn
+// here as plain DOM with the lucide icon of the same name.
+export function kindIcon(kind: AccordionKind): IconNode {
+  const name = accordionKindIcons[kind].displayName;
+  return name !== undefined && name in icons ? icons[name as keyof typeof icons] : CircleDashed;
+}
 
 function isAccordionKind(kind: string): kind is AccordionKind {
   return (ACCORDION_KINDS as readonly string[]).includes(kind);
@@ -238,8 +232,8 @@ function kindPicker(cards: Cards, item: AccordionItem, index: number) {
   button.setAttribute('aria-label', `Accordion kind: ${item.kind ?? 'none'}`);
   button.setAttribute('aria-haspopup', 'menu');
   button.setAttribute('aria-expanded', 'false');
-  const known = item.kind && isAccordionKind(item.kind) ? KIND_ICONS[item.kind] : undefined;
-  button.append(icon(known ?? CircleDashed, 17), chevron());
+  const known = item.kind && isAccordionKind(item.kind) ? kindIcon(item.kind) : CircleDashed;
+  button.append(icon(known, 17), chevron());
   const key = `${String(index)}:kind`;
   register(cards, button, key);
 
@@ -253,7 +247,7 @@ function kindPicker(cards: Cards, item: AccordionItem, index: number) {
       option.setAttribute('role', 'menuitemradio');
       option.setAttribute('aria-checked', String(kind === item.kind));
       option.style.color = `var(--color-callout-${accordionKindSemantic[kind]}-title)`;
-      option.append(icon(KIND_ICONS[kind], 14), element('span', '', kind));
+      option.append(icon(kindIcon(kind), 14), element('span', '', kind));
       option.addEventListener('click', () => {
         close?.();
         rewriteGroup(cards, (value) => withAccordionAttributes(value, index, { kind }), key);

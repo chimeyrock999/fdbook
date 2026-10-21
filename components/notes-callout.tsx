@@ -24,7 +24,8 @@ type NotesCalloutProps = Omit<ComponentProps<'div'>, 'title'> & {
   graphType?: 'section' | 'keyword';
 };
 
-export function getSemanticCalloutType(type: NotesCalloutType | undefined): SemanticCalloutType {
+// Any string: a type the site does not know is drawn as `info`.
+export function getSemanticCalloutType(type: string | undefined): SemanticCalloutType {
   switch (type) {
     case 'tip':
       return 'idea';

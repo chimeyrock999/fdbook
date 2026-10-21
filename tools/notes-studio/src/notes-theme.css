@@ -1,5 +1,5 @@
 /* The site's notes theme (styles/notes-theme.css, on `body.notes-theme`, with
-   `.dark` on <html> following the system: src/system-theme.ts), mapped onto
+   `.dark` on <html> following the system: index.html), mapped onto
    the editor's --fde-* tokens, so the editor and the Studio chrome look like a
    note page. The component plugins draw with the site tokens (--garden-*,
    --color-graph-*, --color-callout-*) as they are. No value is copied here:

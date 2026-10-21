@@ -20,9 +20,11 @@
   padding-inline: calc(0.875rem - 4px) 0;
   border-start-start-radius: 0.75rem;
 }
-/* A head cell, but editable text, not a flex row of an icon and a title. */
+/* A head cell, but editable text, not a flex row of an icon and a title:
+   a block, its line centred on the icon's taller cell. */
 .notes-prose .studio-callout .studio-callout-title {
   display: block;
+  align-content: center;
   padding-inline-start: 0.4375rem;
   border-start-end-radius: 0.75rem;
 }
