@@ -21,8 +21,11 @@ function statusOf(xy: string): ChangeStatus | null {
 // Reads `git status --porcelain=v2 -z --branch`. Entries are NUL-separated;
 // a rename (`2`) is followed by its old path as an entry of its own. Only
 // files the path policy allows are kept, so a .DS_Store or a stray .txt in
-// content/notes never reaches a commit.
-export function parseStatus(output: string): Changes {
+// content/notes never reaches a commit. A file the index deletes while the
+// disk keeps it (`git rm --cached`) comes twice, deleted and untracked: it is
+// listed once, as modified, and named in `recheck`, since it may still match
+// HEAD.
+export function parseStatus(output: string): Changes & { recheck: string[] } {
   const entries = output.split('\0');
   let branch: string | null = null;
   const files: ChangedFile[] = [];
@@ -55,14 +58,34 @@ export function parseStatus(output: string): Changes {
     }
     if (file && classifyPath(file.path)) files.push(file);
   }
-  return { branch, files };
+  const deleted = new Set(files.filter((file) => file.status === 'D').map((file) => file.path));
+  const recheck = files.filter((file) => file.status === 'A' && deleted.has(file.path)).map((file) => file.path);
+  const twice = new Set(recheck);
+  return {
+    branch,
+    files: files.flatMap((file): ChangedFile[] => {
+      if (!twice.has(file.path)) return [file];
+      return file.status === 'D' ? [{ path: file.path, status: 'M' }] : [];
+    }),
+    recheck,
+  };
+}
+
+// Whether the file on disk is the one HEAD has.
+async function matchesHead(root: string, path: string) {
+  const [head, disk] = await Promise.all([
+    runGit(root, ['rev-parse', '--verify', '--quiet', `HEAD:${path}`]).catch(() => ''),
+    runGit(root, ['hash-object', '--', path]),
+  ]);
+  return head.trim() !== '' && head.trim() === disk.trim();
 }
 
 // What `git status` says changed under content/notes and public/notes, by path.
 export async function loadChanges(root: string): Promise<Changes> {
   await assertWorktreeTop(root);
   const output = await runGit(root, ['status', '--porcelain=v2', '-z', '--branch', '--untracked-files=all', '--', ...AREAS]);
-  const changes = parseStatus(output);
-  changes.files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-  return changes;
+  const { branch, files, recheck } = parseStatus(output);
+  const unchanged = new Set<string>();
+  for (const path of recheck) if (await matchesHead(root, path)) unchanged.add(path);
+  return { branch, files: files.filter((file) => !unchanged.has(file.path)).sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) };
 }

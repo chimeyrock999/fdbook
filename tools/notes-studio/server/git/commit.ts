@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { HttpError } from '../http.ts';
 import { MAIN_BRANCH } from './branch.ts';
 import { readCommits, type Commit } from './history.ts';
@@ -12,7 +14,9 @@ export type CommitRequest = { message: unknown; paths: unknown };
 // be one `git status` lists now (a rename brings its old path along). Files
 // not picked stay as they were: `git commit -- <paths>` commits those paths
 // alone, whatever else is staged, and takes them as they are on disk when it
-// runs. New files have to be added first; if the commit then fails (a hook,
+// runs. Files on disk are added first, so new ones are known; a path gone
+// from disk (a deletion, a rename's old path, staged or not) is left to the
+// commit, which records it from HEAD. If the commit then fails (a hook,
 // no user.email, a merge in progress), the index is put back as it was, so a
 // failed commit stages nothing. The message is kept as written, `#` lines
 // too (an issue reference), only trimmed.
@@ -35,7 +39,8 @@ export async function commitChanges(root: string, { message, paths }: CommitRequ
   // Fails on a merge in progress (unmerged entries), before anything changed.
   const index = (await runGit(root, ['write-tree'])).trim();
   try {
-    await runGit(root, ['add', '--all', '--', ...specs]);
+    const onDisk = [...specs].filter((path) => existsSync(join(root, path)));
+    if (onDisk.length > 0) await runGit(root, ['add', '--all', '--', ...onDisk]);
     await runGit(root, ['commit', '--quiet', '--cleanup=whitespace', '-m', text, '--', ...specs]);
   } catch (error) {
     await runGit(root, ['read-tree', index]);

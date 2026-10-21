@@ -22,7 +22,7 @@ describe('parseStatus', () => {
       '? public/notes/s/pic.png',
       '',
     ].join(NUL);
-    expect(parseStatus(output)).toEqual({
+    expect(parseStatus(output)).toMatchObject({
       branch: 'cr/sinks',
       files: [
         { path: 'content/notes/a.mdx', status: 'M' },
@@ -43,7 +43,17 @@ describe('parseStatus', () => {
       'u UU N... 100644 100644 100644 100644 aaa bbb ccc content/notes/both.mdx',
       '',
     ].join(NUL);
-    expect(parseStatus(output)).toEqual({ branch: null, files: [{ path: 'content/notes/both.mdx', status: 'M' }] });
+    expect(parseStatus(output)).toEqual({ branch: null, files: [{ path: 'content/notes/both.mdx', status: 'M' }], recheck: [] });
+  });
+
+  it('lists a file the index deletes but the disk keeps once, as modified, to be checked against HEAD', () => {
+    const output = [
+      '# branch.head cr/x',
+      '1 D. N... 100644 000000 000000 aaa 000 content/notes/kept.mdx',
+      '? content/notes/kept.mdx',
+      '',
+    ].join(NUL);
+    expect(parseStatus(output)).toEqual({ branch: 'cr/x', files: [{ path: 'content/notes/kept.mdx', status: 'M' }], recheck: ['content/notes/kept.mdx'] });
   });
 
   it('keeps only the end of a rename the Studio may edit', () => {
@@ -115,6 +125,12 @@ describe('loadChanges', () => {
     expect((await loadChanges(worktree.root)).files).toEqual([
       { path: 'content/notes/streaming/watermarks.mdx', status: 'R', from: 'content/notes/streaming/watermark-and-late-events.mdx' },
     ]);
+  });
+
+  it('lists a file taken out of the index once: modified if it differs from HEAD, else not at all', async () => {
+    git(worktree.root, 'rm', '-q', '--cached', 'content/notes/streaming/index.mdx', 'content/notes/database/index.mdx');
+    await write('content/notes/streaming/index.mdx', 'changed\n');
+    expect((await loadChanges(worktree.root)).files).toEqual([{ path: 'content/notes/streaming/index.mdx', status: 'M' }]);
   });
 
   it('refuses a root that is not the top of a git worktree', async () => {

@@ -5,7 +5,6 @@ import type { Leave } from './leave';
 
 const SHOWN_MS = 8000;
 
-
 // The reminder that a change request was left with uncommitted files. It
 // blocks nothing: the files stay in that change request's worktree, and the
 // toast goes after a few seconds. The change request switcher (#16) shows it.

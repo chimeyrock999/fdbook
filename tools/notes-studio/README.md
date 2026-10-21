@@ -469,7 +469,8 @@ in one folder, `reorder <folder>` for `meta.yaml` alone, `update assets of
 <folder>` for assets alone. Once edited, the message stays as written until
 **Use the suggestion**; it is kept as written, `#` lines too. **Commit**
 runs `git add` and `git commit` on the picked paths alone, so anything else,
-staged or not, stays as it was, and a commit that fails (a hook, a missing
+staged or not, stays as it was; a deletion or rename staged in a terminal
+commits too. A commit that fails (a hook, a missing
 `user.email`) stages nothing. An unchecked file stays unchecked until it
 leaves the list. It
 waits while the open note has edits not saved yet, and it is off on `main`

@@ -17,7 +17,8 @@ export function runGit(root: string, args: string[]) {
       ['--literal-pathspecs', '--no-optional-locks', '-c', 'core.quotePath=false', ...args],
       { cwd: root, timeout: TIMEOUT_MS, maxBuffer: MAX_OUTPUT, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' } },
       (error, stdout, stderr) => {
-        if (error) reject(new HttpError(500, `git ${args[0] ?? ''} failed: ${(stderr || error.message).trim()}`));
+        // git says some refusals ("nothing to commit") on stdout.
+        if (error) reject(new HttpError(500, `git ${args[0] ?? ''} failed: ${(stderr.trim() || stdout.trim() || error.message).trim()}`));
         else resolve(stdout);
       },
     );

@@ -99,6 +99,25 @@ describe('changes API', () => {
     expect((await changes()).files).toEqual([]);
   });
 
+  it('commits a rename and a deletion staged in a terminal', async () => {
+    git(studio.root, 'mv', 'content/notes/streaming/watermark-and-late-events.mdx', 'content/notes/streaming/watermarks.mdx');
+    await writeFile(note('streaming/watermarks.mdx'), 'renamed and edited\n');
+    git(studio.root, 'rm', '-q', 'content/notes/database/index.mdx');
+    expect((await changes()).files).toEqual([
+      { path: 'content/notes/database/index.mdx', status: 'D' },
+      { path: 'content/notes/streaming/watermarks.mdx', status: 'R', from: 'content/notes/streaming/watermark-and-late-events.mdx' },
+    ]);
+    const response = await commit({ message: 'docs(notes): rename and remove', paths: ['content/notes/streaming/watermarks.mdx', 'content/notes/database/index.mdx'] });
+    expect(response.status).toBe(200);
+    expect((json(response) as Commit).files).toEqual([
+      { status: 'D', path: 'content/notes/database/index.mdx' },
+      { status: 'D', path: 'content/notes/streaming/watermark-and-late-events.mdx' },
+      { status: 'A', path: 'content/notes/streaming/watermarks.mdx' },
+    ]);
+    expect(committed('streaming/watermarks.mdx')).toBe('renamed and edited\n');
+    expect((await changes()).files).toEqual([]);
+  });
+
   it('keeps a message that starts with #', async () => {
     await writeFile(note('streaming/index.mdx'), 'issue\n');
     const response = await commit({ message: '#42 fix typo', paths: ['content/notes/streaming/index.mdx'] });
@@ -126,7 +145,7 @@ describe('changes API', () => {
   it('lists the change request commits, newest first, without merges', async () => {
     // main moves on, is fetched, and is merged into the change request.
     git(studio.root, 'switch', '--quiet', 'main');
-    await writeFile(note('database/index.mdx'), 'on main\n');
+    await writeFile(note('data-modeling/index.mdx'), 'on main\n');
     git(studio.root, 'commit', '--quiet', '-am', 'main moves on');
     git(studio.root, 'update-ref', 'refs/remotes/origin/main', 'main');
     git(studio.root, 'switch', '--quiet', 'cr/test');
@@ -134,8 +153,8 @@ describe('changes API', () => {
     expect(git(studio.root, 'log', '-1', '--format=%s')).toBe('Merge main\n');
     const { base, commits } = await history();
     expect(base).toBe('origin/main');
-    expect(commits.map((each) => each.message)).toEqual(['docs(notes): add later', '#42 fix typo', 'docs(notes): update 2 pages', 'docs(notes): add exactly-once-sinks']);
-    expect(commits[3].files).toEqual([{ status: 'A', path: 'content/notes/streaming/exactly-once-sinks.mdx' }]);
+    expect(commits.map((each) => each.message)).toEqual(['docs(notes): add later', '#42 fix typo', 'docs(notes): rename and remove', 'docs(notes): update 2 pages', 'docs(notes): add exactly-once-sinks']);
+    expect(commits[4].files).toEqual([{ status: 'A', path: 'content/notes/streaming/exactly-once-sinks.mdx' }]);
     expect(Number.isNaN(Date.parse(commits[0].date))).toBe(false);
   });
 

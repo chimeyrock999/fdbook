@@ -46,7 +46,6 @@ type View = {
   marks: TreeMarks | null;
 };
 
-
 // The icon the site's sidebar shows. The server keeps only names the site's
 // lucide has (server/tree/build.ts); the Studio's lucide-react, already
 // loaded for the UI, still has every one. Null: Folder / FileText.
