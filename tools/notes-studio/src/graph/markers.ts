@@ -1,21 +1,23 @@
-import type { Mark, Node as PmNode } from '@tiptap/pm/model';
+import { parseMdxToDoc } from '@fumadocs-editor/core';
+import { Fragment, Node as PmNode, type Mark } from '@tiptap/pm/model';
 import { NodeSelection, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
+import { editorSyntax } from '../plugins';
 import { TEXT_DIRECTIVE, jsxMarkers, plainLabel } from '../plugins/graph-objects/decorate';
 import { attributeSpans, attributes } from '../plugins/source-attributes';
 import { slugify } from '../slug';
 
 // The graph markers of components/graph-objects.tsx as the Studio edits
 // them: wrap a selection as a <Keyword>/<Tag>, mark a heading with
-// :graph-meta, and rewrite a marker's id and displayName. Only the marker's
-// own source changes; every other byte of the note stays.
+// :graph-meta, rewrite a marker's id and displayName, and remove a marker.
+// Only the marker's own source changes; every other byte of the note stays.
 
 export type MarkerKind = 'Keyword' | 'Tag' | 'GraphMeta';
 
 export type Marker = {
   kind: MarkerKind;
-  // Where the attributes live: a JSX opening (or self-closing) tag, or a
-  // text directive atom.
-  source: { type: 'tag'; from: number; to: number } | { type: 'atom'; pos: number };
+  // Where the attributes live: a JSX opening (or self-closing) tag, with the
+  // closing tag of a keyword, or a text directive atom.
+  source: { type: 'tag'; from: number; to: number; close: { from: number; to: number } | null } | { type: 'atom'; pos: number };
   // The whole marker: through the closing tag of a keyword.
   extent: { from: number; to: number };
   attrs: Partial<Record<string, string>>;
@@ -80,13 +82,13 @@ export function markersIn(block: PmNode, start: number): Marker[] {
   const out: Marker[] = [];
   for (const { name, open, close } of jsxMarkers(block, start)) {
     if (!close) {
-      out.push({ kind: 'GraphMeta', source: { type: 'tag', from: open.from, to: open.to }, extent: { from: open.from, to: open.to }, attrs: open.attrs, text: '', content: null });
+      out.push({ kind: 'GraphMeta', source: { type: 'tag', from: open.from, to: open.to, close: null }, extent: { from: open.from, to: open.to }, attrs: open.attrs, text: '', content: null });
       continue;
     }
     const inner = { from: open.to - start, to: close.from - start };
     out.push({
       kind: KINDS[name],
-      source: { type: 'tag', from: open.from, to: open.to },
+      source: { type: 'tag', from: open.from, to: open.to, close: { from: close.from, to: close.to } },
       extent: { from: open.from, to: close.to },
       attrs: open.attrs,
       text: plainText(block, inner.from, inner.to).trim(),
@@ -138,7 +140,8 @@ export function markerAt(state: EditorState): Marker | null {
   const { $from, $to } = selection;
   if (!$from.parent.isTextblock || !$from.sameParent($to)) return null;
   const markers = markersIn($from.parent, $from.start());
-  const around = markers.find((marker) => marker.source.type === 'tag' && selection.from >= marker.extent.from && selection.to <= marker.extent.to);
+  // The innermost of nested keywords: the last one around it to start.
+  const around = markers.filter((marker) => marker.source.type === 'tag' && selection.from >= marker.extent.from && selection.to <= marker.extent.to).at(-1);
   if (around) return around;
   if ($from.parent.type.name === 'heading') return markers.find((marker) => marker.kind === 'GraphMeta') ?? null;
   return null;
@@ -302,4 +305,73 @@ export function updateMarker(state: EditorState, marker: Marker, values: GraphVa
     writeText();
   }
   return tr;
+}
+
+// A directive label as the inline content it reads as, with `marks` (the
+// atom's own) added: its Markdown as Markdown, its escapes as the
+// characters they stand for, the spaces inside its brackets kept. It is
+// parsed after a word, as it sits in its paragraph: on its own, `1. x`
+// would be a list, `# x` a heading and `import x` an ESM statement. Should
+// it still not read as one paragraph, it goes back as its text.
+function labelContent(state: EditorState, label: string, marks: readonly Mark[]): Fragment {
+  const { schema } = state;
+  const lead = /^\s*/.exec(label)?.[0] ?? '';
+  const trail = /\s*$/.exec(label.slice(lead.length))?.[0] ?? '';
+  const body = label.slice(lead.length, label.length - trail.length);
+  if (body === '') return Fragment.from(lead || trail ? [schema.text(lead + trail, marks)] : []);
+  let nodes: PmNode[] | null = null;
+  try {
+    const blocks = parseMdxToDoc(`a ${body}`, editorSyntax()).doc.content ?? [];
+    if (blocks.length === 1 && blocks[0].type === 'paragraph') {
+      const parsed: PmNode[] = [];
+      PmNode.fromJSON(schema, blocks[0]).content.forEach((node) => { parsed.push(node); });
+      const first = parsed.at(0);
+      if (first?.isText && first.marks.length === 0 && first.text?.startsWith('a ')) {
+        const rest = first.text.slice(2);
+        nodes = rest === '' ? parsed.slice(1) : [schema.text(rest), ...parsed.slice(1)];
+      }
+    }
+  } catch {
+    // Not MDX on its own: read as text below.
+  }
+  nodes ??= [schema.text(body.replace(/\\(.)/g, '$1'))];
+  if (lead) nodes.unshift(schema.text(lead));
+  if (trail) nodes.push(schema.text(trail));
+  return Fragment.from(nodes.map((node) => node.mark(marks.reduce((set, mark) => mark.addToSet(set), node.marks))));
+}
+
+// The range a marker that leaves nothing behind takes with it: the marker
+// and one space beside it, so `Title :graph-meta{…}` becomes `Title`,
+// `a <GraphMeta /> b` becomes `a b` and `a <GraphMeta />, b` `a, b`.
+function withSpace(state: EditorState, from: number, to: number) {
+  const plain = (node: PmNode | null | undefined, test: RegExp) => !!node?.isText && !isTagText(node) && test.test(node.text ?? '');
+  const $from = state.doc.resolve(from);
+  const $to = state.doc.resolve(to);
+  const before = plain($from.nodeBefore, /\s$/);
+  const after = plain($to.nodeAfter, /^\s/);
+  const closing = plain($to.nodeAfter, /^[.,;:!?)\]}…'"’”]/u);
+  if (before && (after || closing || to === $to.end())) return { from: from - 1, to };
+  if (after && from === $from.start()) return { from, to: to + 1 };
+  return { from, to };
+}
+
+// Takes a marker off and keeps what it marked: a keyword's text with its
+// Markdown, a directive's label as the text it reads as, a heading's title
+// without the space its graph-meta added. One transaction, so one undo puts
+// the marker back.
+export function removeMarker(state: EditorState, marker: Marker): Transaction {
+  const { tr } = state;
+  const { source } = marker;
+  if (source.type === 'tag' && source.close) {
+    tr.delete(source.close.from, source.close.to);
+    tr.delete(source.from, source.to);
+    return tr;
+  }
+  const { from, to } = marker.extent;
+  const node = source.type === 'atom' ? state.doc.nodeAt(source.pos) : null;
+  const label = node && marker.kind !== 'GraphMeta' ? TEXT_DIRECTIVE.exec(String(node.attrs.value))?.at(2) : undefined;
+  const content = node && label !== undefined ? labelContent(state, label, node.marks) : Fragment.empty;
+  if (content.size > 0) return tr.replaceWith(from, to, content);
+  const range = withSpace(state, from, to);
+  return tr.delete(range.from, range.to);
 }

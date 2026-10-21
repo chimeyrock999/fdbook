@@ -1,15 +1,17 @@
 import { parseMdxToDoc, serializeDocToMdx } from '@fumadocs-editor/core';
 import { Node } from '@tiptap/pm/model';
+import { history, undo } from '@tiptap/pm/history';
 import { EditorState, NodeSelection, TextSelection, type Transaction } from '@tiptap/pm/state';
 import { describe, expect, it } from 'vitest';
-import { addGraphMeta, defaults, graphMetaTarget, markerAt, updateMarker, withAttributes, wrapRange, wrapSelection } from '../../../src/graph/markers';
+import { listedIn } from '../../../src/graph/listed';
+import { addGraphMeta, defaults, graphMetaTarget, markerAt, removeMarker, updateMarker, withAttributes, wrapRange, wrapSelection } from '../../../src/graph/markers';
 import { defined, schema, syntax } from '../../support/editor-state';
 
 // A note as the editor holds it, with the snapshot that keeps unedited
 // blocks byte for byte when it is written back.
 function open(source: string) {
   const parsed = parseMdxToDoc(source, syntax);
-  const state = EditorState.create({ doc: Node.fromJSON(schema, parsed.doc) });
+  const state = EditorState.create({ doc: Node.fromJSON(schema, parsed.doc), plugins: [history()] });
   const write = (doc: Node) => serializeDocToMdx(doc.toJSON() as typeof parsed.doc, parsed.snapshot, syntax);
   return { state, write };
 }
@@ -257,5 +259,154 @@ describe('markerAt and updateMarker', () => {
     expect(write(placed.apply(updateMarker(placed, marker, { id: 'b', displayName: 'A', text: marker.text })).doc)).toBe(
       '<Keyword id="b" displayName="A">Alpha </Keyword>next\n',
     );
+  });
+});
+
+describe('removeMarker', () => {
+  const remove = (state: EditorState) => applied(state, removeMarker(state, defined(markerAt(state), 'marker')));
+
+  function atomAt(state: EditorState) {
+    let atom = -1;
+    state.doc.descendants((node, pos) => {
+      if (node.type.name === 'verbatimInline' && atom === -1) atom = pos;
+    });
+    return state.apply(state.tr.setSelection(NodeSelection.create(state.doc, atom)));
+  }
+
+  // The text of the first paragraph the note parses to.
+  const reads = (source: string) => Node.fromJSON(schema, parseMdxToDoc(source, syntax).doc).firstChild?.textContent;
+
+  it('takes a wrapped keyword back to the text it wrapped', () => {
+    const cases: [string, string, 'Keyword' | 'Tag'][] = [
+      ['Mỗi process có một Process Control Block (PCB) lưu trạng thái.\n\nOther paragraph.\n', 'Process Control Block (PCB)', 'Keyword'],
+      ['A **fact table** here.\n', 'fact table', 'Tag'],
+    ];
+    for (const [source, needle, kind] of cases) {
+      const { state, write } = open(source);
+      const wrapped = applied(state, wrapSelection(select(state, needle), kind));
+      expect(write(wrapped.doc)).not.toBe(source);
+      expect(write(remove(wrapped).doc)).toBe(source);
+    }
+    // Bold that stops inside the keyword stays as it was.
+    const split = open('**alpha** beta **gamma**\n');
+    const all = split.state.apply(split.state.tr.setSelection(TextSelection.create(split.state.doc, 1, split.state.doc.content.size - 1)));
+    expect(split.write(remove(applied(all, wrapSelection(all, 'Keyword'))).doc)).toBe('**alpha** beta **gamma**\n');
+  });
+
+  it('takes a graph node off its heading with the space it added', () => {
+    const source = '## Intro\n\n### Yet Another Resource Negotiator\n\nYARN.\n';
+    const { state, write } = open(source);
+    const marked = applied(state, addGraphMeta(caret(state, at(state, 'Negotiator') + 3)));
+    expect(write(remove(marked).doc)).toBe(source);
+
+    const jsx = open('### Hadoop <GraphMeta id="hadoop" displayName="Hadoop" />\n\nText.\n');
+    expect(jsx.write(remove(caret(jsx.state, at(jsx.state, 'Hadoop') + 2)).doc)).toBe('### Hadoop\n\nText.\n');
+    const first = open('### :graph-meta{id="x" displayName="X"} Title\n');
+    expect(first.write(remove(caret(first.state, at(first.state, 'Title') + 1)).doc)).toBe('### Title\n');
+  });
+
+  it('leaves every other byte of the note', () => {
+    const NOTE = [
+      'Một <Keyword id="process" displayName="process">**process**</Keyword> và <Tag id="fact" displayName="Fact">fact</Tag>.',
+      '',
+      'Mixed <Keyword id="mixed" displayName="Mixed">**mi**xed</Keyword> marks.',
+      '',
+      '### Hadoop Overview :graph-meta{id="hadoop-overview" displayName="Hadoop"}',
+      '',
+      'Self <GraphMeta id="grain" displayName="Grain" kind="keyword" /> marker.',
+      '',
+    ].join('\n');
+    const { state, write } = open(NOTE);
+    const lines = NOTE.split('\n');
+    const without = (pos: number, index: number, line: string) => {
+      const out = write(remove(caret(state, pos)).doc).split('\n');
+      expect(out[index]).toBe(line);
+      expect(out.filter((_, i) => i !== index)).toEqual(lines.filter((_, i) => i !== index));
+    };
+    without(at(state, 'fact') + 1, 0, 'Một <Keyword id="process" displayName="process">**process**</Keyword> và fact.');
+    without(at(state, 'process', 0) + 1, 0, 'Một **process** và <Tag id="fact" displayName="Fact">fact</Tag>.');
+    without(at(state, 'xed', 2) + 1, 2, 'Mixed **mi**xed marks.');
+    without(at(state, 'Overview'), 4, '### Hadoop Overview');
+    without(at(state, 'id="grain"'), 6, 'Self marker.');
+  });
+
+  it('puts a directive label back as the text it reads as', () => {
+    const plain = open('Atom :keyword[Registers]{id="registers" displayName="Registers"} here.\n');
+    expect(plain.write(remove(atomAt(plain.state)).doc)).toBe('Atom Registers here.\n');
+
+    // Each character the label escapes: the text reads the same after.
+    const escaped = open('Atom :tag[a\\*b\\* and \\`x\\` \\\\ y\\_z \\[1\\] \\< b \\{x}]{id="r" displayName="R"} here.\n');
+    const label = atomAt(escaped.state);
+    const text = defined(markerAt(label)).text;
+    expect(text).toBe('a*b* and `x` \\ y_z [1] < b {x}');
+    const written = escaped.write(remove(label).doc);
+    expect(written).toBe('Atom a\\*b\\* and \\`x\\` \\ y_z \\[1] \\< b \\{x} here.\n');
+    expect(reads(written)).toBe(`Atom ${text} here.`);
+
+    // Markdown in the label stays Markdown.
+    const bold = open('Text :keyword[**Big** data]{id="big-data" displayName="Big data"} end.\n');
+    expect(bold.write(remove(atomAt(bold.state)).doc)).toBe('Text **Big** data end.\n');
+    // A label that would parse as a block goes back as its text.
+    const list = open('A :keyword[- x]{id="x"} b.\n');
+    expect(reads(list.write(remove(atomAt(list.state)).doc))).toBe('A - x b.');
+    // No label: nothing shows on the site, and nothing is left.
+    const empty = open('A :keyword{id="x"} b.\n');
+    expect(empty.write(remove(atomAt(empty.state)).doc)).toBe('A b.\n');
+  });
+
+  // Found in the self-review: labels the label parser read as a document,
+  // spaces inside the brackets, punctuation after an empty marker, and
+  // nested keywords.
+  it('handles the labels and places a plain parse gets wrong', () => {
+    const removed = (source: string) => {
+      const opened = open(source);
+      return opened.write(remove(atomAt(opened.state)).doc);
+    };
+    // `import`/`export` start ESM in a document of their own.
+    expect(removed('A :keyword[import data]{id="i"} b.\n')).toBe('A import data b.\n');
+    // A list marker keeps the Markdown after it.
+    expect(reads(removed('A :keyword[1. **Big** data]{id="x"} b.\n'))).toBe('A 1. Big data b.');
+    expect(removed('A :keyword[1. **Big** data]{id="x"} b.\n')).toContain('**Big**');
+    expect(removed('A :keyword[_x_ y]{id="x"} b.\n')).toBe('A *x* y b.\n');
+    // The spaces inside the brackets are the text's.
+    expect(reads(removed('foo:keyword[ bar ]{id="b"}baz\n'))).toBe('foo bar baz');
+    expect(removed('A :keyword{id="x"}.\n')).toBe('A.\n');
+    const self = open('Self <GraphMeta id="g" />, more\n');
+    expect(self.write(remove(caret(self.state, at(self.state, 'id="g"'))).doc)).toBe('Self, more\n');
+
+    const nested = open('A <Keyword id="o" displayName="O">x <Keyword id="i" displayName="I">y</Keyword></Keyword> z\n');
+    const inner = caret(nested.state, at(nested.state, 'I">') + 4);
+    expect(markerAt(inner)).toMatchObject({ attrs: { id: 'i' } });
+    expect(nested.write(remove(inner).doc)).toBe('A <Keyword id="o" displayName="O">x y</Keyword> z\n');
+  });
+
+  it('comes back with one undo', () => {
+    for (const source of [
+      'A <Tag id="fact" displayName="Fact">fact</Tag> here.\n',
+      '### Title :graph-meta{id="title" displayName="Title"}\n',
+      'Atom :keyword[a \\[b\\]]{id="ab"} here.\n',
+    ]) {
+      const { state, write } = open(source);
+      const placed = source.includes(':keyword') ? atomAt(state) : caret(state, at(state, source.includes('fact') ? 'fact' : 'Title') + 1);
+      let removed = remove(placed);
+      expect(write(removed.doc)).not.toBe(source);
+      undo(removed, (tr) => { removed = removed.apply(tr); });
+      expect(write(removed.doc)).toBe(source);
+    }
+  });
+});
+
+describe('listedIn', () => {
+  it('names the frontmatter entries that list an id', () => {
+    const graph = {
+      keywords: [{ id: 'a' }, { id: 'pcb' }],
+      sections: [{ id: 'pcb', keywords: [{ id: 'x' }, { id: 'pcb' }] }, { id: 'b' }],
+    };
+    expect(listedIn(graph, 'pcb')).toEqual(['graph.keywords.1', 'graph.sections.0', 'graph.sections.0.keywords.1']);
+    expect(listedIn(graph, 'none')).toEqual([]);
+    expect(listedIn(graph, '')).toEqual([]);
+    // A draft that does not pass the schema yet.
+    expect(listedIn({ keywords: 'pcb', sections: [null, { keywords: {} }] }, 'pcb')).toEqual([]);
+    expect(listedIn(undefined, 'pcb')).toEqual([]);
   });
 });

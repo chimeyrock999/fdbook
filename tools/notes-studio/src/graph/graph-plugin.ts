@@ -1,7 +1,8 @@
 import { keydownHandler } from '@tiptap/pm/keymap';
 import { Plugin, PluginKey, type Command, type EditorState } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
-import { addGraphMeta, markerAt, wrapSelection, type Marker } from './markers';
+import { composing } from '../keyboard';
+import { addGraphMeta, markerAt, removeMarker, wrapSelection, type Marker } from './markers';
 import { OPEN_GRAPH_FIELDS } from './meta';
 
 // The marker at the selection; which marker the graph fields are open for,
@@ -13,13 +14,13 @@ export type GraphState = { marker: Marker | null; open: number | null; seq: numb
 
 export const graphKey = new PluginKey<GraphState>('studioGraph');
 
-export type GraphAction = 'Keyword' | 'Tag' | 'GraphMeta' | 'edit';
+export type GraphAction = 'Keyword' | 'Tag' | 'GraphMeta' | 'edit' | 'remove';
 
 // What a graph action does at the selection, as a ProseMirror command:
 // Keyword and Tag wrap the selection, GraphMeta marks the caret's heading,
 // and each opens the fields of the marker it made. With nothing to make,
 // Keyword, Tag and GraphMeta open the fields of a marker already there of
-// that kind, and `edit` of any marker.
+// that kind, and `edit` of any marker. `remove` takes the marker there off.
 export function graphCommand(action: GraphAction): Command {
   return (state, dispatch, view) => {
     if (view && !view.editable) return false;
@@ -29,7 +30,12 @@ export function graphCommand(action: GraphAction): Command {
       return true;
     }
     const marker = markerAt(state);
-    if (!marker || (action !== 'edit' && marker.kind !== action)) return false;
+    if (!marker) return false;
+    if (action === 'remove') {
+      dispatch?.(removeMarker(state, marker).scrollIntoView());
+      return true;
+    }
+    if (action !== 'edit' && marker.kind !== action) return false;
     dispatch?.(state.tr.setMeta(graphKey, { open: true }));
     return true;
   };
@@ -43,6 +49,7 @@ const keys = keydownHandler({
   'Mod-Alt-k': graphCommand('Keyword'),
   'Mod-Alt-t': graphCommand('Tag'),
   'Mod-Alt-g': graphCommand('GraphMeta'),
+  'Mod-Alt-x': graphCommand('remove'),
 });
 
 // The graph actions on a live editor: their shortcuts and the open/closed
@@ -72,7 +79,9 @@ export function graphPlugin(onUpdate: (view: EditorView | null) => void): Plugin
       },
     },
     props: {
-      handleKeyDown: (view, event) => keys(view, event),
+      // ProseMirror leaves out keydowns during a composition, but not the
+      // one Safari sends right after it.
+      handleKeyDown: (view, event) => !composing(event) && keys(view, event),
     },
     view(view) {
       onUpdate(view);

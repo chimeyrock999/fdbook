@@ -182,7 +182,7 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, place
                 reveal={field}
               />
               <MdxEditor.Visual className="studio-prose notes-prose" />
-              <GraphTools container={editor} />
+              <GraphTools container={editor} graph={frontmatter.status === 'ok' ? frontmatter.data.graph : undefined} />
             </div>
           </div>
         ) : (
