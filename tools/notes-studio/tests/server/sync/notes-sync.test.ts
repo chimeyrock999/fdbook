@@ -91,13 +91,14 @@ describe('notes sync', () => {
     await expect(sync.open('leak.mdx', { editor: new TextEditor() }).opened).rejects.toThrow(/denied/);
   });
 
-  // Tree commands write files the scope never sees (mkdir also writes
-  // meta.json) and skip meta.yaml, so new pages go through the file API.
+  // Tree commands skip meta.yaml, so new pages go through the file API. Since
+  // core 0.4.2 `mkdir` also needs write access to the folder's meta.json,
+  // which the scope never grants (fuma-nama/fumadocs-editor#25).
   it('refuses to create pages or folders', async () => {
     const sync = connect();
     sync.onTree(() => undefined);
     await expect.poll(() => sync.tree() !== null).toBe(true);
-    await expect(sync.run({ type: 'mkdir', dir: 'zz-new', title: 'Zz' })).rejects.toThrow(/denied/);
+    await expect(sync.run({ type: 'mkdir', dir: 'zz-new', title: 'Zz' })).rejects.toThrow(/denied: zz-new\/meta\.json/);
     await expect(sync.run({ type: 'create', path: 'streaming/zz-page.mdx', title: 'Zz' })).rejects.toThrow(/denied/);
     await expect(stat(join(studio.root, 'content/notes/zz-new'))).rejects.toThrow();
     await expect(stat(join(studio.root, 'content/notes/streaming/zz-page.mdx'))).rejects.toThrow();

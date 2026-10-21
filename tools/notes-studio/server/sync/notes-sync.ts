@@ -15,9 +15,10 @@ export function createNotesSync(root: string, port: number) {
     const resolved = resolveWorktreePath(root, `${NOTES_DIR}/${path}`);
     return resolved?.kind === 'note' ? resolved.absolute : null;
   };
-  // Writes only to notes that already exist. Its tree commands would create
-  // files the scope never sees (`mkdir` also writes meta.json) and leave
-  // meta.yaml alone, so new pages go through the file API (#11).
+  // Writes only to notes that already exist. Its tree `create` would add a
+  // page without touching meta.yaml, so new pages go through the file API
+  // (#11). `mkdir` is refused by this scope too: since core 0.4.2 it also
+  // needs write access to the folder's meta.json, which is not a note.
   const writable = (path: string) => {
     const absolute = note(path);
     return absolute !== null && existsSync(absolute);
