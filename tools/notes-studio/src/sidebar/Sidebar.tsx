@@ -1,6 +1,6 @@
 import { CircleAlert, FolderTree, PanelLeft } from 'lucide-react';
 import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import { SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, type Sidebar as SidebarState, type SidebarView } from './useSidebar';
+import { clampWidth, SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, type Sidebar as SidebarState, type SidebarView } from './useSidebar';
 
 // The open note's issue count for the activity bar, or null with no note.
 export type IssueCount = { count: number; errors: boolean } | null;
@@ -16,26 +16,37 @@ const BIG_STEP = 48;
 // (`onCloseDrawer`), leaving the desktop layout as it was. The Issues
 // view is filled by the editor through a portal into `issuesRef`, since the
 // lint lives with the open note.
-export function Sidebar({ state, drawer, onCloseDrawer, issues, notes, issuesRef }: {
+export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, issuesRef }: {
   state: SidebarState;
   drawer: boolean;
   onCloseDrawer: () => void;
   issues: IssueCount;
+  // Whether a note is open: its count is null until its first lint result.
+  hasNote: boolean;
   notes: ReactNode;
   issuesRef: (element: HTMLElement | null) => void;
 }) {
   const pane = useRef<HTMLDivElement>(null);
   const shown = state.shown || drawer;
 
+  // The drag sets the pane's width directly and saves it once at the end,
+  // so moving the pointer neither re-renders the Studio nor writes storage.
   const startResize = (event: PointerEvent<HTMLDivElement>) => {
-    const left = pane.current?.getBoundingClientRect().left;
-    if (left === undefined) return;
+    const element = pane.current;
+    if (event.button !== 0 || !element) return;
+    const left = element.getBoundingClientRect().left;
     event.preventDefault();
     const handle = event.currentTarget;
     handle.setPointerCapture(event.pointerId);
     handle.dataset.dragging = '';
-    const move = (next: globalThis.PointerEvent) => { state.resize(next.clientX - left); };
+    let width = state.width;
+    const move = (next: globalThis.PointerEvent) => {
+      width = clampWidth(next.clientX - left);
+      element.style.width = `${String(width)}px`;
+      handle.setAttribute('aria-valuenow', String(width));
+    };
     const stop = () => {
+      state.resize(width);
       delete handle.dataset.dragging;
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', stop);
@@ -85,7 +96,6 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, notes, issuesRef
         <button
           type="button"
           className="studio-activity-button studio-activity-bottom"
-          aria-pressed={shown}
           aria-label={shown ? 'Hide the sidebar' : 'Show the sidebar'}
           title={shown ? 'Hide the sidebar' : 'Show the sidebar'}
           onClick={drawer ? onCloseDrawer : state.toggle}
@@ -99,7 +109,7 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, notes, issuesRef
         </div>
         <div className="studio-pane-view" hidden={state.view !== 'issues'}>
           <h2 className="studio-pane-head">Issues</h2>
-          {issues === null && <p className="px-3 py-2 text-[12.5px] text-[var(--fde-muted-foreground)]">Open a note to see its issues.</p>}
+          {!hasNote && <p className="px-3 py-2 text-[12.5px] text-[var(--fde-muted-foreground)]">Open a note to see its issues.</p>}
           <div ref={issuesRef} className="min-h-0 flex-1 overflow-auto px-3 pt-2 pb-5" />
         </div>
         <div

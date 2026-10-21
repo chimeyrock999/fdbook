@@ -6,11 +6,11 @@ import type { TreeAnswer, TreeClient, TreeFolder, TreeRequest } from '../../../s
 import { PageTree } from '../../../src/tree/PageTree';
 
 const root: TreeFolder = {
-  kind: 'folder', id: 'folder:', path: '', title: 'Notes', meta: 'meta.yaml', metaMtime: 10, index: null, defaultOpen: true, hidden: null, entry: null,
+  kind: 'folder', id: 'folder:', path: '', title: 'Notes', meta: 'meta.yaml', metaMtime: 10, index: null, hidden: null, entry: null,
   children: [
     {
       kind: 'folder', id: 'folder:guide', path: 'guide', title: 'Guide', meta: 'guide/meta.yaml', metaMtime: 20, index: 'guide/index.mdx',
-      defaultOpen: true, hidden: null, entry: 0,
+      hidden: null, entry: 0,
       children: [
         { kind: 'page', id: 'page:guide/one.mdx', path: 'guide/one.mdx', title: 'One', entry: 0, hidden: null },
         { kind: 'page', id: 'page:guide/two.mdx', path: 'guide/two.mdx', title: 'Two', entry: 1, hidden: null },
@@ -22,7 +22,7 @@ const root: TreeFolder = {
     { kind: 'page', id: 'page:draft.mdx', path: 'draft.mdx', title: 'Draft', entry: null, hidden: 'unlisted' },
     {
       kind: 'folder', id: 'folder:old', path: 'old', title: 'Old', meta: 'old/meta.yaml', metaMtime: 30, index: null,
-      defaultOpen: false, hidden: 'visible-false', entry: null,
+      hidden: 'visible-false', entry: null,
       children: [{ kind: 'page', id: 'page:old/x.mdx', path: 'old/x.mdx', title: 'X', entry: 0, hidden: null }],
     },
   ],
@@ -61,9 +61,8 @@ describe('PageTree', () => {
     expect(screen.queryByRole('button', { name: 'X' })).toBeNull();
   });
 
-  it("starts folders closed whatever meta.yaml's defaultOpen says", async () => {
+  it('starts folders closed, whatever the site would open', async () => {
     const { client } = fakeClient(() => ({ changes: [], open: null }));
-    // Guide says defaultOpen: true, but that is the site sidebar's setting.
     render(<PageTree root={root} client={client} active={null} onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'Expand Guide' }).getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('button', { name: 'One' })).toBeNull();

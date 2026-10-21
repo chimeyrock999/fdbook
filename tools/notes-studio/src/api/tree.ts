@@ -2,7 +2,7 @@
 // server/tree/types.ts and server/tree/ops.ts; paths are relative to
 // content/notes.
 
-import { readJson } from './json';
+import { errorOf, readJson } from './json';
 
 export type Hidden = 'unlisted' | 'visible-false';
 
@@ -15,7 +15,6 @@ export type TreeFolder = Base & {
   meta: string | null;
   metaMtime: number | null;
   index: string | null;
-  defaultOpen: boolean;
   hidden: Hidden | null;
   children: TreeNode[];
 };
@@ -41,8 +40,7 @@ export type TreeAnswer = { changes: TreeChange[]; open: string | null };
 
 export function createTreeClient(base = '') {
   async function failed(response: Response): Promise<never> {
-    const body = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `HTTP ${String(response.status)}`);
+    throw await errorOf(response);
   }
 
   return {

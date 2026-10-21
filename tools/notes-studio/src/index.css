@@ -301,7 +301,8 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    max-width: calc(100vw - 120px);
+    /* Leaves the editor at least 420px beside the activity bar. */
+    max-width: max(220px, calc(100vw - 44px - 420px));
     border-right: 1px solid var(--fde-border);
   }
   .studio-pane-view {

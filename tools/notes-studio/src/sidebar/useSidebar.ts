@@ -10,7 +10,7 @@ const STORAGE_KEY = 'notes-studio:sidebar';
 
 type Layout = { view: SidebarView; shown: boolean; width: number };
 
-const clampWidth = (width: number) => Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width)));
+export const clampWidth = (width: number) => Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width)));
 
 function readStored(): Layout {
   const fallback: Layout = { view: 'notes', shown: true, width: SIDEBAR_WIDTH };

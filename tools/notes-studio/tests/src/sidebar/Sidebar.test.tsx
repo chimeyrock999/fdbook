@@ -5,9 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Sidebar, type IssueCount } from '../../../src/sidebar/Sidebar';
 import { useSidebar } from '../../../src/sidebar/useSidebar';
 
-function Harness({ drawer = false, issues = null, onCloseDrawer = () => undefined }: { drawer?: boolean; issues?: IssueCount; onCloseDrawer?: () => void }) {
+function Harness({ drawer = false, issues = null, hasNote = false, onCloseDrawer = () => undefined }: {
+  drawer?: boolean;
+  issues?: IssueCount;
+  hasNote?: boolean;
+  onCloseDrawer?: () => void;
+}) {
   const state = useSidebar();
-  return <Sidebar state={state} drawer={drawer} onCloseDrawer={onCloseDrawer} issues={issues} notes={<p>tree</p>} issuesRef={() => undefined} />;
+  return <Sidebar state={state} drawer={drawer} onCloseDrawer={onCloseDrawer} issues={issues} hasNote={hasNote} notes={<p>tree</p>} issuesRef={() => undefined} />;
 }
 
 const stored = () => JSON.parse(localStorage.getItem('notes-studio:sidebar') ?? 'null') as unknown;
@@ -20,6 +25,8 @@ const separator = () => screen.getByRole('separator', { name: 'Resize the sideba
 
 beforeEach(() => {
   localStorage.clear();
+  // jsdom has no pointer capture.
+  HTMLElement.prototype.setPointerCapture = () => undefined;
 });
 afterEach(cleanup);
 
@@ -78,6 +85,30 @@ describe('Sidebar', () => {
     expect(pane().style.width).toBe('220px');
     fireEvent.doubleClick(separator());
     expect(pane().style.width).toBe('284px');
+  });
+
+  it('drags the edge with the main button only, and saves the width once at the end', () => {
+    render(<Harness />);
+    fireEvent.pointerDown(separator(), { button: 2, pointerId: 1 });
+    fireEvent.pointerMove(separator(), { clientX: 400, pointerId: 1 });
+    expect(pane().style.width).toBe('284px');
+    fireEvent.pointerDown(separator(), { button: 0, pointerId: 1 });
+    fireEvent.pointerMove(separator(), { clientX: 360, pointerId: 1 });
+    fireEvent.pointerMove(separator(), { clientX: 400, pointerId: 1 });
+    expect(pane().style.width).toBe('400px');
+    expect(separator().getAttribute('aria-valuenow')).toBe('400');
+    expect(stored()).toBeNull();
+    fireEvent.pointerUp(separator(), { pointerId: 1 });
+    expect(stored()).toEqual({ view: 'notes', shown: true, width: 400 });
+  });
+
+  it('asks for a note only when none is open', async () => {
+    const { rerender } = render(<Harness />);
+    await userEvent.click(screen.getByRole('button', { name: 'Issues' }));
+    expect(screen.getByText('Open a note to see its issues.')).toBeTruthy();
+    // A note is open but its first lint result has not come back.
+    rerender(<Harness hasNote />);
+    expect(screen.queryByText('Open a note to see its issues.')).toBeNull();
   });
 
   it('reads a broken or out-of-range stored layout safely', () => {

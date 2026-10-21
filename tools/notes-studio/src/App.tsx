@@ -9,7 +9,7 @@ import { NoteGate } from './notes/NoteGate';
 import { OpenOnSite } from './notes/OpenOnSite';
 import { NOTES_PREFIX, noteFromUrl, syncPath } from './notes/notes';
 import { Sidebar, type IssueCount } from './sidebar/Sidebar';
-import { useSidebar } from './sidebar/useSidebar';
+import { useSidebar, type SidebarView } from './sidebar/useSidebar';
 import { PageTree } from './tree/PageTree';
 import { renamedPath } from './tree/tree';
 import { useTree } from './tree/useTree';
@@ -33,11 +33,16 @@ export function App() {
   const [issuesSlot, setIssuesSlot] = useState<HTMLElement | null>(null);
   const [issueCount, setIssueCount] = useState<IssueCount>(null);
   const closeDrawer = useCallback(() => { setDrawer(false); }, []);
-  const { show } = sidebar;
-  const showIssues = useCallback(() => {
-    show('issues');
-    if (window.matchMedia(DRAWER_QUERY).matches) setDrawer(true);
-  }, [show]);
+  const { show, select } = sidebar;
+  // On a phone the drawer opens on the view, leaving the desktop layout as it
+  // was; on a desktop the sidebar shows the view.
+  const openView = useCallback((view: SidebarView) => {
+    if (window.matchMedia(DRAWER_QUERY).matches) {
+      select(view);
+      setDrawer(true);
+    } else show(view);
+  }, [select, show]);
+  const showIssues = useCallback(() => { openView('issues'); }, [openView]);
 
   // A drawer left open while the window grows would keep the sidebar shown.
   useEffect(() => {
@@ -74,7 +79,7 @@ export function App() {
   return (
     <div className="flex h-dvh flex-col bg-[var(--fde-background)] text-[var(--fde-foreground)]">
       <header className="flex min-w-0 items-center gap-2.5 border-b border-[var(--fde-border)] px-3 py-2">
-        <button type="button" className="studio-button md:hidden" onClick={() => { setDrawer(true); }}>
+        <button type="button" className="studio-button md:hidden" onClick={() => { openView('notes'); }}>
           Notes
         </button>
         <span className="font-semibold whitespace-nowrap">Notes Studio</span>
@@ -87,6 +92,7 @@ export function App() {
           drawer={drawer}
           onCloseDrawer={closeDrawer}
           issues={issueCount}
+          hasNote={active !== null}
           issuesRef={setIssuesSlot}
           notes={
             <>

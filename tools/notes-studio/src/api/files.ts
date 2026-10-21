@@ -1,6 +1,6 @@
 // Client for the Studio file API (server/files/api.ts, server/files/events.ts).
 
-import { readJson } from './json';
+import { errorOf, readJson } from './json';
 
 export type FileKind = 'note' | 'meta' | 'asset';
 export type TextFile = { path: string; content: string; mtimeMs: number };
@@ -24,8 +24,7 @@ export function createFilesClient(base = '') {
   const fileUrl = (path: string) => `${base}/api/file?path=${encodeURIComponent(path)}`;
 
   async function failed(response: Response): Promise<never> {
-    const body = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `HTTP ${String(response.status)}`);
+    throw await errorOf(response);
   }
 
   async function conflict(path: string, response: Response): Promise<never> {

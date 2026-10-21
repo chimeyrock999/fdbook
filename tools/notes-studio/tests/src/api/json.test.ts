@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readJson, STALE_SERVER } from '../../../src/api/json';
+import { errorOf, readJson, STALE_SERVER } from '../../../src/api/json';
 import { createTreeClient } from '../../../src/api/tree';
 
 describe('readJson', () => {
@@ -20,5 +20,11 @@ describe('readJson', () => {
     } finally {
       globalThis.fetch = original;
     }
+  });
+
+  it('reads the API error, or says to restart on a plain 404 from an older server', async () => {
+    const api = new Response('{"error":"gone"}', { status: 404, headers: { 'Content-Type': 'application/json' } });
+    expect((await errorOf(api)).message).toBe('gone');
+    expect((await errorOf(new Response('Not Found', { status: 404 }))).message).toBe(STALE_SERVER);
   });
 });

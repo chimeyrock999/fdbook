@@ -110,12 +110,11 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, issue
   if (mode !== 'source' && reveal !== null) setReveal(null);
   if (mode !== 'visual' && field !== null) setField(null);
 
-  const issues = lintState.issues;
-  const count: IssueCount = issues === null ? null : { count: issues.length, errors: issues.some((issue) => issue.severity === 'error') };
-  const countKey = JSON.stringify(count);
+  const issueTotal = lintState.issues?.length ?? null;
+  const hasErrors = lintState.issues?.some((issue) => issue.severity === 'error') ?? false;
   useEffect(() => {
-    onIssueCount(JSON.parse(countKey) as IssueCount);
-  }, [countKey, onIssueCount]);
+    onIssueCount(issueTotal === null ? null : { count: issueTotal, errors: hasErrors });
+  }, [issueTotal, hasErrors, onIssueCount]);
   // No note, no count: the activity bar drops its badge.
   useEffect(() => () => { onIssueCount(null); }, [onIssueCount]);
   // An issue in the frontmatter opens its field in the header; any other
