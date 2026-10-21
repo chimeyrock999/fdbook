@@ -9,8 +9,8 @@ import { NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 // same path check as the file API (policy plus no symlinks) decides what it
 // may read and write, so `.md`, hidden files and anything outside the notes
 // stay out. Its media endpoints are not mounted: assets go through the file
-// API into public/.
-export function createNotesSync(root: string, port: number) {
+// API into public/. A `readOnly` sync (main) opens notes but writes none.
+export function createNotesSync(root: string, port: number, { readOnly = false } = {}) {
   const note = (path: string) => {
     const resolved = resolveWorktreePath(root, `${NOTES_DIR}/${path}`);
     return resolved?.kind === 'note' ? resolved.absolute : null;
@@ -20,6 +20,7 @@ export function createNotesSync(root: string, port: number) {
   // (#11). `mkdir` is refused by this scope too: since core 0.4.2 it also
   // needs write access to the folder's meta.json, which is not a note.
   const writable = (path: string) => {
+    if (readOnly) return false;
     const absolute = note(path);
     return absolute !== null && existsSync(absolute);
   };

@@ -1,4 +1,5 @@
 import { errorOf, readJson } from './json';
+import { API_BASE } from './workspace';
 
 // Client for the assets API (server/assets/api.ts). Types mirror
 // server/assets/ops.ts; paths are worktree paths (`public/notes/…`,
@@ -30,7 +31,7 @@ export type AssetRequest =
 
 export type AssetAnswer = { changes: AssetChange[]; usages: AssetUsage[] };
 
-export function createAssetsClient(base = '') {
+export function createAssetsClient(base = API_BASE) {
   async function failed(response: Response): Promise<never> {
     throw await errorOf(response);
   }

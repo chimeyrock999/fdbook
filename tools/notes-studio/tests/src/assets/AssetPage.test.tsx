@@ -28,7 +28,7 @@ beforeAll(() => {
   URL.revokeObjectURL = (url: string) => { revoked.push(url); };
 });
 
-function setup(path: string, { unsaved = false, assets = ASSETS }: { unsaved?: boolean; assets?: AssetInfo[] | null } = {}) {
+function setup(path: string, { unsaved = false, readOnly = false, assets = ASSETS }: { unsaved?: boolean; readOnly?: boolean; assets?: AssetInfo[] | null } = {}) {
   const change = vi.fn((request: AssetRequest): Promise<AssetAnswer> => {
     if (request.op === 'replace') {
       const to = request.extension === 'png' ? request.path : request.path.replace(/\.png$/, `.${request.extension}`);
@@ -49,7 +49,7 @@ function setup(path: string, { unsaved = false, assets = ASSETS }: { unsaved?: b
   const onOpenUsage = vi.fn();
   const onChanged = vi.fn();
   const page = (at: string, list: AssetInfo[] | null) => (
-    <AssetPage client={client} list={{ assets: list, error: null, reload }} path={at} unsaved={unsaved} onOpenUsage={onOpenUsage} onChanged={onChanged} />
+    <AssetPage client={client} list={{ assets: list, error: null, reload }} path={at} unsaved={unsaved} readOnly={readOnly} onOpenUsage={onOpenUsage} onChanged={onChanged} />
   );
   // StrictMode, as src/main.tsx renders the Studio.
   const { rerender } = render(page(path, assets), { wrapper: StrictMode });
@@ -255,5 +255,12 @@ describe('AssetPage', () => {
     const canvas = screen.getByRole('img', { name: 'Preview of old_name.png' }).parentElement ?? document.body;
     fireEvent.drop(canvas, { dataTransfer: { files: [file], types: ['Files'] } });
     expect(within(screen.getByRole('dialog')).getByRole('figure', { name: 'picked' }).textContent).toContain('dropped.png');
+  });
+
+  it('shows the file without Replace, Rename, Delete or the drop zone when read only (main)', () => {
+    setup(SPARE.path, { readOnly: true });
+    expect(screen.getByRole('heading', { name: 'spare.svg' })).toBeTruthy();
+    for (const name of [/Replace/, /Rename/, /Delete/]) expect(screen.queryByRole('button', { name })).toBeNull();
+    expect(screen.queryByText('Drop a file here to replace it')).toBeNull();
   });
 });

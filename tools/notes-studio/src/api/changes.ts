@@ -1,7 +1,9 @@
-// Client for the changes API (server/git/api.ts). Types mirror
-// server/git/status.ts and server/git/history.ts; paths are worktree paths.
+// Client for the changes API (server/git/api.ts), in the worktree the page
+// edits (src/api/workspace.ts). Types mirror server/git/status.ts and
+// server/git/history.ts; paths are worktree paths.
 
 import { errorOf, readJson } from './json';
+import { API_BASE } from './workspace';
 
 export type ChangeStatus = 'M' | 'A' | 'D' | 'R';
 export type ChangedFile = { path: string; status: ChangeStatus; from?: string };
@@ -10,7 +12,7 @@ export type CommitFile = { status: 'M' | 'A' | 'D'; path: string };
 export type Commit = { sha: string; date: string; message: string; files: CommitFile[] };
 export type History = { base: string | null; commits: Commit[] };
 
-export function createChangesClient(base = '') {
+export function createChangesClient(base = API_BASE) {
   async function failed(response: Response): Promise<never> {
     throw await errorOf(response);
   }

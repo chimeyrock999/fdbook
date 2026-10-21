@@ -24,7 +24,7 @@ export function createRequestListener(port: number, handlers: Handler[], fallbac
   };
 }
 
-function refuseUpgrade(socket: Duplex, status: 403 | 404) {
+export function refuseUpgrade(socket: Duplex, status: 403 | 404) {
   socket.end(`HTTP/1.1 ${String(status)} ${status === 403 ? 'Forbidden' : 'Not Found'}\r\nConnection: close\r\n\r\n`);
   socket.destroy();
 }
