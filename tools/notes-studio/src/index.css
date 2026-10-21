@@ -53,10 +53,11 @@
     outline-offset: 1px;
   }
 
-  /* Panels: notes | editor | frontmatter on desktop. Below 1024px the
-     frontmatter becomes a drawer; below 768px the notes do too. */
+  /* Panels: notes | editor | side panel (frontmatter, issues) on desktop.
+     Below 1024px the side panel becomes a drawer; below 768px the notes do
+     too. */
   .studio-notes,
-  .studio-frontmatter {
+  .studio-panel {
     min-height: 0;
     overflow: auto;
     background: var(--fde-card);
@@ -66,14 +67,28 @@
     flex: none;
     border-right: 1px solid var(--fde-border);
   }
-  .studio-frontmatter {
+  .studio-panel {
     width: 300px;
     flex: none;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     border-left: 1px solid var(--fde-border);
+  }
+  .studio-panel-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 8px 12px 0;
+    border-bottom: 1px solid var(--fde-border);
+  }
+  .studio-panel-body {
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
     padding: 12px 14px 20px;
   }
   @media (max-width: 1023px) {
-    .studio-frontmatter {
+    .studio-panel {
       display: none;
     }
   }
@@ -94,7 +109,8 @@
   .studio-notes.studio-drawer-open {
     left: 0;
   }
-  .studio-frontmatter.studio-drawer-open {
+  .studio-panel.studio-drawer-open {
+    display: flex;
     right: 0;
   }
   .studio-scrim {

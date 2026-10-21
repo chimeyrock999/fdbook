@@ -1,20 +1,9 @@
 import { Bird, Bug, Droplet, Flower2, Leaf, Rat, Snail, Sprout } from 'lucide-react';
 import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import type { CalloutType } from '@/lib/notes-syntax';
 
-type NotesCalloutType =
-  | 'caution'
-  | 'danger'
-  | 'error'
-  | 'example'
-  | 'idea'
-  | 'important'
-  | 'info'
-  | 'note'
-  | 'success'
-  | 'tip'
-  | 'warn'
-  | 'warning';
+type NotesCalloutType = CalloutType;
 type SemanticCalloutType =
   | 'caution'
   | 'danger'

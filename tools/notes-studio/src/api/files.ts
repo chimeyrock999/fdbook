@@ -31,6 +31,9 @@ export function createFilesClient(base = '') {
     throw new FileConflictError(path, body.mtimeMs === null ? null : { content: body.content, mtimeMs: body.mtimeMs });
   }
 
+  const listeners = new Set<(event: FileEvent) => void>();
+  let events: EventSource | null = null;
+
   return {
     async listFiles(): Promise<FileEntry[]> {
       const response = await fetch(`${base}/api/files`);
@@ -67,14 +70,21 @@ export function createFilesClient(base = '') {
     },
 
     // Follows file changes on disk. The Studio's own saves arrive too: compare
-    // the event's mtimeMs with the one writeFile returned to skip them.
+    // the event's mtimeMs with the one writeFile returned to skip them. All
+    // subscribers share one EventSource, closed with the last of them.
     subscribeFileEvents(listener: (event: FileEvent) => void): () => void {
-      const source = new EventSource(`${base}/api/events`);
-      source.onmessage = (message: MessageEvent<string>) => {
-        listener(JSON.parse(message.data) as FileEvent);
+      listeners.add(listener);
+      events ??= new EventSource(`${base}/api/events`);
+      events.onmessage = (message: MessageEvent<string>) => {
+        const event = JSON.parse(message.data) as FileEvent;
+        for (const each of [...listeners]) each(event);
       };
       return () => {
-        source.close();
+        listeners.delete(listener);
+        if (listeners.size === 0) {
+          events?.close();
+          events = null;
+        }
       };
     },
   };

@@ -1,4 +1,5 @@
 import type { PhrasingContent, Root } from 'mdast';
+import { CALLOUT_DIRECTIVES } from './notes-syntax.ts';
 
 type Position = NonNullable<Root['position']>;
 type Point = Position['start'];
@@ -18,33 +19,7 @@ type SourceFile = { value?: unknown };
 
 type PositionedNode = { position?: Partial<Position> };
 
-const calloutDirectiveTypes = new Set([
-  'caution',
-  'danger',
-  'error',
-  'example',
-  'important',
-  'info',
-  'note',
-  'success',
-  'tip',
-  'warn',
-  'warning',
-]);
-
-const admonitionTypes: Record<string, string> = {
-  caution: 'caution',
-  danger: 'danger',
-  error: 'error',
-  example: 'example',
-  important: 'important',
-  info: 'info',
-  note: 'note',
-  success: 'success',
-  tip: 'tip',
-  warn: 'warn',
-  warning: 'warning',
-};
+const calloutDirectiveTypes = new Set<string>(CALLOUT_DIRECTIVES);
 
 const directiveFences: Record<DirectiveType, string> = {
   containerDirective: ':::',
@@ -240,7 +215,7 @@ function transformContainerDirective(node: DirectiveNode) {
       type: 'mdxJsxFlowElement',
       name: 'Callout',
       attributes: [
-        createMdxAttribute('type', admonitionTypes[node.name] ?? node.name),
+        createMdxAttribute('type', node.name),
         ...(title ? [createMdxAttribute('title', title)] : []),
       ],
       children,
