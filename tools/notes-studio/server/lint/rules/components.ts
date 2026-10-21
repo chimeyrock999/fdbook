@@ -3,6 +3,7 @@ import type { ContainerDirective, LeafDirective, TextDirective } from 'mdast-uti
 import type { MdxJsxFlowElement, MdxJsxTextElement } from 'mdast-util-mdx-jsx';
 import { visit } from 'unist-util-visit';
 import { ACCORDION_KINDS, CALLOUT_TYPES } from '../../../../../lib/notes-syntax.ts';
+import { publicAsset } from '../../security/asset-types.ts';
 import { headOf, type LintContext, type Report } from '../types.ts';
 
 const calloutTypes = new Set<string>(CALLOUT_TYPES);
@@ -35,20 +36,6 @@ function isJsx(node: Nodes, names: string[]): node is Jsx {
   return (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') && names.includes(node.name ?? '');
 }
 
-// The file under public/ that the site would read for `src`
-// (lib/read-public-asset.ts), or null when it is outside public/.
-function publicAsset(src: string) {
-  const segments: string[] = [];
-  for (const segment of (src.split(/[?#]/)[0] ?? '').trim().split('/')) {
-    if (segment === '' || segment === '.') continue;
-    if (segment === '..') {
-      if (segments.length === 0) return null;
-      segments.pop();
-    } else segments.push(segment);
-  }
-  return segments.length > 0 ? segments.join('/') : null;
-}
-
 // The site reads `src` from public/ only (lib/read-public-asset.ts): a URL
 // such as https://… shows the placeholder too.
 function checkAsset(node: Nodes, source: string, context: LintContext, report: Report, src: string | null | undefined, label: string) {
@@ -67,6 +54,14 @@ function checkAsset(node: Nodes, source: string, context: LintContext, report: R
   });
 }
 
+function decodeUrlPath(url: string) {
+  try {
+    return decodeURI(url);
+  } catch {
+    return url;
+  }
+}
+
 function checkEmbeds(node: Nodes, source: string, context: LintContext, report: Report) {
   if (isJsx(node, ['HtmlEmbed', 'SvgDiagram'])) {
     // Inline markup (`html` or `svg`) needs no file.
@@ -80,9 +75,10 @@ function checkEmbeds(node: Nodes, source: string, context: LintContext, report: 
     }
     return;
   }
-  // Relative images are imported by the MDX build; only /… reads public/.
+  // Relative images are imported by the MDX build; only /… reads public/,
+  // as a URL the browser asks for, so percent escapes are decoded.
   if (node.type === 'image' && node.url.startsWith('/') && !node.url.startsWith('//')) {
-    checkAsset(node, source, context, report, node.url, 'The image');
+    checkAsset(node, source, context, report, decodeUrlPath(node.url), 'The image');
   }
 }
 

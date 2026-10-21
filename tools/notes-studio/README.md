@@ -43,6 +43,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `lint/` checks a note against the site's rules (see Lint below).
   - `tree/` builds the page tree and creates, renames and reorders pages
     (see Page tree below).
+  - `assets/` finds where notes use the files under `public/notes`, and
+    renames and deletes them (see Assets below).
 - `src/`: the React UI.
   - `api/` holds the clients for the server.
   - `editor/` is the note editor: Visual and Source modes, save status and
@@ -53,8 +55,9 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `media/` saves pasted and dropped images under `public/notes` (see
     Images below).
   - `notes/` is the check that a note can be opened.
-  - `sidebar/` is the left sidebar: the activity bar (Notes, Issues), its
-    width and whether it is shown.
+  - `sidebar/` is the left sidebar: the activity bar (Notes, Assets,
+    Issues), its width and whether it is shown.
+  - `assets/` is the Assets view and its rename and delete dialogs.
   - `tree/` is the page tree in the Notes view and its dialogs.
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
@@ -94,6 +97,8 @@ another one.
 | `POST /api/lint` | Takes JSON `{ path, content }` for a note and returns `{ path, issues }` (see Lint). Writes nothing. |
 | `GET /api/tree` | The page tree: `{ tree }` (see Page tree) |
 | `POST /api/tree` | Takes JSON `{ op: "create" \| "rename" \| "move", dryRun?, … }`, changes the tree and returns `{ changes, open }`. With `dryRun` it writes nothing. |
+| `GET /api/assets` | Every file under `public/notes` with where notes use it: `{ assets: [{ path, mtimeMs, usages: [{ note, line, column, length, text, unsure }] }] }` (see Assets) |
+| `POST /api/assets` | Takes JSON `{ op: "rename" \| "delete", path, name?, baseMtime, dryRun? }`, changes the asset and the notes that use it, and returns `{ changes, usages }`. With `dryRun` it writes nothing. |
 | any other `/api/…` | `404` with a JSON `{ error }`, never the app's page (see below) |
 | `/__fde_sync` (websocket) | The fumadocs-editor sync server for `content/notes`. It reads `.mdx` only, writes only notes that already exist (no page or folder creation; that goes through the file API), and merges changes made on disk into open documents. Known gap: its tree `delete` command still removes an existing note, without updating `meta.yaml` or checking the mtime, because the scope cannot tell it apart from a save on the same path. Don't wire the editor's tree delete until upstream can authorize tree commands separately (fuma-nama/fumadocs-editor#24). |
 
@@ -156,16 +161,16 @@ through the notes sync socket:
 ## Sidebar
 
 The left side works like VS Code's. The activity bar holds the **Notes**
-view (the page tree) and the **Issues** view (the open note's lint issues,
-with their count on the icon); picking the open view again hides the
-sidebar, and so does the button at the foot of the bar. Drag the sidebar's
-right edge to resize it (220–480px), or focus the edge and use the arrow
-keys, Shift for bigger steps, Home and End for the limits; double-click
-resets it to 284px. It never takes more than the window leaves the editor
-(420px); resizing starts from the width it shows. The view, the width and
-whether it is shown are kept in localStorage. Below 768px the sidebar is a
-drawer, opened from the header's Notes button or the toolbar's issue count,
-and its view takes up to 320px.
+view (the page tree), the **Assets** view (see Assets) and the **Issues**
+view (the open note's lint issues, with their count on the icon); picking
+the open view again hides the sidebar, and so does the button at the foot of
+the bar. Drag the sidebar's right edge to resize it (220–480px), or focus
+the edge and use the arrow keys, Shift for bigger steps, Home and End for
+the limits; double-click resets it to 284px. It never takes more than the
+window leaves the editor (420px); resizing starts from the width it shows.
+The view, the width and whether it is shown are kept in localStorage. Below
+768px the sidebar is a drawer, opened from the header's Notes button or the
+toolbar's issue count, and its view takes up to 320px.
 
 ## Graph markers
 
@@ -289,7 +294,54 @@ saved, and Escape or Cancel writes nothing.
   images suggest images. The page's own folder ranks first, then the folder
   the note sits in, where many notes keep their assets.
 
-Renaming or deleting an existing asset is not supported yet.
+Renaming or deleting an asset is in the Assets view.
+
+## Assets
+
+The sidebar's Assets view shows `public/notes` as folders, the open note's
+asset folder open, each file with how many times notes use it (`unused` when
+none does) and `diagram` when a diagram source generates it. Filter by name,
+or show the unused files only. A file opens the list of the notes and lines
+that use it, and the diagram sources that generate it; picking a note line
+opens the note in Source with the path selected. Its menu:
+
+- **Rename…** gives the file a new name in its folder, in the same
+  kebab-case as uploads; the extension stays. Every reference to it is
+  rewritten: `![…](/notes/…)` images, Markdown links and link definitions,
+  `src` on `HtmlEmbed`, `SvgDiagram` and `<img>`, and `::html`, `::svg`,
+  `::diagram`. Only the path changes: a query or hash (`?embed=1`) and the
+  way the path was written stay. The dialog shows every file it writes,
+  and the diagram sources that still name the old path.
+- **Delete…** removes a file no note uses and no diagram generates, and
+  the folders it leaves empty. Otherwise the dialog lists those instead and
+  offers no delete.
+
+References are found on the parsed note, as the site reads them (the lint's
+`asset-missing` rule uses the same reading): embed `src` is a path under
+`public/` (a string, or a string literal in braces), `/…` images, links and
+`<img src>` are URLs from the page, percent escapes decoded. Relative images
+(`./a.png`) are imported by the MDX build, so they are not assets here; the
+frontmatter and code blocks never count. Some uses cannot be rewritten: a
+path written with a character reference the Studio does not read, or a note
+that does not parse but holds the file's name (whole, so `data.png` is not
+`ta.png`). They count as unsure uses, so delete is refused and a rename
+waits until they are fixed.
+
+Diagram sources are the Archify specs under `diagrams/` (their
+`meta.output`) and the `*.regen.sh` scripts (their `OUT=`). Regenerating
+writes that path again, so the Studio does not delete such a file. It does
+not edit `diagrams/` either: after a rename, update the source before
+regenerating. The list reads them again when a note or an asset changes, not
+when a diagram does.
+
+Changes go through `POST /api/assets`, which takes the same lock as page
+tree changes. Like those, a change is planned against the disk, then
+applied: the asset and every note must still have the mtime they were
+planned from, the asset moves first, then each note is written atomically.
+If the first note cannot be written, the asset moves back. A note open in
+the editor merges the rewrite through its sync. While the open note has
+unsaved edits, rename and delete wait for it: the server only sees what is
+on disk. The view loads the list only while it is shown.
 
 ## Lint
 

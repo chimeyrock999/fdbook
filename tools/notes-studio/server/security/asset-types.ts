@@ -23,3 +23,17 @@ export function extensionOf(path: string) {
   const name = path.slice(path.lastIndexOf('/') + 1);
   return name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '';
 }
+
+// The file under public/ that the site would read for `src`
+// (lib/read-public-asset.ts), or null when it is outside public/.
+export function publicAsset(src: string) {
+  const segments: string[] = [];
+  for (const segment of (src.split(/[?#]/)[0] ?? '').trim().split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
+      if (segments.length === 0) return null;
+      segments.pop();
+    } else segments.push(segment);
+  }
+  return segments.length > 0 ? segments.join('/') : null;
+}

@@ -59,8 +59,9 @@ function Changes({ changes }: { changes: TreeChange[] }) {
 }
 
 // A modal over the whole Studio: the rest of the page is inert while it is
-// open, so the note behind it cannot change, and Tab stays inside.
-function Dialog({ title, onClose, onSubmit, children }: { title: string; onClose: () => void; onSubmit: () => void; children: ReactNode }) {
+// open, so the note behind it cannot change, and Tab stays inside. The
+// asset dialogs use it too.
+export function Dialog({ title, onClose, onSubmit, children }: { title: string; onClose: () => void; onSubmit: () => void; children: ReactNode }) {
   const layer = useRef<HTMLDivElement>(null);
   useEffect(() => makeOthersInert(layer.current), []);
   const submit = (event: SyntheticEvent) => {

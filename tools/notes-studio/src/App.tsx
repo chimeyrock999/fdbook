@@ -1,13 +1,17 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { AssetUsage } from './api/assets';
+import { createAssetsClient } from './api/assets';
 import { createFilesClient } from './api/files';
 import { createLintClient } from './api/lint';
 import { createTreeClient } from './api/tree';
-import { NoteEditor } from './editor/NoteEditor';
+import { AssetsView } from './assets/AssetsView';
+import { useAssetList } from './assets/useAssetList';
+import { NoteEditor, type SourcePlace } from './editor/NoteEditor';
 import { useAssets } from './media/useAssets';
 import { NoteGate } from './notes/NoteGate';
 import { OpenOnSite } from './notes/OpenOnSite';
-import { NOTES_PREFIX, noteFromUrl, syncPath } from './notes/notes';
+import { NOTES_PREFIX, noteFromUrl, syncPath, unsavedNote } from './notes/notes';
 import { Sidebar, type IssueCount } from './sidebar/Sidebar';
 import { useSidebar, type SidebarView } from './sidebar/useSidebar';
 import { PageTree } from './tree/PageTree';
@@ -23,10 +27,14 @@ export function App() {
   const treeClient = useMemo(() => createTreeClient(), []);
   const { tree, error, reload } = useTree(treeClient, files);
   const assets = useAssets(files);
+  const assetsClient = useMemo(() => createAssetsClient(), []);
+  // A usage picked in the Assets view, to show in its note's Source; any
+  // other way of opening a note drops it.
+  const [place, setPlace] = useState<(SourcePlace & { note: string }) | null>(null);
   const [active, setActive] = useState(() => noteFromUrl(window.location.search));
   // The open note's autosave state, by path: a rename waits until it is saved.
   const [saved, setSaved] = useState<{ path: string; status: DocumentStatus } | null>(null);
-  const unsaved = active !== null && (saved?.path !== active || saved.status !== 'synced') ? syncPath(active) : null;
+  const unsaved = unsavedNote(active, saved);
   const sidebar = useSidebar();
   // Below 768px the sidebar is a drawer, open or not.
   const [drawer, setDrawer] = useState(false);
@@ -34,6 +42,8 @@ export function App() {
   const [issueCount, setIssueCount] = useState<IssueCount>(null);
   const closeDrawer = useCallback(() => { setDrawer(false); }, []);
   const { show, select } = sidebar;
+  // The assets list follows the disk only while the Assets view is shown.
+  const assetList = useAssetList(assetsClient, files, sidebar.view === 'assets' && (sidebar.shown || drawer));
   // On a phone the drawer opens on the view, leaving the desktop layout as it
   // was; on a desktop the sidebar shows the view.
   const openView = useCallback((view: SidebarView) => {
@@ -54,16 +64,30 @@ export function App() {
 
   // Back and forward move between opened notes.
   useEffect(() => {
-    const onPop = () => { setActive(noteFromUrl(window.location.search)); };
+    const onPop = () => {
+      setPlace(null);
+      setActive(noteFromUrl(window.location.search));
+    };
     window.addEventListener('popstate', onPop);
     return () => { window.removeEventListener('popstate', onPop); };
   }, []);
 
-  const open = (path: string) => {
+  const go = (path: string) => {
     setDrawer(false);
     if (path === active) return;
     window.history.pushState(null, '', `?path=${encodeURIComponent(path)}`);
     setActive(path);
+  };
+  const open = (path: string) => {
+    setPlace(null);
+    go(path);
+  };
+
+  const placeSeq = useRef(0);
+  const openUsage = (usage: AssetUsage) => {
+    placeSeq.current += 1;
+    setPlace({ note: usage.note, line: usage.line, column: usage.column, length: usage.length, seq: placeSeq.current });
+    go(usage.note);
   };
 
   // The open note moved with a rename: follow it without a new history entry.
@@ -94,6 +118,7 @@ export function App() {
           issues={issueCount}
           hasNote={active !== null}
           issuesRef={setIssuesSlot}
+          assets={<AssetsView client={assetsClient} list={assetList} active={active} unsaved={unsaved !== null} onOpenUsage={openUsage} />}
           notes={
             <>
               {error && <p role="alert" className="p-3 text-[12.5px] text-[var(--fde-error)]">Could not load the page tree: {error}</p>}
@@ -123,6 +148,7 @@ export function App() {
               onIssueCount={setIssueCount}
               onShowIssues={showIssues}
               onIssueShown={closeDrawer}
+              place={place?.note === active ? place : null}
             />
           </NoteGate>
         ) : (

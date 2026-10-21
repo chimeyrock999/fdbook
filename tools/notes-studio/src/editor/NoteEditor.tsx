@@ -34,6 +34,10 @@ type Panels = {
 };
 type Clients = { files: ReturnType<typeof createFilesClient>; lint: LintClient };
 
+// A place in the note to show in Source once it is open (a usage picked in
+// the Assets view); a new `seq` shows it again.
+export type SourcePlace = { line: number; column: number; length: number; seq: number };
+
 // One note, open through the notes sync socket: autosave, live merge of
 // changes made on disk, and the conflict choice when both sides edited the
 // same block. `path` is relative to content/notes; the caller remounts this
@@ -41,11 +45,13 @@ type Clients = { files: ReturnType<typeof createFilesClient>; lint: LintClient }
 // go to the sidebar's Issues view. Pasted, dropped and picked images are saved in the
 // note's folder under public/notes, under a name asked for first; `assets`
 // lists public/notes (useAssets), for the name check and Source. `onStatus`
-// follows the autosave state, so a rename can wait for it.
-export function NoteEditor({ path, assets, onStatus, ...rest }: {
+// follows the autosave state, so a rename can wait for it. `place` is
+// selected in Source once the note is open.
+export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
   path: string;
   assets: readonly string[];
   onStatus?: (status: DocumentStatus) => void;
+  place?: SourcePlace | null;
 } & Panels & Clients) {
   const notePath = `${NOTES_PREFIX}${path}`;
   const uploads = useAssetUploads(rest.files, notePath, assets);
@@ -78,6 +84,7 @@ export function NoteEditor({ path, assets, onStatus, ...rest }: {
         opened={writable !== null}
         status={writable === null && status !== 'denied' && status !== 'offline' ? null : (status ?? 'synced')}
         locked={locked}
+        place={place}
         {...rest}
       />
     </MdxEditor.Root>
@@ -87,8 +94,9 @@ export function NoteEditor({ path, assets, onStatus, ...rest }: {
 // The plugins' decorations, one ProseMirror plugin for every editor.
 const decorations = decorationsPlugin(editorConfig.decorators);
 
-function EditorLayout({ notePath, assets, uploads, opened, status, locked, issuesSlot, onIssueCount, onShowIssues, onIssueShown, files, lint }: {
+function EditorLayout({ notePath, assets, uploads, opened, status, locked, place, issuesSlot, onIssueCount, onShowIssues, onIssueShown, files, lint }: {
   notePath: string;
+  place: SourcePlace | null;
   assets: readonly string[];
   uploads: ReturnType<typeof useAssetUploads>;
   opened: boolean;
@@ -117,6 +125,19 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, issue
   useEffect(() => {
     onIssueCount(issueTotal === null ? null : { count: issueTotal, errors: hasErrors });
   }, [issueTotal, hasErrors, onIssueCount]);
+  // Only once the note is open: before that Source has no text to select in.
+  const placeSeq = opened ? place?.seq : undefined;
+  useEffect(() => {
+    if (placeSeq === undefined || place === null) return;
+    const { line, column, length } = place;
+    setMode('source');
+    // The note opens over the sync socket, after this renders: the place can
+    // only be applied once it is there, so this follows `opened`.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReveal((previous) => ({ start: { line, column }, end: { line, column: column + length }, seq: (previous?.seq ?? 0) + 1 }));
+    // `placeSeq` stands for `place`, a new object on every render of App.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeSeq, setMode]);
   // No note, no count: the activity bar drops its badge.
   useEffect(() => () => { onIssueCount(null); }, [onIssueCount]);
   // An issue in the frontmatter opens its field in the header; any other

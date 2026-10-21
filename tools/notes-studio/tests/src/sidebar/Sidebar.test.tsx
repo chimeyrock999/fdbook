@@ -12,7 +12,7 @@ function Harness({ drawer = false, issues = null, hasNote = false, onCloseDrawer
   onCloseDrawer?: () => void;
 }) {
   const state = useSidebar();
-  return <Sidebar state={state} drawer={drawer} onCloseDrawer={onCloseDrawer} issues={issues} hasNote={hasNote} notes={<p>tree</p>} issuesRef={() => undefined} />;
+  return <Sidebar state={state} drawer={drawer} onCloseDrawer={onCloseDrawer} issues={issues} hasNote={hasNote} notes={<p>tree</p>} assets={<p>asset list</p>} issuesRef={() => undefined} />;
 }
 
 const stored = () => JSON.parse(localStorage.getItem('notes-studio:sidebar') ?? 'null') as unknown;
@@ -31,6 +31,19 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Sidebar', () => {
+  it('has an Assets view between Notes and Issues, kept across reloads', async () => {
+    const { unmount } = render(<Harness />);
+    const labels = [...screen.getByRole('navigation', { name: 'Sidebar views' }).querySelectorAll('button')].map((button) => button.getAttribute('aria-label'));
+    expect(labels.slice(0, 3)).toEqual(['Notes', 'Assets', 'Issues']);
+    await userEvent.click(screen.getByRole('button', { name: 'Assets' }));
+    expect(screen.getByText('asset list').closest('.studio-pane-view')?.hasAttribute('hidden')).toBe(false);
+    expect(screen.getByText('tree').closest('.studio-pane-view')?.hasAttribute('hidden')).toBe(true);
+    expect(stored()).toMatchObject({ view: 'assets', shown: true });
+    unmount();
+    render(<Harness />);
+    expect(screen.getByRole('button', { name: 'Assets' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('switches views from the activity bar and folds on the open one, as VS Code does', async () => {
     render(<Harness />);
     expect(screen.getByRole('button', { name: 'Notes' }).getAttribute('aria-pressed')).toBe('true');
