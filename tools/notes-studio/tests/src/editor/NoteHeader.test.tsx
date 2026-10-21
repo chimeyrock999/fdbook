@@ -53,12 +53,20 @@ function Harness({ initial, onWrite, readOnly = false, reveal = null, onLeave = 
 const details = () => userEvent.click(screen.getByRole('button', { name: /Edit details/ }));
 
 // The server's list (server/icons/api.ts), read here as Node reads it.
-const iconNames = vi.hoisted(() => ({ fail: 0 }));
+// `without` drops names, as an older site lucide-react would lack them.
+const iconNames = vi.hoisted(() => ({ fail: 0, without: [] as string[] }));
 vi.mock('../../../src/api/icons', () => ({
-  fetchIconNames: () => (iconNames.fail-- > 0 ? Promise.reject(new Error('HTTP 500')) : Promise.resolve(NOTE_ICON_NAMES)),
+  fetchIconNames: () =>
+    iconNames.fail-- > 0
+      ? Promise.reject(new Error('HTTP 500'))
+      : Promise.resolve(NOTE_ICON_NAMES.filter((name) => !iconNames.without.includes(name))),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  iconNames.fail = 0;
+  iconNames.without = [];
+});
 
 describe('NoteHeader', () => {
   it('shows the title and description in place and edits them', async () => {
@@ -165,9 +173,15 @@ describe('NoteHeader', () => {
     expect(writes.at(-1)).toBe(note);
   });
 
-  // The site's lucide-react is older than the Studio's: BrainOff is only in
-  // the Studio's set, Trash2 only in the site's (the Studio still exports it).
+  // The site's lucide-react may be older than the Studio's: BrainOff stands
+  // for a name only the Studio has.
   it('offers the site\'s icons and flags any other name', async () => {
+    iconNames.without = ['BrainOff'];
+    vi.resetModules();
+    const { NoteHeader: Fresh } = await import('../../../src/editor/NoteHeader');
+    function Harness({ initial }: { initial: string; onWrite: unknown }) {
+      return <Fresh source={initial} onSource={vi.fn()} readOnly={false} onOpenSource={vi.fn()} onLeave={vi.fn()} reveal={null} />;
+    }
     render(<Harness initial={note.replace('graph:', 'icon: BrainOff\ngraph:')} onWrite={vi.fn()} />);
     await details();
     expect(await screen.findByText('The site has no lucide icon named BrainOff.')).toBeTruthy();
@@ -175,9 +189,7 @@ describe('NoteHeader', () => {
     const search = await screen.findByPlaceholderText(/Search \d+ lucide icons/);
     await userEvent.type(search, 'brain');
     expect(screen.getAllByRole('option').map((option) => option.getAttribute('aria-label'))).not.toContain('BrainOff');
-    await userEvent.clear(search);
-    await userEvent.type(search, 'trash2');
-    expect(screen.getByRole('option', { name: 'Trash2' }).querySelector('svg')).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Brain' }).querySelector('svg')).toBeTruthy();
   });
 
   it('shows keys it does not edit read-only and their issues', async () => {
