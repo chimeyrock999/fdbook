@@ -43,10 +43,26 @@ describe('SiteCallout', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
+  it('draws the menu on the page body, not in the callout block', async () => {
+    const { container } = draw('note');
+    await userEvent.click(screen.getByRole('button', { name: 'Callout type: note' }));
+    const menu = screen.getByRole('menu');
+    expect(menu.parentElement).toBe(document.body);
+    expect(container.contains(menu)).toBe(false);
+    expect(menu.style.top).not.toBe('');
+    // It goes with the callout.
+    cleanup();
+    expect(document.body.querySelector('.studio-picker-menu')).toBeNull();
+  });
+
   it('closes the menu on a press outside or Escape', async () => {
     draw('note');
     const icon = screen.getByRole('button', { name: 'Callout type: note' });
     await userEvent.click(icon);
+    // A press on the menu (outside the picker) keeps it open.
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: screen.getByRole('menu') });
+    expect(screen.getByRole('menu')).toBeTruthy();
+    await userEvent.pointer({ keys: '[/MouseLeft]' });
     await userEvent.click(document.body);
     expect(screen.queryByRole('menu')).toBeNull();
     await userEvent.click(icon);

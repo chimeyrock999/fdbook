@@ -1,6 +1,8 @@
 import type { ComponentRenderProps } from '@fumadocs-editor/ui';
 import { ChevronDown } from 'lucide-react';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
+import { floatMenu } from '../picker-menu';
 import { ICONS, semanticType } from './types';
 
 // components/notes-callout.tsx in the editor: an icon and title bar over a
@@ -20,23 +22,13 @@ export function SiteCallout({ props, children, setProp, types }: ComponentRender
   const Icon = ICONS[semantic];
   const [open, setOpen] = useState(false);
   const picker = useRef<HTMLSpanElement>(null);
+  const menu = useRef<HTMLSpanElement>(null);
 
-  // Any press outside closes the menu (Safari does not focus a clicked
-  // button, so a blur would not come).
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: Event) => {
-      if (!(event.target instanceof Node && picker.current?.contains(event.target))) setOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', escape);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', escape);
-    };
+  // The menu is drawn on document.body over the note (picker-menu.ts); a
+  // press outside or Escape closes it.
+  useLayoutEffect(() => {
+    if (!open || !menu.current || !picker.current) return;
+    return floatMenu(menu.current, picker.current, () => { setOpen(false); });
   }, [open]);
   const style = {
     '--notes-callout-color': `var(--color-callout-${semantic})`,
@@ -58,8 +50,8 @@ export function SiteCallout({ props, children, setProp, types }: ComponentRender
           <Icon size={18} aria-hidden />
           <ChevronDown size={10} className="studio-picker-chevron" aria-hidden />
         </button>
-        {open && (
-          <span role="menu" className="studio-picker-menu">
+        {open && createPortal(
+          <span ref={menu} role="menu" className="studio-picker-menu">
             {types.map((option) => {
               const OptionIcon = ICONS[semanticType(option)];
               return (
@@ -79,7 +71,8 @@ export function SiteCallout({ props, children, setProp, types }: ComponentRender
                 </button>
               );
             })}
-          </span>
+          </span>,
+          document.body,
         )}
       </span>
       {children}

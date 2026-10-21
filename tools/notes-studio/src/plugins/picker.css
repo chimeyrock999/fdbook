@@ -2,7 +2,6 @@
    menu. In an editable note the icon shows it is a button: a tint and a
    chevron on hover and focus. */
 .studio-picker {
-  position: relative;
   display: inline-flex;
 }
 .studio-picker-button {
@@ -28,10 +27,11 @@
     transition: none;
   }
 }
+/* The open menu sits on document.body, placed from the picker's box
+   (picker-menu.ts): over the next block, and under the phone drawer's
+   scrim (index.css). */
 .studio-picker-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
+  position: fixed;
   z-index: 20;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
