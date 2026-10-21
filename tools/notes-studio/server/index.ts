@@ -1,29 +1,25 @@
-import { existsSync } from 'node:fs';
+import { parseStudioPort, repoRoot, studioRoot } from './config.ts';
+import { driftedPackages } from './deps.ts';
 
 // Studio deps live in this package; shared @site code resolves zod and
-// fumadocs-core from the repo root.
-const missing = [
-  ['../node_modules/vite', 'npm run studio:install'],
-  ['../../../node_modules/zod', 'npm install'],
-].filter(([path]) => !existsSync(new URL(path, import.meta.url)));
+// fumadocs-core from the repo root. Each must be installed as its
+// package-lock.json pins: a pull without a reinstall shows up here, before
+// anything runs on the old packages.
+const problems = [
+  { dir: repoRoot, command: 'npm install' },
+  { dir: studioRoot, command: 'npm run studio:install' },
+].flatMap(({ dir, command }) => {
+  const drifted = driftedPackages(dir);
+  return drifted.length > 0 ? [{ drifted, command }] : [];
+});
 
-if (missing.length > 0) {
-  const commands = missing.map(([, command]) => `\`${command}\``).join(' and ');
-  console.error(`Notes Studio dependencies are not installed. Run ${commands} from the repo root.`);
+if (problems.length > 0) {
+  const commands = problems.map(({ command }) => `\`${command}\``).join(' and ');
+  const packages = problems.flatMap(({ drifted }) => drifted).join(', ');
+  console.error(`Notes Studio dependencies do not match the lockfiles: ${packages}. Run ${commands} from the repo root.`);
   process.exit(1);
 }
 
-// Installed, but older than the site now asks for: a pull without a
-// reinstall. The page tree depends on fumadocs-core's current shape.
-const { staleRootPackages } = await import('./deps.ts');
-const { repoRoot } = await import('./config.ts');
-const stale = staleRootPackages(repoRoot);
-if (stale.length > 0) {
-  console.error(`Notes Studio needs newer packages at the repo root: ${stale.join(', ')}. Run \`npm install\` from the repo root.`);
-  process.exit(1);
-}
-
-const { parseStudioPort } = await import('./config.ts');
 const { startStudioServer } = await import('./studio-server.ts');
 
 try {

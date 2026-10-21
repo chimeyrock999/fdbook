@@ -18,9 +18,11 @@ runs TypeScript directly).
 
 After a pull, run `npm install` (and `npm run studio:install` when this
 package changed) and restart the Studio: the server keeps the code it started
-with. It refuses to start when a root package it relies on (`fumadocs-core`,
-whose page tree shape the tree builder reads) is older than the root
-`package.json` asks for, and names the package (`server/deps.ts`).
+with. It refuses to start when a direct dependency, at the root or here, is
+missing or installed at another version than its `package-lock.json` pins,
+and names the packages and the command (`server/deps.ts`). A pull without a
+reinstall once left fumadocs-core 16.8.11 in place, where every page tree
+folder got the same id.
 
 **Open on site** in the header opens the note's page on the site's dev server
 (`npm run dev` at the repo root, `http://localhost:3000` unless

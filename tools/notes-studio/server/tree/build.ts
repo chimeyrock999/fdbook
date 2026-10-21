@@ -99,12 +99,14 @@ function convertNode(context: Context, node: PageTree.Node, folder: string): Tre
   return convertFolder(context, node, folder);
 }
 
-// A folder's path. fumadocs-core before 16.17 gave folders a meta path
-// string as `$ref`: every folder would get the same empty path and id.
+// A folder's path. Without one every folder would share the empty path and
+// id, and so its open state. fumadocs-core before 16.17 gave folders a meta
+// path string as `$ref` (server/deps.ts stops the Studio on such an install).
 function folderPath(folder: PageTree.Folder): string {
   const ref: unknown = folder.$ref;
   if (typeof ref === 'object' && ref !== null && typeof (ref as { folder?: unknown }).folder === 'string') return (ref as { folder: string }).folder;
-  throw new Error('fumadocs-core is older than the site requires: run `npm install` from the repo root.');
+  if (typeof ref === 'string') throw new Error('fumadocs-core is older than the site requires: run `npm install` from the repo root.');
+  throw new Error(`a page tree folder (${nameOf(folder)}) has no $ref.folder: the loader must keep refs`);
 }
 
 function convertFolder(context: Context, node: PageTree.Folder | PageTree.Root, path: string): TreeFolder {
@@ -187,9 +189,9 @@ function folderMap(folder: TreeFolder, map = new Map<string, TreeFolder>()) {
 // the tree at its own folder, after the listed children, marked unlisted.
 function mergeFallback(context: Context, main: Map<string, TreeFolder>, into: TreeFolder, fallback: PageTree.Folder | PageTree.Root) {
   for (const child of fallback.children) {
-    if (child.type === 'folder' && main.has(folderPath(child))) {
-      const existing = main.get(folderPath(child));
-      if (existing) mergeFallback(context, main, existing, child);
+    const existing = child.type === 'folder' ? main.get(folderPath(child)) : undefined;
+    if (child.type === 'folder' && existing) {
+      mergeFallback(context, main, existing, child);
       continue;
     }
     if (child.type === 'separator') continue;

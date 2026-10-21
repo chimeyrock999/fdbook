@@ -2,46 +2,53 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { repoRoot } from '../../server/config';
-import { meets, staleRootPackages } from '../../server/deps';
+import { driftedPackages } from '../../server/deps';
 
-describe('root package versions', () => {
-  const roots: string[] = [];
+describe('installed packages against the lockfile', () => {
+  const dirs: string[] = [];
   afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+    await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
-  // A throwaway checkout whose package.json wants `wants` and whose
-  // node_modules has `installed` (or nothing).
-  async function checkout(wants: string, installed: string | null) {
-    const root = await mkdtemp(join(tmpdir(), 'studio-deps-'));
-    roots.push(root);
-    await writeFile(join(root, 'package.json'), JSON.stringify({ dependencies: { 'fumadocs-core': wants } }));
-    if (installed !== null) {
-      await mkdir(join(root, 'node_modules/fumadocs-core'), { recursive: true });
-      await writeFile(join(root, 'node_modules/fumadocs-core/package.json'), JSON.stringify({ version: installed }));
+  // A throwaway package: package.json asks for `wants`, package-lock.json
+  // pins `locked`, node_modules holds `installed` (null: nothing).
+  async function checkout(packages: Record<string, { locked: string; installed: string | null; dev?: boolean }>) {
+    const dir = await mkdtemp(join(tmpdir(), 'studio-deps-'));
+    dirs.push(dir);
+    const manifest = { dependencies: {} as Record<string, string>, devDependencies: {} as Record<string, string> };
+    const lock: Record<string, { version: string }> = { '': { version: '0.0.0' } };
+    for (const [name, { locked, installed, dev }] of Object.entries(packages)) {
+      (dev ? manifest.devDependencies : manifest.dependencies)[name] = `^${locked}`;
+      lock[`node_modules/${name}`] = { version: locked };
+      if (installed !== null) {
+        await mkdir(join(dir, 'node_modules', name), { recursive: true });
+        await writeFile(join(dir, 'node_modules', name, 'package.json'), JSON.stringify({ name, version: installed }));
+      }
     }
-    return root;
+    await writeFile(join(dir, 'package.json'), JSON.stringify(manifest));
+    await writeFile(join(dir, 'package-lock.json'), JSON.stringify({ lockfileVersion: 3, packages: lock }));
+    return dir;
   }
 
-  it('reads caret and exact ranges', () => {
-    expect(meets('^16.17.7', '16.17.7')).toBe(true);
-    expect(meets('^16.17.7', '16.18.0')).toBe(true);
-    expect(meets('^16.17.7', '16.8.11')).toBe(false);
-    expect(meets('^16.17.7', '16.17.6')).toBe(false);
-    expect(meets('^16.17.7', '17.0.0')).toBe(false);
-    expect(meets('16.17.7', '16.17.8')).toBe(false);
-    expect(meets('latest', '1.0.0')).toBe(true);
+  it('names packages a pull changed without a reinstall, either way', async () => {
+    // The checkout that opened every folder at once: fumadocs-core 16.8.11 after #40.
+    const dir = await checkout({
+      'fumadocs-core': { locked: '16.17.7', installed: '16.8.11' },
+      zod: { locked: '4.1.0', installed: '4.1.0' },
+      vite: { locked: '8.3.4', installed: null, dev: true },
+      '@scope/pkg': { locked: '1.0.0', installed: '1.0.1' },
+    });
+    expect(driftedPackages(dir)).toEqual([
+      'fumadocs-core 16.8.11 (lockfile 16.17.7)',
+      '@scope/pkg 1.0.1 (lockfile 1.0.0)',
+      'vite missing (lockfile 8.3.4)',
+    ]);
   });
 
-  it('names a package installed older than the root asks for: a pull without a reinstall', async () => {
-    // The checkout that showed every folder opening at once (#53 on fumadocs-core 16.8.11).
-    expect(staleRootPackages(await checkout('^16.17.7', '16.8.11'))).toEqual(['fumadocs-core 16.8.11 (wants ^16.17.7)']);
-    expect(staleRootPackages(await checkout('^16.17.7', null))).toEqual(['fumadocs-core missing (wants ^16.17.7)']);
-    expect(staleRootPackages(await checkout('^16.17.7', '16.17.7'))).toEqual([]);
-  });
-
-  it('passes on this checkout', () => {
-    expect(staleRootPackages(repoRoot)).toEqual([]);
+  it('passes a matching install, and a package without a lockfile', async () => {
+    expect(driftedPackages(await checkout({ zod: { locked: '4.1.0', installed: '4.1.0' } }))).toEqual([]);
+    const bare = await mkdtemp(join(tmpdir(), 'studio-deps-'));
+    dirs.push(bare);
+    expect(driftedPackages(bare)).toEqual([]);
   });
 });

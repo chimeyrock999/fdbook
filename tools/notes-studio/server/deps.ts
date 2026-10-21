@@ -1,44 +1,37 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Root packages the Studio server reads at runtime and whose shape it relies
-// on: the page tree reads fumadocs-core's page tree nodes ($ref.folder only
-// exists from 16.17). A checkout that pulled a bump but did not reinstall
-// would otherwise run with the old package and build a broken tree.
-const ROOT_PACKAGES = ['fumadocs-core'];
+// A pull that changed package-lock.json without a reinstall leaves
+// node_modules on the old versions, and the Studio then runs against
+// packages whose shape it does not expect: with fumadocs-core 16.8.11 every
+// page tree folder got the same id, so opening one opened all. The check is
+// the one `npm install` would act on: each direct dependency installed at
+// the version package-lock.json pins.
 
-const parse = (version: string) => /^(\d+)\.(\d+)\.(\d+)/.exec(version)?.slice(1).map(Number) ?? null;
+type Manifest = { version?: string; dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+type Lockfile = { packages?: Record<string, { version?: string } | undefined> };
 
-// Whether `version` meets `range`, for the ranges the root package.json uses:
-// `^x.y.z` (same major, at least x.y.z) or an exact `x.y.z`. Anything else
-// is taken as met.
-export function meets(range: string, version: string): boolean {
-  const caret = range.startsWith('^');
-  const wanted = parse(caret ? range.slice(1) : range);
-  const have = parse(version);
-  if (!wanted || !have) return true;
-  const [major, minor, patch] = have as [number, number, number];
-  const [wantMajor, wantMinor, wantPatch] = wanted as [number, number, number];
-  if (!caret) return major === wantMajor && minor === wantMinor && patch === wantPatch;
-  if (major !== wantMajor) return false;
-  return minor > wantMinor || (minor === wantMinor && patch >= wantPatch);
+function read(path: string): unknown {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
-const readJson = (path: string) => JSON.parse(readFileSync(path, 'utf8')) as { version?: string; dependencies?: Record<string, string> };
-
-// The root packages whose installed version is older than the root
-// package.json asks for, as `name installed (wants range)`.
-export function staleRootPackages(root: string): string[] {
-  const wanted = readJson(join(root, 'package.json')).dependencies ?? {};
-  return ROOT_PACKAGES.flatMap((name) => {
-    const range = wanted[name];
-    if (!range) return [];
-    let installed: string | undefined;
-    try {
-      installed = readJson(join(root, 'node_modules', name, 'package.json')).version;
-    } catch {
-      return [`${name} missing (wants ${range})`];
-    }
-    return installed === undefined || meets(range, installed) ? [] : [`${name} ${installed} (wants ${range})`];
+// The direct dependencies of the package at `dir` that are missing or
+// installed at another version than its package-lock.json pins, as
+// `name installed (lockfile version)`. Empty when `dir` has no lockfile.
+export function driftedPackages(dir: string): string[] {
+  const manifest = read(join(dir, 'package.json')) as Manifest | null;
+  const lockfile = read(join(dir, 'package-lock.json')) as Lockfile | null;
+  if (!manifest || !lockfile?.packages) return [];
+  const names = Object.keys({ ...manifest.dependencies, ...manifest.devDependencies });
+  return names.flatMap((name) => {
+    const locked = lockfile.packages?.[`node_modules/${name}`]?.version;
+    if (locked === undefined) return [];
+    const installed = (read(join(dir, 'node_modules', name, 'package.json')) as Manifest | null)?.version;
+    if (installed === locked) return [];
+    return [`${name} ${installed ?? 'missing'} (lockfile ${locked})`];
   });
 }
