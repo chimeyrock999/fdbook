@@ -1,4 +1,4 @@
-import { CircleAlert, FolderTree, Images, PanelLeft } from 'lucide-react';
+import { CircleAlert, FolderTree, GitBranch, Images, PanelLeft } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { clampWidth, SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, type Sidebar as SidebarState, type SidebarView } from './useSidebar';
 
@@ -35,8 +35,9 @@ function useWidthCap() {
 // view buttons only switch views and the foot button closes the drawer
 // (`onCloseDrawer`), leaving the desktop layout as it was. The Issues
 // view is filled by the editor through a portal into `issuesRef`, since the
-// lint lives with the open note.
-export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, assets, issuesRef }: {
+// lint lives with the open note. With change requests, `changeRequests`
+// adds a button under the views that opens their list in the main pane.
+export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, assets, issuesRef, changeRequests = null }: {
   state: SidebarState;
   drawer: boolean;
   onCloseDrawer: () => void;
@@ -46,6 +47,7 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
   notes: ReactNode;
   assets: ReactNode;
   issuesRef: (element: HTMLElement | null) => void;
+  changeRequests?: { shown: boolean; onOpen: () => void } | null;
 }) {
   const pane = useRef<HTMLDivElement>(null);
   const shown = state.shown || drawer;
@@ -119,6 +121,18 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
               {issues.count}
             </span>
           ),
+        )}
+        {changeRequests && (
+          <button
+            type="button"
+            className="studio-activity-button"
+            aria-pressed={changeRequests.shown}
+            aria-label="Change requests"
+            title="Change requests"
+            onClick={changeRequests.onOpen}
+          >
+            <GitBranch size={20} strokeWidth={1.8} />
+          </button>
         )}
         <button
           type="button"

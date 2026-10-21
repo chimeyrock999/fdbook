@@ -1,4 +1,4 @@
-import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '../http.ts';
+import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '../http.ts';
 import { createKeyedLock } from '../files/store.ts';
 import { loadTree } from './build.ts';
 import { applyPlan, planCreate, planMove, planRename, planSetOpen, planVisibility, type Plan } from './ops.ts';
@@ -49,19 +49,7 @@ export function createTreeApi(root: string, lock = createKeyedLock()): Handler {
   async function route(request: Parameters<Handler>[0]) {
     if (request.method === 'GET') return { tree: await loadTree(root) };
     if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
-    // JSON only, so a browser must preflight it and a foreign page cannot send one blind.
-    if (!(request.headers['content-type'] ?? '').startsWith('application/json')) {
-      throw new HttpError(415, 'tree changes must be application/json');
-    }
-    let body: unknown;
-    try {
-      body = JSON.parse((await readBody(request, MAX_BODY_BYTES)).toString('utf8'));
-    } catch (error) {
-      if (error instanceof HttpError) throw error;
-      throw new HttpError(400, 'body is not JSON');
-    }
-    if (typeof body !== 'object' || body === null || Array.isArray(body)) throw new HttpError(400, 'body must be an object');
-    return change(body as Body);
+    return change(await readJsonObject(request, MAX_BODY_BYTES, 'tree changes'));
   }
 
   return async (request, response) => {

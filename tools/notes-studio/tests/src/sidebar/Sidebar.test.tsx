@@ -5,14 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Sidebar, type IssueCount } from '../../../src/sidebar/Sidebar';
 import { useSidebar } from '../../../src/sidebar/useSidebar';
 
-function Harness({ drawer = false, issues = null, hasNote = false, onCloseDrawer = () => undefined }: {
+function Harness({ drawer = false, issues = null, hasNote = false, onCloseDrawer = () => undefined, changeRequests = null }: {
   drawer?: boolean;
   issues?: IssueCount;
   hasNote?: boolean;
   onCloseDrawer?: () => void;
+  changeRequests?: { shown: boolean; onOpen: () => void } | null;
 }) {
   const state = useSidebar();
-  return <Sidebar state={state} drawer={drawer} onCloseDrawer={onCloseDrawer} issues={issues} hasNote={hasNote} notes={<p>tree</p>} assets={<p>asset list</p>} issuesRef={() => undefined} />;
+  return <Sidebar state={state} drawer={drawer} onCloseDrawer={onCloseDrawer} issues={issues} hasNote={hasNote} notes={<p>tree</p>} assets={<p>asset list</p>} issuesRef={() => undefined} changeRequests={changeRequests} />;
 }
 
 const stored = () => JSON.parse(localStorage.getItem('notes-studio:sidebar') ?? 'null') as unknown;
@@ -180,5 +181,18 @@ describe('Sidebar', () => {
     expect(button.querySelector('[data-errors]')).toBeTruthy();
     rerender(<Harness issues={{ count: 0, errors: false }} />);
     expect(screen.getByRole('button', { name: 'Issues' }).querySelector('.studio-activity-count')).toBeNull();
+  });
+
+  it('opens the change requests from a button under the views, only when there are change requests', async () => {
+    const { rerender } = render(<Harness />);
+    expect(screen.queryByRole('button', { name: 'Change requests' })).toBeNull();
+    const onOpen = vi.fn();
+    rerender(<Harness changeRequests={{ shown: false, onOpen }} />);
+    const labels = [...screen.getByRole('navigation', { name: 'Sidebar views' }).querySelectorAll('button')].map((button) => button.getAttribute('aria-label'));
+    expect(labels).toEqual(['Notes', 'Assets', 'Issues', 'Change requests', 'Hide the sidebar']);
+    await userEvent.click(screen.getByRole('button', { name: 'Change requests' }));
+    expect(onOpen).toHaveBeenCalledOnce();
+    rerender(<Harness changeRequests={{ shown: true, onOpen }} />);
+    expect(screen.getByRole('button', { name: 'Change requests' }).getAttribute('aria-pressed')).toBe('true');
   });
 });

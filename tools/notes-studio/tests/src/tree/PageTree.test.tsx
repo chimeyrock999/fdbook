@@ -43,10 +43,10 @@ function fakeClient(answer: (request: TreeRequest, dryRun: boolean) => TreeAnswe
 // onChanged as useTree's reload: whether the next tree loaded.
 const loaded = (ok = true) => vi.fn(() => Promise.resolve(ok));
 
-function setup(answer: Parameters<typeof fakeClient>[0] = () => ({ changes: [], open: null })) {
+function setup(answer: Parameters<typeof fakeClient>[0] = () => ({ changes: [], open: null }), { readOnly = false } = {}) {
   const { client, change } = fakeClient(answer);
   const props = { onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: loaded() };
-  render(<PageTree root={root} client={client} active="guide/two.mdx" {...props} />);
+  render(<PageTree root={root} client={client} active="guide/two.mdx" readOnly={readOnly} {...props} />);
   return { change, ...props };
 }
 
@@ -380,5 +380,15 @@ describe('PageTree', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Rename' }));
     expect(change).toHaveBeenLastCalledWith({ op: 'rename', path: 'guide', slug: 'manual' });
     await waitFor(() => { expect(onRenamed).toHaveBeenCalledWith('guide', 'manual'); });
+  });
+
+  it('only shows and opens pages when read only (main): no new page, row menu or drag', async () => {
+    const { onOpen } = setup(undefined, { readOnly: true });
+    expect(screen.queryByRole('button', { name: 'New page' })).toBeNull();
+    expect(screen.queryAllByRole('button', { name: /^Actions for/ })).toEqual([]);
+    expect(document.querySelectorAll('li[draggable="true"]').length).toBe(0);
+    expect(document.querySelectorAll('.studio-tree-grip').length).toBe(0);
+    await userEvent.click(screen.getByRole('button', { name: 'One' }));
+    expect(onOpen).toHaveBeenCalledWith('guide/one.mdx');
   });
 });

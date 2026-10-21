@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { API_BASE } from './workspace';
 
 // The mtime each asset under public/notes last changed to while the Studio
 // was open, by worktree path. The file API serves assets with
@@ -9,10 +10,10 @@ import { useSyncExternalStore } from 'react';
 const versions = new Map<string, number>();
 const listeners = new Set<() => void>();
 
-const fileUrl = (path: string, base = '') => `${base}/api/file?path=${encodeURIComponent(path)}`;
+const fileUrl = (path: string, base = API_BASE) => `${base}/api/file?path=${encodeURIComponent(path)}`;
 
 // The file API URL for an asset, with its version once it changed.
-export function assetUrl(path: string, base = '') {
+export function assetUrl(path: string, base = API_BASE) {
   const version = versions.get(path);
   return version === undefined ? fileUrl(path, base) : `${fileUrl(path, base)}&v=${String(version)}`;
 }

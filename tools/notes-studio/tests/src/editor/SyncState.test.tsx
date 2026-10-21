@@ -27,4 +27,9 @@ describe('SaveStatus', () => {
     rerender(<SaveStatus status="denied" />);
     expect(screen.getByRole('status').textContent).toMatch(/Read-only/);
   });
+
+  it('says Read only for a note that opened but cannot be written (main)', () => {
+    render(<SaveStatus status="synced" readOnly />);
+    expect(screen.getByRole('status').textContent).toBe('Read only');
+  });
 });

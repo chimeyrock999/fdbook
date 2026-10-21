@@ -46,11 +46,13 @@ function Preview({ asset, zoom, onBox }: { asset: AssetInfo; zoom: 'fit' | 'actu
 // replace and delete wait while the open note is `unsaved`, as in the
 // sidebar.
 // `onChanged` hears every change, so the URL can follow a move.
-export function AssetPage({ client, list, path, unsaved, onOpenUsage, onChanged }: {
+export function AssetPage({ client, list, path, unsaved, readOnly = false, onOpenUsage, onChanged }: {
   client: AssetsClient;
   list: ReturnType<typeof useAssetList>;
   path: string;
   unsaved: boolean;
+  // Main: the file is shown, not replaced, renamed or deleted.
+  readOnly?: boolean;
   onOpenUsage: (usage: AssetUsage) => void;
   onChanged: (answer: AssetAnswer) => void;
 }) {
@@ -102,7 +104,7 @@ export function AssetPage({ client, list, path, unsaved, onOpenUsage, onChanged 
     event.preventDefault();
     setDragging(false);
     const file = event.dataTransfer.files[0] as File | undefined;
-    if (file && !generated && !unsaved) setDialog({ kind: 'replace', file });
+    if (file && !generated && !unsaved && !readOnly) setDialog({ kind: 'replace', file });
   };
   const waitHint = unsaved ? 'The open note has unsaved changes. Rename, replace or delete once it shows Saved.' : undefined;
   const deleteHint = generated ? 'A diagram generates it: change the diagram instead' : used > 0 ? `Still used ${plural(used, 'time')}` : waitHint;
@@ -114,29 +116,31 @@ export function AssetPage({ client, list, path, unsaved, onOpenUsage, onChanged 
           <h1>{name}</h1>
           <span>{asset.path}</span>
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            className="studio-button gap-1.5"
-            disabled={generated || unsaved}
-            title={generated ? 'A diagram generates it: change the diagram instead' : waitHint}
-            onClick={() => { setDialog({ kind: 'replace', file: null }); }}
-          >
-            <Upload size={14} aria-hidden /> Replace…
-          </button>
-          <button type="button" className="studio-button gap-1.5" disabled={unsaved} title={waitHint} onClick={() => { setDialog({ kind: 'rename' }); }}>
-            <Pencil size={14} aria-hidden /> Rename…
-          </button>
-          <button
-            type="button"
-            className="studio-button studio-asset-delete gap-1.5"
-            disabled={unsaved || used > 0 || generated}
-            title={deleteHint}
-            onClick={() => { setDialog({ kind: 'delete' }); }}
-          >
-            <Trash2 size={14} aria-hidden /> Delete…
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              className="studio-button gap-1.5"
+              disabled={generated || unsaved}
+              title={generated ? 'A diagram generates it: change the diagram instead' : waitHint}
+              onClick={() => { setDialog({ kind: 'replace', file: null }); }}
+            >
+              <Upload size={14} aria-hidden /> Replace…
+            </button>
+            <button type="button" className="studio-button gap-1.5" disabled={unsaved} title={waitHint} onClick={() => { setDialog({ kind: 'rename' }); }}>
+              <Pencil size={14} aria-hidden /> Rename…
+            </button>
+            <button
+              type="button"
+              className="studio-button studio-asset-delete gap-1.5"
+              disabled={unsaved || used > 0 || generated}
+              title={deleteHint}
+              onClick={() => { setDialog({ kind: 'delete' }); }}
+            >
+              <Trash2 size={14} aria-hidden /> Delete…
+            </button>
+          </div>
+        )}
       </div>
       <div className="studio-asset-page-body">
         {shownStatus !== null && <p role="status" className="studio-tree-status">{shownStatus}</p>}
@@ -151,13 +155,13 @@ export function AssetPage({ client, list, path, unsaved, onOpenUsage, onChanged 
               <span>{extensionOf(name).toUpperCase()} file</span>
             )}
             <span className="flex-1" />
-            {!generated && <span>Drop a file here to replace it</span>}
+            {!generated && !readOnly && <span>Drop a file here to replace it</span>}
           </div>
           <div
             className="studio-asset-canvas"
             data-drop={dragging || undefined}
             onDragOver={(event) => {
-              if (generated || !event.dataTransfer.types.includes('Files')) return;
+              if (generated || readOnly || !event.dataTransfer.types.includes('Files')) return;
               event.preventDefault();
               setDragging(true);
             }}
