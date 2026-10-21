@@ -1,0 +1,19 @@
+.studio-embed-controls {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+}
+.studio-card .studio-embed-title {
+  display: block;
+  padding: 10px 14px 0;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.studio-card .studio-embed-caption {
+  display: block;
+  padding: 2px 14px 10px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--fde-muted-foreground);
+}

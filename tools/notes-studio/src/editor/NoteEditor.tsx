@@ -1,6 +1,6 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { MdxEditor, useEditorMode, useSourceText, useSyncStatus } from '@fumadocs-editor/ui';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type { createFilesClient } from '../api/files';
 import type { LintClient, LintIssue } from '../api/lint';
 import { FrontmatterForm } from '../frontmatter/FrontmatterForm';
@@ -8,6 +8,8 @@ import { IssuesChip, IssuesPanel } from '../lint/IssuesPanel';
 import { useLint } from '../lint/useLint';
 import { NOTES_PREFIX } from '../notes/notes';
 import { editorConfig } from '../plugins';
+import { decorationsPlugin, useEditorPlugin } from './decorations';
+import { NoteHeader } from './NoteHeader';
 import type { RevealRequest } from './reveal';
 import { SourceEditor } from './SourceEditor';
 import { ConflictDialog, SaveStatus } from './SyncState';
@@ -52,6 +54,9 @@ export function NoteEditor({ path, ...rest }: { path: string } & Panels & Client
   );
 }
 
+// The plugins' decorations, one ProseMirror plugin for every editor.
+const decorations = decorationsPlugin(editorConfig.decorators);
+
 function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel, onClosePanel, files, lint }: {
   notePath: string;
   opened: boolean;
@@ -63,12 +68,22 @@ function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel
   const source = useSourceText();
   const [tab, setTab] = useState<'frontmatter' | 'issues'>('frontmatter');
   const [reveal, setReveal] = useState<RevealRequest | null>(null);
+  const editor = useRef<HTMLElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  useEditorPlugin(editor, decorations);
   // Only once the server sent the note: before that (still opening, denied,
   // offline) the text is empty, and an empty note would pass as clean.
   const lintState = useLint(lint, files, notePath, opened ? source.value : null);
   // A request is for the Source on screen now; a later Source starts fresh.
   if (mode !== 'source' && reveal !== null) setReveal(null);
 
+  // The header puts the focus on the frontmatter's title field, in the panel
+  // (a drawer to open first below 1024px).
+  const openFrontmatter = () => {
+    setTab('frontmatter');
+    if (window.matchMedia(DRAWER_QUERY).matches) onOpenPanel();
+    requestAnimationFrame(() => { panel.current?.querySelector('input')?.focus(); });
+  };
   const openIssues = () => {
     setTab('issues');
     if (window.matchMedia(DRAWER_QUERY).matches) onOpenPanel();
@@ -94,7 +109,7 @@ function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
-      <section aria-label="Editor" className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--fde-background)]">
+      <section ref={editor} aria-label="Editor" className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--fde-background)]">
         <div className="flex flex-wrap items-center gap-2.5 border-b border-[var(--fde-border)] px-4 py-2">
           <SaveStatus status={status} />
           <IssuesChip state={lintState} onOpen={openIssues} />
@@ -110,13 +125,16 @@ function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel
         </div>
         {mode === 'visual' ? (
           <div className="studio-visual min-h-0 flex-1 overflow-auto">
-            <MdxEditor.Visual className="mx-auto w-full max-w-[52rem] px-[clamp(16px,5vw,56px)] py-7" />
+            <div className="mx-auto w-full max-w-[52rem] px-[clamp(16px,5vw,56px)] py-7">
+              <NoteHeader source={source.value} onOpen={openFrontmatter} />
+              <MdxEditor.Visual className="studio-prose" />
+            </div>
           </div>
         ) : (
           <SourceEditor reveal={reveal} />
         )}
       </section>
-      <aside className={`studio-panel ${panelOpen ? 'studio-drawer-open' : ''}`} aria-label="Side panel">
+      <aside ref={panel} className={`studio-panel ${panelOpen ? 'studio-drawer-open' : ''}`} aria-label="Side panel">
         <div role="tablist" aria-label="Panel" className="studio-panel-tabs">
           <PanelTab selected={tab === 'frontmatter'} onSelect={() => { setTab('frontmatter'); }}>
             Frontmatter

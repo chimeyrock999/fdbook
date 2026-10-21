@@ -8,20 +8,27 @@ const spec = (name: string) => ({ name, render: () => null }) as UiComponentSpec
 
 describe('plugin registry', () => {
   it('finds every plugin folder', () => {
-    expect(editorConfig.plugins.map((plugin) => plugin.id)).toEqual(['admonition', 'fumadocs-ui', 'html-embed']);
+    expect(editorConfig.plugins.map((plugin) => plugin.id)).toEqual([
+      'callout', 'fumadocs-ui', 'graph-objects', 'html-embed', 'site-directives', 'svg-diagram',
+    ]);
     expect(editorConfig.syntax).toEqual({ directives: true });
+    expect(editorConfig.decorators).toHaveLength(2);
     const names = editorConfig.components.map((component) => component.name);
-    expect(names).toEqual(expect.arrayContaining(['Callout', 'Steps', 'Tabs', 'HtmlEmbed']));
+    expect(names).toEqual(expect.arrayContaining([':::', 'Callout', 'Steps', 'Tabs', 'HtmlEmbed', 'SvgDiagram', 'SectionTitle']));
     expect(names).not.toContain('TypeTable');
   });
 
   it('merges plugins in path order and turns a dialect on when any plugin does', () => {
+    const decorateA = () => [];
+    const decorateB = () => [];
     const config = buildEditorConfig({
-      './b/index.ts': { default: definePlugin({ id: 'b', components: [spec('B')], syntax: { math: false } }) },
-      './a/index.ts': { default: definePlugin({ id: 'a', components: [spec('A')], syntax: { math: true } }) },
+      './b/index.ts': { default: definePlugin({ id: 'b', components: [spec('B')], syntax: { math: false }, decorate: decorateB }) },
+      './a/index.ts': { default: definePlugin({ id: 'a', components: [spec('A')], syntax: { math: true }, decorate: decorateA }) },
+      './c/index.ts': { default: definePlugin({ id: 'c' }) },
     });
     expect(config.components.map((component) => component.name)).toEqual(['A', 'B']);
     expect(config.syntax).toEqual({ math: true });
+    expect(config.decorators).toEqual([decorateA, decorateB]);
   });
 
   it('refuses duplicate ids, duplicate components and a missing default export', () => {

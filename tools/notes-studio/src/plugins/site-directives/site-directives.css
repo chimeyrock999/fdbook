@@ -1,0 +1,74 @@
+/* components/accordion.tsx: a bordered card per item, tinted head with the
+   kind's icon, Show/Open on the right. The body is its MDX source. */
+.studio-accordions {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+.studio-accordion {
+  overflow: hidden;
+  border: 1px solid var(--acc-border);
+  border-radius: 10px;
+}
+.studio-accordion-head {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--acc-tint);
+  text-align: left;
+  cursor: pointer;
+}
+.studio-accordion-head svg {
+  flex: none;
+  color: var(--acc-title);
+}
+.studio-accordion-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.84375rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.studio-accordion-state {
+  flex: none;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--acc-title);
+}
+.studio-accordion-body {
+  border-top: 1px solid var(--acc-line);
+}
+.studio-accordion-source {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  border: 0;
+  padding: 0.75rem 0.9375rem;
+  background: var(--garden-code-bg);
+  color: var(--fde-foreground);
+  font: 12.5px/1.6 var(--font-mono);
+}
+
+.studio-youtube-frame {
+  display: grid;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  place-items: center;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--garden-accent) 25%, var(--fde-card)), var(--fde-muted));
+  color: var(--fde-foreground);
+  opacity: 0.85;
+}
+.studio-youtube .studio-card-caption {
+  font-weight: 600;
+  color: var(--fde-foreground);
+}
+.studio-accordions > .studio-source-button {
+  align-self: flex-end;
+}

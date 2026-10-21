@@ -1,0 +1,53 @@
+/* Shared by the plugins that draw a card: decorations hide the source they
+   cover with .studio-hidden, cards carry a bar and a caption, and the MDX
+   button brings the source back. */
+.studio-hidden {
+  display: none !important;
+}
+
+/* A card over a directive or embed the editor cannot draw live. */
+.studio-card {
+  position: relative;
+  margin: 1rem 0;
+  overflow: hidden;
+  border: 1px solid var(--fde-border);
+  border-radius: 0.75rem;
+  background: var(--fde-card);
+}
+.studio-card-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--fde-border);
+  background: var(--garden-surface-2);
+  font-size: 12px;
+  color: var(--fde-muted-foreground);
+}
+.studio-card-bar svg {
+  flex: none;
+}
+.studio-card-src {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.studio-card-caption {
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--fde-muted-foreground);
+}
+.studio-source-button {
+  flex: none;
+  border: 1px solid var(--fde-border);
+  border-radius: 6px;
+  background: var(--fde-background);
+  padding: 1px 7px;
+  font: 500 10.5px var(--font-mono);
+  color: var(--fde-muted-foreground);
+}
