@@ -226,6 +226,31 @@ describe('accordion kind and title', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Accordion kind: deep-dive' }));
   });
 
+  it('opens the kind menu on the checked kind from the keyboard and picks with the arrow keys', async () => {
+    const { editor: live } = mount();
+    const before = value(live);
+    screen.getByRole('button', { name: 'Accordion kind: tip' }).focus();
+    await userEvent.keyboard('{Enter}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: 'tip' }));
+    const at = ACCORDION_KINDS.indexOf('tip');
+    await userEvent.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: ACCORDION_KINDS[at - 2] }));
+    await userEvent.keyboard('{End}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: ACCORDION_KINDS.at(-1) }));
+    await userEvent.keyboard('{ArrowRight}{Enter}');
+    expect(value(live)).toBe(before.replace('{kind="tip" title="Second"}', `{kind="${ACCORDION_KINDS[0]}" title="Second"}`));
+  });
+
+  it('keeps the focus on the kind button when the checked kind is picked again', async () => {
+    const { editor: live } = mount();
+    const before = value(live);
+    screen.getByRole('button', { name: 'Accordion kind: tip' }).focus();
+    await userEvent.keyboard('{Enter}{Enter}');
+    expect(value(live)).toBe(before);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Accordion kind: tip' }));
+  });
+
   it('closes the kind menu on a press outside or Escape', async () => {
     const { container } = mount();
     const kind = screen.getByRole('button', { name: 'Accordion kind: tip' });

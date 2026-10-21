@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { floatMenu, placeMenu } from '../../../src/plugins/picker-menu';
 
 type Rect = { top: number; left: number; width: number; height: number };
@@ -130,5 +130,102 @@ describe('floatMenu', () => {
     expect(tab()).toBe(false);
     expect(close).toHaveBeenCalledTimes(1);
     expect(document.activeElement).toBe(button);
+  });
+
+  it('moves between the options in the two-column grid with the arrow keys, Home and End', () => {
+    const { picker, button, menu } = setup();
+    // Five options: note tip / error warn / idea.
+    const options = [...menu.querySelectorAll('button'), ...['warn', 'idea'].map((name) => {
+      const option = menu.appendChild(document.createElement('button'));
+      option.textContent = name;
+      return option;
+    })];
+    onTestFinished(floatMenu({ menu, picker, button }, vi.fn()));
+    const press = (key: string) => {
+      const handled = !document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      return [document.activeElement?.textContent, handled];
+    };
+    options[0]?.focus();
+    expect(press('ArrowRight')).toEqual(['tip', true]);
+    expect(press('ArrowDown')).toEqual(['warn', true]);
+    // Down from the last row, and Up from the first, stay put.
+    expect(press('ArrowDown')).toEqual(['warn', true]);
+    expect(press('ArrowLeft')).toEqual(['error', true]);
+    expect(press('ArrowDown')).toEqual(['idea', true]);
+    // Left and Right wrap around the ends.
+    expect(press('ArrowRight')).toEqual(['note', true]);
+    expect(press('ArrowUp')).toEqual(['note', true]);
+    expect(press('ArrowLeft')).toEqual(['idea', true]);
+    expect(press('Home')).toEqual(['note', true]);
+    expect(press('End')).toEqual(['idea', true]);
+    // Other keys are left alone.
+    expect(press('a')).toEqual(['idea', false]);
+    // Nor with a modifier: Alt+Left is the browser's Back.
+    const back = new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true, cancelable: true });
+    expect(document.activeElement?.dispatchEvent(back)).toBe(true);
+    expect(document.activeElement?.textContent).toBe('idea');
+  });
+
+  it('takes the arrows from the button to the checked option', () => {
+    const { picker, button, menu, options } = setup();
+    options[1]?.setAttribute('aria-checked', 'true');
+    onTestFinished(floatMenu({ menu, picker, button }, vi.fn()));
+    button.focus();
+    button.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    expect(document.activeElement).toBe(options[1]);
+    // Keys from elsewhere in the page stay with it.
+    const field = document.body.appendChild(document.createElement('input'));
+    field.focus();
+    expect(field.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))).toBe(true);
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('focuses the checked option, or the first, when opened from the keyboard', () => {
+    const { picker, button, menu, options } = setup();
+    button.focus();
+    const opened = (focus: boolean) => {
+      const stop = floatMenu({ menu, picker, button, focus }, vi.fn());
+      const active = document.activeElement;
+      stop();
+      return active;
+    };
+    // Opened with the mouse: the focus stays.
+    expect(opened(false)).toBe(button);
+    expect(opened(true)).toBe(options[0]);
+    options[2]?.setAttribute('aria-checked', 'true');
+    expect(opened(true)).toBe(options[2]);
+  });
+
+  it('gives the focus back to the button when the menu goes with the focus in it', () => {
+    const { picker, button, menu, options } = setup();
+    // Closed with an option focused, before or after the menu is removed.
+    let stop = floatMenu({ menu, picker, button, focus: true }, vi.fn());
+    stop();
+    expect(document.activeElement).toBe(button);
+    stop = floatMenu({ menu, picker, button, focus: true }, vi.fn());
+    menu.remove();
+    stop();
+    expect(document.activeElement).toBe(button);
+    // The focus went elsewhere first: it stays there.
+    document.body.append(menu);
+    const field = document.body.appendChild(document.createElement('input'));
+    stop = floatMenu({ menu, picker, button }, vi.fn());
+    options[1]?.focus();
+    field.focus();
+    stop();
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('leaves the focus to a press outside, and hands it back without a scroll', () => {
+    const { picker, button, menu } = setup();
+    const focus = vi.spyOn(button, 'focus');
+    // A press outside closes the menu before the browser moves the focus.
+    let stop = floatMenu({ menu, picker, button, focus: true }, () => { stop(); });
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    expect(focus).not.toHaveBeenCalled();
+    // The picker may be scrolled out of view: the hand-back does not scroll.
+    stop = floatMenu({ menu, picker, button, focus: true }, vi.fn());
+    stop();
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
   });
 });
