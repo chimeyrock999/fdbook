@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode, t
 import { createPortal } from 'react-dom';
 import { useEditorPlugin } from '../editor/decorations';
 import { composing } from '../keyboard';
+import { useDock } from './dock';
 import { closeGraphFields, graphCommand, graphKey, graphPlugin, type GraphAction } from './graph-plugin';
 import { defaults, graphMetaTarget, markerAt, updateMarker, wrapRange, type Marker } from './markers';
 
@@ -15,36 +16,11 @@ function shortcut(key: string) {
 
 const LABELS: Record<Marker['kind'], string> = { Keyword: 'Keyword', Tag: 'Tag', GraphMeta: 'Graph node' };
 
-// Where a popup goes: under the selection, kept on screen. The selection,
-// not the marker: a marker's hidden source (a heading's :graph-meta) has no
-// box to measure.
-function below(view: EditorView, width: number) {
-  const { from, to } = view.state.selection;
-  const start = view.coordsAtPos(from);
-  const end = view.coordsAtPos(to);
-  const left = Math.max(8, Math.min(Math.min(start.left, end.left), window.innerWidth - width - 8));
-  return { left, top: Math.max(start.bottom, end.bottom) + 8 };
-}
-
-// Draws again while a popup is up and the page scrolls or resizes.
-function useFollowScroll() {
-  const [, redraw] = useState(0);
-  useEffect(() => {
-    const again = () => { redraw((count) => count + 1); };
-    window.addEventListener('scroll', again, true);
-    window.addEventListener('resize', again);
-    return () => {
-      window.removeEventListener('scroll', again, true);
-      window.removeEventListener('resize', again);
-    };
-  }, []);
-}
-
-// The graph bar under the selection (wrap it as a Keyword or Tag, mark the
-// heading as a graph node, edit the marker there) and the fields of a
-// marker's id and displayName. The editor's own format bubble sits above
-// the selection, so this sits below. Both live on the live editor inside
-// `container`, through the graph plugin.
+// The graph bar (wrap the selection as a Keyword or Tag, mark the heading
+// as a graph node, edit the marker there) and the fields of a marker's id
+// and displayName. The bar docks under the editor's own format bubble when
+// that sits under the selection (see dock.ts). Both live on the live editor
+// inside `container`, through the graph plugin.
 export function GraphTools({ container }: { container: RefObject<HTMLElement | null> }) {
   const [view, setView] = useState<EditorView | null>(null);
   const [, redraw] = useState(0);
@@ -68,23 +44,35 @@ export function GraphTools({ container }: { container: RefObject<HTMLElement | n
   const graph = graphKey.getState(view.state);
   if (!graph) return null;
   const { marker, open, seq } = graph;
-  if (open !== null && marker) return <GraphFields key={seq} view={view} marker={marker} />;
+  if (open !== null && marker) return <GraphFields key={seq} view={view} container={container} marker={marker} />;
   if (!view.hasFocus() || view.composing) return null;
   const canWrap = wrapRange(view.state) !== null;
   const canMark = graphMetaTarget(view.state) !== null;
   if (!canWrap && !canMark && !marker) return null;
-  return <GraphBar view={view} marker={marker} canWrap={canWrap} canMark={canMark} />;
+  return <GraphBar view={view} container={container} marker={marker} canWrap={canWrap} canMark={canMark} />;
 }
 
-function GraphBar({ view, marker, canWrap, canMark }: { view: EditorView; marker: Marker | null; canWrap: boolean; canMark: boolean }) {
-  useFollowScroll();
+function GraphBar({ view, container, marker, canWrap, canMark }: {
+  view: EditorView;
+  container: RefObject<HTMLElement | null>;
+  marker: Marker | null;
+  canWrap: boolean;
+  canMark: boolean;
+}) {
   const run = (action: GraphAction) => { graphCommand(action)(view.state, view.dispatch, view); };
+  const bar = useRef<HTMLDivElement>(null);
+  const { from, to } = view.state.selection;
+  // Hidden until the editor's bubble is placed, so the bar does not jump.
+  // The bubble never shows for a caret: nothing to wait for then.
+  const { docked, waiting } = useDock(view, container, bar, `${String(from)}-${String(to)}`, from !== to);
   return createPortal(
     <div
+      ref={bar}
       role="toolbar"
       aria-label="Graph"
-      className="studio-popup fixed z-40 flex max-w-[calc(100vw-16px)] flex-wrap gap-0.5 p-[3px]"
-      style={below(view, 330)}
+      data-docked={docked}
+      className="studio-popup fixed top-0 left-0 z-40 flex max-w-[calc(100vw-16px)] flex-wrap gap-0.5 p-[3px]"
+      style={{ visibility: waiting ? 'hidden' : 'visible' }}
     >
       <BarButton icon={<Highlighter size={14} aria-hidden />} label="Keyword" keys="K" disabled={!canWrap} onRun={() => { run('Keyword'); }} />
       <BarButton icon={<Tag size={14} aria-hidden />} label="Tag" keys="T" disabled={!canWrap} onRun={() => { run('Tag'); }} />
@@ -119,8 +107,7 @@ function BarButton({ icon, label, keys, disabled, onRun }: { icon: ReactNode; la
 // A new marker (no id yet) takes its id and displayName from the text until
 // they are edited. Enter or a click elsewhere writes them, Escape leaves
 // the marker as it is.
-function GraphFields({ view, marker }: { view: EditorView; marker: Marker }) {
-  useFollowScroll();
+function GraphFields({ view, container, marker }: { view: EditorView; container: RefObject<HTMLElement | null>; marker: Marker }) {
   const fresh = !marker.attrs.id;
   const [text, setText] = useState(marker.text);
   const [id, setId] = useState(marker.attrs.id ?? '');
@@ -128,6 +115,9 @@ function GraphFields({ view, marker }: { view: EditorView; marker: Marker }) {
   const [follow, setFollow] = useState(fresh);
   const root = useRef<HTMLFormElement>(null);
   const first = useRef<HTMLInputElement>(null);
+  // The bubble hides while the fields have the focus: under the selection,
+  // or above it with no room below.
+  useDock(view, container, root, 'fields', false);
   const derived = defaults(text);
   const values = { id: follow ? derived.id : id, displayName: follow ? derived.displayName : name, text };
 
@@ -174,8 +164,7 @@ function GraphFields({ view, marker }: { view: EditorView; marker: Marker }) {
       ref={root}
       role="dialog"
       aria-label={`${LABELS[marker.kind]} id`}
-      className="studio-popup fixed z-40 grid w-[min(330px,calc(100vw-16px))] gap-[7px] px-3 py-2.5 text-[12.5px]"
-      style={below(view, 330)}
+      className="studio-popup fixed top-0 left-0 z-40 grid w-[min(330px,calc(100vw-16px))] gap-[7px] px-3 py-2.5 text-[12.5px]"
       onKeyDown={(event) => {
         if (composing(event)) {
           if (event.key === 'Enter') event.preventDefault();
