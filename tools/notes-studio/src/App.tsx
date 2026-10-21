@@ -2,6 +2,7 @@ import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssetAnswer, AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
+import { createChangesClient, type ChangedFile } from './api/changes';
 import { assetChanged } from './api/asset-versions';
 import { createFilesClient } from './api/files';
 import { createLintClient } from './api/lint';
@@ -10,6 +11,10 @@ import { movedTo } from './assets/asset-changes';
 import { AssetPage } from './assets/AssetPage';
 import { AssetsView } from './assets/AssetsView';
 import { useAssetList } from './assets/useAssetList';
+import { ChangesView } from './changes/ChangesView';
+import { titlesOf } from './changes/labels';
+import { treeMarks } from './changes/marks';
+import { useChanges } from './changes/useChanges';
 import { NoteEditor, type SourcePlace } from './editor/NoteEditor';
 import { ASSETS_PREFIX } from './media/asset-names';
 import { useAssets } from './media/useAssets';
@@ -32,6 +37,10 @@ export function App() {
   const { tree, error, reload } = useTree(treeClient, files);
   const assets = useAssets(files);
   const assetsClient = useMemo(() => createAssetsClient(), []);
+  const changesClient = useMemo(() => createChangesClient(), []);
+  const git = useChanges(changesClient, files);
+  const marks = useMemo(() => (git.changes ? treeMarks(git.changes.files) : null), [git.changes]);
+  const titles = useMemo(() => titlesOf(tree), [tree]);
   // A usage picked in the Assets view, to show in its note's Source; any
   // other way of opening a note drops it.
   const [place, setPlace] = useState<(SourcePlace & { note: string }) | null>(null);
@@ -98,6 +107,11 @@ export function App() {
     setPlace(null);
     go({ kind: 'asset', path });
   };
+  // A changed file picked in the Changes view.
+  const openChanged = (file: ChangedFile) => {
+    if (file.path.startsWith(NOTES_PREFIX)) open(file.path);
+    else openAsset(file.path);
+  };
   // The open asset moved with a rename or a replace: follow it without a new history entry.
   const assetChangedBy = (answer: AssetAnswer) => {
     const to = movedTo(answer);
@@ -142,6 +156,19 @@ export function App() {
           issues={issueCount}
           hasNote={active !== null}
           issuesRef={setIssuesSlot}
+          changeCount={git.changes?.files.length ?? 0}
+          changes={
+            <ChangesView
+              client={changesClient}
+              changes={git.changes}
+              history={git.history}
+              error={git.error}
+              titles={titles}
+              unsaved={unsaved}
+              onOpen={openChanged}
+              onCommitted={git.reload}
+            />
+          }
           assets={
             <AssetsView
               client={assetsClient}
@@ -164,6 +191,7 @@ export function App() {
                 onOpen={(path) => { open(NOTES_PREFIX + path); }}
                 onRenamed={renamed}
                 unsaved={unsaved}
+                marks={marks}
                 onChanged={reload}
               />
             </>

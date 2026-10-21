@@ -1,4 +1,4 @@
-import { CircleAlert, FolderTree, Images, PanelLeft } from 'lucide-react';
+import { CircleAlert, FolderTree, GitCommitHorizontal, Images, PanelLeft } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { clampWidth, SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, type Sidebar as SidebarState, type SidebarView } from './useSidebar';
 
@@ -29,14 +29,14 @@ function useWidthCap() {
 }
 
 // The left side of the Studio, as in VS Code: an activity bar with the Notes,
-// Assets and Issues views and, at its foot, the button that hides the sidebar; then
+// Assets, Issues and Changes views and, at its foot, the button that hides the sidebar; then
 // the open view, which can be resized from its right edge. Below 768px the
 // whole sidebar is a drawer (`drawer`), always showing its view: there the
 // view buttons only switch views and the foot button closes the drawer
 // (`onCloseDrawer`), leaving the desktop layout as it was. The Issues
 // view is filled by the editor through a portal into `issuesRef`, since the
 // lint lives with the open note.
-export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, assets, issuesRef }: {
+export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, assets, issuesRef, changes = null, changeCount = 0 }: {
   state: SidebarState;
   drawer: boolean;
   onCloseDrawer: () => void;
@@ -46,6 +46,9 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
   notes: ReactNode;
   assets: ReactNode;
   issuesRef: (element: HTMLElement | null) => void;
+  // The Changes view, with its own heading, and the number of files changed.
+  changes?: ReactNode;
+  changeCount?: number;
 }) {
   const pane = useRef<HTMLDivElement>(null);
   const shown = state.shown || drawer;
@@ -120,6 +123,12 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
             </span>
           ),
         )}
+        {viewButton(
+          'changes',
+          changeCount === 0 ? 'Changes' : `Changes (${String(changeCount)})`,
+          <GitCommitHorizontal size={20} strokeWidth={1.8} />,
+          changeCount > 0 && <span className="studio-activity-count" data-info>{changeCount}</span>,
+        )}
         <button
           type="button"
           className="studio-activity-button studio-activity-bottom"
@@ -143,6 +152,9 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
           <h2 className="studio-pane-head">Issues</h2>
           {!hasNote && <p className="px-3 py-2 text-[12.5px] text-[var(--fde-muted-foreground)]">Open a note to see its issues.</p>}
           <div ref={issuesRef} className="min-h-0 flex-1 overflow-auto px-3 pt-2 pb-5" />
+        </div>
+        <div className="studio-pane-view" hidden={state.view !== 'changes'}>
+          {changes}
         </div>
         <div
           role="separator"

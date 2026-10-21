@@ -6,6 +6,7 @@ import { createAssetsApi } from './assets/api.ts';
 import { DEFAULT_STUDIO_PORT, repoRoot, STUDIO_HOST, studioRoot } from './config.ts';
 import { createFilesApi } from './files/api.ts';
 import { createFileEvents } from './files/events.ts';
+import { createChangesApi } from './git/api.ts';
 import { createKeyedLock } from './files/store.ts';
 import { apiNotFound, pathnameOf } from './http.ts';
 import { createIconsApi } from './icons/api.ts';
@@ -60,11 +61,13 @@ export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = rep
   const notesLock = createKeyedLock();
   const treeApi = createTreeApi(root, notesLock);
   const assetsApi = createAssetsApi(root, notesLock);
+  // A commit waits for them too, so it never takes half of a rename.
+  const changesApi = createChangesApi(root, notesLock);
   const iconsApi = createIconsApi();
   const fileEvents = createFileEvents(root);
   const notesSync = createNotesSync(root, boundPort);
 
-  server.on('request', createRequestListener(boundPort, [fileEvents.handle, filesApi, lintApi, treeApi, assetsApi, iconsApi, apiNotFound], vite.middlewares));
+  server.on('request', createRequestListener(boundPort, [fileEvents.handle, filesApi, lintApi, treeApi, assetsApi, changesApi, iconsApi, apiNotFound], vite.middlewares));
   routeUpgrades(server, boundPort, (viteHmr) => [
     {
       matches: (request) => pathnameOf(request) === SYNC_ENDPOINT,

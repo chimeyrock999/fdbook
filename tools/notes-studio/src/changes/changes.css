@@ -1,0 +1,295 @@
+/* The Changes view (src/changes) and the change marks in the page tree. */
+@layer components {
+  /* M / A / D / R, as VS Code colors them. */
+  .studio-change-mark {
+    flex: none;
+    width: 14px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    text-align: center;
+  }
+  [data-change='M'] { --change: var(--fde-warning); }
+  [data-change='A'] { --change: var(--fde-success); }
+  [data-change='D'] { --change: var(--fde-error); }
+  [data-change='R'] { --change: var(--fde-info); }
+  .studio-change-mark[data-change] {
+    color: var(--change);
+  }
+  .studio-tree-label[data-change] > .truncate {
+    color: var(--change);
+  }
+  .studio-tree-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    margin: 0 4px;
+    border-radius: 50%;
+    background: var(--fde-warning);
+  }
+  .studio-activity-count[data-info] {
+    background: var(--fde-info);
+  }
+
+  .studio-changes {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .studio-changes-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .studio-changes-branch {
+    max-width: 60%;
+    margin-left: auto;
+    padding: 1px 6px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--fde-muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-overflow: ellipsis;
+    text-transform: none;
+    white-space: nowrap;
+  }
+  .studio-changes-note {
+    padding: 12px;
+    font-size: 12.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-error {
+    color: var(--fde-error);
+  }
+  .studio-changes-note code,
+  .studio-changes-banner code,
+  .studio-leave-notice code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .studio-changes-banner {
+    margin: 10px 12px 0;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--fde-warning) 35%, transparent);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--fde-warning) 12%, transparent);
+    font-size: 12px;
+  }
+  .studio-changes-commit-box {
+    display: grid;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    border-bottom: 1px solid var(--fde-border);
+  }
+  .studio-changes-input {
+    min-height: 58px;
+    resize: vertical;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .studio-changes-input[aria-invalid='true'] {
+    border-color: var(--fde-error);
+  }
+  .studio-changes-hint {
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-link {
+    color: var(--fde-info);
+    font-size: 11.5px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .studio-changes-link[data-quiet] {
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-submit {
+    justify-content: center;
+    padding-block: 6px;
+  }
+  .studio-changes-submit:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .studio-changes-why {
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-note + .studio-changes-why {
+    padding: 0 12px;
+  }
+  .studio-changes-why[data-tone='error'] {
+    color: var(--fde-error);
+  }
+  .studio-changes-why[data-tone='ok'] {
+    color: var(--fde-success);
+  }
+  .studio-changes-group,
+  .studio-changes-history-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .studio-changes input[type='checkbox'] {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    accent-color: var(--fde-primary);
+  }
+  .studio-changes-files {
+    display: grid;
+    padding: 0 6px 4px;
+  }
+  .studio-changes-file {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 4px 6px;
+    border-radius: 6px;
+  }
+  .studio-changes-file:hover {
+    background: var(--fde-accent);
+  }
+  .studio-changes-what {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    line-height: 1.25;
+  }
+  .studio-changes-name {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-changes-name:not(:disabled):hover {
+    text-decoration: underline;
+  }
+  .studio-changes-file[data-change='D'] .studio-changes-name {
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--fde-error) 60%, transparent);
+  }
+  .studio-changes-what small {
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fde-muted-foreground);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-changes-history {
+    margin-top: 6px;
+    border-top: 1px solid var(--fde-border);
+  }
+  .studio-changes-history-toggle {
+    width: 100%;
+    padding-bottom: 6px;
+  }
+  .studio-changes-history-toggle .studio-changes-count {
+    margin-left: auto;
+  }
+  .studio-changes-chevron {
+    flex: none;
+    transition: transform 0.12s;
+  }
+  .studio-changes-chevron[data-open] {
+    transform: rotate(90deg);
+  }
+  .studio-changes-commits {
+    display: grid;
+    gap: 2px;
+    padding: 0 6px 16px;
+  }
+  .studio-changes-commit > button {
+    display: grid;
+    grid-template-columns: 16px 1fr;
+    gap: 0 6px;
+    width: 100%;
+    padding: 6px;
+    border-radius: 6px;
+    text-align: left;
+  }
+  .studio-changes-commit > button:hover {
+    background: var(--fde-accent);
+  }
+  .studio-changes-commit .studio-changes-chevron {
+    margin-top: 2px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-message {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .studio-changes-sub {
+    display: flex;
+    grid-column: 2;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-commit-files {
+    display: grid;
+    gap: 1px;
+    padding: 0 6px 6px 28px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+    overflow-wrap: anywhere;
+  }
+  .studio-leave-notice {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    z-index: 50;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    max-width: 340px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+  }
+  .studio-leave-notice > svg {
+    flex: none;
+    margin-top: 1px;
+    color: var(--fde-warning);
+  }
+  .studio-leave-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  @media (max-width: 767px) {
+    .studio-leave-notice {
+      left: 10px;
+      right: 10px;
+      max-width: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .studio-changes-chevron {
+      transition: none;
+    }
+  }
+}

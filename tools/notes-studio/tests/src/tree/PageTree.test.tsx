@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TreeAnswer, TreeClient, TreeFolder, TreeRequest } from '../../../src/api/tree';
+import { treeMarks } from '../../../src/changes/marks';
 import { PageTree } from '../../../src/tree/PageTree';
 
 const root: TreeFolder = {
@@ -66,6 +67,29 @@ describe('PageTree', () => {
     expect(screen.getByTitle(/No meta.yaml lists it/)).toBeTruthy();
     // `Old` is closed until opened; Guide is open because the open note is in it.
     expect(screen.queryByRole('button', { name: 'X' })).toBeNull();
+  });
+
+  it('marks git changes: a status per note, a dot on a folder holding them, D on a deleted entry', async () => {
+    const marks = treeMarks([
+      { path: 'content/notes/guide/two.mdx', status: 'M' },
+      { path: 'content/notes/guide/gone.mdx', status: 'D' },
+      { path: 'content/notes/old/x.mdx', status: 'A' },
+      { path: 'content/notes/guide/index.mdx', status: 'M' },
+    ]);
+    const { client } = fakeClient(() => ({ changes: [], open: null }));
+    render(<PageTree root={root} client={client} active="guide/two.mdx" marks={marks} onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={loaded()} />);
+    const rowOf = (name: string) => screen.getByRole('button', { name }).closest('.studio-tree-row');
+    expect(rowOf('Two')?.querySelector('.studio-change-mark')?.textContent).toBe('M');
+    expect(screen.getByRole('button', { name: 'Two' }).getAttribute('data-change')).toBe('M');
+    expect(rowOf('Guide')?.querySelector('.studio-change-mark')?.textContent).toBe('M');
+    expect(rowOf('One')?.querySelector('.studio-change-mark')).toBeNull();
+    expect(screen.getByTitle('guide/meta.yaml: “gone” reaches no page or folder.').closest('.studio-tree-row')?.querySelector('.studio-change-mark')?.textContent).toBe('D');
+    // Guide is open: its rows show the changes. Old is closed over one.
+    expect(rowOf('Guide')?.querySelector('.studio-tree-dot')).toBeNull();
+    expect(rowOf('Old')?.querySelector('.studio-tree-dot')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Expand Old' }));
+    expect(rowOf('Old')?.querySelector('.studio-tree-dot')).toBeNull();
+    expect(rowOf('X')?.querySelector('.studio-change-mark')?.textContent).toBe('A');
   });
 
   it('draws the icons the site shows, else the default ones', () => {
