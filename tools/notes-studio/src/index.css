@@ -1,1 +1,159 @@
 @import 'tailwindcss';
+@import '@fumadocs-editor/ui/styles.css';
+@import './notes-theme.css';
+
+/* The Studio chrome uses the editor's --fde-* tokens, which follow the
+   system light/dark preference, so both always match. */
+:root {
+  color-scheme: light dark;
+  font-family: var(--font-sans);
+}
+
+@layer components {
+  .studio-input {
+    width: 100%;
+    border: 1px solid var(--fde-border);
+    background: var(--fde-background);
+    border-radius: 7px;
+    padding: 5px 9px;
+    font-size: 13px;
+  }
+  .studio-button {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--fde-border);
+    background: var(--fde-card);
+    border-radius: 8px;
+    padding: 4px 11px;
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+  .studio-button-primary {
+    background: var(--fde-foreground);
+    color: var(--fde-background);
+    border-color: var(--fde-foreground);
+  }
+  .studio-link {
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-link:hover {
+    color: var(--fde-foreground);
+  }
+  .studio-add {
+    justify-self: start;
+    border: 1px dashed var(--fde-border);
+    border-radius: 7px;
+    padding: 3px 8px;
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  :where(button, input, textarea):focus-visible {
+    outline: 2px solid var(--fde-info);
+    outline-offset: 1px;
+  }
+
+  /* Panels: notes | editor | frontmatter on desktop. Below 1024px the
+     frontmatter becomes a drawer; below 768px the notes do too. */
+  .studio-notes,
+  .studio-frontmatter {
+    min-height: 0;
+    overflow: auto;
+    background: var(--fde-card);
+  }
+  .studio-notes {
+    width: 248px;
+    flex: none;
+    border-right: 1px solid var(--fde-border);
+  }
+  .studio-frontmatter {
+    width: 300px;
+    flex: none;
+    border-left: 1px solid var(--fde-border);
+    padding: 12px 14px 20px;
+  }
+  @media (max-width: 1023px) {
+    .studio-frontmatter {
+      display: none;
+    }
+  }
+  @media (max-width: 767px) {
+    .studio-notes {
+      display: none;
+    }
+  }
+  .studio-drawer-open {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 40;
+    width: min(320px, 88%);
+    box-shadow: 0 0 30px rgb(0 0 0 / 0.2);
+  }
+  .studio-notes.studio-drawer-open {
+    left: 0;
+  }
+  .studio-frontmatter.studio-drawer-open {
+    right: 0;
+  }
+  .studio-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    background: rgb(0 0 0 / 0.35);
+  }
+
+  /* The form edits the frontmatter; Visual hides its YAML block (Source
+     still shows it). */
+  .studio-visual [data-mdx-frontmatter] {
+    display: none;
+  }
+
+  .studio-embed {
+    position: relative;
+    margin: 0;
+    border: 1px solid var(--fde-border);
+    border-radius: 10px;
+    background: var(--fde-card);
+    overflow: hidden;
+  }
+  .studio-embed-controls {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+  }
+  .studio-embed-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+    border-bottom: 1px solid var(--fde-border);
+  }
+  .studio-embed-tag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--fde-accent);
+    color: var(--fde-foreground);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .studio-embed-src {
+    font-family: var(--font-mono);
+    overflow-wrap: anywhere;
+  }
+  .studio-embed-title {
+    display: block;
+    padding: 12px 14px 2px;
+    font-weight: 600;
+  }
+  .studio-embed-caption {
+    display: block;
+    padding: 2px 14px 12px;
+    font-size: 13px;
+    font-style: italic;
+    color: var(--fde-muted-foreground);
+  }
+}

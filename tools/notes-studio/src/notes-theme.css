@@ -1,0 +1,66 @@
+/* The site's notes theme (`.notes-theme` and `.dark .notes-theme` in
+   app/notes/notes.css) mapped onto the editor's --fde-* tokens, so the
+   editor and the Studio chrome look like a note page. Tailwind on the site
+   does not scan tools/, so the values are copied; tests/src/notes-theme.test.ts
+   fails when they drift. */
+@import '@fontsource/be-vietnam-pro/400.css';
+@import '@fontsource/be-vietnam-pro/500.css';
+@import '@fontsource/be-vietnam-pro/600.css';
+@import '@fontsource/be-vietnam-pro/700.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+:root {
+  --font-sans: 'Be Vietnam Pro', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* light */
+  --fde-background: #f8f5ec;
+  --fde-foreground: #24402a;
+  --fde-muted: #ede8d6;
+  --fde-muted-foreground: #6c7f67;
+  --fde-popover: #fbf8ee;
+  --fde-popover-foreground: #24402a;
+  --fde-card: #fbf8ee;
+  --fde-card-foreground: #24402a;
+  --fde-border: #ded8c3;
+  --fde-primary: #4a7233;
+  --fde-primary-foreground: #fbf8ee;
+  --fde-secondary: #ede8d6;
+  --fde-secondary-foreground: #3d5a40;
+  --fde-accent: #e4edd5;
+  --fde-accent-foreground: #24402a;
+  --fde-ring: #6e9c4f;
+  --fde-info: #4e86a8;
+  --fde-idea: #b08a2e;
+  --fde-warning: #c2762f;
+  --fde-error: #b03c4e;
+  --fde-success: #6e9c4f;
+}
+
+/* dark, with the editor's own selector so it wins over its defaults */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light):not(.dark) {
+    --fde-background: #14201a;
+    --fde-foreground: #e8f0e1;
+    --fde-muted: #223021;
+    --fde-muted-foreground: #93a88d;
+    --fde-popover: #1b291f;
+    --fde-popover-foreground: #e8f0e1;
+    --fde-card: #1b291f;
+    --fde-card-foreground: #e8f0e1;
+    --fde-border: #2c3d2f;
+    --fde-primary: #b7dc8a;
+    --fde-primary-foreground: #14201a;
+    --fde-secondary: #223021;
+    --fde-secondary-foreground: #cbdcc2;
+    --fde-accent: #263524;
+    --fde-accent-foreground: #e8f0e1;
+    --fde-ring: #a9d07c;
+    --fde-info: #6fa9c8;
+    --fde-idea: #d2b25e;
+    --fde-warning: #d98f4f;
+    --fde-error: #cf6579;
+    --fde-success: #a9d07c;
+  }
+}

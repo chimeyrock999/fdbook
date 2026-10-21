@@ -70,6 +70,19 @@ describe('notes sync', () => {
     await expect.poll(() => editor.external.at(-1), { timeout: 5000 }).toBe(`${opened.text}\nfrom the API\n`);
   });
 
+  // The editor's autosave path: an edit in the open document lands in the file.
+  it('writes edits made in the open document to the note', async () => {
+    const editor = new TextEditor();
+    const doc = connect().open('streaming/index.mdx', { editor });
+    const opened = await doc.opened;
+    editor.text = `${opened.text}\nfrom the editor\n`;
+    doc.changed();
+    await doc.flush();
+    const path = join(studio.root, 'content/notes/streaming/index.mdx');
+    await expect.poll(() => readFile(path, 'utf8'), { timeout: 5000 }).toBe(`${opened.text}\nfrom the editor\n`);
+    expect(doc.status()).toBe('synced');
+  });
+
   it('refuses files outside the notes policy', async () => {
     const sync = connect();
     await expect(sync.open('readme.md', { editor: new TextEditor() }).opened).rejects.toThrow(/denied/);
@@ -78,13 +91,14 @@ describe('notes sync', () => {
     await expect(sync.open('leak.mdx', { editor: new TextEditor() }).opened).rejects.toThrow(/denied/);
   });
 
-  // Tree commands write files the scope never sees (mkdir also writes
-  // meta.json) and skip meta.yaml, so new pages go through the file API.
+  // Tree commands skip meta.yaml, so new pages go through the file API. Since
+  // core 0.4.2 `mkdir` also needs write access to the folder's meta.json,
+  // which the scope never grants (fuma-nama/fumadocs-editor#25).
   it('refuses to create pages or folders', async () => {
     const sync = connect();
     sync.onTree(() => undefined);
     await expect.poll(() => sync.tree() !== null).toBe(true);
-    await expect(sync.run({ type: 'mkdir', dir: 'zz-new', title: 'Zz' })).rejects.toThrow(/denied/);
+    await expect(sync.run({ type: 'mkdir', dir: 'zz-new', title: 'Zz' })).rejects.toThrow(/denied: zz-new\/meta\.json/);
     await expect(sync.run({ type: 'create', path: 'streaming/zz-page.mdx', title: 'Zz' })).rejects.toThrow(/denied/);
     await expect(stat(join(studio.root, 'content/notes/zz-new'))).rejects.toThrow();
     await expect(stat(join(studio.root, 'content/notes/streaming/zz-page.mdx'))).rejects.toThrow();
