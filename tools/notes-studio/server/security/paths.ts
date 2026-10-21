@@ -1,30 +1,10 @@
 import { lstatSync } from 'node:fs';
 import { join } from 'node:path';
-import { ASSET_TYPES, ASSETS_DIR, extensionOf } from './asset-types.ts';
+import { ASSET_TYPES, ASSETS_DIR, classifyPath, extensionOf, NOTES_DIR, type PathKind } from './asset-types.ts';
 
-export { ASSET_TYPES, ASSETS_DIR, extensionOf };
-
-// The only files the Studio may touch, as worktree-relative posix paths.
-// Every surface (file API, file events, notes sync) asks this one module.
-export const NOTES_DIR = 'content/notes';
-
-export type PathKind = 'note' | 'meta' | 'asset';
-
-// Lexical check only: no `..`, `.`, empty or hidden segments (`.obsidian`,
-// temp files), no backslashes or NUL, and a known name under a known area.
-export function classifyPath(path: string): PathKind | null {
-  if (path.includes('\\') || path.includes('\0')) return null;
-  const segments = path.split('/');
-  if (segments.some((segment) => segment === '' || segment.startsWith('.'))) return null;
-  const name = segments.at(-1) ?? '';
-  const under = (dir: string) => path.startsWith(`${dir}/`);
-  if (under(NOTES_DIR)) {
-    if (name === 'meta.yaml') return 'meta';
-    return name.endsWith('.mdx') ? 'note' : null;
-  }
-  if (under(ASSETS_DIR)) return extensionOf(name) in ASSET_TYPES ? 'asset' : null;
-  return null;
-}
+// The path policy: what may be touched (classifyPath, in asset-types.ts so
+// the UI can ask it too) and where it is on disk.
+export { ASSET_TYPES, ASSETS_DIR, classifyPath, extensionOf, NOTES_DIR, type PathKind };
 
 // Walks the path from the worktree root with lstat and refuses any symlink on
 // the way, even one that stays inside the area: a save replaces the file, so

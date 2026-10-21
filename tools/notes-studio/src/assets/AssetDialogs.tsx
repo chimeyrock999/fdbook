@@ -1,40 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { extensionOf } from '../../server/security/asset-types';
 import type { AssetAnswer, AssetChange, AssetInfo, AssetRequest, AssetsClient, AssetSource, AssetUsage } from '../api/assets';
 import { sitePath } from '../media/asset-names';
 import { slugify } from '../slug';
 import { Dialog } from '../tree/TreeDialogs';
+import { message, usePreview } from './asset-changes';
 import { nameOf } from './asset-tree';
 
-const PREVIEW_MS = 200;
-
 const stemOf = (path: string) => nameOf(path).slice(0, nameOf(path).lastIndexOf('.'));
-const message = (reason: unknown) => (reason instanceof Error ? reason.message : String(reason));
 
-// What the server would write for `request`, asked again as it changes.
-function usePreview(client: AssetsClient, request: AssetRequest | null) {
-  const [preview, setPreview] = useState<{ changes: AssetChange[]; error: string | null } | null>(null);
-  const key = JSON.stringify(request);
-  useEffect(() => {
-    if (request === null) return;
-    let current = true;
-    const timer = setTimeout(() => {
-      client.change(request, true).then(
-        (answer) => { if (current) setPreview({ changes: answer.changes, error: null }); },
-        (reason: unknown) => { if (current) setPreview({ changes: [], error: message(reason) }); },
-      );
-    }, PREVIEW_MS);
-    return () => {
-      current = false;
-      clearTimeout(timer);
-    };
-    // `key` stands for `request`, which is a new object on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, key]);
-  return request === null ? null : preview;
-}
-
-function Changes({ changes }: { changes: AssetChange[] }) {
+export function Changes({ changes }: { changes: AssetChange[] }) {
   return (
     <div className="grid gap-1">
       <span className="studio-field-label">Writes</span>
@@ -48,6 +23,12 @@ function Changes({ changes }: { changes: AssetChange[] }) {
               </>
             )}
             {change.type === 'delete' && `− ${change.path}`}
+            {change.type === 'replace' && (
+              <>
+                {change.to === change.path ? `⟳ ${change.path}` : `${change.path} → ${nameOf(change.to)}`}{' '}
+                <span>{change.to === change.path ? 'new content; notes stay as they are' : 'new content'}</span>
+              </>
+            )}
             {change.type === 'keep' && (
               <>
                 = {change.path} <span>{change.detail}</span>
@@ -103,7 +84,7 @@ export function SourceList({ sources }: { sources: AssetSource[] }) {
   );
 }
 
-function Pick({ asset }: { asset: AssetInfo }) {
+export function Pick({ asset }: { asset: AssetInfo }) {
   return <p className="studio-asset-pick">{asset.path}</p>;
 }
 

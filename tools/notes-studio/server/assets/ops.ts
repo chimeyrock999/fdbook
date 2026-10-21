@@ -1,3 +1,4 @@
+import type { Stats } from 'node:fs';
 import { readFile, readdir, rename, rm, rmdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { slugify } from '../../src/slug.ts';
@@ -19,12 +20,15 @@ import { findAssetSources, type AssetSource } from './sources.ts';
 // the line.
 export type AssetUsage = { note: string; line: number; column: number; length: number; text: string; unsure: boolean };
 // `sources` are the diagram sources that generate it (server/assets/sources.ts).
-export type AssetInfo = { path: string; mtimeMs: number; usages: AssetUsage[]; sources: AssetSource[] };
+export type AssetInfo = { path: string; mtimeMs: number; size: number; usages: AssetUsage[]; sources: AssetSource[] };
 
 export type AssetChange =
   | { type: 'move'; path: string; to: string }
   | { type: 'change'; path: string; detail: string }
   | { type: 'delete'; path: string }
+  // New content for the asset, at `to`: its own path, or the same name with
+  // the new file's extension.
+  | { type: 'replace'; path: string; to: string }
   // Left as it is: a diagram source that still names the old path.
   | { type: 'keep'; path: string; detail: string };
 
@@ -63,7 +67,7 @@ function noteFile(root: string, path: string) {
 // is read and parsed again, a note that is gone is dropped. The mtime is
 // the one listed before the read, so a save during the read shows as a
 // newer mtime next time.
-async function scanNotes(root: string, scan: NoteScan) {
+export async function scanNotes(root: string, scan: NoteScan) {
   const notes = (await listEditableFiles(root)).filter((file) => file.kind === 'note');
   const listed = new Set(notes.map((note) => note.path));
   for (const path of scan.keys()) if (!listed.has(path)) scan.delete(path);
@@ -98,7 +102,7 @@ function unsureUsage(note: string, lines: string[], asset: string): AssetUsage |
 }
 
 // Every usage of the given assets, by asset, in note and line order.
-function usagesIn(scan: NoteScan, assets: Iterable<string>) {
+export function usagesIn(scan: NoteScan, assets: Iterable<string>) {
   const usages = new Map<string, AssetUsage[]>();
   for (const asset of assets) usages.set(asset, []);
   for (const [note, { refs, lines }] of [...scan].sort(([a], [b]) => a.localeCompare(b))) {
@@ -122,7 +126,7 @@ export async function listAssets(root: string, scan: NoteScan = new Map()): Prom
   const files = (await listEditableFiles(root)).filter((file) => file.kind === 'asset');
   const usages = usagesIn(await scanNotes(root, scan), files.map((file) => file.path));
   const sources = await findAssetSources(root);
-  return files.map((file) => ({ path: file.path, mtimeMs: file.mtimeMs, usages: usages.get(file.path) ?? [], sources: sources.get(file.path) ?? [] }));
+  return files.map((file) => ({ path: file.path, mtimeMs: file.mtimeMs, size: file.size, usages: usages.get(file.path) ?? [], sources: sources.get(file.path) ?? [] }));
 }
 
 function guarded(root: string, path: unknown) {
@@ -131,7 +135,7 @@ function guarded(root: string, path: unknown) {
   return resolved.absolute;
 }
 
-async function checkAsset(root: string, path: string, baseMtime: unknown) {
+export async function checkAsset(root: string, path: string, baseMtime: unknown) {
   const info = await statOrNull(guarded(root, path));
   if (!info?.isFile()) throw new HttpError(404, `no such file: ${path}`);
   if (typeof baseMtime !== 'number') throw new HttpError(400, 'baseMtime must be the mtime the asset was listed with');
@@ -139,7 +143,7 @@ async function checkAsset(root: string, path: string, baseMtime: unknown) {
   return info;
 }
 
-function listed(usages: AssetUsage[]) {
+export function listed(usages: AssetUsage[]) {
   const notes = [...new Set(usages.map((usage) => usage.note))];
   return notes.length > 3 ? `${notes.slice(0, 3).join(', ')} and ${plural(notes.length - 3, 'more note')}` : notes.join(', ');
 }
@@ -158,6 +162,16 @@ export async function planAssetRename(root: string, request: RenameRequest, scan
   }
   const to = `${path.slice(0, path.lastIndexOf('/'))}/${name}.${extensionOf(path)}`;
   if (to === path) throw new HttpError(400, 'the name did not change');
+  const sources = (await findAssetSources(root)).get(path) ?? [];
+  return planMove(root, { path, info }, to, scan, { type: 'move', path, to }, sources);
+}
+
+// The asset going from `asset.path` to `to`, and every reference to it
+// pointed there; `first` heads the changes, and `sources` (the diagram
+// sources that generate it) are listed as kept. Rename uses it, and a
+// replace that changes the extension.
+export async function planMove(root: string, asset: { path: string; info: Stats }, to: string, scan: NoteScan, first: AssetChange, sources: AssetSource[]): Promise<AssetPlan> {
+  const { path, info } = asset;
   const target = await statOrNull(guarded(root, to));
   // A name that differs only in case is the same file on a case-insensitive disk.
   if (target && target.ino !== info.ino) throw new HttpError(409, `${to} already exists`);
@@ -169,7 +183,7 @@ export async function planAssetRename(root: string, request: RenameRequest, scan
     throw new HttpError(409, `${listed(unsure)} may use ${baseOf(path)} in a way the Studio cannot rewrite (the note does not parse, or the path is written with escapes it does not read): fix it first`);
   }
   const writes: Write[] = [];
-  const changes: AssetChange[] = [{ type: 'move', path, to }];
+  const changes: AssetChange[] = [first];
   for (const note of new Set(usages.map((usage) => usage.note))) {
     // The text the references were found in: read again, and parsed again
     // only if it changed since the scan.
@@ -185,7 +199,7 @@ export async function planAssetRename(root: string, request: RenameRequest, scan
     changes.push({ type: 'change', path: note, detail: plural(result.count, 'reference') });
   }
   // The Studio does not write diagrams/: say what still names the old path.
-  for (const source of (await findAssetSources(root)).get(path) ?? []) {
+  for (const source of sources) {
     changes.push({ type: 'keep', path: source.path, detail: `still writes ${baseOf(path)}: update it before regenerating` });
   }
   return { asset: { path, baseMtime: info.mtimeMs }, to, writes, changes, usages };
@@ -228,8 +242,10 @@ async function checkNote(root: string, write: Write) {
 // asset moves (or goes) first, then each note is written atomically. If the
 // first note cannot be written, the asset moves back and nothing changed.
 // Not a transaction past that: a later failure leaves the notes before it
-// written, and the error says so.
-export async function applyAssetPlan(root: string, plan: AssetPlan) {
+// written, and the error says so. With `content` (a replace) the asset is
+// written at `to` instead of moved there, and the old file goes once the
+// notes point at the new one. Returns the asset's mtime after a write.
+export async function applyAssetPlan(root: string, plan: AssetPlan, content?: Buffer): Promise<number | null> {
   const from = guarded(root, plan.asset.path);
   const info = await statOrNull(from);
   if (info?.mtimeMs !== plan.asset.baseMtime) throw new HttpError(409, `${plan.asset.path} changed on disk`);
@@ -237,12 +253,15 @@ export async function applyAssetPlan(root: string, plan: AssetPlan) {
   if (plan.to === null) {
     await rm(from);
     await pruneEmpty(root, dirname(from));
-    return;
+    return null;
   }
+  if (content !== undefined && plan.to === plan.asset.path) return writeAtomic(from, content, info.mode);
   const to = guarded(root, plan.to);
   const target = await statOrNull(to);
   if (target && target.ino !== info.ino) throw new HttpError(409, `${plan.to} already exists`);
-  await rename(from, to);
+  let mtimeMs: number | null = null;
+  if (content === undefined) await rename(from, to);
+  else mtimeMs = await writeAtomic(to, content, info.mode);
   let written = 0;
   for (const write of plan.writes) {
     try {
@@ -253,10 +272,15 @@ export async function applyAssetPlan(root: string, plan: AssetPlan) {
       const status = error instanceof HttpError ? error.status : 500;
       const why = error instanceof HttpError ? error.message : `could not write ${write.path}: ${(error as Error).message}`;
       if (written === 0) {
-        await rename(to, from);
+        await (content === undefined ? rename(to, from) : rm(to));
         throw new HttpError(status, `${why}; nothing was changed`);
+      }
+      if (content !== undefined) {
+        throw new HttpError(status, `${why}; ${plan.to} is written and ${plural(written, 'note')} before it point there, while ${plan.asset.path} is still in place for the rest`);
       }
       throw new HttpError(status, `${why}; ${plan.asset.path} is already ${baseOf(plan.to)}, and ${plural(written, 'note')} before it point there`);
     }
   }
+  if (content !== undefined) await rm(from);
+  return mtimeMs;
 }

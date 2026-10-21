@@ -6,7 +6,7 @@ export const ASSETS_PREFIX = `${ASSETS_DIR}/`;
 
 // The image types the site serves, by extension and by MIME type. A pasted
 // image often has no usable name, so its type picks the extension.
-const IMAGE_EXTENSIONS = Object.keys(ASSET_TYPES).filter((extension) => ASSET_TYPES[extension].startsWith('image/'));
+export const IMAGE_EXTENSIONS = Object.keys(ASSET_TYPES).filter((extension) => ASSET_TYPES[extension].startsWith('image/'));
 const EXTENSION_OF_TYPE: Record<string, string> = { 'image/jpeg': 'jpg' };
 for (const extension of IMAGE_EXTENSIONS) EXTENSION_OF_TYPE[ASSET_TYPES[extension]] ??= extension;
 
