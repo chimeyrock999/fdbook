@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NOTE_ICON_NAMES } from '@site/lib/notes-icons';
 import { NoteHeader } from '../../../src/editor/NoteHeader';
+import { useFrontmatter } from '../../../src/frontmatter/useFrontmatter';
 import type { FieldReveal } from '../../../src/frontmatter/MetadataStrip';
 
 const note = `---
@@ -21,7 +22,9 @@ graph:
 # Streaming
 `;
 
-// The header bound to a source string, as the editor binds it.
+// The header bound to a source string, as the editor binds it: the
+// frontmatter state lives above the header, which `hide` unmounts as Source
+// mode does.
 function Harness({ initial, onWrite, readOnly = false, reveal = null, onLeave = vi.fn() }: {
   initial: string;
   onWrite: (source: string) => void;
@@ -30,24 +33,28 @@ function Harness({ initial, onWrite, readOnly = false, reveal = null, onLeave = 
   onLeave?: () => void;
 }) {
   const [source, setSource] = useState(initial);
+  const [shown, setShown] = useState(true);
+  const frontmatter = useFrontmatter(source, (next) => {
+    onWrite(next);
+    setSource(next);
+  });
   return (
     <>
-      <NoteHeader
-        source={source}
-        onSource={(next) => {
-          onWrite(next);
-          setSource(next);
-        }}
-        readOnly={readOnly}
-        onOpenSource={vi.fn()}
-        onLeave={onLeave}
-        reveal={reveal}
-      />
+      {shown && <NoteHeader frontmatter={frontmatter} readOnly={readOnly} onOpenSource={vi.fn()} onLeave={onLeave} reveal={reveal} />}
       <button type="button" onClick={() => { setSource(source.replace('title: "Streaming"', 'title: "From disk"')); }}>
         disk change
       </button>
+      <button type="button" onClick={() => { setShown(!shown); }}>
+        toggle header
+      </button>
     </>
   );
+}
+
+// A header over a fixed source, for the cases that never write.
+function Fixed({ source, onOpenSource = vi.fn() }: { source: string; onOpenSource?: () => void }) {
+  const frontmatter = useFrontmatter(source, vi.fn());
+  return <NoteHeader frontmatter={frontmatter} readOnly={false} onOpenSource={onOpenSource} onLeave={vi.fn()} reveal={null} />;
 }
 
 const details = () => userEvent.click(screen.getByRole('button', { name: /Edit details/ }));
@@ -106,6 +113,34 @@ describe('NoteHeader', () => {
     expect(writes.at(-1)).not.toContain('visible');
     await userEvent.click(screen.getByRole('switch', { name: 'Shown on the site' }));
     expect(writes.at(-1)).toContain('visible: false');
+  });
+
+  // Source mode unmounts the header; the draft lives above it.
+  it('restores visible: true after the header was unmounted between off and on', async () => {
+    const source = 'title: A\n# c1\nvisible: true # keep\nfull: true';
+    const block = `---\n${source}\n---\n\nBody.\n`;
+    const writes: string[] = [];
+    render(<Harness initial={block} onWrite={(s) => writes.push(s)} />);
+    await details();
+    await userEvent.click(screen.getByRole('switch', { name: 'Shown on the site' }));
+    expect(writes.at(-1)).toContain('visible: false # keep');
+    await userEvent.click(screen.getByRole('button', { name: 'toggle header' }));
+    await userEvent.click(screen.getByRole('button', { name: 'toggle header' }));
+    await details();
+    await userEvent.click(screen.getByRole('switch', { name: 'Shown on the site' }));
+    expect(writes.at(-1)).toBe(block);
+  });
+
+  // Safari ends the composition before the keydown of the committing Enter.
+  it('does not move on with the Enter that commits an IME candidate', () => {
+    const onLeave = vi.fn();
+    render(<Harness initial={note} onWrite={vi.fn()} onLeave={onLeave} />);
+    const title = screen.getByLabelText('Title');
+    title.focus();
+    fireEvent.keyDown(title, { key: 'Enter', keyCode: 229 });
+    expect(document.activeElement).toBe(title);
+    fireEvent.keyDown(screen.getByLabelText('Description'), { key: 'Enter', keyCode: 229 });
+    expect(onLeave).not.toHaveBeenCalled();
   });
 
   it('keeps an invalid draft off the source and shows the issue next to the field', async () => {
@@ -179,8 +214,10 @@ describe('NoteHeader', () => {
     iconNames.without = ['BrainOff'];
     vi.resetModules();
     const { NoteHeader: Fresh } = await import('../../../src/editor/NoteHeader');
+    const { useFrontmatter: freshFrontmatter } = await import('../../../src/frontmatter/useFrontmatter');
     function Harness({ initial }: { initial: string; onWrite: unknown }) {
-      return <Fresh source={initial} onSource={vi.fn()} readOnly={false} onOpenSource={vi.fn()} onLeave={vi.fn()} reveal={null} />;
+      const frontmatter = freshFrontmatter(initial, vi.fn());
+      return <Fresh frontmatter={frontmatter} readOnly={false} onOpenSource={vi.fn()} onLeave={vi.fn()} reveal={null} />;
     }
     render(<Harness initial={note.replace('graph:', 'icon: BrainOff\ngraph:')} onWrite={vi.fn()} />);
     await details();
@@ -215,19 +252,11 @@ describe('NoteHeader', () => {
       function Outside() {
         const [source, setSource] = useState(note);
         setOutside = setSource;
-        return (
-          <NoteHeader
-            source={source}
-            onSource={(next) => {
-              writes.push(next);
-              setSource(next);
-            }}
-            readOnly={false}
-            onOpenSource={vi.fn()}
-            onLeave={vi.fn()}
-            reveal={null}
-          />
-        );
+        const frontmatter = useFrontmatter(source, (next) => {
+          writes.push(next);
+          setSource(next);
+        });
+        return <NoteHeader frontmatter={frontmatter} readOnly={false} onOpenSource={vi.fn()} onLeave={vi.fn()} reveal={null} />;
       }
       render(<Outside />);
       fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Streaming notes' } });
@@ -254,9 +283,7 @@ describe('NoteHeader', () => {
 
   it('sends broken YAML to source mode', async () => {
     const onOpenSource = vi.fn();
-    render(
-      <NoteHeader source={'---\ntitle: [x\n---\n'} onSource={vi.fn()} readOnly={false} onOpenSource={onOpenSource} onLeave={vi.fn()} reveal={null} />,
-    );
+    render(<Fixed source={'---\ntitle: [x\n---\n'} onOpenSource={onOpenSource} />);
     expect(screen.getByRole('alert').textContent).toMatch(/not valid YAML/);
     await userEvent.click(screen.getByRole('button', { name: 'Fix it in Source' }));
     expect(onOpenSource).toHaveBeenCalled();
@@ -313,7 +340,11 @@ describe('NoteHeader', () => {
     iconNames.fail = 2;
     vi.resetModules();
     const { NoteHeader: Fresh } = await import('../../../src/editor/NoteHeader');
-    render(<Fresh source={note} onSource={vi.fn()} readOnly={false} onOpenSource={vi.fn()} onLeave={vi.fn()} reveal={null} />);
+    const { useFrontmatter: freshFrontmatter } = await import('../../../src/frontmatter/useFrontmatter');
+    function Header() {
+      return <Fresh frontmatter={freshFrontmatter(note, vi.fn())} readOnly={false} onOpenSource={vi.fn()} onLeave={vi.fn()} reveal={null} />;
+    }
+    render(<Header />);
     await details();
     await userEvent.click(screen.getByRole('button', { name: 'Choose an icon' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));

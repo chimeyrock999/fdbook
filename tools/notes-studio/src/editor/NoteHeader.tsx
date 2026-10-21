@@ -1,21 +1,21 @@
 import { useEffect, useLayoutEffect, useRef, type KeyboardEvent, type RefObject } from 'react';
 import { FieldError } from '../frontmatter/fields';
 import { MetadataStrip, type FieldReveal } from '../frontmatter/MetadataStrip';
-import { useFrontmatter } from '../frontmatter/useFrontmatter';
+import type { Frontmatter } from '../frontmatter/useFrontmatter';
 
 // The frontmatter at the top of the note, where the note page shows it
 // (app/notes/[[...slug]]/page.tsx): the title and description edited in
 // place, and the other keys in a strip under them. `reveal` focuses the
-// field at a frontmatter path; `onLeave` moves on into the body.
-export function NoteHeader({ source, onSource, readOnly, onOpenSource, onLeave, reveal }: {
-  source: string;
-  onSource: (source: string) => void;
+// field at a frontmatter path; `onLeave` moves on into the body. The caller
+// holds `frontmatter` (useFrontmatter) where it outlives Source mode, so the
+// draft, and the `visible` it restores, survive a look at Source.
+export function NoteHeader({ frontmatter, readOnly, onOpenSource, onLeave, reveal }: {
+  frontmatter: Frontmatter;
   readOnly: boolean;
   onOpenSource: () => void;
   onLeave: () => void;
   reveal: FieldReveal | null;
 }) {
-  const frontmatter = useFrontmatter(source, onSource);
   const title = useRef<HTMLTextAreaElement>(null);
   const description = useRef<HTMLTextAreaElement>(null);
 
@@ -71,9 +71,14 @@ export function NoteHeader({ source, onSource, readOnly, onOpenSource, onLeave, 
   );
 }
 
-// Enter moves on; Shift+Enter breaks the line in the description.
+// Enter moves on; Shift+Enter breaks the line in the description. Not the
+// Enter that commits an IME candidate: Safari ends the composition before
+// that keydown, which then only shows as keyCode 229.
 function movesOn(event: KeyboardEvent) {
-  if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return false;
+  // keyCode is deprecated, but 229 is the only sign of that Enter in Safari.
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
+  const committing = event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229;
+  if (event.key !== 'Enter' || event.shiftKey || committing) return false;
   event.preventDefault();
   return true;
 }

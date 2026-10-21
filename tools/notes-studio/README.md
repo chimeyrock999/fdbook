@@ -104,9 +104,9 @@ through the notes sync socket:
 
 - **Visual** edits blocks in place and looks like the note page: the
   frontmatter title and description on top, the site's prose, callouts, code
-  frames, keywords and accordions (see Plugins). Type `/` for the block and component menu. Blocks you don't
-  touch are written back byte for byte. Syntax that no plugin understands
-  shows as source and still round-trips.
+  frames, keywords and accordions (see Plugins). Type `/` for the block and
+  component menu. Blocks you don't touch are written back byte for byte.
+  Syntax that no plugin understands shows as source and still round-trips.
 - **Source** is CodeMirror 6 over the whole MDX file. Text that does not parse
   stays in Source until it is fixed.
 - **Frontmatter** is edited at the top of the note in Visual. The title and

@@ -5,6 +5,7 @@ import type { createFilesClient } from '../api/files';
 import type { LintClient, LintIssue } from '../api/lint';
 import { frontmatterPathAt } from '../frontmatter/frontmatter';
 import type { FieldReveal } from '../frontmatter/MetadataStrip';
+import { useFrontmatter } from '../frontmatter/useFrontmatter';
 import { IssuesChip, IssuesPanel } from '../lint/IssuesPanel';
 import { useLint } from '../lint/useLint';
 import { NOTES_PREFIX } from '../notes/notes';
@@ -68,6 +69,8 @@ function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel
   const { mode, setMode, canShowVisual } = useEditorMode();
   const sync = useSyncStatus();
   const source = useSourceText();
+  // Here rather than in the header, which Source mode unmounts.
+  const frontmatter = useFrontmatter(source.value, source.onChange);
   const [reveal, setReveal] = useState<RevealRequest | null>(null);
   const [field, setField] = useState<FieldReveal | null>(null);
   const editor = useRef<HTMLElement>(null);
@@ -116,8 +119,7 @@ function EditorLayout({ notePath, opened, status, locked, panelOpen, onOpenPanel
           <div className="studio-visual min-h-0 flex-1 overflow-auto">
             <div className="mx-auto w-full max-w-[52rem] px-[clamp(16px,5vw,56px)] py-7">
               <NoteHeader
-                source={source.value}
-                onSource={source.onChange}
+                frontmatter={frontmatter}
                 readOnly={source.readOnly || locked}
                 onOpenSource={() => { setMode('source'); }}
                 onLeave={() => { focusBody(editor.current); }}
