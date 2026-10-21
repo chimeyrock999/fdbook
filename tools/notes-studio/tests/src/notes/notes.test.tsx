@@ -56,6 +56,8 @@ describe('note helpers', () => {
     for (const page of [{ kind: 'diff', path: 'content/notes/a b/c#d.mdx' }, { kind: 'diff', path: 'content/notes/n&w.mdx', from: 'content/notes/old.mdx' }] as const) {
       expect(pageFromUrl(pageQuery(page))).toEqual(page);
     }
+    // In a change request, the diff is of that worktree's file.
+    expect(pageQuery({ kind: 'diff', path: 'content/notes/a.mdx', from: 'content/notes/b.mdx' }, 'sinks')).toBe('?cr=sinks&diff=content%2Fnotes%2Fa.mdx&from=content%2Fnotes%2Fb.mdx');
   });
 
   it('maps a note to its page on the site', () => {

@@ -20,8 +20,10 @@ function blockedBy({ branch, unsaved, picked, message }: { branch: string | null
   return null;
 }
 
-function FileGroup({ name, files, excluded, titles, current, onToggle, onToggleAll, onOpen }: {
+function FileGroup({ name, files, excluded, titles, readOnly, current, onToggle, onToggleAll, onOpen }: {
   name: string;
+  // Main: listed, not picked.
+  readOnly: boolean;
   files: ChangedFile[];
   excluded: Set<string>;
   titles: Map<string, string>;
@@ -39,7 +41,7 @@ function FileGroup({ name, files, excluded, titles, current, onToggle, onToggleA
   return (
     <section aria-label={name}>
       <div className="studio-changes-group">
-        <input ref={all} type="checkbox" aria-label={`Pick all ${name.toLowerCase()}`} checked={picked === files.length} onChange={(event) => { onToggleAll(files, event.target.checked); }} />
+        {!readOnly && <input ref={all} type="checkbox" aria-label={`Pick all ${name.toLowerCase()}`} checked={picked === files.length} onChange={(event) => { onToggleAll(files, event.target.checked); }} />}
         {name} <span className="studio-changes-count">{files.length}</span>
       </div>
       <ul className="studio-changes-files">
@@ -47,7 +49,7 @@ function FileGroup({ name, files, excluded, titles, current, onToggle, onToggleA
           const label = labelOf(file, titles);
           return (
             <li key={file.path} className="studio-changes-file" data-change={file.status} aria-current={file.path === current || undefined} title={file.from === undefined ? file.path : `${file.from} → ${file.path}`}>
-              <input type="checkbox" aria-label={`Commit ${shortPath(file.path)}`} checked={!excluded.has(file.path)} onChange={(event) => { onToggle(file.path, event.target.checked); }} />
+              {!readOnly && <input type="checkbox" aria-label={`Commit ${shortPath(file.path)}`} checked={!excluded.has(file.path)} onChange={(event) => { onToggle(file.path, event.target.checked); }} />}
               <span className="studio-changes-what">
                 {/* Opens the file's diff against main. */}
                 <button type="button" className="studio-changes-name" onClick={() => { onOpen(file); }}>
@@ -101,9 +103,12 @@ function CommitItem({ commit, open, onToggle, onOpen }: { commit: Commit; open: 
 // picked, files that appear later too, and an unchecked file stays unchecked
 // until it leaves the list; the message follows the picked files
 // (suggestMessage) until it is edited. Commit waits while the open note has
-// edits not saved yet (`unsaved`), as a rename does. A file, listed or in a
-// commit, opens its diff against main (#18); `current` is the one open.
-export function ChangesView({ client, changes, history, error, titles, unsaved, current = null, onOpen, onCommitted }: {
+// edits not saved yet (`unsaved`), as a rename does.
+// `readOnly` (main with change requests) lists the changes and commits
+// without the commit box: commits are made in a change request. A file,
+// listed or in a commit, opens its diff against main (#18); `current` is
+// the one open.
+export function ChangesView({ client, changes, history, error, titles, unsaved, readOnly = false, current = null, onOpen, onCommitted }: {
   client: ChangesClient;
   changes: Changes | null;
   history: History | null;
@@ -111,6 +116,7 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
   // Titles from the page tree, by worktree path (titlesOf).
   titles: Map<string, string>;
   unsaved: string | null;
+  readOnly?: boolean;
   current?: string | null;
   // Opens a file's diff against main.
   onOpen: (file: ChangedFile) => void;
@@ -192,7 +198,9 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
         <span className="studio-changes-branch" title="The branch this worktree is on">{changes.branch ?? 'detached HEAD'}</span>
       </h2>
       {error !== null && <p role="alert" className="studio-changes-note studio-changes-error">Could not read the changes: {error}</p>}
-      {changes.branch === MAIN_BRANCH && (
+      {readOnly ? (
+        <p className="studio-changes-banner">Main is read only. Commit in a change request: pick one, or start one with Edit.</p>
+      ) : changes.branch === MAIN_BRANCH && (
         <p className="studio-changes-banner">
           You are on <code>{MAIN_BRANCH}</code>. Open a change request to commit; your changes stay in the worktree.
         </p>
@@ -204,7 +212,7 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
         </>
       ) : (
         <>
-          <div className="studio-changes-commit-box">
+          {!readOnly && <div className="studio-changes-commit-box">
             <label htmlFor="studio-commit-message" className="studio-field-label">Commit message</label>
             <textarea
               id="studio-commit-message"
@@ -225,10 +233,10 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
               Commit {plural(picked.length, 'file')}
             </button>
             {whyLine}
-          </div>
-          <FileGroup name="Pages" files={pages} excluded={excluded} titles={titles} current={current} onOpen={onOpen}
+          </div>}
+          <FileGroup name="Pages" files={pages} excluded={excluded} titles={titles} readOnly={readOnly} current={current} onOpen={onOpen}
             onToggle={(path, pick) => { toggle([path], pick); }} onToggleAll={(group, pick) => { toggle(group.map((file) => file.path), pick); }} />
-          <FileGroup name="Assets" files={assets} excluded={excluded} titles={titles} current={current} onOpen={onOpen}
+          <FileGroup name="Assets" files={assets} excluded={excluded} titles={titles} readOnly={readOnly} current={current} onOpen={onOpen}
             onToggle={(path, pick) => { toggle([path], pick); }} onToggleAll={(group, pick) => { toggle(group.map((file) => file.path), pick); }} />
         </>
       )}

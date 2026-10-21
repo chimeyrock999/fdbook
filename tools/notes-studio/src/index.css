@@ -12,6 +12,7 @@
 @import './changes/changes.css';
 @import './diff/diff.css';
 @import './graph/graph.css';
+@import './cr/cr.css';
 /* Site components whose classes the Studio draws with (src/plugins). */
 @source '../../../components/graph-objects.tsx';
 

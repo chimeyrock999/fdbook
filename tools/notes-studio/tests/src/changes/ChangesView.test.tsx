@@ -6,7 +6,7 @@ import type { ChangedFile, Changes, ChangesClient, Commit, History } from '../..
 import type { createFilesClient, FileEvent } from '../../../src/api/files';
 import { ChangesView } from '../../../src/changes/ChangesView';
 import { LeaveNotice } from '../../../src/changes/LeaveNotice';
-import { leaveNotice } from '../../../src/changes/leave';
+import { leaveNotice, leftBehind, rememberLeave } from '../../../src/changes/leave';
 import { useChanges } from '../../../src/changes/useChanges';
 
 afterEach(() => {
@@ -155,6 +155,15 @@ describe('ChangesView', () => {
     expect(screen.getByRole('button', { name: 'timeline.png' }).closest('li')?.hasAttribute('aria-current')).toBe(false);
   });
 
+  it('on main (read only) lists the changes without a commit box', () => {
+    render(<ChangesView client={{} as ChangesClient} changes={{ branch: null, files }} history={history} error={null} titles={titles} unsaved={null} readOnly onOpen={vi.fn()} onCommitted={() => Promise.resolve()} />);
+    expect(screen.getByText(/Main is read only/)).toBeTruthy();
+    expect(screen.queryByLabelText('Commit message')).toBeNull();
+    expect(screen.queryAllByRole('checkbox')).toEqual([]);
+    expect(screen.queryByRole('button', { name: /^Commit/ })).toBeNull();
+    expect(within(screen.getByRole('region', { name: 'Pages' })).getAllByRole('listitem')).toHaveLength(4);
+  });
+
   it('lists the change request commits with their files', async () => {
     const { onOpen } = setup({ changes: { branch: 'cr/sinks', files: [] } });
     expect(screen.getByText(/No changes to commit/).textContent).toBe('No changes to commit on cr/sinks.');
@@ -210,15 +219,28 @@ describe('useChanges', () => {
 
 describe('LeaveNotice', () => {
   it('reminds only about a change request with uncommitted files', () => {
-    expect(leaveNotice(null)).toBeNull();
-    expect(leaveNotice({ branch: 'cr/x', files: [] })).toBeNull();
-    expect(leaveNotice({ branch: null, files })).toBeNull();
-    expect(leaveNotice({ branch: 'cr/x', files })).toEqual({ branch: 'cr/x', count: 5 });
+    expect(leaveNotice(null, 'x')).toBeNull();
+    expect(leaveNotice({ branch: 'cr/x', files: [] }, 'x')).toBeNull();
+    // Main is read only: leaving it leaves nothing behind.
+    expect(leaveNotice({ branch: null, files }, null)).toBeNull();
+    expect(leaveNotice({ branch: 'cr/x', files }, 'x')).toEqual({ cr: 'x', branch: 'cr/x', count: 5 });
+  });
+
+  it('carries the reminder to the page the switch loads, not back to the one left', () => {
+    sessionStorage.clear();
+    rememberLeave({ cr: 'x', branch: 'cr/x', count: 2 });
+    expect(leftBehind('y')).toEqual({ cr: 'x', branch: 'cr/x', count: 2 });
+    expect(leftBehind(null)).toEqual({ cr: 'x', branch: 'cr/x', count: 2 });
+    expect(leftBehind('x')).toBeNull();
+    rememberLeave(null);
+    expect(leftBehind('y')).toBeNull();
+    sessionStorage.setItem('notes-studio:left-cr', '{"cr":1}');
+    expect(leftBehind('y')).toBeNull();
   });
 
   it('blocks nothing, goes back or away, and leaves by itself', () => {
     vi.useFakeTimers();
-    const notice = { branch: 'cr/x', count: 2 };
+    const notice = { cr: 'x', branch: 'cr/x', count: 2 };
     const onBack = vi.fn();
     const onClose = vi.fn();
     const { rerender } = render(<LeaveNotice notice={notice} onBack={onBack} onClose={() => { onClose(); }} />);

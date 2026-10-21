@@ -7,7 +7,8 @@ const SHOWN_MS = 8000;
 
 // The reminder that a change request was left with uncommitted files. It
 // blocks nothing: the files stay in that change request's worktree, and the
-// toast goes after a few seconds. The change request switcher (#16) shows it.
+// toast goes after a few seconds. The page a switch opens shows it (App).
+// Discard needs none: its dialog lists the uncommitted files it removes.
 export function LeaveNotice({ notice, onBack, onClose }: { notice: Leave; onBack: () => void; onClose: () => void }) {
   // The latest onClose, so a parent's render does not restart the timer.
   const close = useRef(onClose);

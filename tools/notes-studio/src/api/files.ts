@@ -2,6 +2,7 @@
 
 import { assetUrl } from './asset-versions';
 import { errorOf, readJson } from './json';
+import { API_BASE } from './workspace';
 
 export type FileKind = 'note' | 'meta' | 'asset';
 export type TextFile = { path: string; content: string; mtimeMs: number };
@@ -21,7 +22,7 @@ export class FileConflictError extends Error {
   }
 }
 
-export function createFilesClient(base = '') {
+export function createFilesClient(base = API_BASE) {
   const fileUrl = (path: string) => `${base}/api/file?path=${encodeURIComponent(path)}`;
 
   async function failed(response: Response): Promise<never> {
@@ -96,7 +97,7 @@ export function createFilesClient(base = '') {
 // without the leading slash, as lib/read-public-asset.ts reads it) as the
 // file API URL that serves it, versioned once it changed (asset-versions.ts);
 // null for anything else, which the file API does not serve.
-export function publicAssetUrl(src: string | undefined, base = ''): string | null {
+export function publicAssetUrl(src: string | undefined, base = API_BASE): string | null {
   const path = src?.split(/[?#]/)[0].trim().replace(/^\/+/, '') ?? '';
   if (!path.startsWith('notes/') || /^[a-z]+:/i.test(src ?? '')) return null;
   return assetUrl(`public/${path}`, base);

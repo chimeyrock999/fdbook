@@ -22,7 +22,7 @@ const ASSETS: AssetInfo[] = [
   },
 ];
 
-function setup({ unsaved = false, active = 'content/notes/guide/intro.mdx', current = null }: { unsaved?: boolean; active?: string | null; current?: string | null } = {}) {
+function setup({ unsaved = false, readOnly = false, active = 'content/notes/guide/intro.mdx', current = null }: { unsaved?: boolean; readOnly?: boolean; active?: string | null; current?: string | null } = {}) {
   const change = vi.fn((request: AssetRequest): Promise<AssetAnswer> => {
     if (request.op === 'delete') return Promise.resolve({ changes: [{ type: 'delete', path: request.path }], usages: [] });
     if (request.op === 'replace') return Promise.reject(new Error('the view does not replace'));
@@ -47,6 +47,7 @@ function setup({ unsaved = false, active = 'content/notes/guide/intro.mdx', curr
       active={active}
       current={at}
       unsaved={unsaved}
+      readOnly={readOnly}
       onOpen={onOpen}
       onOpenUsage={onOpenUsage}
       onChanged={onChanged}
@@ -174,5 +175,13 @@ describe('AssetsView', () => {
     expect(within(menu).getByRole<HTMLButtonElement>('menuitem', { name: 'Delete…' }).disabled).toBe(true);
     expect(within(menu).getByText(/unsaved changes/)).toBeTruthy();
     expect(within(menu).getByRole<HTMLButtonElement>('menuitem', { name: 'Open' }).disabled).toBe(false);
+  });
+
+  it('leaves only Open in the row menu when read only (main)', async () => {
+    const { onOpen } = setup({ readOnly: true });
+    const menu = await openMenu('old_name.png');
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent.trim())).toEqual(['Open']);
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Open' }));
+    expect(onOpen).toHaveBeenCalledWith('public/notes/guide/old_name.png');
   });
 });

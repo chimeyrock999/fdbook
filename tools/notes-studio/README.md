@@ -14,7 +14,10 @@ npm run studio           # http://127.0.0.1:4310
 ```
 
 Set `STUDIO_PORT` to use another port. Needs Node 22.18 or newer (the server
-runs TypeScript directly).
+runs TypeScript directly). The Studio opens main read only and edits in
+change requests, each a branch with its own worktree (see Change requests
+below), so it needs git, an `origin` with a `main` branch, and `gh` for the
+pull request statuses.
 
 After a pull, run `npm install` (and `npm run studio:install` when this
 package changed) and restart the Studio: the server keeps the code it started
@@ -42,6 +45,10 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `index.ts` is the entry point; it checks the dependencies are installed.
   - `studio-server.ts` puts the pieces together: it binds the port and mounts
     Vite and the handlers below.
+  - `workspace.ts` holds the handlers of one worktree (files, events, sync,
+    lint, tree, assets) and serves each change request's under `/cr/<slug>/`.
+  - `cr/` has the change requests: branches, worktrees, statuses (see
+    Change requests below).
   - `config.ts` holds the host, the port and the root paths.
   - `routing.ts` runs the guard on every request and upgrade, then hands the
     request to a handler.
@@ -58,7 +65,10 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     picked files (see Changes below), and reads a file as main holds it
     (see Diff).
 - `src/`: the React UI.
-  - `api/` holds the clients for the server.
+  - `api/` holds the clients for the server; `workspace.ts` says which
+    worktree the page edits (`?cr=`).
+  - `cr/` is the change request picker, the Edit menu, their dialogs and
+    the list page.
   - `editor/` is the note editor: Visual and Source modes, save status and
     the conflict dialog.
   - `frontmatter/` reads and writes a note's YAML frontmatter and holds the
@@ -102,8 +112,10 @@ Everything the server touches goes through two checks.
   points inside: a save replaces the file, so it would turn a linked note into
   a copy. The file API, the file events and the notes sync all use this check.
 
-The worktree is this checkout for now; `startStudioServer({ root })` takes
-another one.
+`npm run studio` serves main read only and each change request's worktree
+under `/cr/<slug>/` (see Change requests). `startStudioServer({ root })`
+without `changeRequests`, as the tests start it, edits the one worktree at
+`root` instead.
 
 | Endpoint | What it does |
 | --- | --- |
@@ -118,10 +130,14 @@ another one.
 | `POST /api/assets` | Takes JSON `{ op: "rename" \| "delete" \| "replace", path, name?, extension?, baseMtime, dryRun? }`, changes the asset and the notes that use it, and returns `{ changes, usages }`. With `dryRun` it writes nothing; a replace is a dry run only here. |
 | `PUT /api/assets?path=…&extension=…&baseMtime=…` | Replaces the asset's content with the raw bytes (`X-Studio-Write: 1`, up to 25 MB), at its path or, with another extension, at its name with that one, and returns `{ changes, usages, mtimeMs }` (see Assets) |
 | `GET /api/changes` | What `git status` says changed under `content/notes` and `public/notes`, only files the path policy allows: `{ branch, files: [{ path, status: "M" \| "A" \| "D" \| "R", from? }] }` (see Changes) |
-| `POST /api/changes` | Takes JSON `{ message, paths }` and commits those files, and only them, on the worktree's branch; answers the commit `{ sha, date, message, files: [{ status, path }] }`. Refuses an empty message, a path with no change, and `main` or a detached HEAD. |
+| `POST /api/changes` | Takes JSON `{ message, paths }` and commits those files, and only them, on the worktree's branch; answers the commit `{ sha, date, message, files: [{ status, path }] }`. Refuses an empty message, a path with no change, and a branch named `main` or a detached HEAD; read-only main answers `403` first. |
 | `GET /api/changes/history` | The change request's commits, newest first: `{ base, commits }`, where `base` is `origin/main` (else `main`) |
 | `GET /api/changes/diff?path=…[&from=…]` | The file against main (see Diff): `{ path, from?, base, status: "same" \| "M" \| "A" \| "D" \| "R", before, after }`, each side `{ kind: "text", text, size }`, `{ kind: "binary", size }` (an asset that is not SVG or HTML, or text over 2 MB) or `null` where the file is missing. `base` is the merge base of `origin/main` (else `main`) and `HEAD`, or `null` without one; `from` reads main under a renamed file's old name. |
 | `GET /api/changes/blob?path=…[&base=<sha>]` | The file's bytes as commit `base` (the diff's own base, else the merge base now) holds it, for an image's before side; 404 when it has none. Served like an asset, with `Content-Security-Policy: sandbox`. |
+| `GET /api/crs` | The change requests: `{ enabled, crs: [{ slug, name, branch, status, pushed, worktree, changedPages, uncommitted, updatedMs, previewUrl, pr }], taken, prError }`, `taken` being the slugs a new one cannot take; `?fresh=1` reads the pull requests again (see Change requests) |
+| `POST /api/crs` | Takes JSON `{ name }`, fetches origin, adds the branch and its worktree, and returns `{ cr }` |
+| `POST /api/crs/<slug>/discard` | Takes JSON `{ dryRun? }`, removes the worktree and the local branch, and returns `{ discard: { slug, branch, worktree, commits, uncommitted, pushed, pr } }`. With `dryRun` it removes nothing. |
+| `/cr/<slug>/api/…`, `/cr/<slug>/__fde_sync` | The endpoints above (but `/api/crs`) for the change request's worktree. An unknown slug answers `404`. |
 | any other `/api/…` | `404` with a JSON `{ error }`, never the app's page (see below) |
 | `/__fde_sync` (websocket) | The fumadocs-editor sync server for `content/notes`. It reads `.mdx` only, writes only notes that already exist (no page or folder creation; that goes through the file API), and merges changes made on disk into open documents. Known gap: its tree `delete` command still removes an existing note, without updating `meta.yaml` or checking the mtime, because the scope cannot tell it apart from a save on the same path. Don't wire the editor's tree delete until upstream can authorize tree commands separately (fuma-nama/fumadocs-editor#24). |
 
@@ -141,6 +157,64 @@ temp file and renames it over the target, keeping the file's mode.
 `src/api/files.ts` is the UI client. `writeFile` throws a
 `FileConflictError` that holds the disk version. `subscribeFileEvents` follows
 `/api/events`.
+
+## Change requests
+
+The Studio never writes to main. It opens on main read only: the header's
+picker says `main · Read only`, the editor and the frontmatter are locked
+(the status says Read only), the page tree has no New page, row menu or
+drag, and assets cannot be replaced, renamed or deleted. The server refuses
+every write there too (`403`), whatever the page sends; lint still runs.
+Main is a worktree of `origin/main` at
+`~/.chimey-studio/worktrees/_main`, checked out again at startup and when a
+change request is created. Both fetch `main` and every `cr/*` branch from
+origin first, dropping the remote refs of branches deleted there; offline,
+startup reads the `origin/main` the clone has.
+
+**Edit** in the header continues in a change request still open (Draft,
+Previewing, In review) or starts a new one; with none open it starts one at
+once. A new change request takes a name. Its slug is the name in kebab-case
+ASCII, at most 24 characters, with `-2`, `-3`, … when taken, so `cr-<slug>`
+fits the 28 characters Cloudflare Pages keeps in a preview alias. Taken
+means a local or remote `cr/*` branch, the head of a past pull request
+(whose status a new branch of that name would show) or a folder in the
+Studio home; the dialog shows the branch the server will pick. Creating it
+fetches origin, then adds branch `cr/<slug>` from `origin/main` (not tracking
+main, so a push cannot land there) with its worktree at
+`~/.chimey-studio/worktrees/<slug>` (`STUDIO_HOME` moves the folder). The
+name is the branch description and the creation time a `studiocreated` key
+in the branch's config: git holds everything, there is no other state.
+
+The page then opens `?cr=<slug>` with what was open. Each change request is
+served under `/cr/<slug>/` (its API and its notes sync), so a page can only
+write to the one it shows. Switching (the picker) loads the page again,
+keeping the note or asset open. A worktree removed by hand is pruned at
+startup (`git worktree prune`) and added again from the branch when the
+change request opens.
+
+| Status | When |
+| --- | --- |
+| Draft | the branch is not on origin |
+| Previewing | the branch is on origin (as of the last fetch or push), no pull request |
+| In review / Merged / Closed | the branch's pull request is open, merged or closed (`gh pr list`, read at most every 30s) |
+
+When gh cannot read the pull requests (not installed, not logged in,
+offline), the statuses come from git alone and the list says why.
+
+The list (the activity bar's Change requests button, or All change requests
+in the picker; `?view=crs`) groups them as In progress (Draft, Previewing),
+Waiting to merge (In review) and To clean up (Merged, Closed). Each card
+shows the name, status, branch, the notes changed against origin/main
+(committed or not), how many files are not committed, when it was last
+updated (its last commit, an uncommitted file, or its creation), the preview
+link once it is pushed (`https://cr-<slug>.<project>.pages.dev`, with the
+project from `STUDIO_PAGES_PROJECT`) and the pull request. It loads again
+when the window gets the focus back and when files change.
+
+**Discard** (on a card) asks first, listing what goes from this machine: the
+worktree, with what was not committed, and the local branch with its
+commits. A branch already on origin, its pull request and its preview stay
+there (#21). Discarding the change request the page shows goes back to main.
 
 ## Editor
 
@@ -202,7 +276,7 @@ through the notes sync socket:
 ## Sidebar
 
 The left side works like VS Code's. The activity bar holds the **Notes**
-view (the page tree), the **Assets** view (see Assets) and the **Issues**
+view (the page tree), the **Assets** view (see Assets), the **Issues**
 view (the open note's lint issues, with their count on the icon) and the
 **Changes** view (see Changes, with the number of changed files); picking
 the open view again hides the sidebar, and so does the button at the foot of
@@ -471,16 +545,20 @@ The commit message is required. It starts as a suggestion for the picked
 files (`src/changes/message.ts`): `docs(notes): update <slug>` for one page
 (`add`, `remove`, `rename a to b`), `update <folder> (3 pages)` for several
 in one folder, `reorder <folder>` for `meta.yaml` alone, `update assets of
-<folder>` for assets alone. Once edited, the message stays as written until
-**Use the suggestion**; it is kept as written, `#` lines too. **Commit**
-runs `git add` and `git commit` on the picked paths alone, so anything else,
-staged or not, stays as it was; a deletion or rename staged in a terminal
-commits too. A commit that fails (a hook, a missing
-`user.email`) stages nothing. An unchecked file stays unchecked until it
-leaves the list. It
-waits while the open note has edits not saved yet, and it is off on `main`
-and on a detached HEAD: change requests are branches (#16). Git's own
-error, such as a missing `user.email`, shows under the button.
+<folder>` for assets alone. Once edited, the message stays as written,
+`#` lines too, until **Use the suggestion**. An unchecked file stays
+unchecked until it leaves the list.
+
+**Commit** runs `git add` and `git commit` on the picked paths alone, so
+anything else, staged or not, stays as it was; a deletion or rename staged
+in a terminal commits too. A commit that fails (a hook, a missing
+`user.email`) stages nothing, and git's own reason shows under the button.
+It waits while the open note has edits not saved yet. Each change request
+commits in its own worktree, through its own `/cr/<slug>/api/changes`, one
+commit at a time with its tree and asset changes. Main is read only: the
+view lists its changes and history without the commit box, and the server
+refuses a commit there; a Studio over one worktree refuses one on a branch
+named `main` or a detached HEAD.
 
 **History** lists the change request's commits, those on `HEAD` and not on
 `origin/main` (or `main`), without merges: message, time, short sha, and
@@ -494,8 +572,10 @@ which takes the status's color; a dot on a closed folder that holds a
 change, or on any folder whose `meta.yaml` changed; and `D` on a
 `meta.yaml` entry whose page was deleted.
 
-`LeaveNotice` reminds, without blocking, that a change request was left
-with uncommitted files; the change request switcher (#16) shows it.
+Switching away from a change request with uncommitted files (the picker,
+the list, Edit) shows a reminder on the page the switch opens, with **Back
+to** that change request; it blocks nothing and goes after 8 seconds. A
+discard needs none: its dialog lists the uncommitted files it removes.
 
 ## Diff
 

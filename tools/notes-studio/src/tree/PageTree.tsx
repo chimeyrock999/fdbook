@@ -43,6 +43,7 @@ type View = {
   onDragOver: (event: DragEvent, node: TreeNode, parent: TreeFolder) => void;
   onDrop: (event: DragEvent, node: TreeNode, parent: TreeFolder) => void;
   openMenu: (menu: Menu) => void;
+  readOnly: boolean;
   marks: TreeMarks | null;
 };
 
@@ -52,11 +53,11 @@ type View = {
 const iconOf = (name: string | null): LucideIcon | undefined => (name === null ? undefined : (icons as Partial<Record<string, LucideIcon>>)[name]);
 
 function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; dim: boolean; view: View }) {
-  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu, marks } = view;
+  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu, readOnly, marks } = view;
   const hidden = 'hidden' in node ? node.hidden : null;
   const note = noteOf(node);
   const open = node.kind === 'folder' && (filtering || isOpen(node));
-  const canMove = movable(node) && !filtering;
+  const canMove = movable(node) && !filtering && !readOnly;
   const faded = dim || hidden !== null;
   // Its git status (#17): the note's, or a missing entry's deleted page.
   const change = marks === null ? null : node.kind === 'missing' ? missingStatus(marks, node) : note === null ? null : (marks.notes.get(note) ?? null);
@@ -117,20 +118,22 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
         {change !== null && <span className="studio-change-mark" data-change={change} title={CHANGE_NAME[change]}>{change}</span>}
         {canMove ? (
           <span className="studio-tree-grip" aria-hidden="true"><GripVertical size={13} /></span>
-        ) : node.entry === null && hidden !== 'unlisted' && node.kind !== 'missing' ? (
+        ) : !readOnly && node.entry === null && hidden !== 'unlisted' && node.kind !== 'missing' ? (
           <span className="studio-tree-grip" title={lockedWhy(node, parent)}><Lock size={12} /></span>
         ) : null}
-        <button
-          type="button"
-          className="studio-tree-more"
-          aria-label={`Actions for ${titleOf(node)}`}
-          onClick={(event) => {
-            const box = event.currentTarget.getBoundingClientRect();
-            openMenu({ node, parent, top: box.bottom + 2, left: box.left });
-          }}
-        >
-          <MoreHorizontal size={14} />
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="studio-tree-more"
+            aria-label={`Actions for ${titleOf(node)}`}
+            onClick={(event) => {
+              const box = event.currentTarget.getBoundingClientRect();
+              openMenu({ node, parent, top: box.bottom + 2, left: box.left });
+            }}
+          >
+            <MoreHorizontal size={14} />
+          </button>
+        )}
       </div>
       {node.kind === 'folder' && open && <Items folder={node} nested dim={faded} view={view} />}
     </li>
@@ -149,13 +152,15 @@ function Items({ folder, nested = false, dim, view }: { folder: TreeFolder; nest
 // The notes as the site's sidebar shows them, from meta.yaml, plus what the
 // site hides. Pages can be created, renamed, reordered, hidden and shown here; every change
 // goes through /api/tree. `active` and paths are relative to content/notes.
-export function PageTree({ root, client, active, unsaved = null, marks = null, onOpen, onRenamed, onChanged }: {
+// `readOnly` (main) shows the tree only: no new page, row menu or drag.
+export function PageTree({ root, client, active, unsaved = null, readOnly = false, marks = null, onOpen, onRenamed, onChanged }: {
   root: TreeFolder | null;
   client: TreeClient;
   active: string | null;
   // The open note while it has edits not on disk yet: renaming it (or its
   // folder) would move the file under the editor and lose them.
   unsaved?: string | null;
+  readOnly?: boolean;
   // The worktree's git changes, marked on the rows (src/changes/marks.ts).
   marks?: TreeMarks | null;
   onOpen: (path: string) => void;
@@ -236,7 +241,7 @@ export function PageTree({ root, client, active, unsaved = null, marks = null, o
     setDrop(null);
   };
 
-  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu, marks };
+  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu, readOnly, marks };
   const menuNode = menu?.node ?? null;
   const movesUnsaved =
     unsaved !== null && (menuNode?.kind === 'page' || menuNode?.kind === 'folder') && renamedPath(unsaved, menuNode.path, menuNode.path) !== null;
@@ -254,9 +259,11 @@ export function PageTree({ root, client, active, unsaved = null, marks = null, o
           value={query}
           onChange={(event) => { setQuery(event.target.value); }}
         />
-        <button type="button" className="studio-icon-button" aria-label="New page" title="New page" onClick={() => { setDialog({ kind: 'create', parent: root, after: null }); }}>
-          <Plus size={15} />
-        </button>
+        {!readOnly && (
+          <button type="button" className="studio-icon-button" aria-label="New page" title="New page" onClick={() => { setDialog({ kind: 'create', parent: root, after: null }); }}>
+            <Plus size={15} />
+          </button>
+        )}
       </div>
       {shown.children.length === 0 ? (
         <p className="px-2 text-[12.5px] text-[var(--fde-muted-foreground)]">No note matches “{query}”.</p>

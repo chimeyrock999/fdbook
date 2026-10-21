@@ -28,6 +28,23 @@ export async function readBody(request: IncomingMessage, limit: number) {
   return Buffer.concat(chunks);
 }
 
+// A JSON object body. JSON only, so a browser must preflight the request
+// and a foreign page cannot send one blind; `what` names it in the 415.
+export async function readJsonObject(request: IncomingMessage, limit: number, what: string): Promise<Record<string, unknown>> {
+  if (!(request.headers['content-type'] ?? '').startsWith('application/json')) {
+    throw new HttpError(415, `${what} must be application/json`);
+  }
+  let body: unknown;
+  try {
+    body = JSON.parse((await readBody(request, limit)).toString('utf8'));
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(400, 'body is not JSON');
+  }
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) throw new HttpError(400, 'body must be an object');
+  return body as Record<string, unknown>;
+}
+
 export function pathnameOf(request: IncomingMessage) {
   return new URL(request.url ?? '/', 'http://studio').pathname;
 }

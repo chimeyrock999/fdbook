@@ -1,6 +1,6 @@
 import { createKeyedLock } from '../files/store.ts';
 import type { IncomingMessage } from 'node:http';
-import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '../http.ts';
+import { HttpError, pathnameOf, readBody, readJsonObject, sendJson, type Handler } from '../http.ts';
 import { MAX_ASSET_BYTES } from '../security/asset-types.ts';
 import { applyAssetPlan, listAssets, planAssetDelete, planAssetRename, type AssetPlan, type NoteScan } from './ops.ts';
 import { planAssetReplace } from './replace.ts';
@@ -69,19 +69,7 @@ export function createAssetsApi(root: string, lock = createKeyedLock()): Handler
     if (request.method === 'GET') return { assets: await listAssets(root, scan) };
     if (request.method === 'PUT') return replace(request);
     if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
-    // JSON only, so a browser must preflight it and a foreign page cannot send one blind.
-    if (!(request.headers['content-type'] ?? '').startsWith('application/json')) {
-      throw new HttpError(415, 'asset changes must be application/json');
-    }
-    let body: unknown;
-    try {
-      body = JSON.parse((await readBody(request, MAX_BODY_BYTES)).toString('utf8'));
-    } catch (error) {
-      if (error instanceof HttpError) throw error;
-      throw new HttpError(400, 'body is not JSON');
-    }
-    if (typeof body !== 'object' || body === null || Array.isArray(body)) throw new HttpError(400, 'body must be an object');
-    return change(body as Body);
+    return change(await readJsonObject(request, MAX_BODY_BYTES, 'asset changes'));
   }
 
   return async (request, response) => {

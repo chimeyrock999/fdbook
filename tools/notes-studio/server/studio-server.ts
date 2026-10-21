@@ -2,19 +2,13 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { SYNC_ENDPOINT } from '@fumadocs-editor/core/sync';
 import { createServer as createViteServer } from 'vite';
-import { createAssetsApi } from './assets/api.ts';
 import { DEFAULT_STUDIO_PORT, repoRoot, STUDIO_HOST, studioRoot } from './config.ts';
-import { createFilesApi } from './files/api.ts';
-import { createFileEvents } from './files/events.ts';
-import { createChangesApi } from './git/api.ts';
-import { createKeyedLock } from './files/store.ts';
+import { createChangeRequestsApi } from './cr/api.ts';
+import { openChangeRequests, type ChangeRequestOptions, type ChangeRequests } from './cr/manager.ts';
 import { apiNotFound, pathnameOf } from './http.ts';
 import { createIconsApi } from './icons/api.ts';
-import { createLintApi } from './lint/api.ts';
 import { createRequestListener, routeUpgrades } from './routing.ts';
-import { createTreeApi } from './tree/api.ts';
-import { createNotesSync } from './sync/notes-sync.ts';
-
+import { createWorkspace, createWorkspaceRouter } from './workspace.ts';
 export type StudioServer = {
   server: Server;
   url: string;
@@ -32,7 +26,14 @@ function closeServer(server: Server) {
 // One process, one origin: the UI (Vite middleware), the file API, file
 // events and the notes sync socket share 127.0.0.1:<port>, behind one
 // Host/Origin guard that runs on every request and every websocket upgrade.
-export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = repoRoot } = {}): Promise<StudioServer> {
+// With `changeRequests` the Studio opens main read-only (unprefixed /api/…
+// and /__fde_sync) and each change request's worktree under /cr/<slug>/
+// (see workspace.ts). Without it, it edits the one worktree at `root`.
+export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = repoRoot, changeRequests }: {
+  port?: number;
+  root?: string;
+  changeRequests?: ChangeRequestOptions;
+} = {}): Promise<StudioServer> {
   const server = createServer();
   // Bind first so a busy port fails before Vite starts its watcher.
   await new Promise<void>((resolve, reject) => {
@@ -55,26 +56,27 @@ export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = rep
     await closeServer(server);
     throw error;
   }
-  const filesApi = createFilesApi(root);
-  const lintApi = createLintApi(root);
-  // Tree and asset changes both write notes: one at a time.
-  const notesLock = createKeyedLock();
-  const treeApi = createTreeApi(root, notesLock);
-  const assetsApi = createAssetsApi(root, notesLock);
-  // A commit waits for them too, so it never takes half of a rename.
-  const changesApi = createChangesApi(root, notesLock);
-  const iconsApi = createIconsApi();
-  const fileEvents = createFileEvents(root);
-  const notesSync = createNotesSync(root, boundPort);
+  let crs: ChangeRequests | null = null;
+  try {
+    if (changeRequests) crs = await openChangeRequests(changeRequests);
+  } catch (error) {
+    await vite.close();
+    await closeServer(server);
+    throw error;
+  }
+  const main = createWorkspace(crs?.mainRoot ?? root, boundPort, { readOnly: crs !== null });
+  const shared = [createIconsApi(), apiNotFound];
+  const workspaces = createWorkspaceRouter(boundPort, (slug) => crs?.worktreeOf(slug) ?? Promise.resolve(null), shared);
+  // A discarded change request's watchers and sync close before its worktree goes.
+  crs?.onDiscard((slug) => workspaces.close(slug));
 
-  server.on('request', createRequestListener(boundPort, [fileEvents.handle, filesApi, lintApi, treeApi, assetsApi, changesApi, iconsApi, apiNotFound], vite.middlewares));
+  server.on('request', createRequestListener(boundPort, [workspaces.handle, createChangeRequestsApi(crs), ...main.handlers, ...shared], vite.middlewares));
   routeUpgrades(server, boundPort, (viteHmr) => [
     {
       matches: (request) => pathnameOf(request) === SYNC_ENDPOINT,
-      handle: (request, socket, head) => {
-        notesSync.handleUpgrade(request, socket, head);
-      },
+      handle: main.handleUpgrade,
     },
+    workspaces.syncRoute(SYNC_ENDPOINT),
     {
       // Vite only answers on its base path; elsewhere it would leave the socket open.
       matches: (request) =>
@@ -87,9 +89,9 @@ export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = rep
     server,
     url: `http://${STUDIO_HOST}:${String(boundPort)}/`,
     close: async () => {
-      fileEvents.close();
       try {
-        await notesSync.close();
+        await workspaces.closeAll();
+        await main.close();
         await vite.close();
       } finally {
         await closeServer(server);

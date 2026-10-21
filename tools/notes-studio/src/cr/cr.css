@@ -1,0 +1,199 @@
+/* Change requests (src/cr): the picker and Edit menu in the header, their
+   status badges, and the list in the main pane. Menus and dialogs are the
+   Studio's own (.studio-menu, .studio-dialog). */
+@layer components {
+  .studio-cr-badge {
+    --cr-color: var(--fde-muted-foreground);
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--cr-color);
+    background: color-mix(in srgb, var(--cr-color) 12%, transparent);
+  }
+  .studio-cr-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--cr-color);
+  }
+  .studio-cr-badge[data-status='draft'] { --cr-color: var(--fde-idea); }
+  .studio-cr-badge[data-status='previewing'] { --cr-color: var(--fde-info); }
+  .studio-cr-badge[data-status='review'] { --cr-color: var(--fde-warning); }
+  .studio-cr-badge[data-status='merged'] { --cr-color: var(--fde-success); }
+  .studio-cr-badge[data-status='closed'] { --cr-color: var(--fde-error); }
+
+  .studio-cr-picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    max-width: 280px;
+    padding: 4px 8px 4px 10px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    background: var(--fde-card);
+    font-size: 12.5px;
+  }
+  .studio-cr-picker-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  @media (max-width: 767px) {
+    .studio-cr-picker {
+      flex: 1;
+      max-width: none;
+    }
+  }
+
+  .studio-cr-menu {
+    max-width: 300px;
+    min-width: 240px;
+  }
+  .studio-cr-menu button .studio-cr-menu-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .studio-button-danger {
+    background: var(--fde-error);
+    border-color: var(--fde-error);
+    color: var(--fde-background);
+  }
+  .studio-dialog .studio-button-danger:disabled {
+    opacity: 0.5;
+  }
+
+  .studio-cr-hint {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+    overflow-wrap: anywhere;
+  }
+  .studio-cr-warning {
+    font-size: 12.5px;
+    color: var(--fde-warning);
+  }
+  .studio-cr-lost {
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--fde-muted);
+    font-size: 12.5px;
+  }
+  .studio-cr-lost code {
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+  }
+
+  .studio-cr-list {
+    display: grid;
+    align-content: start;
+    gap: 22px;
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 28px 40px;
+  }
+  @media (max-width: 767px) {
+    .studio-cr-list {
+      padding: 18px 14px 30px;
+    }
+  }
+  .studio-cr-list-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .studio-cr-list-head h1 {
+    flex: 1;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .studio-cr-group {
+    display: grid;
+    gap: 8px;
+  }
+  .studio-cr-group h2 {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-cr-empty {
+    padding: 4px 2px;
+    font-size: 12.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-cr-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--fde-border);
+    border-radius: 10px;
+    background: var(--fde-card);
+  }
+  .studio-cr-card[aria-current='true'] {
+    border-color: var(--fde-primary);
+  }
+  .studio-cr-card-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .studio-cr-card-title strong {
+    font-size: 14.5px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .studio-cr-card-meta {
+    grid-column: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    font-size: 12.5px;
+    color: var(--fde-muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .studio-cr-card-meta a {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--fde-primary);
+  }
+  .studio-cr-card-ops {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    display: flex;
+    gap: 6px;
+  }
+  @media (max-width: 767px) {
+    .studio-cr-card {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .studio-cr-card-ops {
+      grid-column: 1;
+      grid-row: auto;
+    }
+  }
+}
