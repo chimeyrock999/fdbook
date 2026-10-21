@@ -1,5 +1,5 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createFilesClient } from './api/files';
 import { createLintClient } from './api/lint';
 import { createTreeClient } from './api/tree';
@@ -8,9 +8,14 @@ import { useAssets } from './media/useAssets';
 import { NoteGate } from './notes/NoteGate';
 import { OpenOnSite } from './notes/OpenOnSite';
 import { NOTES_PREFIX, noteFromUrl, syncPath } from './notes/notes';
+import { Sidebar, type IssueCount } from './sidebar/Sidebar';
+import { useSidebar } from './sidebar/useSidebar';
 import { PageTree } from './tree/PageTree';
 import { renamedPath } from './tree/tree';
 import { useTree } from './tree/useTree';
+
+// Below this width the sidebar is a drawer (see .studio-sidebar).
+const DRAWER_QUERY = '(max-width: 767px)';
 
 export function App() {
   const files = useMemo(() => createFilesClient(), []);
@@ -22,7 +27,25 @@ export function App() {
   // The open note's autosave state, by path: a rename waits until it is saved.
   const [saved, setSaved] = useState<{ path: string; status: DocumentStatus } | null>(null);
   const unsaved = active !== null && (saved?.path !== active || saved.status !== 'synced') ? syncPath(active) : null;
-  const [drawer, setDrawer] = useState<'notes' | 'panel' | null>(null);
+  const sidebar = useSidebar();
+  // Below 768px the sidebar is a drawer, open or not.
+  const [drawer, setDrawer] = useState(false);
+  const [issuesSlot, setIssuesSlot] = useState<HTMLElement | null>(null);
+  const [issueCount, setIssueCount] = useState<IssueCount>(null);
+  const closeDrawer = useCallback(() => { setDrawer(false); }, []);
+  const { show } = sidebar;
+  const showIssues = useCallback(() => {
+    show('issues');
+    if (window.matchMedia(DRAWER_QUERY).matches) setDrawer(true);
+  }, [show]);
+
+  // A drawer left open while the window grows would keep the sidebar shown.
+  useEffect(() => {
+    const query = window.matchMedia(DRAWER_QUERY);
+    const onChange = () => { if (!query.matches) setDrawer(false); };
+    query.addEventListener('change', onChange);
+    return () => { query.removeEventListener('change', onChange); };
+  }, []);
 
   // Back and forward move between opened notes.
   useEffect(() => {
@@ -32,7 +55,7 @@ export function App() {
   }, []);
 
   const open = (path: string) => {
-    setDrawer(null);
+    setDrawer(false);
     if (path === active) return;
     window.history.pushState(null, '', `?path=${encodeURIComponent(path)}`);
     setActive(path);
@@ -51,32 +74,36 @@ export function App() {
   return (
     <div className="flex h-dvh flex-col bg-[var(--fde-background)] text-[var(--fde-foreground)]">
       <header className="flex min-w-0 items-center gap-2.5 border-b border-[var(--fde-border)] px-3 py-2">
-        <button type="button" className="studio-button md:hidden" onClick={() => { setDrawer('notes'); }}>
+        <button type="button" className="studio-button md:hidden" onClick={() => { setDrawer(true); }}>
           Notes
         </button>
         <span className="font-semibold whitespace-nowrap">Notes Studio</span>
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)]">{active ?? ''}</span>
         {active && <OpenOnSite path={active} />}
-        {active && (
-          <button type="button" className="studio-button lg:hidden" onClick={() => { setDrawer('panel'); }}>
-            Panel
-          </button>
-        )}
       </header>
       <div className="relative flex min-h-0 flex-1">
-        <aside aria-label="Notes panel" className={`studio-notes ${drawer === 'notes' ? 'studio-drawer-open' : ''}`}>
-          {error && <p role="alert" className="p-3 text-[12.5px] text-[var(--fde-error)]">Could not load the page tree: {error}</p>}
-          <PageTree
-            root={tree}
-            client={treeClient}
-            active={active === null ? null : syncPath(active)}
-            onOpen={(path) => { open(NOTES_PREFIX + path); }}
-            onRenamed={renamed}
-            unsaved={unsaved}
-            onChanged={reload}
-          />
-        </aside>
-        {drawer === 'notes' && <button type="button" aria-label="Close notes" className="studio-scrim md:hidden" onClick={() => { setDrawer(null); }} />}
+        <Sidebar
+          state={sidebar}
+          drawer={drawer}
+          onCloseDrawer={closeDrawer}
+          issues={issueCount}
+          issuesRef={setIssuesSlot}
+          notes={
+            <>
+              {error && <p role="alert" className="p-3 text-[12.5px] text-[var(--fde-error)]">Could not load the page tree: {error}</p>}
+              <PageTree
+                root={tree}
+                client={treeClient}
+                active={active === null ? null : syncPath(active)}
+                onOpen={(path) => { open(NOTES_PREFIX + path); }}
+                onRenamed={renamed}
+                unsaved={unsaved}
+                onChanged={reload}
+              />
+            </>
+          }
+        />
+        {drawer && <button type="button" aria-label="Close the sidebar" className="studio-scrim md:hidden" onClick={closeDrawer} />}
         {active ? (
           <NoteGate files={files} path={active}>
             <NoteEditor
@@ -86,9 +113,10 @@ export function App() {
               files={files}
               assets={assets}
               lint={lint}
-              panelOpen={drawer === 'panel'}
-              onOpenPanel={() => { setDrawer('panel'); }}
-              onClosePanel={() => { setDrawer(null); }}
+              issuesSlot={issuesSlot}
+              onIssueCount={setIssueCount}
+              onShowIssues={showIssues}
+              onIssueShown={closeDrawer}
             />
           </NoteGate>
         ) : (

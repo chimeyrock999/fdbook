@@ -1,6 +1,7 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { MdxEditor, useEditorMode, useSourceText, useSyncStatus } from '@fumadocs-editor/ui';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { createFilesClient } from '../api/files';
 import type { LintClient, LintIssue } from '../api/lint';
 import { frontmatterPathAt } from '../frontmatter/frontmatter';
@@ -11,6 +12,7 @@ import { useLint } from '../lint/useLint';
 import { UploadNotice } from '../media/UploadNotice';
 import { useAssetUploads } from '../media/useAssetUploads';
 import { NOTES_PREFIX } from '../notes/notes';
+import type { IssueCount } from '../sidebar/Sidebar';
 import { assetCompletion } from './asset-completion';
 import { editorConfig } from '../plugins';
 import { decorationsPlugin, useEditorPlugin } from './decorations';
@@ -19,17 +21,22 @@ import type { RevealRequest } from './reveal';
 import { SourceEditor } from './SourceEditor';
 import { ConflictDialog, SaveStatus } from './SyncState';
 
-type Panels = { panelOpen: boolean; onOpenPanel: () => void; onClosePanel: () => void };
+// The sidebar's Issues view: the editor fills `issuesSlot` and reports the
+// count for the activity bar. `onShowIssues` opens the view (the issues
+// chip); `onIssueShown` follows a picked issue, so a phone's drawer closes.
+type Panels = {
+  issuesSlot: HTMLElement | null;
+  onIssueCount: (count: IssueCount) => void;
+  onShowIssues: () => void;
+  onIssueShown: () => void;
+};
 type Clients = { files: ReturnType<typeof createFilesClient>; lint: LintClient };
-
-// Below this width the side panel is a drawer (see .studio-panel).
-const DRAWER_QUERY = '(max-width: 1023px)';
 
 // One note, open through the notes sync socket: autosave, live merge of
 // changes made on disk, and the conflict choice when both sides edited the
 // same block. `path` is relative to content/notes; the caller remounts this
-// per path. The frontmatter is edited in the note header; the side panel
-// holds the lint issues. Pasted, dropped and picked images are saved in the
+// per path. The frontmatter is edited in the note header; the lint issues
+// go to the sidebar's Issues view. Pasted, dropped and picked images are saved in the
 // note's folder under public/notes, under a name asked for first; `assets`
 // lists public/notes (useAssets), for the name check and Source. `onStatus`
 // follows the autosave state, so a rename can wait for it.
@@ -78,7 +85,7 @@ export function NoteEditor({ path, assets, onStatus, ...rest }: {
 // The plugins' decorations, one ProseMirror plugin for every editor.
 const decorations = decorationsPlugin(editorConfig.decorators);
 
-function EditorLayout({ notePath, assets, uploads, opened, status, locked, panelOpen, onOpenPanel, onClosePanel, files, lint }: {
+function EditorLayout({ notePath, assets, uploads, opened, status, locked, issuesSlot, onIssueCount, onShowIssues, onIssueShown, files, lint }: {
   notePath: string;
   assets: readonly string[];
   uploads: ReturnType<typeof useAssetUploads>;
@@ -103,9 +110,14 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, panel
   if (mode !== 'source' && reveal !== null) setReveal(null);
   if (mode !== 'visual' && field !== null) setField(null);
 
-  const openIssues = () => {
-    if (window.matchMedia(DRAWER_QUERY).matches) onOpenPanel();
-  };
+  const issues = lintState.issues;
+  const count: IssueCount = issues === null ? null : { count: issues.length, errors: issues.some((issue) => issue.severity === 'error') };
+  const countKey = JSON.stringify(count);
+  useEffect(() => {
+    onIssueCount(JSON.parse(countKey) as IssueCount);
+  }, [countKey, onIssueCount]);
+  // No note, no count: the activity bar drops its badge.
+  useEffect(() => () => { onIssueCount(null); }, [onIssueCount]);
   // An issue in the frontmatter opens its field in the header; any other
   // position is into the source text, so show it in Source.
   const showIssue = (issue: LintIssue) => {
@@ -117,7 +129,7 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, panel
       setMode('source');
       setReveal((previous) => ({ start: issue.start, end: issue.end, seq: (previous?.seq ?? 0) + 1 }));
     }
-    onClosePanel();
+    onIssueShown();
   };
 
   return (
@@ -126,7 +138,7 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, panel
         <div className="flex flex-wrap items-center gap-2.5 border-b border-[var(--fde-border)] px-4 py-2">
           <SaveStatus status={status} />
           <UploadNotice notice={uploads.notice} onDismiss={uploads.dismissNotice} />
-          <IssuesChip state={lintState} onOpen={openIssues} />
+          <IssuesChip state={lintState} onOpen={onShowIssues} />
           <span className="flex-1" />
           <div role="tablist" aria-label="Mode" className="inline-flex rounded-lg border border-[var(--fde-border)] bg-[var(--fde-card)] p-0.5">
             <Tab selected={mode === 'visual'} disabled={!canShowVisual} onSelect={() => { setMode('visual'); }}>
@@ -154,22 +166,7 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, panel
           <SourceEditor reveal={reveal} completion={completion} />
         )}
       </section>
-      <aside className={`studio-panel ${panelOpen ? 'studio-drawer-open' : ''}`} aria-label="Side panel">
-        <h2 className="studio-panel-head">
-          Issues
-          {lintState.issues !== null && lintState.issues.length > 0 && (
-            <span
-              className={`rounded-full px-1.5 text-[11px] font-semibold text-[var(--fde-background)] tabular-nums ${lintState.issues.some((issue) => issue.severity === 'error') ? 'bg-[var(--fde-error)]' : 'bg-[var(--fde-warning)]'}`}
-            >
-              {lintState.issues.length}
-            </span>
-          )}
-        </h2>
-        <div className="studio-panel-body">
-          <IssuesPanel state={lintState} onSelect={showIssue} />
-        </div>
-      </aside>
-      {panelOpen && <button type="button" aria-label="Close panel" className="studio-scrim lg:hidden" onClick={onClosePanel} />}
+      {issuesSlot && createPortal(<IssuesPanel state={lintState} onSelect={showIssue} />, issuesSlot)}
       {uploads.dialog}
       {status === 'conflict' && sync && <ConflictDialog onKeepMine={sync.keepMine} onTakeDisk={sync.takeDisk} />}
     </div>
