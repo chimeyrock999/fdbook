@@ -22,13 +22,14 @@ export function SiteCallout({ props, children, setProp, types }: ComponentRender
   const Icon = ICONS[semantic];
   const [open, setOpen] = useState(false);
   const picker = useRef<HTMLSpanElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLSpanElement>(null);
 
   // The menu is drawn on document.body over the note (picker-menu.ts); a
-  // press outside or Escape closes it.
+  // press outside or Escape closes it, Escape back on the icon.
   useLayoutEffect(() => {
-    if (!open || !menu.current || !picker.current) return;
-    return floatMenu(menu.current, picker.current, () => { setOpen(false); });
+    if (!open || !menu.current || !picker.current || !button.current) return;
+    return floatMenu({ menu: menu.current, picker: picker.current, button: button.current }, () => { setOpen(false); });
   }, [open]);
   const style = {
     '--notes-callout-color': `var(--color-callout-${semantic})`,
@@ -40,6 +41,7 @@ export function SiteCallout({ props, children, setProp, types }: ComponentRender
     <div className="studio-callout" style={style} data-type={type}>
       <span ref={picker} className="studio-picker studio-callout-picker" contentEditable={false}>
         <button
+          ref={button}
           type="button"
           className="studio-picker-button studio-callout-icon"
           aria-label={`Callout type: ${type}`}

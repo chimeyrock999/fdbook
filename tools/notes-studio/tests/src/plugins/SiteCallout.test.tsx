@@ -68,6 +68,19 @@ describe('SiteCallout', () => {
     await userEvent.click(icon);
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(icon);
+  });
+
+  it('reaches the options with Tab from the icon', async () => {
+    const setProp = vi.fn();
+    draw('note', setProp);
+    const icon = screen.getByRole('button', { name: 'Callout type: note' });
+    await userEvent.click(icon);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: 'note' }));
+    await userEvent.tab();
+    await userEvent.keyboard('{Enter}');
+    expect(setProp).toHaveBeenCalledWith('type', 'info');
   });
 
   it('keeps the type of a locked note', async () => {

@@ -43,6 +43,9 @@
   background: var(--fde-popover);
   box-shadow: 0 6px 18px rgb(0 0 0 / 0.14);
 }
+.studio-picker-menu[data-hidden] {
+  visibility: hidden;
+}
 .studio-picker-menu button {
   display: flex;
   align-items: center;

@@ -258,14 +258,10 @@ function kindPicker(cards: Cards, item: AccordionItem, index: number) {
       });
       menu.append(option);
     }
-    // Drawn on document.body over the note (picker-menu.ts). Escape gives
-    // the focus back to the button.
+    // Drawn on document.body over the note (picker-menu.ts).
     document.body.append(menu);
     button.setAttribute('aria-expanded', 'true');
-    const stop = floatMenu(menu, picker, (reason) => {
-      close?.();
-      if (reason === 'escape') button.focus();
-    });
+    const stop = floatMenu({ menu, picker, button }, () => { close?.(); });
     close = () => {
       closers.get(cards.root)?.delete(closing);
       stop();
