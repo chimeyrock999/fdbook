@@ -1,5 +1,6 @@
 import { notesPageSchema, type NotesPageFrontmatter } from '@site/lib/notes-schema';
 import { isMap, isScalar, isSeq, parseDocument, type Document, type Node } from 'yaml';
+import { findBlock } from './block';
 
 // The YAML frontmatter of a note, read for the form and written back so that
 // only the values that changed move: comments, key order, quoting and keys
@@ -14,20 +15,10 @@ export type FrontmatterRead =
   | { status: 'missing' }
   | { status: 'invalid'; error: string };
 
-// `---` on the first line, the YAML, then `---` on its own line.
-const BLOCK = /^---(\r?\n)(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)/;
-
 // The YAML text of the block (without the `---` lines), or null if the note
 // has none. Two sources with the same block hold the same frontmatter.
 export function frontmatterText(source: string): string | null {
   return findBlock(source)?.yaml ?? null;
-}
-
-function findBlock(source: string) {
-  const match = BLOCK.exec(source);
-  if (!match) return null;
-  const [whole, newline, yaml = ''] = match as unknown as [string, string, string | undefined];
-  return { yaml, newline, end: whole.length };
 }
 
 function parse(yaml: string): Document | null {

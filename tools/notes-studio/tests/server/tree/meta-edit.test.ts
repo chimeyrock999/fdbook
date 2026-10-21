@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { repoRoot } from '../../../server/config';
-import { insertEntry, metaTemplate, moveEntry, quote, readPages, replaceEntry, setDefaultOpen } from '../../../server/tree/meta-edit';
+import { insertEntry, metaTemplate, moveEntry, quote, readPages, removeKey, replaceEntry, setDefaultOpen, setFlag } from '../../../server/tree/meta-edit';
 
 const real = (path: string) => readFileSync(join(repoRoot, 'content/notes', path), 'utf8');
 
@@ -113,5 +113,24 @@ describe('meta.yaml edits', () => {
     expect(() => setDefaultOpen('pages: [a\n', true)).toThrow('does not parse');
     expect(() => setDefaultOpen('{ title: X }\n', true)).toThrow('not a block map');
     expect(() => setDefaultOpen('- a\n', true)).toThrow('not a block map');
+  });
+
+  it('sets any flag like defaultOpen and takes it out again byte for byte', () => {
+    for (const text of ['title: X # name\nicon: Brain\npages: []\n', 'title: X', 'pages:\n  - a\n', '', 'title: X\r\npages: []\r\n', 'title: |\n  Long\npages: []\n']) {
+      const hidden = setFlag(text, 'visible', false);
+      expect(hidden).toBe(setDefaultOpen(text, false).replace('defaultOpen', 'visible'));
+      expect(removeKey(hidden, 'visible')).toBe(text);
+    }
+    expect(setFlag('title: X\nvisible: true # shown\n', 'visible', false)).toBe('title: X\nvisible: false # shown\n');
+  });
+
+  it('removes a key with its comment and leaves a file without it alone', () => {
+    expect(removeKey('title: X\nvisible: false # off\npages: []\n', 'visible')).toBe('title: X\npages: []\n');
+    expect(removeKey('visible:\ntitle: X\n', 'visible')).toBe('title: X\n');
+    expect(removeKey('title: X\n', 'visible')).toBe('title: X\n');
+    expect(removeKey('', 'visible')).toBe('');
+    expect(() => removeKey('visible:\n  a: b\n', 'visible')).toThrow('visible is not a value');
+    expect(() => removeKey('{ visible: false }\n', 'visible')).toThrow('not a block map');
+    expect(() => setFlag('title: [\n', 'visible', false, 'frontmatter')).toThrow('frontmatter does not parse');
   });
 });

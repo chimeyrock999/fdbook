@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Check, ChevronRight, ExternalLink, EyeOff, FileText, Folder, GripVertical, icons, Lock, MoreHorizontal, Pencil, Plus, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronRight, ExternalLink, Eye, EyeOff, FileText, Folder, GripVertical, icons, Lock, MoreHorizontal, Pencil, Plus, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { createElement, useEffect, useRef, useState, type DragEvent } from 'react';
 import type { TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
 import { CreateDialog, RenameDialog } from './TreeDialogs';
@@ -140,7 +140,7 @@ function Items({ folder, nested = false, dim, view }: { folder: TreeFolder; nest
 }
 
 // The notes as the site's sidebar shows them, from meta.yaml, plus what the
-// site hides. Pages can be created, renamed and reordered here; every change
+// site hides. Pages can be created, renamed, reordered, hidden and shown here; every change
 // goes through /api/tree. `active` and paths are relative to content/notes.
 export function PageTree({ root, client, active, unsaved = null, onOpen, onRenamed, onChanged }: {
   root: TreeFolder | null;
@@ -231,6 +231,9 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
   const menuNode = menu?.node ?? null;
   const movesUnsaved =
     unsaved !== null && (menuNode?.kind === 'page' || menuNode?.kind === 'folder') && renamedPath(unsaved, menuNode.path, menuNode.path) !== null;
+  // Hiding or showing a page writes its frontmatter; a folder's only its
+  // meta.yaml. An unlisted page counts too: it may also say visible: false.
+  const writesUnsaved = movesUnsaved && menuNode.kind === 'page';
   return (
     <nav ref={navRef} aria-label="Page tree" className="flex min-h-0 flex-1 flex-col gap-2 p-2.5">
       <div className="flex gap-1.5">
@@ -278,7 +281,25 @@ export function PageTree({ root, client, active, unsaved = null, onOpen, onRenam
               <Pencil size={14} /> Rename…
             </button>
           )}
-          {movesUnsaved && <p className="studio-menu-hint">The open note has unsaved changes. Rename once it shows Saved.</p>}
+          {(menuNode.kind === 'page' || menuNode.kind === 'folder') && (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={menuNode.path === 'index.mdx' || menuNode.path === '' || writesUnsaved}
+              onClick={() => {
+                const visible = menuNode.hidden !== null;
+                send({ op: 'visibility', path: menuNode.path, visible }, (changes) =>
+                  changes.length === 0 ? 'Nothing to change.' : visible ? `Showed ${menuNode.path} in the sidebar.` : `Hid ${menuNode.path} from the sidebar.`);
+              }}
+            >
+              {menuNode.hidden === null ? <><EyeOff size={14} /> Hide from sidebar</> : <><Eye size={14} /> Show in sidebar</>}
+            </button>
+          )}
+          {movesUnsaved && (
+            <p className="studio-menu-hint">
+              The open note has unsaved changes. {writesUnsaved ? `Rename or ${menuNode.hidden !== null ? 'show' : 'hide'} it` : 'Rename'} once it shows Saved.
+            </p>
+          )}
           {menuNode.kind === 'folder' && (
             <>
               <button

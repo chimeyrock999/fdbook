@@ -278,6 +278,33 @@ describe('PageTree', () => {
     expect(within(screen.getByRole('menu')).queryByRole('menuitemcheckbox')).toBeNull();
   });
 
+  it('hides a shown node and shows a hidden one from the menu', async () => {
+    const { change, onChanged } = setup((request) => ({ changes: request.op === 'visibility' ? [{ type: 'change', path: request.path, detail: '' }] : [], open: null }));
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for One' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Hide from sidebar' }));
+    expect(change).toHaveBeenCalledWith({ op: 'visibility', path: 'guide/one.mdx', visible: false });
+    expect((await screen.findByRole('status')).textContent).toBe('Hid guide/one.mdx from the sidebar.');
+    expect(onChanged).toHaveBeenCalled();
+    // An unlisted page and a folder with visible: false both show again.
+    for (const [name, path] of [['Draft', 'draft.mdx'], ['Old', 'old']]) {
+      await userEvent.click(screen.getByRole('button', { name: `Actions for ${name}` }));
+      expect(screen.queryByRole('menuitem', { name: 'Hide from sidebar' })).toBeNull();
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Show in sidebar' }));
+      expect(change).toHaveBeenLastCalledWith({ op: 'visibility', path, visible: true });
+    }
+    expect((await screen.findByRole('status')).textContent).toBe('Showed old in the sidebar.');
+  });
+
+  it('reports a hide with nothing to change, or one the server refused', async () => {
+    setup((request) => (request.op === 'visibility' && request.path === 'loose' ? new Error('content/notes/loose/meta.yaml changed on disk') : { changes: [], open: null }));
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Guide' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Hide from sidebar' }));
+    expect((await screen.findByRole('status')).textContent).toBe('Nothing to change.');
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Loose' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Hide from sidebar' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('changed on disk');
+  });
+
   it('shows why a create would be refused', async () => {
     setup((request) => (request.op === 'create' && request.slug === 'taken' ? new Error('content/notes/taken.mdx already exists') : { changes: [], open: null }));
     await userEvent.click(screen.getByRole('button', { name: 'New page' }));
@@ -290,14 +317,19 @@ describe('PageTree', () => {
   it('waits for the open note to be saved before renaming it or its folder', async () => {
     const { client } = fakeClient(() => ({ changes: [], open: null }));
     render(<PageTree root={root} client={client} active="guide/two.mdx" unsaved="guide/two.mdx" onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={loaded()} />);
+    const hide = () => screen.getByRole<HTMLButtonElement>('menuitem', { name: 'Hide from sidebar' });
     for (const name of ['Two', 'Guide']) {
       await userEvent.click(screen.getByRole('button', { name: `Actions for ${name}` }));
       expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: 'Rename…' }).disabled).toBe(true);
       expect(screen.getByRole('menu').textContent).toContain('unsaved changes');
+      // Hiding the note writes its frontmatter; hiding its folder only meta.yaml.
+      expect(hide().disabled).toBe(name === 'Two');
+      expect(screen.getByRole('menu').textContent.includes('Rename or hide it once it shows Saved.')).toBe(name === 'Two');
       await userEvent.keyboard('{Escape}');
     }
     await userEvent.click(screen.getByRole('button', { name: 'Actions for One' }));
     expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: 'Rename…' }).disabled).toBe(false);
+    expect(hide().disabled).toBe(false);
   });
 
   it('keeps the rename dialog modal and waits for a save that starts while it is open', async () => {
