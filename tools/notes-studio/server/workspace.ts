@@ -26,13 +26,13 @@ const refuseWrites: Handler = (request, response) => {
 
 // The handlers of one worktree: file API and events, lint, page tree,
 // assets, changes (git status, commit, history), and the notes sync socket.
-export function createWorkspace(root: string, port: number, { readOnly = false } = {}) {
+export function createWorkspace(root: string, hosts: string[], { readOnly = false } = {}) {
   // Tree and asset changes both write notes: one at a time. A commit waits
   // for them too, so it never takes half of a rename. The lock is this
   // worktree's own: change requests never wait on each other.
   const notesLock = createKeyedLock();
   const fileEvents = createFileEvents(root);
-  const sync = createNotesSync(root, port, { readOnly });
+  const sync = createNotesSync(root, hosts, { readOnly });
   const handlers: Handler[] = [
     ...(readOnly ? [refuseWrites] : []),
     fileEvents.handle,
@@ -66,7 +66,7 @@ const CR_PATH = /^\/cr\/([^/]+)(\/.*)$/;
 // `close`. The request goes on with the prefix taken off, to the
 // workspace's handlers, then to `shared` (what every workspace answers
 // alike: icons, and the JSON 404 for any other /api/ path).
-export function createWorkspaceRouter(port: number, resolve: (slug: string) => Promise<string | null>, shared: Handler[]) {
+export function createWorkspaceRouter(hosts: string[], resolve: (slug: string) => Promise<string | null>, shared: Handler[]) {
   // `workspace` stays undefined while the entry opens.
   type Entry = { ready: Promise<Workspace | null>; workspace?: Workspace | null };
   const open = new Map<string, Entry>();
@@ -80,7 +80,7 @@ export function createWorkspaceRouter(port: number, resolve: (slug: string) => P
     const drop = () => { if (open.get(slug) === entry) open.delete(slug); };
     entry.ready = resolve(slug).then(
       (root) => {
-        entry.workspace = root === null ? null : createWorkspace(root, port);
+        entry.workspace = root === null ? null : createWorkspace(root, hosts);
         if (entry.workspace === null) drop();
         return entry.workspace;
       },

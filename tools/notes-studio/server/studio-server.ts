@@ -2,12 +2,13 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { SYNC_ENDPOINT } from '@fumadocs-editor/core/sync';
 import { createServer as createViteServer } from 'vite';
-import { DEFAULT_STUDIO_PORT, repoRoot, STUDIO_HOST, studioRoot } from './config.ts';
+import { DEFAULT_STUDIO_HOST, DEFAULT_STUDIO_PORT, repoRoot, studioRoot } from './config.ts';
 import { createChangeRequestsApi } from './cr/api.ts';
 import { openChangeRequests, type ChangeRequestOptions, type ChangeRequests } from './cr/manager.ts';
 import { apiNotFound, pathnameOf } from './http.ts';
 import { createIconsApi } from './icons/api.ts';
 import { createRequestListener, routeUpgrades } from './routing.ts';
+import { ownHosts } from './security/guard.ts';
 import { createWorkspace, createWorkspaceRouter } from './workspace.ts';
 export type StudioServer = {
   server: Server;
@@ -24,12 +25,13 @@ function closeServer(server: Server) {
 }
 
 // One process, one origin: the UI (Vite middleware), the file API, file
-// events and the notes sync socket share 127.0.0.1:<port>, behind one
+// events and the notes sync socket share <host>:<port>, behind one
 // Host/Origin guard that runs on every request and every websocket upgrade.
 // With `changeRequests` the Studio opens main read-only (unprefixed /api/…
 // and /__fde_sync) and each change request's worktree under /cr/<slug>/
 // (see workspace.ts). Without it, it edits the one worktree at `root`.
-export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = repoRoot, changeRequests }: {
+export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEFAULT_STUDIO_PORT, root = repoRoot, changeRequests }: {
+  host?: string;
   port?: number;
   root?: string;
   changeRequests?: ChangeRequestOptions;
@@ -38,12 +40,13 @@ export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = rep
   // Bind first so a busy port fails before Vite starts its watcher.
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(port, STUDIO_HOST, () => {
+    server.listen(port, host, () => {
       server.off('error', reject);
       resolve();
     });
   });
   const { port: boundPort } = server.address() as AddressInfo;
+  const hosts = ownHosts(host, boundPort);
 
   let vite;
   try {
@@ -64,14 +67,14 @@ export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = rep
     await closeServer(server);
     throw error;
   }
-  const main = createWorkspace(crs?.mainRoot ?? root, boundPort, { readOnly: crs !== null });
+  const main = createWorkspace(crs?.mainRoot ?? root, hosts, { readOnly: crs !== null });
   const shared = [createIconsApi(), apiNotFound];
-  const workspaces = createWorkspaceRouter(boundPort, (slug) => crs?.worktreeOf(slug) ?? Promise.resolve(null), shared);
+  const workspaces = createWorkspaceRouter(hosts, (slug) => crs?.worktreeOf(slug) ?? Promise.resolve(null), shared);
   // A discarded change request's watchers and sync close before its worktree goes.
   crs?.onDiscard((slug) => workspaces.close(slug));
 
-  server.on('request', createRequestListener(boundPort, [workspaces.handle, createChangeRequestsApi(crs), ...main.handlers, ...shared], vite.middlewares));
-  routeUpgrades(server, boundPort, (viteHmr) => [
+  server.on('request', createRequestListener(hosts, [workspaces.handle, createChangeRequestsApi(crs), ...main.handlers, ...shared], vite.middlewares));
+  routeUpgrades(server, hosts, (viteHmr) => [
     {
       matches: (request) => pathnameOf(request) === SYNC_ENDPOINT,
       handle: main.handleUpgrade,
@@ -87,7 +90,7 @@ export async function startStudioServer({ port = DEFAULT_STUDIO_PORT, root = rep
 
   return {
     server,
-    url: `http://${STUDIO_HOST}:${String(boundPort)}/`,
+    url: `http://${hosts[0]}/`,
     close: async () => {
       try {
         await workspaces.closeAll();

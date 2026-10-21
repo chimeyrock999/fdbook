@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { SYNC_ENDPOINT } from '@fumadocs-editor/core/sync';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRequestListener } from '../../server/routing';
+import { ownHosts } from '../../server/security/guard';
 import { rawRequest, tryUpgrade } from '../support/http';
 import { startTestStudio, type TestStudio } from '../support/studio';
 
@@ -53,7 +54,7 @@ describe('request listener', () => {
     const failing = () => Promise.reject(new Error('disk on fire'));
     server.on(
       'request',
-      createRequestListener(port, [failing], (_request, response) => response.end('fallback')),
+      createRequestListener(ownHosts('127.0.0.1', port), [failing], (_request, response) => response.end('fallback')),
     );
   });
 

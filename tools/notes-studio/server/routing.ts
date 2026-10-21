@@ -6,9 +6,9 @@ import { rejectForeignRequest } from './security/guard.ts';
 type UpgradeListener = (request: IncomingMessage, socket: Duplex, head: Buffer) => void;
 
 // Guard first, then each handler in order, then the fallback (Vite).
-export function createRequestListener(port: number, handlers: Handler[], fallback: RequestListener): RequestListener {
+export function createRequestListener(hosts: string[], handlers: Handler[], fallback: RequestListener): RequestListener {
   return (request, response) => {
-    const reason = rejectForeignRequest(request, port);
+    const reason = rejectForeignRequest(request, hosts);
     if (reason) {
       response.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }).end(`Forbidden: ${reason}\n`);
       return;
@@ -34,7 +34,7 @@ export function refuseUpgrade(socket: Duplex, status: 403 | 404) {
 // hanging. Listeners already attached (Vite HMR) become the `existing` route.
 export function routeUpgrades(
   server: Server,
-  port: number,
+  hosts: string[],
   routes: (existing: UpgradeListener) => { matches: (request: IncomingMessage) => boolean; handle: UpgradeListener }[],
 ) {
   const previous = server.listeners('upgrade') as UpgradeListener[];
@@ -43,7 +43,7 @@ export function routeUpgrades(
     for (const listener of previous) listener(request, socket, head);
   });
   server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
-    if (rejectForeignRequest(request, port)) {
+    if (rejectForeignRequest(request, hosts)) {
       refuseUpgrade(socket, 403);
       return;
     }

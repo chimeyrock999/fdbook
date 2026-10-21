@@ -1,6 +1,6 @@
 # Notes Studio
 
-Local editor for `content/notes` (see #23). It runs on `127.0.0.1` only and is
+Local editor for `content/notes` (see #23). It runs on `127.0.0.1` by default and is
 not part of the site build: `tools/` is excluded from the site's TypeScript,
 ESLint and Tailwind sources.
 
@@ -13,7 +13,11 @@ npm run studio:install   # once, installs this package's dependencies
 npm run studio           # http://127.0.0.1:4310
 ```
 
-Set `STUDIO_PORT` to use another port. Needs Node 22.18 or newer (the server
+Set `STUDIO_PORT` to use another port. Set `STUDIO_HOST` to one IP address
+of this machine to serve there instead of loopback, for example a Tailscale
+address: `STUDIO_HOST=100.71.207.12 npm run studio` serves
+`http://100.71.207.12:4310`. The Studio has no login, so anyone who can reach
+that address can edit; `0.0.0.0` and host names are refused. Needs Node 22.18 or newer (the server
 runs TypeScript directly). The Studio opens main read only and edits in
 change requests, each a branch with its own worktree (see Change requests
 below), so it needs git, an `origin` with a `main` branch, and `gh` for the
@@ -100,8 +104,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
 Everything the server touches goes through two checks.
 
 - **Origin guard** (`server/guard.ts`). Every request and every websocket
-  upgrade must carry `Host: 127.0.0.1:<port>` or `localhost:<port>`, which
-  stops DNS rebinding. If it sends `Origin` or `Sec-Fetch-Site`, they must be
+  upgrade must carry `Host: 127.0.0.1:<port>` or `localhost:<port>` (with
+  `STUDIO_HOST`, `<that address>:<port>`), which stops DNS rebinding. If it sends `Origin` or `Sec-Fetch-Site`, they must be
   this origin. Requests without them (curl, agents) pass on Host alone. A
   websocket upgrade that is neither Vite HMR nor the notes sync is closed.
 - **Path policy** (`server/paths.ts`). Paths are relative to the worktree, in

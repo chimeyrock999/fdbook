@@ -1,8 +1,9 @@
+import { isIP } from 'node:net';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const STUDIO_HOST = '127.0.0.1';
+export const DEFAULT_STUDIO_HOST = '127.0.0.1';
 export const DEFAULT_STUDIO_PORT = 4310;
 
 export const studioRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -29,4 +30,16 @@ export function parseStudioPort(value: string | undefined): number {
     throw new Error(`STUDIO_PORT must be a port number between 1 and 65535, got "${value}".`);
   }
   return port;
+}
+
+// The address to bind: empty or unset means 127.0.0.1. Only an IP address,
+// so the Host check still stops DNS rebinding, and not a wildcard, which
+// would answer on every network the machine is on.
+export function parseStudioHost(value: string | undefined): string {
+  if (value === undefined || value.trim() === '') return DEFAULT_STUDIO_HOST;
+  const host = value.trim();
+  if (isIP(host) === 0 || host === '0.0.0.0' || host === '::') {
+    throw new Error(`STUDIO_HOST must be one IP address of this machine, not a name or 0.0.0.0, got "${value}".`);
+  }
+  return host;
 }

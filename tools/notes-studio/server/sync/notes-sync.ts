@@ -10,7 +10,7 @@ import { NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 // may read and write, so `.md`, hidden files and anything outside the notes
 // stay out. Its media endpoints are not mounted: assets go through the file
 // API into public/. A `readOnly` sync (main) opens notes but writes none.
-export function createNotesSync(root: string, port: number, { readOnly = false } = {}) {
+export function createNotesSync(root: string, hosts: string[], { readOnly = false } = {}) {
   const note = (path: string) => {
     const resolved = resolveWorktreePath(root, `${NOTES_DIR}/${path}`);
     return resolved?.kind === 'note' ? resolved.absolute : null;
@@ -29,6 +29,6 @@ export function createNotesSync(root: string, port: number, { readOnly = false }
     // The upgrade already passed the guard; checking again here keeps the
     // sync server safe even if it is mounted somewhere else later.
     authenticate: ({ request }) =>
-      rejectForeignRequest(request, port) ? null : { read: (path) => note(path) !== null, write: writable },
+      rejectForeignRequest(request, hosts) ? null : { read: (path) => note(path) !== null, write: writable },
   });
 }
