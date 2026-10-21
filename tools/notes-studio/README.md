@@ -16,6 +16,15 @@ npm run studio           # http://127.0.0.1:4310
 Set `STUDIO_PORT` to use another port. Needs Node 22.18 or newer (the server
 runs TypeScript directly).
 
+**Open on site** in the header opens the note's page on the site's dev server
+(`npm run dev` at the repo root, `http://localhost:3000` unless
+`STUDIO_SITE_URL` says otherwise). The Studio does not start the site (#43).
+
+The Studio replaces the Chimey Notes Obsidian plugin, removed in #15. Its
+checks live on in Lint and its component snippets in the `/` menu; inserting
+Keyword, Tag and GraphMeta markers is #42, creating pages and editing
+`meta.yaml` come with the page tree (#11).
+
 ## Layout
 
 - `server/`: one Node process on one origin.
@@ -133,6 +142,7 @@ of failing the build.
 | `directive-unclosed` | error | A container with no closing fence of its own |
 | `directive-nesting` | error | A nested container with as many colons as its parent, and a fence left with nothing to close |
 | `callout-type` | error | `<Callout type>` outside the site's list |
+| `callout-style` | error | `<Callout style="…">` as a string: the site only reads a `style` object, so the string sets nothing (use `type` for the look) |
 | `accordion-kind` | error | `kind` of `:::accordion` or `<Accordion>` outside the site's list |
 | `link-broken` | error | A `./` or `../` link that reaches no note, resolved like `source.resolveHref` (as a file next to the note, then as a URL against the page), and `/notes/…` links with no page |
 | `asset-missing` | error | `src` of `HtmlEmbed`, `SvgDiagram`, `::html`, `::svg`, `::diagram`, or a `/…` image, that is not a file in `public/` (a URL such as `https://…` included: the site only reads `public/`) |

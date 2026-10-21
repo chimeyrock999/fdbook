@@ -8,6 +8,9 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Where "Open on site" points (src/notes/OpenOnSite.tsx); empty means the
+  // site's dev server on localhost:3000.
+  define: { 'import.meta.env.STUDIO_SITE_URL': JSON.stringify(process.env.STUDIO_SITE_URL ?? '') },
   resolve: {
     // Shared code from the site (e.g. lib/notes-schema.ts). Its own imports
     // (zod, fumadocs-core) resolve from the repo root node_modules.

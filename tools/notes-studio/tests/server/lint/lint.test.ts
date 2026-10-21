@@ -76,6 +76,13 @@ describe('callouts and accordions', () => {
     expect(issues[0]?.message).toContain('hint');
   });
 
+  it('flags a callout whose style is a string, and accepts a style object', () => {
+    const source = '<Callout style="warning">x</Callout>\n\n<Callout type="tip" style={{ marginTop: 0 }}>x</Callout>\n\n```mdx\n<Callout style="warning">x</Callout>\n```\n';
+    const issues = lint(source);
+    expect(summary(issues)).toEqual(['callout-style@1']);
+    expect(issues[0]?.message).toContain('`type`');
+  });
+
   it('flags an unknown accordion kind, in a directive or JSX', () => {
     const source = '::::accordions\n:::accordion{title="Q" kind="faq"}\na\n:::\n::::\n\n<Accordions><Accordion title="A" kind="tips">x</Accordion></Accordions>\n';
     const issues = lint(source);
