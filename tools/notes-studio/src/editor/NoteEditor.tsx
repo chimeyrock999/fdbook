@@ -31,8 +31,13 @@ const DRAWER_QUERY = '(max-width: 1023px)';
 // per path. The frontmatter is edited in the note header; the side panel
 // holds the lint issues. Pasted, dropped and picked images are saved in the
 // note's folder under public/notes, under a name asked for first; `assets`
-// lists public/notes (useAssets), for the name check and Source.
-export function NoteEditor({ path, assets, ...rest }: { path: string; assets: readonly string[] } & Panels & Clients) {
+// lists public/notes (useAssets), for the name check and Source. `onStatus`
+// follows the autosave state, so a rename can wait for it.
+export function NoteEditor({ path, assets, onStatus, ...rest }: {
+  path: string;
+  assets: readonly string[];
+  onStatus?: (status: DocumentStatus) => void;
+} & Panels & Clients) {
   const notePath = `${NOTES_PREFIX}${path}`;
   const uploads = useAssetUploads(rest.files, notePath, assets);
   // Null until the server sent the file. A denied open never reports it, so
@@ -47,7 +52,10 @@ export function NoteEditor({ path, assets, ...rest }: { path: string; assets: re
         onOpen: (opened) => {
           setWritable(opened.writable);
         },
-        onStatus: setStatus,
+        onStatus: (next) => {
+          setStatus(next);
+          onStatus?.(next);
+        },
       }}
       components={editorConfig.components}
       syntax={editorConfig.syntax}

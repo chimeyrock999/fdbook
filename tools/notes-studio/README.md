@@ -41,6 +41,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `files/` has the file API, the file events and the file-system helpers.
   - `sync/` has the fumadocs-editor sync server for `content/notes`.
   - `lint/` checks a note against the site's rules (see Lint below).
+  - `tree/` builds the page tree and creates, renames and reorders pages
+    (see Page tree below).
 - `src/`: the React UI.
   - `api/` holds the clients for the server.
   - `editor/` is the note editor: Visual and Source modes, save status and
@@ -50,7 +52,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `lint/` is the Issues tab and the issue count in the toolbar.
   - `media/` saves pasted and dropped images under `public/notes` (see
     Images below).
-  - `notes/` is the note list and the check that a note can be opened.
+  - `notes/` is the check that a note can be opened.
+  - `tree/` is the page tree in the left panel and its dialogs.
   - `plugins/` holds the editor plugins (see below).
 - `tests/`: laid out like `server/` and `src/`. `tests/support/` holds the
   fixtures: a throwaway worktree, a Studio on a free port, and raw HTTP and
@@ -85,6 +88,8 @@ another one.
 | `PUT /api/file?path=…` | Notes and `meta.yaml` take a JSON body `{ content, baseMtime }`. Assets take the raw bytes plus `X-Studio-Write: 1` and `X-Base-Mtime`. |
 | `GET /api/events` | Server-sent events: `{ type: "add" \| "change" \| "unlink", path, mtimeMs }` |
 | `POST /api/lint` | Takes JSON `{ path, content }` for a note and returns `{ path, issues }` (see Lint). Writes nothing. |
+| `GET /api/tree` | The page tree: `{ tree }` (see Page tree) |
+| `POST /api/tree` | Takes JSON `{ op: "create" \| "rename" \| "move", dryRun?, … }`, changes the tree and returns `{ changes, open }`. With `dryRun` it writes nothing. |
 | `/__fde_sync` (websocket) | The fumadocs-editor sync server for `content/notes`. It reads `.mdx` only, writes only notes that already exist (no page or folder creation; that goes through the file API), and merges changes made on disk into open documents. Known gap: its tree `delete` command still removes an existing note, without updating `meta.yaml` or checking the mtime, because the scope cannot tell it apart from a save on the same path. Don't wire the editor's tree delete until upstream can authorize tree commands separately (fuma-nama/fumadocs-editor#24). |
 
 A save names the mtime it was edited from; `null` means a new file. If the
@@ -100,7 +105,7 @@ temp file and renames it over the target, keeping the file's mode.
 
 ## Editor
 
-Pick a note in the list (or open `?path=content/notes/…mdx`). The editor is
+Pick a note in the page tree (or open `?path=content/notes/…mdx`). The editor is
 [fumadocs-editor](https://github.com/fuma-nama/fumadocs-editor), opened
 through the notes sync socket:
 
@@ -133,6 +138,60 @@ through the notes sync socket:
   components draw with (`--garden-*`, `--color-graph-*`, `--color-callout-*`);
   a test fails when they drift. `src/notes-prose.css` copies the note page's
   prose rules (`app/notes/notes.module.css`).
+
+## Page tree
+
+The left panel shows the notes as the site's sidebar does. The server runs
+the same fumadocs `loader()` as `lib/source.ts` over `content/notes`
+(`server/tree/build.ts`), so the order, separators (`---Label---`), links,
+nested entries (`a/b`), `...`, `z...a`, `...folder` and `!slug` all come out
+as on the site. On top of that the tree shows:
+
+- **hidden**: pages and folders the site leaves out of its sidebar, in their
+  own folder after the listed ones. Either no meta.yaml lists them (fumadocs'
+  fallback tree) or they say `visible: false` (`lib/visible-page-tree.ts`).
+  Hover the badge for the reason.
+- **missing**: a `pages` entry that reaches no page or folder, at its place.
+- **Filter** keeps the pages and folders whose title or path matches, with
+  the folders on the way to them.
+
+Changes go through `POST /api/tree`, never through the notes sync, which
+cannot update meta.yaml. Each one is planned against the disk and applied
+under one lock. Every file it writes must still have the mtime it was read
+at, checked before anything is written and again just before each write;
+otherwise the answer is `409`. A rename moves the page or folder first, so
+a move that fails writes nothing.
+
+- **Reorder** (drag a row, or the row menu's Move up / Move down) moves an
+  entry within its folder's `pages`. Only nodes with an entry of their own
+  there can move; a lock explains the others. The edit swaps the text of the
+  entry lines, so comments, blank lines, quote style, `icon`, `visible` and a
+  missing final newline stay as they were. A folder without meta.yaml gets
+  one with only `pages`, in the new order, so its title (from the index
+  page) and its closed-by-default state stay.
+- **New page** (the `+` button, or New page here / below in the row menu)
+  writes `slug.mdx`, or `slug/index.mdx` plus `slug/meta.yaml`, with the
+  frontmatter the notes use (title, description, graph), as the Obsidian
+  plugin wrote it. The slug is added to the parent's `pages` after the
+  chosen entry, unless the parent has no meta.yaml, no `pages`, or
+  `...`/`z...a`, which list it already.
+- **Rename** gives a page or folder a new name in the same folder. Every
+  meta.yaml entry that reached it (`a/b`, `!x`, `...x` included) and every
+  Markdown link or link definition to it (`./`, `../` and `/notes/…`, anchors
+  kept) points at the new name; only the changed path segment is rewritten.
+  Only links that reach a note change: `/notes/a/page/x.png` (an image in
+  the page's asset folder, which does not move) and a folder `page/` next
+  to `page.mdx` keep their paths. JSX `href`s are not rewritten. A note open
+  in the editor follows the rename; renaming it, or its folder, waits until
+  its edits are saved. The dialogs show what will be written (a dry run)
+  before you confirm.
+
+A rename does not move the page's images: they stay in
+`public/notes/<old path>/`, the links to them keep working, and the dry run
+lists the folder as staying. New images go to the folder of the new path
+(see Images). Rename and reorder do
+not cover moving a page to another folder, deleting, or editing a folder's
+title, icon or `defaultOpen`.
 
 ## Images
 

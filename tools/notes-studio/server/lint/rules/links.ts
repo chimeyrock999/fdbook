@@ -12,7 +12,7 @@ export function pageUrl(path: string) {
 }
 
 // fumadocs' joinPath: `..` above the root is dropped, not an error.
-function joinPath(...paths: string[]) {
+export function joinPath(...paths: string[]) {
   const out: string[] = [];
   for (const path of paths) {
     for (const segment of path.split('/')) {
