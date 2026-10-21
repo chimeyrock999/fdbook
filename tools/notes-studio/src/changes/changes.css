@@ -165,8 +165,13 @@
     padding: 4px 6px;
     border-radius: 6px;
   }
-  .studio-changes-file:hover {
+  .studio-changes-file:hover,
+  .studio-changes-file[aria-current='true'] {
     background: var(--fde-accent);
+  }
+  /* The file whose diff is open. */
+  .studio-changes-file[aria-current='true'] {
+    box-shadow: inset 2px 0 0 var(--fde-primary);
   }
   .studio-changes-what {
     display: grid;
@@ -182,7 +187,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .studio-changes-name:not(:disabled):hover {
+  .studio-changes-name:hover {
     text-decoration: underline;
   }
   .studio-changes-file[data-change='D'] .studio-changes-name {
@@ -252,11 +257,24 @@
   .studio-changes-commit-files {
     display: grid;
     gap: 1px;
-    padding: 0 6px 6px 28px;
+    padding: 0 6px 6px 22px;
     font-family: var(--font-mono);
     font-size: 11.5px;
     color: var(--fde-muted-foreground);
     overflow-wrap: anywhere;
+  }
+  .studio-changes-commit-files button,
+  .studio-changes-commit-files span {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    padding: 1px 6px;
+    border-radius: 5px;
+    text-align: left;
+  }
+  .studio-changes-commit-files button:hover {
+    background: var(--fde-accent);
+    color: var(--fde-foreground);
   }
   .studio-leave-notice {
     position: absolute;
