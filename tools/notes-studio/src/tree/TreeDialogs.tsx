@@ -47,6 +47,7 @@ function Changes({ changes }: { changes: TreeChange[] }) {
             </>
           )}
           {change.type === 'move' && `${change.path} → ${change.to}`}
+          {change.type === 'delete' && `− ${change.path}`}
           {change.type === 'keep' && (
             <>
               = {change.path} <span>{change.detail}</span>
