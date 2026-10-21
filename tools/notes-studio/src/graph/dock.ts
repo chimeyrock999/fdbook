@@ -74,17 +74,21 @@ function scrollerOf(element: HTMLElement): HTMLElement | undefined {
 
 // Places `floating` (fixed) against the selection and the editor's bubble,
 // and keeps it there while either moves, the page scrolls or `floating`
-// changes size. `key` changes with the selection: with `wait`, after a
-// change the popup stays hidden until the bubble shows or BUBBLE_DELAY
-// passes.
+// changes size. `key` changes with the selection. With `wait` (a selection
+// the bubble shows for), a new key keeps the popup hidden until the bubble
+// is placed or BUBBLE_DELAY passes; a bubble sliding to a new place (it has
+// a 200ms transition on top/left) hides it too, until the slide ends.
 export function useDock(view: EditorView, root: RefObject<HTMLElement | null>, floating: RefObject<HTMLElement | null>, key: string, wait: boolean) {
   const [docked, setDocked] = useState<Docked>('selection');
-  const [waiting, setWaiting] = useState(wait);
+  // The last key the popup was placed for, and whether the bubble is moving.
+  // Derived during render, so a new selection never paints a stale frame.
+  const [settled, setSettled] = useState<string | null>(null);
+  const [sliding, setSliding] = useState(false);
+  const waiting = wait && (settled !== key || sliding);
 
   useEffect(() => {
     if (!wait) return;
-    setWaiting(true);
-    const timer = setTimeout(() => { setWaiting(false); }, BUBBLE_DELAY);
+    const timer = setTimeout(() => { setSettled(key); }, BUBBLE_DELAY);
     return () => { clearTimeout(timer); };
   }, [key, wait]);
 
@@ -108,17 +112,34 @@ export function useDock(view: EditorView, root: RefObject<HTMLElement | null>, f
         element.style.top = `${String(y)}px`;
       });
     };
-    // The bubble moves by its inline style. BubbleMenu appends it before it
-    // places it, so every candidate is watched: the bubble may reach the
-    // selection only after it was appended.
+    // The bubble moves by its inline style, then slides there. BubbleMenu
+    // appends it before it places it, so every candidate is watched: the
+    // bubble may reach the selection only after it was appended. Its box is
+    // read again once a slide ends, where it really is.
     const watchStyles = new MutationObserver(() => { refresh(); });
+    let listening = new AbortController();
     const refresh = () => {
+      // A slide still running starts again with transitionrun; one whose
+      // bubble was removed never ends, so it is not left waiting.
+      setSliding(false);
       const among = candidates(view, container);
       bubble = findBubble(view, container, among);
       watchStyles.disconnect();
-      for (const element of among) watchStyles.observe(element, { attributes: true, attributeFilter: ['style'] });
+      listening.abort();
+      listening = new AbortController();
+      for (const candidate of among) {
+        watchStyles.observe(candidate, { attributes: true, attributeFilter: ['style'] });
+        const { signal } = listening;
+        candidate.addEventListener('transitionrun', () => { setSliding(true); }, { signal });
+        for (const end of ['transitionend', 'transitioncancel']) {
+          candidate.addEventListener(end, () => {
+            setSliding(false);
+            refresh();
+          }, { signal });
+        }
+      }
       setDocked(bubble ? 'bubble' : 'selection');
-      if (bubble) setWaiting(false);
+      if (bubble) setSettled(key);
       place();
     };
     // It is appended to, or removed from, one of the editor's ancestors.
@@ -132,6 +153,7 @@ export function useDock(view: EditorView, root: RefObject<HTMLElement | null>, f
     return () => {
       observer.disconnect();
       watchStyles.disconnect();
+      listening.abort();
       stop();
     };
   }, [view, root, floating, key]);

@@ -63,7 +63,8 @@ function GraphBar({ view, container, marker, canWrap, canMark }: {
   const bar = useRef<HTMLDivElement>(null);
   const { from, to } = view.state.selection;
   // Hidden until the editor's bubble is placed, so the bar does not jump.
-  const { docked, waiting } = useDock(view, container, bar, `${String(from)}-${String(to)}`, true);
+  // The bubble never shows for a caret: nothing to wait for then.
+  const { docked, waiting } = useDock(view, container, bar, `${String(from)}-${String(to)}`, from !== to);
   return createPortal(
     <div
       ref={bar}

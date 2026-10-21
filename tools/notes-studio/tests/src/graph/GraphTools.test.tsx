@@ -55,6 +55,40 @@ describe('GraphTools', () => {
     expect(screen.getByRole('toolbar', { name: 'Graph' }).style.visibility).toBe('visible');
   });
 
+  it('follows the bubble when it slides to a new place, and shows once it is there', async () => {
+    const view = await mount('Mỗi process có một Process Control Block lưu trạng thái.\n');
+    view.select('Process Control Block');
+    // Hidden from the accessibility tree while it waits for the bubble.
+    const bar = await screen.findByRole('toolbar', { name: 'Graph', hidden: true });
+    await vi.waitFor(() => { expect(bar.dataset.docked).toBe('bubble'); }, { timeout: 2000 });
+    // The bubble BubbleMenu shows, as the bar found it.
+    const bubble = defined(
+      [...document.querySelectorAll<HTMLElement>('[style]')].find((element) => element.style.visibility === 'visible' && element.style.position === 'absolute' && !element.contains(view.prose)),
+      'bubble',
+    );
+    // It moves: its new inline place is set, then it slides there (a
+    // transition on top/left), still far from the selection when the style
+    // changes. Hidden meanwhile; docked again once the slide ends near it.
+    // jsdom puts the selection at 0.
+    bubble.getBoundingClientRect = () => new DOMRect(0, 500, 300, 38);
+    bubble.style.left = '12px';
+    await vi.waitFor(() => { expect(bar.dataset.docked).toBe('selection'); });
+    act(() => { bubble.dispatchEvent(new Event('transitionrun')); });
+    expect(bar.style.visibility).toBe('hidden');
+    bubble.getBoundingClientRect = () => new DOMRect(0, 20, 300, 38);
+    act(() => { bubble.dispatchEvent(new Event('transitionend')); });
+    await vi.waitFor(() => { expect(bar.dataset.docked).toBe('bubble'); });
+    expect(bar.style.visibility).toBe('visible');
+  });
+
+  it('shows at once for a caret, which the bubble never shows for', async () => {
+    const view = await mount('## Process Control Block\n\nText.\n');
+    view.caret('Process', 2);
+    const bar = await screen.findByRole('toolbar', { name: 'Graph' });
+    expect(bar.style.visibility).toBe('visible');
+    view.caret('Control', 1);
+    expect(screen.getByRole('toolbar', { name: 'Graph' }).style.visibility).toBe('visible');
+  });
 
   it('wraps a selection as a Keyword and writes the edited fields', async () => {
     const view = await mount('Mỗi process có một Process Control Block lưu trạng thái.\n');
