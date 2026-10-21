@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode, t
 import { createPortal } from 'react-dom';
 import { useEditorPlugin } from '../editor/decorations';
 import { composing } from '../keyboard';
+import { findBubble, placeBar } from './dock';
 import { closeGraphFields, graphCommand, graphKey, graphPlugin, type GraphAction } from './graph-plugin';
 import { defaults, graphMetaTarget, markerAt, updateMarker, wrapRange, type Marker } from './markers';
 
@@ -15,15 +16,23 @@ function shortcut(key: string) {
 
 const LABELS: Record<Marker['kind'], string> = { Keyword: 'Keyword', Tag: 'Tag', GraphMeta: 'Graph node' };
 
-// Where a popup goes: under the selection, kept on screen. The selection,
-// not the marker: a marker's hidden source (a heading's :graph-meta) has no
-// box to measure.
-function below(view: EditorView, width: number) {
+// The selection's box on screen. The selection, not the marker: a
+// marker's hidden source (a heading's :graph-meta) has no box to measure.
+function selectionBox(view: EditorView) {
   const { from, to } = view.state.selection;
   const start = view.coordsAtPos(from);
   const end = view.coordsAtPos(to);
-  const left = Math.max(8, Math.min(Math.min(start.left, end.left), window.innerWidth - width - 8));
-  return { left, top: Math.max(start.bottom, end.bottom) + 8 };
+  return {
+    top: Math.min(start.top, end.top),
+    bottom: Math.max(start.bottom, end.bottom),
+    left: Math.min(start.left, end.left),
+    right: Math.max(start.right, end.right),
+  };
+}
+
+// Where a popup goes: under the selection, kept on screen.
+function below(view: EditorView, width: number) {
+  return placeBar(selectionBox(view), null, { width, height: 0 }, { width: window.innerWidth, height: Infinity });
 }
 
 // Draws again while a popup is up and the page scrolls or resizes.
@@ -40,11 +49,11 @@ function useFollowScroll() {
   }, []);
 }
 
-// The graph bar under the selection (wrap it as a Keyword or Tag, mark the
-// heading as a graph node, edit the marker there) and the fields of a
-// marker's id and displayName. The editor's own format bubble sits above
-// the selection, so this sits below. Both live on the live editor inside
-// `container`, through the graph plugin.
+// The graph bar (wrap the selection as a Keyword or Tag, mark the heading
+// as a graph node, edit the marker there) and the fields of a marker's id
+// and displayName. The bar docks under the editor's own format bubble when
+// that sits under the selection (see dock.ts). Both live on the live editor
+// inside `container`, through the graph plugin.
 export function GraphTools({ container }: { container: RefObject<HTMLElement | null> }) {
   const [view, setView] = useState<EditorView | null>(null);
   const [, redraw] = useState(0);
@@ -73,18 +82,51 @@ export function GraphTools({ container }: { container: RefObject<HTMLElement | n
   const canWrap = wrapRange(view.state) !== null;
   const canMark = graphMetaTarget(view.state) !== null;
   if (!canWrap && !canMark && !marker) return null;
-  return <GraphBar view={view} marker={marker} canWrap={canWrap} canMark={canMark} />;
+  return <GraphBar view={view} container={container} marker={marker} canWrap={canWrap} canMark={canMark} />;
 }
 
-function GraphBar({ view, marker, canWrap, canMark }: { view: EditorView; marker: Marker | null; canWrap: boolean; canMark: boolean }) {
+// Draws again when the editor's bubble shows, hides or moves: it follows the
+// selection 150ms late, after this bar was placed.
+function useFollowBubble(container: RefObject<HTMLElement | null>) {
+  const [, redraw] = useState(0);
+  useEffect(() => {
+    const root = container.current;
+    if (!root) return;
+    let frame = 0;
+    const observer = new MutationObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => { redraw((count) => count + 1); });
+    });
+    observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] });
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [container]);
+}
+
+// The bar's size for placing it: its width is capped, its height one row.
+const BAR_SIZE = { width: 330, height: 36 };
+const viewport = () => ({ width: window.innerWidth, height: window.innerHeight });
+
+function GraphBar({ view, container, marker, canWrap, canMark }: {
+  view: EditorView;
+  container: RefObject<HTMLElement | null>;
+  marker: Marker | null;
+  canWrap: boolean;
+  canMark: boolean;
+}) {
   useFollowScroll();
+  useFollowBubble(container);
   const run = (action: GraphAction) => { graphCommand(action)(view.state, view.dispatch, view); };
+  const selection = selectionBox(view);
+  const bubble = container.current ? findBubble(container.current, selection) : null;
   return createPortal(
     <div
       role="toolbar"
       aria-label="Graph"
       className="studio-popup fixed z-40 flex max-w-[calc(100vw-16px)] flex-wrap gap-0.5 p-[3px]"
-      style={below(view, 330)}
+      style={placeBar(selection, bubble, BAR_SIZE, viewport())}
     >
       <BarButton icon={<Highlighter size={14} aria-hidden />} label="Keyword" keys="K" disabled={!canWrap} onRun={() => { run('Keyword'); }} />
       <BarButton icon={<Tag size={14} aria-hidden />} label="Tag" keys="T" disabled={!canWrap} onRun={() => { run('Tag'); }} />
