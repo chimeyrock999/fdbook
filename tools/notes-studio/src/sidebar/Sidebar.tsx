@@ -54,6 +54,8 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
 
   // The drag sets the pane's width directly and saves it once at the end,
   // so moving the pointer neither re-renders the Studio nor writes storage.
+  // A press without a move (a click, a double-click's first press) saves
+  // nothing, so a capped width does not replace the stored preference.
   const startResize = (event: PointerEvent<HTMLDivElement>) => {
     const element = pane.current;
     if (event.button !== 0 || !element) return;
@@ -62,14 +64,14 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
     const handle = event.currentTarget;
     handle.setPointerCapture(event.pointerId);
     handle.dataset.dragging = '';
-    let dragged = width;
+    let dragged: number | null = null;
     const move = (next: globalThis.PointerEvent) => {
       dragged = fit(next.clientX - left);
       element.style.width = `${String(dragged)}px`;
       handle.setAttribute('aria-valuenow', String(dragged));
     };
     const stop = () => {
-      state.resize(dragged);
+      if (dragged !== null) state.resize(dragged);
       delete handle.dataset.dragging;
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', stop);

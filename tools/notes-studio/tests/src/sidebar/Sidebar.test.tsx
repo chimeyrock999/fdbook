@@ -102,7 +102,14 @@ describe('Sidebar', () => {
       expect(pane().style.width).toBe('420px');
       fireEvent.keyDown(separator(), { key: 'End' });
       expect(stored()).toMatchObject({ width: 436 });
-      // A drag past the edge stops there too.
+      // A press with no move keeps the stored preference.
+      localStorage.setItem('notes-studio:sidebar', JSON.stringify({ view: 'notes', shown: true, width: 480 }));
+      cleanup();
+      render(<Harness />);
+      fireEvent.pointerDown(separator(), { button: 0, pointerId: 1 });
+      fireEvent.pointerUp(separator(), { pointerId: 1 });
+      expect(stored()).toMatchObject({ width: 480 });
+      // A drag past the edge stops there.
       fireEvent.pointerDown(separator(), { button: 0, pointerId: 1 });
       fireEvent.pointerMove(separator(), { clientX: 700, pointerId: 1 });
       fireEvent.pointerUp(separator(), { pointerId: 1 });
