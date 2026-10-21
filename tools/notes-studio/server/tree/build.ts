@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type * as PageTree from 'fumadocs-core/page-tree';
 import { loader } from 'fumadocs-core/source';
 import { parse } from 'yaml';
+import { findBlock } from '../../src/frontmatter/block.ts';
 import { listEditableFiles } from '../files/store.ts';
 import { siteIconNames } from '../icons/names.ts';
 import { joinPath } from '../lint/rules/links.ts';
@@ -20,8 +21,6 @@ type Data = Record<string, unknown>;
 const SEPARATOR = /^---(?:\[([^\]]+)])?(.+)---|^---$/;
 const LINK = /^(?:external:)?(?:\[[^\]]+])?\[[^\]]+]\([^)]+\)$/;
 const REST = new Set(['...', 'z...a']);
-
-const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
 function parseData(yaml: string): Data {
   try {
@@ -48,7 +47,7 @@ export async function readNotesContent(root: string): Promise<NotesContent> {
       const path = file.path.slice(NOTES_DIR.length + 1);
       mtimes.set(path, file.mtimeMs);
       if (file.kind === 'meta') metas.set(path, parseData(text));
-      else pages.set(path, parseData(FRONTMATTER.exec(text)?.[1] ?? ''));
+      else pages.set(path, parseData(findBlock(text)?.yaml ?? ''));
     }),
   );
   return { pages, metas, mtimes };

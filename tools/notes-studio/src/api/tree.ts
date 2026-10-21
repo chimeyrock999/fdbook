@@ -32,6 +32,7 @@ export type TreeChange =
   | { type: 'add'; path: string }
   | { type: 'change'; path: string; detail: string }
   | { type: 'move'; path: string; to: string }
+  | { type: 'delete'; path: string }
   // Left where it is: a page's images in public/notes (a worktree path).
   | { type: 'keep'; path: string; detail: string };
 
@@ -43,7 +44,9 @@ export type TreeRequest =
   | { op: 'create'; parent: string; slug: string; title: string; kind: CreateKind; defaultOpen: boolean; after: number | null }
   | { op: 'rename'; path: string; slug: string }
   | { op: 'move'; folder: string; from: number; to: number; baseMtime: number | null }
-  | { op: 'set-open'; folder: string; defaultOpen: boolean; baseMtime: number | null };
+  | { op: 'set-open'; folder: string; defaultOpen: boolean; baseMtime: number | null }
+  // `visible: false` in the page's frontmatter or the folder's meta.yaml, or out again.
+  | { op: 'visibility'; path: string; visible: boolean };
 
 // `created`: the page or folder a create added.
 export type TreeAnswer = { changes: TreeChange[]; open: string | null; created?: string };
