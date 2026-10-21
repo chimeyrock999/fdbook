@@ -32,6 +32,7 @@ export type TreeChange =
   | { type: 'add'; path: string }
   | { type: 'change'; path: string; detail: string }
   | { type: 'move'; path: string; to: string }
+  | { type: 'delete'; path: string }
   // Left where it is: a page's images in public/notes (a worktree path).
   | { type: 'keep'; path: string; detail: string };
 

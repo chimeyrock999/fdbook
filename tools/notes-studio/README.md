@@ -295,9 +295,14 @@ a move that fails writes nothing.
   out again: hiding and showing gives back the file byte for byte, unless
   it said `visible: true` (that line goes too). A folder without meta.yaml
   gets one with `visible: false` and its children in `pages`, as a reorder
-  writes, so they can still be ordered. A meta.yaml that showing would
-  leave empty, which the site's schema refuses, says `visible: true`.
-  Showing an unlisted node also adds it at the end of its folder's `pages`.
+  writes, so they can still be ordered. Shown again, that meta.yaml is
+  removed while it still lists them in the order they had without it;
+  reordered meanwhile, it stays without `visible`. A meta.yaml that showing
+  would leave empty, which the site's schema refuses, says `visible: true`.
+  Showing an unlisted node also lists it in its folder's `pages`: a
+  `!name` entry becomes `name`, or it is added at the end. A page `x.mdx`
+  next to a folder `x/` that the folder already lists is refused: the
+  entry reaches the folder, so rename one of them.
   A note open in the editor merges the change through its sync; while it
   has unsaved edits, hiding or showing it waits, as a rename does.
 - **Rename** gives a page or folder a new name in the same folder. Every

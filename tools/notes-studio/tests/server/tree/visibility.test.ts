@@ -1,8 +1,8 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadTree } from '../../../server/tree/build';
-import { applyPlan, planVisibility } from '../../../server/tree/ops';
+import { applyPlan, planMove, planVisibility } from '../../../server/tree/ops';
 import type { TreeFolder, TreeNode } from '../../../server/tree/types';
 import { writeMetaVisible, writePageVisible } from '../../../server/tree/visible-edit';
 import { makeWorktree, type Worktree } from '../../support/studio';
@@ -47,6 +47,7 @@ describe('hiding and showing from the page tree', () => {
   let worktree: Worktree;
   const notes = (path: string) => join(worktree.root, 'content/notes', path);
   const text = (path: string) => readFile(notes(path), 'utf8');
+  const exists = (path: string) => stat(notes(path)).then(() => true, () => false);
   const change = async (path: string, visible: boolean) => {
     const plan = await planVisibility(worktree.root, await loadTree(worktree.root), { path, visible });
     await applyPlan(worktree.root, plan);
@@ -101,9 +102,24 @@ describe('hiding and showing from the page tree', () => {
     expect([folder.hidden, folder.title, folder.defaultOpen]).toEqual(['visible-false', before.title, false]);
     // Its children keep their order and their entries, so they can still move.
     expect(order(folder)).toEqual(order(before));
-    await change('data-modeling', true);
-    expect(await text('data-modeling/meta.yaml')).toBe('pages:\n  - "dimensional-modeling"\n');
-    expect(await hiddenOf('data-modeling')).toBeNull();
+    // Shown again, the folder is as it was: without meta.yaml.
+    expect(await change('data-modeling', true)).toEqual([{ type: 'delete', path: 'data-modeling/meta.yaml' }]);
+    expect(await exists('data-modeling/meta.yaml')).toBe(false);
+    expect(order(nodeAt(await loadTree(worktree.root), 'data-modeling') as TreeFolder)).toEqual(order(before));
+    // So a page added later shows by itself, as it did before.
+    await writeFile(notes('data-modeling/later.mdx'), '---\ntitle: "Later"\n---\n');
+    expect(await hiddenOf('data-modeling/later.mdx')).toBeNull();
+  });
+
+  it('keeps the meta.yaml it wrote once the folder was reordered while hidden', async () => {
+    await writeFile(notes('data-modeling/zz-later.mdx'), '---\ntitle: "Later"\n---\n');
+    await change('data-modeling', false);
+    // Pages come before folders without meta.yaml.
+    expect(await text('data-modeling/meta.yaml')).toBe('visible: false\npages:\n  - "zz-later"\n  - "dimensional-modeling"\n');
+    const hidden = nodeAt(await loadTree(worktree.root), 'data-modeling') as TreeFolder;
+    await applyPlan(worktree.root, await planMove(worktree.root, await loadTree(worktree.root), { folder: 'data-modeling', from: 1, to: 0, baseMtime: hidden.metaMtime }));
+    expect(await change('data-modeling', true)).toEqual([{ type: 'change', path: 'data-modeling/meta.yaml', detail: 'removes visible: false' }]);
+    expect(await text('data-modeling/meta.yaml')).toBe('pages:\n  - "dimensional-modeling"\n  - "zz-later"\n');
   });
 
   it('adds an unlisted page to its folder when shown, and drops its visible: false', async () => {
@@ -123,6 +139,27 @@ describe('hiding and showing from the page tree', () => {
     const meta = await text('meta.yaml');
     await writeFile(notes('meta.yaml'), meta.replace('  - "data-platform"\n', '  - "...database"\n  - "data-platform"\n'));
     expect(await hiddenOf('database')).toBe('gone');
+  });
+
+  it('turns a `!name` entry into the name instead of adding one', async () => {
+    await writeFile(notes('distributed-systems/meta.yaml'), 'title: "D"\npages:\n  - "..."\n  - "!rpc-and-threads"\n');
+    expect(await hiddenOf('distributed-systems/rpc-and-threads.mdx')).toBe('unlisted');
+    expect(await change('distributed-systems/rpc-and-threads.mdx', true)).toEqual([
+      { type: 'change', path: 'distributed-systems/meta.yaml', detail: '"!rpc-and-threads" becomes "rpc-and-threads"' },
+    ]);
+    expect(await text('distributed-systems/meta.yaml')).toBe('title: "D"\npages:\n  - "..."\n  - "rpc-and-threads"\n');
+    expect(await hiddenOf('distributed-systems/rpc-and-threads.mdx')).toBeNull();
+  });
+
+  it('refuses to show a page whose name its folder already gives to a folder', async () => {
+    // mapreduce/ is listed; a page mapreduce.mdx next to it is left out.
+    await writeFile(notes('distributed-systems/mapreduce.mdx'), '---\ntitle: "MR"\n---\n');
+    const meta = await text('distributed-systems/meta.yaml');
+    expect(await hiddenOf('distributed-systems/mapreduce.mdx')).toBe('unlisted');
+    const refused = change('distributed-systems/mapreduce.mdx', true);
+    await expect(refused).rejects.toThrow('already names another page or folder');
+    await expect(refused).rejects.toMatchObject({ status: 409 });
+    expect(await text('distributed-systems/meta.yaml')).toBe(meta);
   });
 
   it('adds an unlisted folder to the root meta.yaml', async () => {
