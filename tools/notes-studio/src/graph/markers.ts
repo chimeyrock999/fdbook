@@ -57,15 +57,16 @@ function uniformText(block: PmNode, from: number, to: number) {
   return uniform;
 }
 
-// Markdown that changes how a directive label reads: emphasis, code, the
-// label's own brackets and the escape itself.
-const LABEL_MARKUP = /[\\*_`[\]]/g;
+// What changes how a directive label reads: Markdown emphasis and code, the
+// label's own brackets, the escape itself, and MDX, since the site parses
+// the label as MDX (`{` starts an expression, `<` a tag).
+const LABEL_MARKUP = /[\\*_`[\]{<]/g;
 
 // A directive label as text: plain when it has no Markdown but escapes, so
 // it can be written back from the text; otherwise its text without the
 // emphasis marks, read only.
 function readLabel(label: string): { text: string; plain: boolean } {
-  const plain = !/(^|[^\\])(\\\\)*[*_`[\]]/.test(label) && !/(^|[^\\])(\\\\)*\\$/.test(label);
+  const plain = !/(^|[^\\])(\\\\)*[*_`[\]{<]/.test(label) && !/(^|[^\\])(\\\\)*\\$/.test(label);
   return plain ? { text: label.replace(/\\(.)/g, '$1').trim(), plain } : { text: plainLabel(label).trim(), plain };
 }
 

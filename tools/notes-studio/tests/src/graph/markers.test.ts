@@ -230,6 +230,15 @@ describe('markerAt and updateMarker', () => {
     expect(written).toBe(':keyword[a\\*b\\* and \\`x\\` \\\\ y\\_z \\[1\\]]{id="d" displayName="D"}\n');
     const again = atomState(written);
     expect(markerAt(again.state)).toMatchObject({ text: typed, content: { type: 'label' } });
+
+    // The label is MDX on the site: `{` starts an expression, `<` a tag.
+    const mdx = 'a < b {x}';
+    const braces = write(state.apply(updateMarker(state, defined(markerAt(state)), { id: 'd', displayName: 'D', text: mdx })).doc);
+    expect(braces).toBe(':keyword[a \\< b \\{x}]{id="d" displayName="D"}\n');
+    expect(markerAt(atomState(braces).state)).toMatchObject({ text: mdx, content: { type: 'label' } });
+    // One already holding an expression or a tag is read only.
+    expect(markerAt(atomState(':keyword[a {x}]{id="d"}\n').state)).toMatchObject({ content: null });
+    expect(markerAt(atomState(':keyword[<b>hi</b>]{id="d"}\n').state)).toMatchObject({ content: null });
   });
 
   // An attribute value cannot hold both quote kinds: double quotes become
