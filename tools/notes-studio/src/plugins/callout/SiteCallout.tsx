@@ -1,4 +1,5 @@
 import type { ComponentRenderProps } from '@fumadocs-editor/ui';
+import { ChevronDown } from 'lucide-react';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ICONS, semanticType } from './types';
 
@@ -45,19 +46,20 @@ export function SiteCallout({ props, children, setProp, types }: ComponentRender
 
   return (
     <div className="studio-callout" style={style} data-type={type}>
-      <span ref={picker} className="studio-callout-picker" contentEditable={false}>
+      <span ref={picker} className="studio-picker studio-callout-picker" contentEditable={false}>
         <button
           type="button"
-          className="studio-callout-icon"
+          className="studio-picker-button studio-callout-icon"
           aria-label={`Callout type: ${type}`}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={(event) => { setOpen(!open && editable(event.currentTarget)); }}
         >
           <Icon size={18} aria-hidden />
+          <ChevronDown size={10} className="studio-picker-chevron" aria-hidden />
         </button>
         {open && (
-          <span role="menu" className="studio-callout-menu">
+          <span role="menu" className="studio-picker-menu">
             {types.map((option) => {
               const OptionIcon = ICONS[semanticType(option)];
               return (

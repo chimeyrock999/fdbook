@@ -18,6 +18,7 @@ import { NoteHeader } from './NoteHeader';
 import type { RevealRequest } from './reveal';
 import { SourceEditor } from './SourceEditor';
 import { ConflictDialog, SaveStatus } from './SyncState';
+import './drag-handle.css';
 
 type Panels = { panelOpen: boolean; onOpenPanel: () => void; onClosePanel: () => void };
 type Clients = { files: ReturnType<typeof createFilesClient>; lint: LintClient };

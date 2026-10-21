@@ -32,7 +32,10 @@ describe('SiteCallout', () => {
   it('changes the type from the icon menu', async () => {
     const setProp = vi.fn();
     draw('note', setProp);
-    await userEvent.click(screen.getByRole('button', { name: 'Callout type: note' }));
+    const icon = screen.getByRole('button', { name: 'Callout type: note' });
+    // A chevron beside the icon shows it opens a menu (picker.css shows it on hover and focus).
+    expect(icon.querySelector('.studio-picker-chevron')).not.toBeNull();
+    await userEvent.click(icon);
     expect(screen.getAllByRole('menuitemradio').map((item) => item.textContent)).toEqual(DIRECTIVE_TYPES);
     expect(screen.getByRole('menuitemradio', { name: 'note' }).getAttribute('aria-checked')).toBe('true');
     await userEvent.click(screen.getByRole('menuitemradio', { name: 'caution' }));

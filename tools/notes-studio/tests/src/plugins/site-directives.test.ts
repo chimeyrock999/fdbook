@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { parseMdxToDoc, serializeDocToMdx, type ParsedDoc } from '@fumadocs-editor/core';
 import { describe, expect, it } from 'vitest';
 import { repoRoot } from '../../../server/config';
-import { parseAccordions, withAccordionBody } from '../../../src/plugins/site-directives/accordions';
+import { parseAccordions, withAccordionAttributes, withAccordionBody } from '../../../src/plugins/site-directives/accordions';
 import { decorateSiteDirectives } from '../../../src/plugins/site-directives/decorate';
 import { defined, describeDecoration, editorState, nodesOf, syntax, withNode } from '../../support/editor-state';
 import { realNotes } from '../../support/notes';
@@ -35,6 +35,62 @@ describe('accordion groups', () => {
     expect(() => withAccordionBody(top, 2, 'x')).toThrow(/no accordion 2/);
   });
 
+  it('rewrites one item\'s kind or title on its own line only', async () => {
+    const [top, indented] = await groups();
+    expect(withAccordionAttributes(top, 1, { kind: 'tip' }))
+      .toBe(top.replace(':::accordion{kind="deep-dive" title="Deep dive"}', ':::accordion{kind="tip" title="Deep dive"}'));
+    expect(withAccordionAttributes(top, 0, { title: 'Wide facts?' }))
+      .toBe(top.replace('title="Open question"', 'title="Wide facts?"'));
+    // The nested `:::note[Nested]` opener in item 2 is not an item.
+    expect(parseAccordions(withAccordionAttributes(top, 1, { title: 'Dig' }))?.items.map((item) => item.title)).toEqual(['Open question', 'Dig']);
+    expect(withAccordionAttributes(indented, 0, { kind: 'danger', title: 'Chú ý' }))
+      .toBe(indented.replace('{kind="warning" title="Lưu ý"}', '{kind="danger" title="Chú ý"}'));
+    expect(() => withAccordionAttributes(top, 2, { kind: 'tip' })).toThrow(/no accordion 2/);
+  });
+
+  it('keeps the quoting, order and spacing of the attributes it rewrites', () => {
+    const group = (opener: string) => `::::accordions\r\n${opener}\r\nx\r\n:::\r\n::::`;
+    const write = (opener: string, changes: { kind?: string; title?: string }) =>
+      withAccordionAttributes(group(opener), 0, changes);
+    expect(write(":::accordion{ title='A'  kind=tip }", { kind: 'note', title: 'B' })).toBe(group(":::accordion{ title='B'  kind=note }"));
+    expect(write(':::accordion{title = "A"}', { title: 'B' })).toBe(group(':::accordion{title = "B"}'));
+    // Missing attributes are added at the end, or in new braces.
+    expect(write(':::accordion{title="A"}', { kind: 'tip' })).toBe(group(':::accordion{title="A" kind="tip"}'));
+    expect(write(':::accordion{}', { kind: 'tip' })).toBe(group(':::accordion{kind="tip"}'));
+    expect(write(':::accordion', { title: 'B' })).toBe(group(':::accordion{title="B"}'));
+    // A title spelled as the label stays in the label.
+    expect(write(':::accordion[A]{kind="tip"}', { title: 'B [x]' })).toBe(group(':::accordion[B \\[x\\]]{kind="tip"}'));
+    // A quote in the new value switches the quoting, or is a reference.
+    expect(write(':::accordion{title="A"}', { title: 'Say "hi"' })).toBe(group(`:::accordion{title='Say "hi"'}`));
+    expect(write(':::accordion{title="A"}', { title: `It's "x"` })).toBe(group(`:::accordion{title="It's &quot;x&quot;"}`));
+    expect(parseAccordions(write(':::accordion{title="A"}', { title: `It's "x"` }))?.items[0].title).toBe(`It's "x"`);
+    expect(parseAccordions(write(':::accordion[A]', { title: 'B [x]' }))?.items[0].title).toBe('B [x]');
+  });
+
+  it('rewrites the attribute itself, never a word inside another value', () => {
+    const group = (opener: string) => `::::accordions\n${opener}\nx\n:::\n::::`;
+    const write = (opener: string, changes: { kind?: string; title?: string }) =>
+      withAccordionAttributes(group(opener), 0, changes);
+    expect(write(':::accordion{title="a kind b" kind}', { kind: 'tip' })).toBe(group(':::accordion{title="a kind b" kind="tip"}'));
+    // The parser keeps the last of two, so that one is written.
+    expect(parseAccordions(group(':::accordion{kind="tip" kind="note"}'))?.items[0].kind).toBe('note');
+    expect(write(':::accordion{kind="tip" kind="note"}', { kind: 'warning' })).toBe(group(':::accordion{kind="tip" kind="warning"}'));
+  });
+
+  // mdast-util-directive decodes character references in attributes, and a
+  // label is markdown: the card shows and writes the text the site shows.
+  it('reads and writes titles as the site reads them', () => {
+    const group = (opener: string) => `::::accordions\n${opener}\nx\n:::\n::::`;
+    const title = (opener: string) => parseAccordions(group(opener))?.items[0].title;
+    expect(title(':::accordion{title="Tom &amp; Jerry &#x2014; &lt;3"}')).toBe('Tom & Jerry \u2014 <3');
+    expect(title(':::accordion[a\\*b &amp; c]')).toBe('a*b & c');
+    const write = (opener: string, text: string) => withAccordionAttributes(group(opener), 0, { title: text });
+    expect(write(':::accordion{title="A"}', 'R&D &amp; more')).toBe(group(':::accordion{title="R&D &amp;amp; more"}'));
+    expect(title(':::accordion{title="R&D &amp;amp; more"}')).toBe('R&D &amp; more');
+    expect(write(':::accordion[A]', 'use *this* & [that]')).toBe(group(':::accordion[use \\*this\\* \\& \\[that\\]]'));
+    expect(title(':::accordion[use \\*this\\* \\& \\[that\\]]')).toBe('use *this* & [that]');
+  });
+
   // What the card's textarea does, through the editor's own parse and save:
   // only the edited body changes, and a group inside a list keeps its indent.
   it('saves an edited body into the note', async () => {
@@ -58,7 +114,7 @@ describe('accordion groups', () => {
     expect(saved.endsWith(source.slice(source.indexOf('::youtube')))).toBe(true);
   });
 
-  it('reads every group in the real notes and writes it back unchanged', async () => {
+  it('reads every group in the real notes and writes its bodies, kinds and titles back unchanged', async () => {
     let items = 0;
     for (const { path, source } of await realNotes()) {
       for (const { node } of nodesOf(editorState(source), 'verbatim')) {
@@ -69,6 +125,7 @@ describe('accordion groups', () => {
         group.items.forEach((item, index) => {
           expect(item.title, path).not.toBe('');
           expect(withAccordionBody(value, index, item.body), path).toBe(value);
+          expect(withAccordionAttributes(value, index, { title: item.title, ...(item.kind && { kind: item.kind }) }), path).toBe(value);
         });
         items += group.items.length;
       }
