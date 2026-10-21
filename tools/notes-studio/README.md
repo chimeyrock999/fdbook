@@ -186,7 +186,12 @@ Visual:
   **Graph node** (`Mod-Alt-G`) adds `:graph-meta{…}` from its title. Some
   systems take a shortcut before the page sees it (`Ctrl-Alt-T` opens a
   terminal on GNOME, `Cmd-Opt-K` the Firefox console on macOS); the bar
-  buttons work everywhere.
+  buttons work everywhere. The bar and the id fields are placed with
+  floating-ui against the box around the selection and the editor's own
+  format bar, which also sits under the selection: under that box, or above
+  it with no room left in the editor (`src/graph/dock.ts`). The editor has
+  no way to add buttons to its format bar yet; one bar is drafted as an
+  upstream request.
 - The id is slugged from the text (Vietnamese marks dropped, `đ` → `d`) and
   the displayName is the text. The fields open right after, and again from
   **Edit … id** on the bar (caret in a keyword or a marked heading) or a
