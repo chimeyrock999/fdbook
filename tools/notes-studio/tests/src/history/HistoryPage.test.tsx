@@ -14,8 +14,6 @@ beforeAll(() => {
     unobserve() { return undefined; }
     disconnect() { return undefined; }
   };
-  // The rendered diff's editor asks about touch input.
-  vi.stubGlobal('matchMedia', (media: string) => ({ matches: false, media, addEventListener: () => undefined, removeEventListener: () => undefined }));
 });
 
 const PAGE = 'content/notes/streaming/groups.mdx';
@@ -28,6 +26,8 @@ const text = (value: string) => ({ kind: 'text' as const, text: value, size: val
 const pageHistory: PageHistory = {
   path: PAGE,
   mtimeMs: 42,
+  deleted: null,
+  generated: false,
   versions: [
     { sha: sha('c'), date: '2026-10-20T10:00:00Z', author: 'Studio Test', message: 'docs: third', path: PAGE, status: 'M', inChangeRequest: true },
     { sha: sha('b'), date: '2026-10-10T10:00:00Z', author: 'Studio Test', message: 'docs: rename', path: PAGE, status: 'R', from: OLD, inChangeRequest: false },
@@ -93,7 +93,7 @@ describe('HistoryPage', () => {
     client.loadHistory.mockResolvedValue({ ...pageHistory, mtimeMs: 43 });
     await user.click(within(dialog).getByRole('button', { name: 'Restore aaaaaaa' }));
     expect(client.restore).toHaveBeenCalledWith(PAGE, sha('a'), 42);
-    expect(onRestored).toHaveBeenCalled();
+    expect(onRestored).toHaveBeenCalledWith(PAGE);
     expect((await screen.findByRole('status')).textContent).toContain('Restored aaaaaaa');
     expect((await versions()).getAllByRole('button')[0].getAttribute('aria-current')).toBe('true');
     await waitFor(() => { expect(client.compare).toHaveBeenLastCalledWith(PAGE, sha('c'), NOW); });

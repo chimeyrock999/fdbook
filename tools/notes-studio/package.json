@@ -14,6 +14,9 @@
     "types:check": "tsc --noEmit"
   },
   "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "0.88.0",
+    "@agentclientprotocol/codex-acp": "2.2.2",
+    "@agentclientprotocol/sdk": "1.7.0",
     "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-markdown": "^6.5.2",

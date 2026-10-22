@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { createFilesClient } from '../api/files';
 import type { LintClient, LintIssue } from '../api/lint';
+import { confirmSignedIn } from '../api/session';
 import { workspaceSyncClient } from '../api/sync';
 import { frontmatterPathAt } from '../frontmatter/frontmatter';
 import type { FieldReveal } from '../frontmatter/MetadataStrip';
@@ -15,6 +16,7 @@ import { useLint } from '../lint/useLint';
 import { UploadNotice } from '../media/UploadNotice';
 import { useAssetUploads } from '../media/useAssetUploads';
 import { NOTES_PREFIX } from '../notes/notes';
+import { useSession } from '../session/session';
 import type { IssueCount } from '../sidebar/Sidebar';
 import { assetCompletion } from './asset-completion';
 import { GraphTools } from '../graph/GraphTools';
@@ -24,6 +26,8 @@ import { NoteHeader } from './NoteHeader';
 import type { RevealRequest } from './reveal';
 import { SourceEditor } from './SourceEditor';
 import { ConflictDialog, SaveStatus } from './SyncState';
+import { useUnsaved } from './unsaved';
+import { UnsavedNotice } from './UnsavedNotice';
 import './drag-handle.css';
 
 // The sidebar's Issues view: the editor fills `issuesSlot` and reports the
@@ -63,6 +67,8 @@ export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
   // Null until the server sent the file. A denied open never reports it, so
   // the status, not `writable` alone, decides whether editing is allowed.
   const [writable, setWritable] = useState<boolean | null>(null);
+  // The note as the server sent it when it opened.
+  const [disk, setDisk] = useState<string | null>(null);
   const [status, setStatus] = useState<DocumentStatus | null>(null);
   const locked = writable === false || status === 'denied';
   return (
@@ -72,10 +78,13 @@ export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
         client: workspaceSyncClient(),
         onOpen: (opened) => {
           setWritable(opened.writable);
+          setDisk(opened.text);
         },
         onStatus: (next) => {
           setStatus(next);
           onStatus?.(next);
+          // The server closes the socket of a session that ended (#115).
+          if (next === 'offline') void confirmSignedIn();
         },
       }}
       components={editorConfig.components}
@@ -84,7 +93,9 @@ export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
       editable={!locked}
     >
       <EditorLayout
+        path={path}
         notePath={notePath}
+        disk={disk}
         assets={assets}
         uploads={uploads}
         opened={writable !== null}
@@ -101,8 +112,10 @@ export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
 // The plugins' decorations, one ProseMirror plugin for every editor.
 const decorations = decorationsPlugin(editorConfig.decorators);
 
-function EditorLayout({ notePath, assets, uploads, opened, status, locked, readOnly, place, issuesSlot, onIssueCount, onShowIssues, onIssueShown, onShowHistory, files, lint }: {
+function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, locked, readOnly, place, issuesSlot, onIssueCount, onShowIssues, onIssueShown, onShowHistory, files, lint }: {
+  path: string;
   notePath: string;
+  disk: string | null;
   place: SourcePlace | null;
   assets: readonly string[];
   uploads: ReturnType<typeof useAssetUploads>;
@@ -116,6 +129,9 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, readO
   const source = useSourceText();
   // Here rather than in the header, which Source mode unmounts.
   const frontmatter = useFrontmatter(source.value, source.onChange);
+  // Unsaved text kept for a page that goes before the save (#121).
+  const who = useSession().state.user?.login ?? '_';
+  const unsaved = useUnsaved(who, path, { text: source.value, disk, status, setText: source.onChange });
   const [reveal, setReveal] = useState<RevealRequest | null>(null);
   const [field, setField] = useState<FieldReveal | null>(null);
   const editor = useRef<HTMLElement>(null);
@@ -167,7 +183,7 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, readO
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
-      <section ref={editor} aria-label="Editor" className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--fde-background)]">
+      <section ref={editor} aria-label="Editor" className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--fde-background)]">
         <div className="flex flex-wrap items-center gap-2.5 border-b border-[var(--fde-border)] px-4 py-2">
           <SaveStatus status={status} readOnly={readOnly} />
           <UploadNotice notice={uploads.notice} onDismiss={uploads.dismissNotice} />
@@ -202,6 +218,7 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, readO
         ) : (
           <SourceEditor reveal={reveal} completion={completion} />
         )}
+        {unsaved.offer && <UnsavedNotice offer={unsaved.offer} writable={!locked} onRestore={unsaved.restore} onDiscard={unsaved.discard} />}
       </section>
       {issuesSlot && createPortal(<IssuesPanel state={lintState} onSelect={showIssue} />, issuesSlot)}
       {uploads.dialog}

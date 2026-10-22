@@ -1,0 +1,435 @@
+/* Agents (src/agents): the header control, the panel at the right of the
+   editor, a run's transcript and the permission dialog. Same tokens and
+   pieces as the rest of the chrome (.studio-button, .studio-menu, .studio-dialog). */
+@layer components {
+  .studio-agent-logo {
+    display: inline-flex;
+    flex: none;
+    vertical-align: -2px;
+  }
+  .studio-agent-logo svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Header: the panel toggle joined to the picker. */
+  .studio-agent-control {
+    display: inline-flex;
+    flex: none;
+    min-width: 0;
+  }
+  .studio-agent-toggle,
+  .studio-agent-picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 9px;
+    border: 1px solid var(--fde-border);
+    background: var(--fde-card);
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+  .studio-agent-toggle {
+    border-radius: 8px 0 0 8px;
+    border-right: 0;
+  }
+  .studio-agent-toggle[aria-pressed='true'] {
+    background: var(--fde-accent);
+  }
+  .studio-agent-picker {
+    min-width: 0;
+    border-radius: 0 8px 8px 0;
+  }
+  .studio-agent-picker-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .studio-agent-picker-review {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--fde-muted-foreground);
+  }
+  @media (max-width: 767px) {
+    .studio-agent-picker-name {
+      display: none;
+    }
+  }
+  .studio-agent-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--fde-info);
+    color: var(--fde-background);
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+
+  /* The picker's menu. */
+  .studio-agent-menu-head {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 8px 2px;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-menu-group {
+    display: grid;
+  }
+  .studio-menu button.studio-agent-item {
+    display: grid;
+    grid-template-columns: 14px 16px minmax(0, 1fr) auto;
+    gap: 2px 8px;
+    width: 100%;
+  }
+  .studio-agent-item-version {
+    font: 11px var(--font-mono);
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-item-why {
+    grid-column: 3 / 5;
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-item-why[data-tone='warning'] {
+    color: var(--fde-warning);
+  }
+  .studio-agent-menu-note {
+    padding: 4px 8px 6px;
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+
+  /* The panel: at the right of the editor; over it on a phone. */
+  .studio-agent-panel {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    width: 360px;
+    min-height: 0;
+    border-left: 1px solid var(--fde-border);
+    background: var(--fde-background);
+  }
+  @media (max-width: 1023px) {
+    .studio-agent-panel {
+      width: 320px;
+    }
+  }
+  @media (max-width: 767px) {
+    .studio-agent-panel {
+      position: absolute;
+      inset: 0 0 0 28px;
+      z-index: 30;
+      width: auto;
+      box-shadow: 0 0 30px rgb(0 0 0 / 0.18);
+    }
+  }
+  .studio-agent-panel-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-panel-head .studio-button {
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--fde-foreground);
+  }
+  .studio-agent-panel-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 12px 12px;
+  }
+  .studio-agent-meta {
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-link {
+    font-size: 11.5px;
+    color: var(--fde-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .studio-agent-composer {
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--fde-border);
+    border-radius: 9px;
+    background: var(--fde-card);
+  }
+  .studio-agent-composer textarea {
+    min-height: 64px;
+    resize: vertical;
+    background: transparent;
+    font-size: 13px;
+    line-height: 1.45;
+    outline: none;
+  }
+  .studio-agent-composer-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .studio-agent-roles {
+    display: inline-flex;
+    overflow: hidden;
+    border: 1px solid var(--fde-border);
+    border-radius: 7px;
+    font-size: 12px;
+  }
+  .studio-agent-roles button {
+    padding: 2px 9px;
+  }
+  .studio-agent-roles button[aria-pressed='true'] {
+    background: var(--fde-accent);
+    font-weight: 600;
+  }
+  .studio-agent-who {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+
+  /* A run. */
+  .studio-agent-run {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--fde-border);
+    border-radius: 9px;
+    background: var(--fde-card);
+  }
+  .studio-agent-run-head,
+  .studio-agent-run-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 8px 10px;
+    font-size: 12.5px;
+  }
+  .studio-agent-run-head {
+    border-bottom: 1px solid var(--fde-border);
+  }
+  .studio-agent-run-foot {
+    border-top: 1px solid var(--fde-border);
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-role,
+  .studio-agent-status {
+    padding: 0 7px;
+    border: 1px solid var(--fde-border);
+    border-radius: 999px;
+    font-size: 11px;
+  }
+  .studio-agent-status[data-status='running'] {
+    color: var(--fde-info);
+  }
+  .studio-agent-status[data-status='done'] {
+    color: var(--fde-success);
+  }
+  .studio-agent-status[data-status='failed'] {
+    color: var(--fde-error);
+  }
+  .studio-agent-status[data-status='cancelled'] {
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-stream {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    font-size: 12.5px;
+  }
+  .studio-agent-prompt {
+    align-self: flex-end;
+    max-width: 90%;
+    padding: 6px 9px;
+    border-radius: 9px 9px 2px 9px;
+    background: var(--fde-accent);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .studio-agent-message {
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .studio-agent-thought {
+    font-size: 12px;
+    font-style: italic;
+    color: var(--fde-muted-foreground);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .studio-agent-plan {
+    display: grid;
+    gap: 2px;
+    padding-left: 10px;
+    border-left: 2px solid var(--fde-border);
+    font-size: 12px;
+  }
+  .studio-agent-plan li[data-status='completed'] {
+    color: var(--fde-muted-foreground);
+    text-decoration: line-through;
+  }
+  .studio-agent-plan li[data-status='in_progress'] {
+    font-weight: 600;
+  }
+  .studio-agent-tool {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px 8px;
+    padding: 5px 8px;
+    border: 1px solid var(--fde-border);
+    border-radius: 7px;
+    background: var(--fde-background);
+    font-size: 12px;
+  }
+  .studio-agent-tool-title {
+    overflow: hidden;
+    font: 11.5px var(--font-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-agent-tool-state {
+    font-size: 11px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-tool[data-status='failed'] .studio-agent-tool-state {
+    color: var(--fde-error);
+  }
+  .studio-agent-tool[data-status='asking'] {
+    border-color: var(--fde-info);
+  }
+  .studio-agent-tool[data-status='wrote'] {
+    border-color: color-mix(in srgb, var(--fde-warning) 45%, var(--fde-border));
+  }
+  .studio-agent-tool[data-status='wrote'] .studio-agent-tool-state {
+    color: var(--fde-warning);
+  }
+  .studio-agent-tool .studio-agent-link {
+    grid-column: 2 / 4;
+    justify-self: start;
+  }
+
+  /* Earlier runs. */
+  .studio-agent-history h3 {
+    margin: 4px 0 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-history button {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0 8px;
+    width: 100%;
+    padding: 7px 4px;
+    border-top: 1px solid var(--fde-border);
+    font-size: 12.5px;
+    text-align: left;
+  }
+  .studio-agent-history button:hover,
+  .studio-agent-history button[aria-current='true'] {
+    background: var(--fde-accent);
+  }
+  .studio-agent-history-prompt {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-agent-history-meta {
+    display: flex;
+    grid-column: 1 / 3;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-history-meta > span:first-child {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* The permission dialog. */
+  .studio-agent-ask-lead {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-ask-command {
+    overflow-x: auto;
+    padding: 9px 11px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    background: var(--fde-background);
+    font: 12px/1.5 var(--font-mono);
+  }
+  .studio-agent-ask-paths {
+    display: grid;
+    gap: 2px;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .studio-agent-ask-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--fde-warning);
+  }
+
+  /* Over the note an agent changed in a run going on. */
+  .studio-agent-wrote {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: min(560px, calc(100% - 32px));
+    padding: 6px 8px 6px 10px;
+    border: 1px solid color-mix(in srgb, var(--fde-warning) 45%, var(--fde-border));
+    border-radius: 8px;
+    background: var(--fde-popover);
+    box-shadow: 0 6px 24px rgb(0 0 0 / 0.14);
+    font-size: 12.5px;
+    transform: translateX(-50%);
+  }
+
+  /* On a change request's card. */
+  .studio-cr-agents {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+}

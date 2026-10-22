@@ -16,6 +16,8 @@
 @import './cr/cr.css';
 @import './sidebar/sidebar.css';
 @import './session/session.css';
+@import './editor/unsaved.css';
+@import './agents/agents.css';
 /* Site components whose classes the Studio draws with (src/plugins). */
 @source '../../../components/graph-objects.tsx';
 
@@ -601,6 +603,9 @@
     position: fixed;
     z-index: 60;
     display: grid;
+    /* One column no wider than the menu: a long row ellipsizes instead of
+       running out of it with its badge, outline and dividers (#117). */
+    grid-template-columns: minmax(0, 1fr);
     min-width: 190px;
     max-width: 240px;
     padding: 4px;

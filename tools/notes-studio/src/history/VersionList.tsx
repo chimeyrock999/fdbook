@@ -1,4 +1,4 @@
-import type { PageVersion } from '../api/history';
+import type { DeletedIn, PageVersion } from '../api/history';
 import { NOW } from '../api/history';
 import { timeAgo } from '../changes/labels';
 import { fileNameOf, shortVersion } from './versions';
@@ -13,11 +13,13 @@ function Tags({ version }: { version: PageVersion }) {
   );
 }
 
-// The page's versions, newest first, on a rail: Now when `ids` starts with
-// it, then the commits. `selected` is the one shown.
-export function VersionList({ ids, versions, selected, restored, onSelect }: {
+// The page's versions, newest first, on a rail: the commit that deleted it
+// when it is gone (not a version: nothing to pick), Now when `ids` starts
+// with it, then the commits. `selected` is the one shown.
+export function VersionList({ ids, versions, deleted = null, selected, restored, onSelect }: {
   ids: readonly string[];
   versions: readonly PageVersion[];
+  deleted?: DeletedIn | null;
   selected: string | null;
   restored: string | null;
   onSelect: (version: string) => void;
@@ -25,6 +27,19 @@ export function VersionList({ ids, versions, selected, restored, onSelect }: {
   const bySha = new Map(versions.map((version) => [version.sha, version]));
   return (
     <ol className="studio-history-list">
+      {deleted !== null && (
+        <li>
+          <div className="studio-history-version" data-gone="">
+            <span className="studio-history-rail" aria-hidden />
+            <span className="studio-history-message">Deleted in {shortVersion(deleted.sha)}</span>
+            <span className="studio-history-sub">
+              <time dateTime={deleted.date} title={new Date(deleted.date).toLocaleString()}>{timeAgo(deleted.date)}</time>
+              <span className="truncate">{deleted.message}</span>
+            </span>
+            <span className="studio-history-tags"><span className="studio-history-tag" data-tag="deleted">Deleted</span></span>
+          </div>
+        </li>
+      )}
       {ids.map((id) => {
         const version = bySha.get(id);
         return (

@@ -48,6 +48,12 @@ describe('DiffPage', () => {
     expect(frontmatter.querySelector('ins')?.textContent).toBe('New.');
     await waitFor(() => { expect(screen.getByRole('region', { name: 'Removed' }).textContent).toContain('AQE is on from Spark 3.0.'); });
     await waitFor(() => { expect(screen.getByRole('region', { name: 'Added' }).textContent).toContain('AQE is on from Spark 3.2.'); });
+    // The live editor replaces the static first paint once the page is idle
+    // (200 ms in jsdom): wait for it, so what it asks of the window
+    // (matchMedia) runs in every run, not only in a slow one.
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: 'Added' }).querySelector('.ProseMirror[contenteditable]')).not.toBeNull();
+    }, { timeout: 10_000 });
     // The heading and Four. stay as context; One. to Three. fold.
     const fold = screen.getByRole('button', { name: '3 unchanged blocks · show' });
     expect(screen.queryByText('Two.')).toBeNull();
@@ -55,7 +61,7 @@ describe('DiffPage', () => {
     await waitFor(() => { expect(screen.getByText('Two.')).toBeTruthy(); });
     await userEvent.click(screen.getByRole('button', { name: /Open in editor/ }));
     expect(onOpen).toHaveBeenCalledWith(NOTE);
-  });
+  }, 20_000);
 
   it('shows the raw diff in Source, in one column in a narrow pane', async () => {
     setup(noteDiff);

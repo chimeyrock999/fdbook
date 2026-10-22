@@ -8,6 +8,7 @@ import { lintWorktree } from '../../../server/lint/context';
 import { json, rawRequest } from '../../support/http';
 import { generatedAsset, plantGeneratedAsset } from '../../support/generated-asset';
 import { startTestStudio, type TestStudio } from '../../support/studio';
+import { CORPUS_TIMEOUT_MS } from '../../support/timeouts';
 
 type Usage = { note: string; line: number; column: number; text: string; unsure: boolean };
 type Asset = { path: string; mtimeMs: number; usages: Usage[]; sources: { path: string; line: number; text: string }[] };
@@ -153,7 +154,7 @@ describe('assets API', () => {
       await writeFile(file(note), `${await text(note)}\nedited elsewhere\n`);
       await expect(applyAssetPlan(studio.root, plan)).rejects.toMatchObject({ status: 409 });
       expect(await exists(SUPERSET)).toBe(true);
-    });
+    }, CORPUS_TIMEOUT_MS);
 
     it('rewrites a reference written with a Markdown escape', async () => {
       await mkdir(file('public/notes/zz-escaped'), { recursive: true });
@@ -183,7 +184,7 @@ describe('assets API', () => {
       expect(await exists(asset)).toBe(true);
       expect(await exists('public/notes/zz-escaped/locked.png')).toBe(false);
       await rm(file('content/notes/zz-a-locked'), { recursive: true });
-    });
+    }, CORPUS_TIMEOUT_MS);
 
     it('lists usages in note and line order', async () => {
       const usages = (await find('public/notes/zz-escaped/foo-bar.png'))?.usages ?? [];

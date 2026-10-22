@@ -1,5 +1,12 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AgentControl } from './agents/AgentControl';
+import { AgentPanel } from './agents/AgentPanel';
+import { AgentWrote } from './agents/AgentWrote';
+import { PermissionDialog } from './agents/PermissionDialog';
+import { firstAsk } from './agents/transcript';
+import { useAgents } from './agents/useAgents';
+import { createAgentsClient, type RunTotals } from './api/agents';
 import type { AssetAnswer, AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
 import { createChangesClient, type ChangedFile } from './api/changes';
@@ -34,13 +41,15 @@ import { CrPicker, EditMenu } from './cr/CrMenus';
 import { useCrs } from './cr/useCrs';
 import { DiffPage } from './diff/DiffPage';
 import { createHistoryClient } from './api/history';
+import { DeletedPagesPage } from './history/DeletedPagesPage';
 import { HistoryPage } from './history/HistoryPage';
+import { useDeletedPages } from './history/useDeletedPages';
 import { NoteEditor, type SourcePlace } from './editor/NoteEditor';
 import { ASSETS_PREFIX } from './media/asset-names';
 import { useAssets } from './media/useAssets';
 import { NoteGate } from './notes/NoteGate';
 import { OpenPreview } from './notes/OpenPreview';
-import { movedPage, NOTES_PREFIX, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote, type Page } from './notes/notes';
+import { isList, movedPage, NOTES_PREFIX, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote, type Page } from './notes/notes';
 import { Sidebar, type IssueCount } from './sidebar/Sidebar';
 import { useSidebar, type SidebarView } from './sidebar/useSidebar';
 import { rightsOf, useSession } from './session/session';
@@ -77,8 +86,11 @@ export function App() {
   const diff = page?.kind === 'diff' ? page : null;
   const history = page?.kind === 'history' ? page.path : null;
   // The note the page tree marks: the one open, or the one whose history is.
-  const treeNote = active ?? history;
+  const treeNote = active ?? (history?.startsWith(NOTES_PREFIX) ? history : null);
   const historyClient = useMemo(() => createHistoryClient(), []);
+  // A page is deleted on HEAD by a commit: the list follows the commits.
+  const deleted = useDeletedPages(historyClient, git.history);
+  const deletedPage = history === null ? undefined : deleted.pages?.find((each) => each.path === history);
   // The open note's autosave state, by path: a rename waits until it is saved.
   const [saved, setSaved] = useState<{ path: string; status: DocumentStatus } | null>(null);
   const unsaved = unsavedNote(active, saved);
@@ -93,6 +105,12 @@ export function App() {
   const newCr = rights.write ? () => { setCrDialog({ kind: 'new' }); } : null;
   const discardRight = (cr: ChangeRequest) => (!rights.write ? 'no' : rights.discard(cr) ? 'yes' : 'admin');
   const currentCr = crs.list?.crs.find((cr) => cr.slug === CURRENT_CR) ?? null;
+  // Agents run in the change request this page edits (#84).
+  const agentsClient = useMemo(() => createAgentsClient(), []);
+  const agents = useAgents(agentsClient, crMode && CURRENT_CR !== null);
+  const liveRuns = agents.runs.filter((run) => run.status === 'running');
+  const asking = rights.agents ? firstAsk(liveRuns, agents.events) : null;
+  const [agentTotals, setAgentTotals] = useState<Record<string, RunTotals>>({});
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);
   // A reader follows a change request's preview too, without pushing or publishing.
@@ -132,6 +150,16 @@ export function App() {
     } else show(view);
   }, [select, show]);
   const showIssues = useCallback(() => { openView('issues'); }, [openView]);
+
+  // The list of change requests shows each one's agent runs, read again
+  // with the list and as this page's runs start and end.
+  const runCount = agents.runs.length;
+  useEffect(() => {
+    if (page?.kind !== 'crs' || !crMode) return undefined;
+    let current = true;
+    agentsClient.totals().then((totals) => { if (current) setAgentTotals(totals); }, () => undefined);
+    return () => { current = false; };
+  }, [agentsClient, crMode, page?.kind, crs.list, runCount, liveRuns.length]);
 
   // A drawer left open while the window grows would keep the sidebar shown.
   useEffect(() => {
@@ -174,6 +202,11 @@ export function App() {
   const openChanged = (file: ChangedFile) => {
     setPlace(null);
     go(file.from === undefined ? { kind: 'diff', path: file.path } : { kind: 'diff', path: file.path, from: file.from });
+  };
+  // A file an agent wrote: its diff against main.
+  const openDiff = (path: string) => {
+    setPlace(null);
+    go({ kind: 'diff', path });
   };
   // The open asset moved with a rename or a replace: follow it without a new history entry.
   const assetChangedBy = (answer: AssetAnswer) => {
@@ -220,7 +253,12 @@ export function App() {
     setPage(next);
   };
 
-  const pagePath = page === null || page.kind === 'crs' ? null : page.path;
+  const pagePath = page === null || isList(page) ? null : page.path;
+  // A history restore wrote files: what lists them loads again.
+  const restored = () => {
+    void git.reload();
+    deleted.reload();
+  };
   // A file is there when the page tree lists the note or the asset list the asset.
   const route = previewRoute(page, (path) => (path.startsWith(NOTES_PREFIX) ? titles.has(path) : assets.includes(path)));
   const committed = async () => {
@@ -260,6 +298,7 @@ export function App() {
         <span className={`min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)] ${crMode ? 'max-md:hidden' : ''}`}>{pagePath ?? ''}</span>
         {crMode && CURRENT_CR === null && rights.write && <EditMenu list={crs.list} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} />}
         {!onMain && <OpenPreview preview={preview.preview} route={route} />}
+        {crMode && <AgentControl agents={agents} live={liveRuns.length} />}
         {action !== null && <PrimaryActionButton action={action} onAction={act} />}
         <UserMenu />
       </header>
@@ -297,6 +336,7 @@ export function App() {
             />
           }
           changeRequests={crMode ? { shown: page?.kind === 'crs', onOpen: openList } : null}
+          deletedPages={{ shown: page?.kind === 'deleted' || deletedPage !== undefined, count: deleted.pages?.length ?? null, onOpen: () => { go({ kind: 'deleted' }); } }}
           assets={
             <AssetsView
               client={assetsClient}
@@ -346,7 +386,16 @@ export function App() {
             />
           </NoteGate>
         ) : asset ? (
-          <AssetPage client={assetsClient} list={assetList} path={asset} unsaved={unsaved !== null} readOnly={readOnly} onOpenUsage={openUsage} onChanged={assetChangedBy} />
+          <AssetPage
+            client={assetsClient}
+            list={assetList}
+            path={asset}
+            unsaved={unsaved !== null}
+            readOnly={readOnly}
+            onOpenUsage={openUsage}
+            onChanged={assetChangedBy}
+            onShowHistory={() => { go({ kind: 'history', path: asset }); }}
+          />
         ) : diff ? (
           <DiffPage
             client={changesClient}
@@ -360,13 +409,28 @@ export function App() {
           <HistoryPage
             client={historyClient}
             path={history}
-            title={titles.get(history) ?? history.slice(history.lastIndexOf('/') + 1)}
+            title={titles.get(history) ?? deletedPage?.title ?? history.slice(history.lastIndexOf('/') + 1)}
             readOnly={onMain}
             reader={!rights.write}
             revision={git.changes}
-            onOpen={() => { open(history); }}
-            onRestored={() => { void git.reload(); }}
+            onOpen={() => { if (history.startsWith(NOTES_PREFIX)) open(history); else openAsset(history); }}
+            onRestored={(path) => {
+              restored();
+              // An asset restored under another extension: its history follows it.
+              if (path === history) return;
+              const next: Page = { kind: 'history', path };
+              window.history.replaceState(null, '', pageQuery(next));
+              setPage(next);
+            }}
+            onBroughtBack={(path) => {
+              restored();
+              void reload();
+              open(path);
+            }}
+            onDeletedList={() => { go({ kind: 'deleted' }); }}
           />
+        ) : page?.kind === 'deleted' ? (
+          <DeletedPagesPage pages={deleted.pages} error={deleted.error} readOnly={onMain} onOpen={(path) => { go({ kind: 'history', path }); }} />
         ) : page?.kind === 'crs' && crMode ? (
           <CrListPage
             list={crs.list}
@@ -378,10 +442,13 @@ export function App() {
             onDiscard={rights.write ? (cr) => { setCrDialog({ kind: 'discard', cr }); } : null}
             canDiscard={rights.discard}
             onRefresh={() => { void crs.reload(true); }}
+            agents={agentTotals}
           />
         ) : (
           <p className="m-auto p-6 text-[13px] text-[var(--fde-muted-foreground)]">{readOnly ? 'Pick a note to read.' : 'Pick a note to edit.'}</p>
         )}
+        {active !== null && <AgentWrote runs={liveRuns} path={active} onOpenDiff={() => { openDiff(active); }} />}
+        {crMode && agents.open && <AgentPanel agents={agents} inCr={CURRENT_CR !== null} canRun={rights.agents} onOpenDiff={openDiff} />}
         {left && <LeaveNotice notice={left} onBack={() => { switchTo(left.cr); }} onClose={dismissLeft} />}
       </div>
       {crDialog?.kind === 'new' && (
@@ -394,6 +461,9 @@ export function App() {
       )}
       {publishing && preview.preview !== null && (
         <PublishDialog client={previewClient} preview={preview.preview} onPublished={published} onClose={() => { setPublishing(false); }} />
+      )}
+      {asking !== null && (
+        <PermissionDialog key={asking.ask.id} run={asking.run} ask={asking.ask} at={asking.at} onAnswer={(optionId) => { void agents.answer(asking.run.id, asking.ask.id, optionId); }} />
       )}
       {crDialog?.kind === 'discard' && <DiscardDialog client={crClient} cr={crDialog.cr} current={crDialog.cr.slug === CURRENT_CR} onDone={discarded} onClose={() => { setCrDialog(null); }} />}
     </div>

@@ -66,6 +66,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     picked files (see Changes below), reads a file as main holds it
     (see Diff), and reads, compares and restores a page's versions (see
     History).
+  - `agents/` runs Claude Code, Codex, omp and Hermes Agent over ACP in a
+    change request, and keeps their transcripts (see Agents below).
 - `src/`: the React UI.
   - `api/` holds the clients for the server; `workspace.ts` says which
     worktree the page edits (`?cr=`).
@@ -90,9 +92,12 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     action, the change marks on the page tree and the reminder on leaving a
     change request.
   - `diff/` is a file's diff against main in the main pane (see Diff).
-  - `history/` is a note's history in the main pane (see History).
+  - `history/` is a note's or an asset's history in the main pane, and
+    the deleted pages (see History).
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
+  - `agents/` is the header's agent control, the agent panel, a run's
+    transcript and the permission dialog (see Agents).
   - `plugins/` holds the editor plugins (see below).
 - `tests/`: laid out like `server/` and `src/`. `tests/support/` holds the
   fixtures: a throwaway worktree, a Studio on a free port, and raw HTTP and
@@ -201,11 +206,15 @@ read (gh logged out, offline), requests answer `503` rather than guess. The
 page and Vite's modules need no role and never wait for gh. That also
 means anyone who reaches the address can read the Studio's own code and
 what Vite serves from the repository (`lib/`, `components/`, `styles/`)
-before signing in; the notes and assets stay behind the gate. An open notes
-sync checks on every read and write that its session still exists and its
-role allows it, and the file events stream ends at its next event once the
-session is gone, so signing out or losing access stops open connections
-too.
+before signing in; the notes and assets stay behind the gate. The notes
+sync checks on every document it opens and every write that its session
+still exists and its role allows it. Its socket is closed when the session
+signs out, and within 15 seconds once the session expired or the role read
+from GitHub fell below reader (that is, once the five-minute role cache read
+it again; while gh cannot answer, the last role read stands). The page
+then asks who is signed in and shows the sign-in over the Studio. The file
+events stream ends at its next event once the session is gone. So signing
+out or losing access stops open connections too.
 
 Set up a GitHub OAuth App (Settings → Developer settings → OAuth Apps)
 and tick **Enable Device Flow**. Then:
@@ -252,8 +261,24 @@ Studio by @login.`
 
 The page asks `GET /api/session` before it loads the Studio
 (`src/session/SessionGate.tsx`): with nobody signed in it shows the
-sign-in page, and a request answering `401` later (the session expired)
-brings it back. The header ends with the signed-in person (their picture
+sign-in page. When the session ends once the Studio is open (a request
+answers `401`, the sync socket closes, access is taken away), the sign-in
+comes up as a dialog over the Studio instead, which stays mounted behind
+it: a note's edits not saved yet stay in the editor, and once signed in
+again its socket reconnects with the new session and the autosave writes
+them. Someone else signing in, or the same person back without write
+access, gets the Studio afresh instead, so nothing saves under another
+account. That holds for a sign-in in another tab too: before each
+connection, reconnects included, the notes sync reads the session the
+browser holds now (`checkSeat` in `src/api/session.ts`) and refuses it
+unless it is the person the Studio runs for. **Sign out** leaves the Studio for the sign-in page. Until a
+note's edits are saved, the page also keeps them in the tab's
+sessionStorage, per person, change request and note
+(`src/editor/unsaved.ts`), so a page that goes away first (the web
+sign-in leaves for GitHub, a reload) offers them back when that person
+opens the note again: **Restore edits** puts them in the editor, with a
+warning when the note changed on disk since, and someone who may no longer
+write can copy them. The header ends with the signed-in person (their picture
 alone on a phone) and a menu with their role and **Sign out**. A reader's
 Studio is read only, as main is, without New change request, Commit,
 Preview, Publish or Discard, but with a change request's **Open preview**; a writer sees Discard and Clean up off, with
@@ -419,10 +444,10 @@ view (the page tree), the **Assets** view (see Assets), the **Issues**
 view (the open note's lint issues, with their count on the icon) and the
 **Changes** view (see Changes, with the number of changed files); picking
 the open view again hides the sidebar, and so does the button at the foot of
-the bar. A rail marks the open view. The **Change requests** button (in
-change request mode) sits at the foot, above that button: it opens a page in
-the main pane rather than a view, so it is filled, not railed, while the list
-is open. Drag the sidebar's right edge to resize it (220–480px), or focus
+the bar. A rail marks the open view. The **Deleted pages** button (with
+their count) and, in change request mode, the **Change requests** button sit
+at the foot, above that button: each opens a page in the main pane rather
+than a view, so it is filled, not railed, while its page is open. Drag the sidebar's right edge to resize it (220–480px), or focus
 the edge and use the arrow keys, Shift for bigger steps, Home and End for
 the limits; double-click resets it to 284px. It never takes more than the
 window leaves the editor (420px); resizing starts from the width it shows.
@@ -438,7 +463,10 @@ Visual:
 - The `/` menu inserts a Keyword or Tag (`<Keyword id="" displayName="">`),
   a Graph heading (`### Title :graph-meta{…}`) and the site's directive
   blocks: accordions, tabs, steps and `::youtube`, next to the JSX
-  components (`<YouTube>` among them).
+  components (`<YouTube>` among them). **Mermaid diagram** (`/mermaid`;
+  `/diagram` lists it next to SVG diagram) inserts a ` ```mermaid ` code
+  block with a starter flowchart, drawn under the code as you type, with
+  the caret in the code.
 - Select text and the graph bar under it wraps it as a **Keyword**
   (`Mod-Alt-K`) or **Tag** (`Mod-Alt-T`). With the caret in a heading,
   **Graph node** (`Mod-Alt-G`) adds `:graph-meta{…}` from its title. Some
@@ -802,6 +830,82 @@ for commits made after publishing (`src/changes/primary-action.ts`). With
 nothing to commit yet, Commit is off. Pushes and Publish wait while the
 open note has edits not saved yet.
 
+## Agents
+
+The Studio drives coding agents over the [Agent Client
+Protocol](https://agentclientprotocol.com) (#84): it is the ACP client, each
+agent a process it starts for one prompt (`server/agents/connection.ts`).
+Each agent signs in on its own (its CLI's login, or its own API key
+variable): the Studio holds no key, reads no token, and starts the agent
+without its own `STUDIO_*`, `GH_*` and `GITHUB_*` variables.
+
+| Agent | Started with | Fenced in by |
+| --- | --- | --- |
+| Claude Code | `@agentclientprotocol/claude-agent-acp`, pinned in `package.json` | the `default` mode (it asks before edits and commands, whatever your `permissions.defaultMode`); `git push` and `gh` denied to an author, best effort (`git -C . push` does not match: the dialog is the fence); edits and the shell denied to a reviewer; bypass mode off |
+| Codex | `@agentclientprotocol/codex-acp`, pinned | `workspace-write` sandbox (worktree only, no network) for an author, `read-only` for a reviewer |
+| omp | `omp acp` (installed by you) | its own permission prompts |
+| Hermes Agent | `hermes acp` (installed with its `[acp]` extra) | the toolsets in your `~/.hermes/config.yaml` (the Studio warns while `terminal` or `code_execution` is on) |
+
+Your own settings still apply: a command your Claude Code settings allow
+runs without asking.
+
+> An agent runs commands as the person who started the Studio, with that
+> person's logins, keys and files. With sign-in on, only an **admin** of
+> the repository may start, answer and cancel runs; readers and writers
+> follow them. Give admin only to people you would hand a shell on this
+> machine.
+
+**Agent** in the header shows or hides the agent
+panel and counts the runs going on; the picker beside it chooses the
+agent for each role, kept in this browser. Agents that are not installed
+are listed greyed, with how to install them (`GET /api/agents`).
+
+- **Where.** Only in a change request: the agent's working folder is its
+  worktree, never main (`/api/agents/runs` on main answers 409). A Studio
+  over one worktree (no change requests) runs no agent.
+- **Roles.** An *author* may write; a *reviewer* only reads: whatever it
+  asks for beyond reading (`read`, `search`, `fetch`, `think` tool calls),
+  the Studio says no without asking you, whichever the agent. omp and
+  Hermes cannot be held to reading from outside, so their own tools may
+  still change a file they do not ask about; the run lists it. Starting,
+  answering and cancelling a run needs an admin (see above).
+- **Files.** `fs/read_text_file` reads any file of the worktree except
+  hidden ones (`.git`, `.env`) and none a symlink leads out to;
+  `fs/write_text_file` writes only what the Studio itself edits (notes,
+  `meta.yaml`, SVG and HTML assets), for an author, under the worktree's
+  notes lock (`server/agents/fs-policy.ts`). Claude Code and Codex write
+  with their own tools instead, inside the fences above: the Studio sees
+  those edits in their tool calls and, at the end of the run, in `git
+  status` against the start (`server/agents/worktree.ts`), so a file
+  edited by hand meanwhile is listed too. Every changed file is in the
+  run's list with **View diff**, and shows in Changes; until #85 turns
+  writes into suggestions, a note changed by a run going on carries a
+  notice over the editor.
+- **Permission.** `session/request_permission` opens one dialog for every
+  agent with the agent's own options, less "always" ones, which would
+  outlive the run. Closing it rejects; so does the server when nobody
+  answers within 5 minutes. Pushes, pull requests and GitHub replies are
+  never the agent's: they stay a person's click.
+- **Runs.** At most three at once per change request. Cancel sends
+  `session/cancel` and stops the process 10 seconds later if it has not
+  ended; discarding the change request or stopping the Studio stops them
+  at once. Every event goes to `GET /api/agents/events` (server-sent
+  events; the page reads the runs again each time it connects, and opens
+  a refused stream again after 5 seconds) and to `<STUDIO_HOME>/agents/<slug>/<run>.jsonl`, with the
+  summary (agent, model, role, status, cost, files written, who started
+  it) in `<run>.json`: next to the worktrees, never in the branch. A
+  discarded change request's transcripts go with it. The cost is what the
+  agent reports (`usage_update`); "Cost not reported" otherwise. The list
+  of change requests shows each one's runs and cost (`GET
+  /api/agents/totals`).
+- **Logos.** Each agent's own mark, in `src/agents/logos/` with its source
+  in the file.
+
+`STUDIO_AGENT_LIVE=1 npx vitest run tests/server/agents/live.test.ts` runs
+each installed agent once through the Studio as a reviewer (it signs in
+with your logins and costs a model call each); the other agent tests use a
+stand-in ACP agent (`tests/support/fake-agent.mjs`).
+
 ## Diff
 
 A file picked in the Changes view opens in the main pane against main
@@ -858,15 +962,54 @@ server writes under the notes lock and only over the page as the history
 read it (its mtime): if the page changed since, it answers 409 and the
 history loads again. Main refuses it (`403`), and so does a reader's
 session (it needs a writer, see Sign-in); the button is off for both,
-on Now and for a page gone from the worktree. An open editor takes the
-restored text as it takes any edit made on disk.
+and on Now. An open editor takes the restored text as it takes any edit
+made on disk.
 
-The API: `GET /api/history?path=` (`{ path, mtimeMs, versions }`),
-`GET /api/history/compare?path=&to=[&from=]` (each a full sha or `now`;
+**Assets** have a history too (#114): **History** on the asset page opens
+it, on main as well. Preview shows the two versions side by side, an image
+with its size and pixel box (the diff page's preview), any other file by
+its size; an SVG has Source too. Restore goes the way Replace writes an
+asset (see Assets): off for an asset a diagram generates (the history
+says so, and the server refuses it too), and a
+version under another extension (a `.png` before a `.webp`) gives the
+asset that extension, every note's link following; the history then follows
+the asset to its new name. Git follows an asset's rename only while its
+content stays alike, so a rename made together with new content starts a
+new history.
+
+**Deleted pages**, at the foot of the activity bar (see Sidebar), lists the
+pages deleted on HEAD, grouped by the commit that deleted them, newest
+first: `git log -M --diff-filter=D` under `content/notes`, so a rename is
+no delete, and a page the worktree has again is left out. A page deleted
+but not committed yet is in Changes instead. Opening one shows its history
+with the delete on top of the versions (**Deleted**). **Restore page…**
+first lists every file it writes (a dry run), then brings the picked
+version back, uncommitted, and opens it: the page; each folder deleted
+with it, as the commit before the delete held it (its `index.mdx`, and its
+`meta.yaml` listing only what comes back, `index` included when it was
+listed: a listed index is a child of its folder, not the folder's page);
+and the topmost of these listed again in the `meta.yaml` above, after the
+entry it followed when it was deleted (first when none of those is left),
+unless that list shows every page by itself (`...`) or did not list it
+before the delete (it stays out of the sidebar, as it was). A path the worktree has is refused (`409`): its own
+history restores it.
+
+`meta.yaml` has no history: a folder's order, title and visibility are
+redone from the page tree, and restoring a whole older file would drop the
+pages made since and bring back entries for pages gone.
+
+The API: `GET /api/history?path=` (`{ path, mtimeMs, deleted, generated,
+versions }`, `deleted` naming the commit that deleted a file the worktree
+no longer has, `generated` whether a diagram generates the asset), `GET /api/history/compare?path=&to=[&from=]` (each a full sha or `now`;
 without `from`, nothing is before), `POST /api/history/restore` with JSON
-`{ path, sha, mtimeMs }`. A sha must be one of the page's versions, and the
-path read at it comes from git. Only notes have a history here: a
-`meta.yaml`, an asset or a deleted page do not. The URL is `?history=<path>`.
+`{ path, sha, mtimeMs }` (answers `{ path, mtimeMs }`, `path` being where
+the file is now), `GET /api/history/deleted` (`{ pages: [{ path, title, sha,
+date, author, message, folderGone }] }`, the latest 200) and `POST
+/api/history/restore-deleted` with JSON `{ path, sha, dryRun? }` (answers
+`{ path, open, changes }`). A sha must be one of the file's versions, and
+the path read at it comes from git; an image of a version is served by
+`GET /api/changes/blob?path=&base=<sha>`. The URLs are `?history=<path>`
+and `?view=deleted`.
 
 ## Lint
 
@@ -943,8 +1086,9 @@ export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] })
   covers.
 - Two plugins may not share an `id` or define the same component.
 - `tests/src/plugins/round-trip.test.ts` parses and writes back every note
-  with all plugins loaded and fails if a byte changes. Put sample MDX for a
-  new component in `src/plugins/<name>/fixtures/*.mdx` to add it to that test.
+  with all plugins loaded, one test per note, and fails if a byte changes.
+  Put sample MDX for a new component in `src/plugins/<name>/fixtures/*.mdx`
+  to add it to that test.
 
 Plugins today:
 
@@ -971,11 +1115,13 @@ Plugins today:
   site shows (character references and label escapes decoded) and are
   written so they read back the same. The MDX button shows the block's
   source.
-- `site-inserts`: the `/` menu items for graph markers and directive
-  blocks. The menu lists components, so each is a spec named
-  `studio-insert-…` whose `insert` returns the site's syntax instead of a
-  node of its own; no note has such a tag, and
-  `tests/src/plugins/site-inserts.test.ts` checks that none parses.
+- `site-inserts`: the `/` menu items for graph markers, directive blocks
+  and a Mermaid diagram. The menu lists components, so each is a spec named
+  `studio-insert-…` whose `insert` returns the site's syntax (or, for
+  Mermaid, the editor's code block) instead of a node of its own; no note
+  has such a tag, and `tests/src/plugins/site-inserts.test.ts` checks that
+  none parses. The menu matches the query against labels only, hence the
+  label "Mermaid diagram".
 - `youtube`: `<YouTube>` as the same card as `::youtube`, its title edited in
   place and its url in the props panel.
 - `fumadocs-ui`: Cards, Steps, Tabs and Accordions.
@@ -994,3 +1140,17 @@ npm --prefix tools/notes-studio test
 npm --prefix tools/notes-studio run lint   # strict typescript-eslint + React hooks
 npm --prefix tools/notes-studio run types:check
 ```
+
+Tests that render the editor run in jsdom (`// @vitest-environment jsdom`).
+`tests/setup/jsdom.ts` runs before every test file and gives the window the
+`matchMedia` jsdom lacks, which the live editor asks once it replaces the
+first paint (`tests/jsdom-setup.test.ts` checks it); `stubLayout` in
+`tests/support/visual-editor.tsx` adds the layout stubs the editor's menus
+need.
+
+A test over every real note grows with `content/notes` while the default
+timeout stays at 5 seconds, so a busy machine times it out. Where the check
+is per note, write it as one `it.each` test per note
+(`tests/support/notes.ts` lists them), with a last test for totals; a test
+that renames, replaces or lints across a copy of the whole corpus takes
+`CORPUS_TIMEOUT_MS` from `tests/support/timeouts.ts`.

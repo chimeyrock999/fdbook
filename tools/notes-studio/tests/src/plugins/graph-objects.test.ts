@@ -8,6 +8,8 @@ import { attributes } from '../../../src/plugins/source-attributes';
 import { defined, describeDecoration, editorState, nodesOf, withNode, withText } from '../../support/editor-state';
 import { realNotes } from '../../support/notes';
 
+const notes = await realNotes();
+
 const fixture = () => readFile(join(repoRoot, 'tools/notes-studio/src/plugins/graph-objects/fixtures/graph-objects.mdx'), 'utf8');
 
 function decorations(state: Parameters<typeof decorateGraphObjects>[0]) {
@@ -86,17 +88,23 @@ describe('graph object decorations', () => {
   // Every <Keyword>, <GraphMeta/> (or <graph-meta/>), :keyword[] and
   // :graph-meta{} is drawn, except inside blocks the editor keeps as source
   // (accordion groups, callouts with a formatted title).
-  it('draws every graph object in the real notes', async () => {
+  // One test per note, each well inside the default timeout; the last one
+  // checks the total (tests in a file run in order).
+  describe('in the real notes', () => {
     const count = (text: string) => (text.match(/<Keyword |<Tag |:keyword\[|:tag\[|<GraphMeta |<graph-meta |:graph-meta\{/g) ?? []).length;
     let total = 0;
-    for (const { path, source } of await realNotes()) {
+
+    it.each(notes)('draws every graph object in $path', ({ source }) => {
       const state = editorState(source);
       const kept = nodesOf(state, 'verbatim').reduce((sum, { node }) => sum + count(String(node.attrs.value)), 0);
       const expected = count(source) - kept;
       const found = decorations(state).filter((item) => item.widget !== undefined || item.class?.startsWith('studio-keyword') === true);
-      expect(found.length, path).toBe(expected);
+      expect(found.length).toBe(expected);
       total += expected;
-    }
-    expect(total).toBeGreaterThan(100);
+    });
+
+    it('finds the graph objects', () => {
+      expect(total).toBeGreaterThan(100);
+    });
   });
 });

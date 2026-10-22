@@ -38,6 +38,40 @@ export async function studioFetch(input: string, init: RequestInit = {}): Promis
   return response;
 }
 
+let confirming: Promise<void> | null = null;
+
+// After something that cannot see a 401 (a sync socket the server closed,
+// whose reconnects it refuses): asks who is signed in, and tells the page
+// when nobody is, or their access was taken away. A server that does not
+// answer says nothing either way. Editors going offline together ask once.
+export function confirmSignedIn() {
+  confirming ??= (async () => {
+    const response = await fetch('/api/session').catch(() => null);
+    if (response?.ok !== true) return;
+    const state = await readJson<SessionState>(response).catch(() => null);
+    if (state?.auth === 'github' && (state.user === null || state.role === 'none')) for (const listener of [...signedOut]) listener();
+  })().finally(() => { confirming = null; });
+  return confirming;
+}
+
+let seatCheck: (() => Promise<boolean>) | null = null;
+
+// Set by the session gate: whether the session the browser holds now is the
+// one the Studio runs with (src/session/SessionGate.tsx). Null when nothing
+// is set.
+export function onSeatCheck(check: (() => Promise<boolean>) | null) {
+  seatCheck = check;
+}
+
+// The notes sync's `auth` hook, asked on every connection, reconnects
+// included: a reconnect carries the cookie the browser holds now, which
+// another tab may have changed to another person's (#121). Refusing closes
+// that connection, so an open note's unsaved edits never save under another
+// account; the gate then mounts the Studio afresh for them.
+export async function checkSeat() {
+  if (seatCheck !== null && !(await seatCheck())) throw new Error('The Studio is signed in as someone else now.');
+}
+
 const postJson = (path: string, body: unknown) =>
   studioFetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 

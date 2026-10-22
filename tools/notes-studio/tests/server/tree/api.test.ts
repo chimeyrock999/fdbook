@@ -5,6 +5,7 @@ import { lintWorktree } from '../../../server/lint/context';
 import type { TreeFolder, TreeNode } from '../../../server/tree/types';
 import { json, rawRequest } from '../../support/http';
 import { startTestStudio, type TestStudio } from '../../support/studio';
+import { CORPUS_TIMEOUT_MS } from '../../support/timeouts';
 
 type Answer = { changes: { type: string; path: string; to?: string; detail?: string }[]; open: string | null };
 
@@ -215,7 +216,7 @@ describe('tree API', () => {
     it('leaves the notes with no new lint issue', async () => {
       const renamed = (issue: string) => issue.replace('mapreduce', 'map-reduce').replace('page-cache', 'os-page-cache');
       expect((await lintIssues()).map(renamed).sort()).toEqual(lintBefore.map(renamed).sort());
-    });
+    }, CORPUS_TIMEOUT_MS);
 
     it('refuses the root page, an index page and a taken name', async () => {
       expect((await post({ op: 'rename', path: 'index.mdx', slug: 'home' })).status).toBe(400);

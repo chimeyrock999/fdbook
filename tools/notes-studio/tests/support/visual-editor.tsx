@@ -6,15 +6,14 @@ import { vi } from 'vitest';
 import { editorConfig } from '../../src/plugins';
 import { defined } from './editor-state';
 
-// jsdom has none of these: the editor asks about touch input, sizes menus
-// and places popups from the selection's rectangles.
+// jsdom has none of these: the editor sizes menus and places popups from
+// the selection's rectangles (matchMedia comes from tests/setup/jsdom.ts).
 export function stubLayout() {
   vi.stubGlobal('ResizeObserver', class {
     observe = () => undefined;
     unobserve = () => undefined;
     disconnect = () => undefined;
   });
-  vi.stubGlobal('matchMedia', (media: string) => ({ matches: false, media, addEventListener: () => undefined, removeEventListener: () => undefined }));
   Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
   Range.prototype.getBoundingClientRect = () => new DOMRect();
 }

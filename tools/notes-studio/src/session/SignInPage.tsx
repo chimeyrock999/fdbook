@@ -1,17 +1,20 @@
 import { Check, Copy, ExternalLink, KeyRound, LogIn } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { DeviceStart, SessionClient, SessionState } from '../api/session';
+import { useCopy } from '../clipboard';
 
 type Step = { kind: 'choose' } | { kind: 'device'; code: DeviceStart } | { kind: 'starting' };
 
-function DeviceCode({ code, client, onDone, onCancel, onError }: {
+function DeviceCode({ titleId, code, client, onDone, onCancel, onError }: {
+  titleId: string;
   code: DeviceStart;
   client: SessionClient;
   onDone: (state: SessionState) => void;
   onCancel: () => void;
   onError: (message: string) => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  // `blocked`: the browser refused every way to copy; the code is selected instead.
+  const { copied, ref: codeRef, copy } = useCopy<HTMLOutputElement>(code.userCode);
   const [trouble, setTrouble] = useState<string | null>(null);
   const callbacks = useRef({ onDone, onError });
   useEffect(() => { callbacks.current = { onDone, onError }; });
@@ -40,22 +43,20 @@ function DeviceCode({ code, client, onDone, onCancel, onError }: {
       clearTimeout(timer);
     };
   }, [client, code]);
-  const copy = () => {
-    navigator.clipboard.writeText(code.userCode).then(() => { setCopied(true); }, () => { setCopied(false); });
-  };
   return (
     <>
-      <h1>Enter the code on GitHub</h1>
+      <h1 id={titleId}>Enter the code on GitHub</h1>
       <p>Open {code.verificationUri.replace(/^https:\/\//, '')} and enter this code. It expires in {Math.round(code.expiresIn / 60)} minutes.</p>
-      <output className="studio-signin-code" aria-label="Sign-in code">{code.userCode}</output>
+      <output ref={codeRef} className="studio-signin-code" aria-label="Sign-in code">{code.userCode}</output>
       <div className="studio-signin-row">
         <button type="button" className="studio-button gap-1.5" onClick={copy}>
-          {copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />} {copied ? 'Copied' : 'Copy code'}
+          {copied === true ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />} {copied === true ? 'Copied' : 'Copy code'}
         </button>
         <a className="studio-button studio-button-primary gap-1.5" href={code.verificationUri} target="_blank" rel="noreferrer">
           <ExternalLink size={14} aria-hidden /> Open GitHub
         </a>
       </div>
+      {copied === 'blocked' && <p role="status">This browser blocked copying. The code is selected: copy it with Ctrl+C (⌘C on a Mac), or type it on GitHub.</p>}
       <p className="studio-signin-wait" role="status"><span aria-hidden /> Waiting for GitHub…</p>
       {trouble !== null && <p className="studio-signin-error" role="alert">{trouble} Trying again…</p>}
       <button type="button" className="studio-button self-start" onClick={onCancel}>Cancel</button>
@@ -63,15 +64,45 @@ function DeviceCode({ code, client, onDone, onCancel, onError }: {
   );
 }
 
-// Instead of the Studio while nobody is signed in: a button for each sign-in
-// the server offers, in its order (STUDIO_GITHUB_FLOWS), the first one the
-// main one. `error` is why the last sign-in failed (a web sign-in comes back
-// with it in ?signin_error=).
-export function SignInPage({ state, client, error: initialError, onSignedIn }: {
+// The page, or once the Studio was open (`ended`: the session ended under
+// it) a dialog over the Studio, which stays behind. SessionGate makes the
+// Studio inert; what it portalled into the body (menus, dialogs) is made
+// inert here while the dialog is up.
+function SignInFrame({ ended, children }: { ended: boolean; children: (titleId: string) => ReactNode }) {
+  const titleId = useId();
+  const frame = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const dialog = frame.current;
+    if (!ended || dialog === null) return;
+    dialog.focus();
+    const others = [...document.body.children].filter((element): element is HTMLElement => element instanceof HTMLElement && !element.inert && !element.contains(dialog));
+    for (const element of others) element.inert = true;
+    return () => { for (const element of others) element.inert = false; };
+  }, [ended]);
+  if (!ended) {
+    return (
+      <main className="studio-signin">
+        <div className="studio-signin-card">{children(titleId)}</div>
+      </main>
+    );
+  }
+  return (
+    <div ref={frame} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId} className="studio-signin studio-signin-over">
+      <div className="studio-signin-card">{children(titleId)}</div>
+    </div>
+  );
+}
+
+// Instead of the Studio while nobody is signed in, or over it once the
+// session ended: a button for each sign-in the server offers, in its order
+// (STUDIO_GITHUB_FLOWS), the first one the main one. `error` is why the
+// last sign-in failed (a web sign-in comes back with it in ?signin_error=).
+export function SignInPage({ state, client, error: initialError, onSignedIn, ended = false }: {
   state: SessionState;
   client: SessionClient;
   error: string | null;
   onSignedIn: (state: SessionState) => void;
+  ended?: boolean;
 }) {
   const [step, setStep] = useState<Step>({ kind: 'choose' });
   const [error, setError] = useState(initialError);
@@ -89,13 +120,13 @@ export function SignInPage({ state, client, error: initialError, onSignedIn }: {
     setStep({ kind: 'choose' });
   };
   return (
-    <main className="studio-signin">
-      <div className="studio-signin-card">
-        {step.kind === 'device' ? (
-          <DeviceCode code={step.code} client={client} onDone={onSignedIn} onCancel={() => { setStep({ kind: 'choose' }); }} onError={failed} />
+    <SignInFrame ended={ended}>
+      {(titleId) => step.kind === 'device' ? (
+          <DeviceCode titleId={titleId} code={step.code} client={client} onDone={onSignedIn} onCancel={() => { setStep({ kind: 'choose' }); }} onError={failed} />
         ) : (
           <>
-            <h1>Sign in to Notes Studio</h1>
+            <h1 id={titleId}>{ended ? 'Your session ended' : 'Sign in to Notes Studio'}</h1>
+            {ended && <p>Sign in again to go on. Edits not saved yet are kept: they save once you are back, or are offered back when you open the note again.</p>}
             <p>
               This Studio needs a GitHub account with access to <b>{repo}</b>.{' '}
               {state.flows[0] === 'web' ? 'You go to github.com and come back here.' : 'It gives you a code to enter on github.com.'}
@@ -118,21 +149,23 @@ export function SignInPage({ state, client, error: initialError, onSignedIn }: {
             <p className="studio-signin-foot">The Studio reads only your name and picture. What you may do comes from your access to the repository; no token is kept.</p>
           </>
         )}
-      </div>
-    </main>
+    </SignInFrame>
   );
 }
 
 // After sign-in, for someone the repository does not let in.
-export function NoAccessPage({ state, onSignOut }: { state: SessionState; onSignOut: () => void }) {
+// Over the Studio when it was taken away while it was open (`ended`).
+export function NoAccessPage({ state, onSignOut, ended = false }: { state: SessionState; onSignOut: () => void; ended?: boolean }) {
   return (
-    <main className="studio-signin">
-      <div className="studio-signin-card">
-        <h1>No access</h1>
-        <p className="studio-signin-error" role="alert">@{state.user?.login} is signed in but has no access to {state.repo ?? 'this repository'}.</p>
-        <p>Ask the owner to add you as a collaborator (or to STUDIO_ALLOWED_USERS), then sign in again.</p>
-        <button type="button" className="studio-button self-start" onClick={onSignOut}>Sign in with another account</button>
-      </div>
-    </main>
+    <SignInFrame ended={ended}>
+      {(titleId) => (
+        <>
+          <h1 id={titleId}>No access</h1>
+          <p className="studio-signin-error" role="alert">@{state.user?.login} is signed in but has no access to {state.repo ?? 'this repository'}.</p>
+          <p>Ask the owner to add you as a collaborator (or to STUDIO_ALLOWED_USERS), then sign in again.</p>
+          <button type="button" className="studio-button self-start" onClick={onSignOut}>Sign in with another account</button>
+        </>
+      )}
+    </SignInFrame>
   );
 }

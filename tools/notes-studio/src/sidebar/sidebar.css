@@ -9,7 +9,12 @@
   .studio-activity-page {
     margin-top: auto;
   }
-  .studio-activity-page + .studio-activity-bottom {
+  .studio-activity-page + .studio-activity-bottom,
+  .studio-activity-page + .studio-activity-page {
     margin-top: 0;
+  }
+  .studio-activity-count[data-muted] {
+    background: var(--fde-muted);
+    color: var(--fde-muted-foreground);
   }
 }
