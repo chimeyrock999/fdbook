@@ -940,8 +940,9 @@ export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] })
   covers.
 - Two plugins may not share an `id` or define the same component.
 - `tests/src/plugins/round-trip.test.ts` parses and writes back every note
-  with all plugins loaded and fails if a byte changes. Put sample MDX for a
-  new component in `src/plugins/<name>/fixtures/*.mdx` to add it to that test.
+  with all plugins loaded, one test per note, and fails if a byte changes.
+  Put sample MDX for a new component in `src/plugins/<name>/fixtures/*.mdx`
+  to add it to that test.
 
 Plugins today:
 
@@ -991,3 +992,10 @@ npm --prefix tools/notes-studio test
 npm --prefix tools/notes-studio run lint   # strict typescript-eslint + React hooks
 npm --prefix tools/notes-studio run types:check
 ```
+
+Tests that render the editor run in jsdom (`// @vitest-environment jsdom`).
+`tests/setup/jsdom.ts` runs before every test file and gives the window the
+`matchMedia` jsdom lacks, which the live editor asks once it replaces the
+first paint (`tests/jsdom-setup.test.ts` checks it); `stubLayout` in
+`tests/support/visual-editor.tsx` adds the layout stubs the editor's menus
+need.

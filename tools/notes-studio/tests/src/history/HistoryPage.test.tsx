@@ -14,8 +14,6 @@ beforeAll(() => {
     unobserve() { return undefined; }
     disconnect() { return undefined; }
   };
-  // The rendered diff's editor asks about touch input.
-  vi.stubGlobal('matchMedia', (media: string) => ({ matches: false, media, addEventListener: () => undefined, removeEventListener: () => undefined }));
 });
 
 const PAGE = 'content/notes/streaming/groups.mdx';
