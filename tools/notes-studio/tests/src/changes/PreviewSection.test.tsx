@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Build, Preview, PreviewClient } from '../../../src/api/preview';
 import { PreviewSection } from '../../../src/changes/PreviewSection';
 import { usePreview } from '../../../src/changes/usePreview';
+import { usePush } from '../../../src/changes/usePush';
 import { OpenPreview } from '../../../src/notes/OpenPreview';
 import { siteRoute } from '../../../src/notes/notes';
 
@@ -17,16 +18,19 @@ const SHA = '9c1ab88000000000000000000000000000000000';
 const URL = 'https://cr-sinks.chimeyrock.pages.dev';
 const LOG = 'https://dash.cloudflare.com/log';
 const build = (state: Build['state'], fields: Partial<Build> = {}): Build => ({ state, logUrl: LOG, deploymentUrl: null, aliasUrl: URL, at: null, error: null, ...fields });
-const fresh: Preview = { branch: 'cr/sinks', blocked: null, pushed: null, unpushed: ['a1', 'b2', 'c3'], uncommitted: 0, url: null, build: null };
+const fresh: Preview = { branch: 'cr/sinks', blocked: null, pushed: null, unpushed: ['a1', 'b2', 'c3'], uncommitted: 0, url: null, build: null, pr: null, prError: null };
 const pushed = (state: Build['state'], fields: Partial<Preview> = {}, buildFields: Partial<Build> = {}): Preview =>
   ({ ...fresh, pushed: { sha: SHA }, unpushed: [], url: URL, build: build(state, buildFields), ...fields });
 
 function setup(preview: Preview, { unsaved = null, error = null, push = vi.fn(() => Promise.resolve(pushed('waiting'))) }: { unsaved?: string | null; error?: string | null; push?: PreviewClient['push'] } = {}) {
   const onPushed = vi.fn();
   const client = { push } as unknown as PreviewClient;
-  const view = (next: Preview, nextUnsaved: string | null = unsaved) => (
-    <PreviewSection client={client} preview={next} error={error} unsaved={nextUnsaved} route="/notes/streaming/sinks" onPushed={onPushed} />
-  );
+  // As the App holds it: the push in usePush, shared with the header.
+  function Section({ next, nextUnsaved }: { next: Preview; nextUnsaved: string | null }) {
+    const pusher = usePush(client, onPushed);
+    return <PreviewSection pusher={pusher} preview={next} error={error} unsaved={nextUnsaved} route="/notes/streaming/sinks" />;
+  }
+  const view = (next: Preview, nextUnsaved: string | null = unsaved) => <Section next={next} nextUnsaved={nextUnsaved} />;
   const { rerender } = render(view(preview));
   return { push, onPushed, rerender: (next: Preview, nextUnsaved?: string | null) => { rerender(view(next, nextUnsaved)); } };
 }

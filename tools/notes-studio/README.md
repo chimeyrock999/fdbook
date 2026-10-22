@@ -84,8 +84,9 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     rename, replace and delete dialogs.
   - `tree/` is the page tree in the Notes view and its dialogs.
   - `changes/` is the Changes view, the suggested commit message, the
-    Preview section, the change marks on the page tree and the reminder on
-    leaving a change request.
+    Preview and Pull request sections, the Publish dialog, the header's main
+    action, the change marks on the page tree and the reminder on leaving a
+    change request.
   - `diff/` is a file's diff against main in the main pane (see Diff).
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
@@ -134,8 +135,10 @@ without `changeRequests`, as the tests start it, edits the one worktree at
 | `GET /api/changes` | What `git status` says changed under `content/notes` and `public/notes`, only files the path policy allows: `{ branch, files: [{ path, status: "M" \| "A" \| "D" \| "R", from? }] }` (see Changes) |
 | `POST /api/changes` | Takes JSON `{ message, paths }` and commits those files, and only them, on the worktree's branch; answers the commit `{ sha, date, message, files: [{ status, path }] }`. Refuses an empty message, a path with no change, and a branch named `main` or a detached HEAD; read-only main answers `403` first. |
 | `GET /api/changes/history` | The change request's commits, newest first: `{ base, commits }`, where `base` is `origin/main` (else `main`) |
-| `GET /api/preview` | The worktree's preview: `{ branch, blocked, pushed, unpushed, uncommitted, url, build }`, `build` being `{ state, logUrl, deploymentUrl, aliasUrl, at, error }` once pushed (see Preview); main answers that it is read only |
+| `GET /api/preview` | The worktree's preview: `{ branch, blocked, pushed, unpushed, uncommitted, url, build, pr, prError }`, `build` being `{ state, logUrl, deploymentUrl, aliasUrl, at, error }` once pushed, `pr` the branch's pull request `{ number, url, state, title }` or null, `prError` why gh could not read it (see Preview and Publish); main answers that it is read only |
 | `POST /api/preview` | Takes JSON `{}`, pushes the change request's branch to origin and answers the preview. Refuses when there is nothing to push (`409`), or when the remote branch has commits the change request has not (`409`, with git's reason); read-only main answers `403` first. |
+| `GET /api/publish` | The pull request's draft, `{ title, body }`: the change request's name, and its commits oldest first with the branch's preview link (see Publish) |
+| `POST /api/publish` | Takes JSON `{ title, body }`, pushes what is not pushed, opens the pull request with `gh pr create` and answers the preview. Refuses with nothing committed, or when the branch already has a pull request (`409`), when gh cannot read the pull request or open one (`502`, a push already made stays), and a title that is empty or over 256 characters, or a description over 60,000 (`400`); read-only main answers `403` first. |
 | `GET /api/changes/diff?path=…[&from=…]` | The file against main (see Diff): `{ path, from?, base, status: "same" \| "M" \| "A" \| "D" \| "R", before, after }`, each side `{ kind: "text", text, size }`, `{ kind: "binary", size }` (an asset that is not SVG or HTML, or text over 2 MB) or `null` where the file is missing. `base` is the merge base of `origin/main` (else `main`) and `HEAD`, or `null` without one; `from` reads main under a renamed file's old name. |
 | `GET /api/changes/blob?path=…[&base=<sha>]` | The file's bytes as commit `base` (the diff's own base, else the merge base now) holds it, for an image's before side; 404 when it has none. Served like an asset, with `Content-Security-Policy: sandbox`. |
 | `GET /api/crs` | The change requests: `{ enabled, crs: [{ slug, name, branch, status, pushed, worktree, changedPages, uncommitted, updatedMs, previewUrl, pr }], taken, prError }`, `taken` being the slugs a new one cannot take; `?fresh=1` reads the pull requests again (see Change requests) |
@@ -621,7 +624,7 @@ discard needs none: its dialog lists the uncommitted files it removes.
 
 The Changes view's **Preview** section, above History, pushes the change
 request so Cloudflare Pages builds its preview (#19); no pull request is
-opened (that is Publish, #20). **Preview** runs `git push origin
+opened (that is Publish, below). **Preview** runs `git push origin
 <HEAD>:refs/heads/cr/<slug>` (`server/preview/preview.ts`): never to main,
 never forced. A push the remote refuses, because the branch there has
 commits this one has not, shows git's reason. The push waits while the open
@@ -663,7 +666,37 @@ Previews sit behind Cloudflare Access: the first one asks for the one-time
 PIN in the browser. **View log** opens the build in the Cloudflare
 dashboard. Commits made after the push show "↑ not pushed" in History, the
 section says the preview is behind by that many, and the button pushes
-them.
+them. With a pull request open, the button is **Update PR**: the push goes
+to that pull request.
+
+## Publish
+
+The **Pull request** section, under Preview, opens a pull request from
+`cr/<slug>` to main for review (#20). **Publish…** opens a dialog with the
+title and description filled from the change request's name and its
+commits (oldest first, with the branch's preview link), both editable.
+Publishing pushes the commits not pushed yet, then runs `gh pr create
+--repo <origin> --base main --head cr/<slug>` (`server/preview/publish.ts`).
+If gh fails after the push, the push stays and the dialog says why; it
+cannot be closed while it publishes.
+
+The branch's pull request is read with `gh pr list --repo <origin> --head
+cr/<slug> --state all` (`server/preview/pull-request.ts`), the newest of
+this repository's winning (`gh pr view <branch>` would take a fork's pull
+request from a branch of the same name), at most every 15 seconds
+while there is none or it is open, every minute once merged or closed, and
+again after each push or publish. A branch gets one pull request: Publish
+reads it fresh and refuses when one is open (later commits go to it with
+Update PR) or merged or closed (the change request is cleaned up instead,
+#21). When gh cannot read it, Publish is off and Preview still works.
+
+The header's main action follows the change request: **Commit** (files
+not committed; it opens Changes at the commit message) → **Preview**
+(commits not pushed) → **Publish** (all pushed, no pull request) → **View
+PR** (the pull request on GitHub, whatever its state), and **Update PR**
+for commits made after publishing (`src/changes/primary-action.ts`). With
+nothing to commit yet, Commit is off. Pushes and Publish wait while the
+open note has edits not saved yet.
 
 ## Diff
 

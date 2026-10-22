@@ -5,6 +5,7 @@ import { createKeyedLock } from '../files/store.ts';
 import { HttpError } from '../http.ts';
 import type { BuildReader } from '../preview/check-runs.ts';
 import { DEFAULT_STALE_DAYS } from '../config.ts';
+import type { BranchPullRequestReader } from '../preview/pull-request.ts';
 import { driftOf, type Drift } from './drift.ts';
 import { CommandError, git, lines } from './git.ts';
 import { createPullRequestReader, ghPullRequests, type ListPullRequests } from './pull-requests.ts';
@@ -67,6 +68,8 @@ export type ChangeRequestOptions = {
   pagesProject?: string | null;
   // Reads the preview builds (server/preview); gh unless a test stands in.
   builds?: BuildReader;
+  // Reads and opens a branch's pull request (server/preview); gh unless a test stands in.
+  branchPullRequests?: BranchPullRequestReader;
   closePullRequest?: ClosePullRequest;
   // STUDIO_STALE_DAYS.
   staleDays?: number;

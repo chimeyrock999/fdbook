@@ -60,6 +60,8 @@ describe('preview API', () => {
       uncommitted: 0,
       url: null,
       build: null,
+      pr: null,
+      prError: null,
     });
     const refused = await push();
     expect(refused.status).toBe(409);

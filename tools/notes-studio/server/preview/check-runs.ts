@@ -54,11 +54,16 @@ export function githubRepoOf(url: string) {
   return /^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/.exec(url.trim())?.[1] ?? null;
 }
 
-// `gh api` on origin's repository, where the Studio pushes; gh's own pick
-// ({owner}/{repo}) only when origin is not on GitHub.
+// The GitHub repository of origin, where the Studio pushes, or null when
+// origin is not on GitHub (gh then picks from the worktree's remotes).
+export async function originRepoOf(root: string) {
+  return githubRepoOf(await run('git', ['remote', 'get-url', 'origin'], root).catch(() => ''));
+}
+
+// `gh api` on origin's repository; gh's own pick ({owner}/{repo}) only when
+// origin is not on GitHub.
 export const ghCheckRun: ReadCheckRun = async (root, sha) => {
-  const origin = await run('git', ['remote', 'get-url', 'origin'], root).catch(() => '');
-  const repo = githubRepoOf(origin) ?? '{owner}/{repo}';
+  const repo = (await originRepoOf(root)) ?? '{owner}/{repo}';
   const output = await run('gh', ['api', `repos/${repo}/commits/${sha}/check-runs?check_name=${encodeURIComponent(CHECK_NAME)}`], root, { timeoutMs: GH_TIMEOUT_MS });
   const runs = (JSON.parse(output) as { check_runs: GhCheckRun[] }).check_runs;
   if (runs.length === 0) return null;
