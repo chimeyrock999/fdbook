@@ -47,9 +47,12 @@ const PELE_VARIABLES = [
   ...Array.from({ length: 8 }, (_, index) => `series-${index + 1}`),
 ].map((name) => `--pele-${name}`);
 const PELE_LABELS = '.pele-label, .pele-cluster-label';
-// The halo behind a lifted subgraph title, recoloured for an author's fill
-// (styles/notes-theme.css).
-const PELE_TITLE_HALOS = '.pele-cluster-title[data-author-fill] > text:not(.pele-cluster-label)';
+// What page rules restyle for an author's fill (styles/notes-theme.css): a
+// subgraph's strength, and the halo behind its lifted title.
+const PELE_AUTHOR_FILLS: [selector: string, property: string][] = [
+  ['.pele-cluster[data-author-fill] > rect', 'fill-opacity'],
+  ['.pele-cluster-title[data-author-fill] > text:not(.pele-cluster-label)', 'stroke'],
+];
 
 export async function exportSvgElement(
   svg: SVGSVGElement,
@@ -65,7 +68,11 @@ export async function exportSvgElement(
   }
 
   const { height, width } = intrinsicSize(svg);
-  const blob = await rasterize(markup, width, height, format);
+  // A Pele diagram keeps the theme's ink, so a transparent image of it is
+  // unreadable on a viewer of the other theme; an .svg file has its own
+  // colours and stays transparent where the format allows it.
+  const painted = svg.matches('svg.pele') || format === 'jpeg';
+  const blob = await rasterize(markup, width, height, format, painted ? backgrounds(svg) : []);
 
   if (blob) download(blob, name);
 }
@@ -107,11 +114,12 @@ function serializeSvg(svg: SVGSVGElement): string {
     if (label.style.fill) return;
     cloneLabels[index]?.style.setProperty('fill', getComputedStyle(label).fill);
   });
-  const halos = svg.querySelectorAll<SVGElement>(PELE_TITLE_HALOS);
-  const cloneHalos = clone.querySelectorAll<SVGElement>(PELE_TITLE_HALOS);
-  halos.forEach((halo, index) => {
-    cloneHalos[index]?.style.setProperty('stroke', getComputedStyle(halo).stroke);
-  });
+  for (const [selector, property] of PELE_AUTHOR_FILLS) {
+    const clones = clone.querySelectorAll<SVGElement>(selector);
+    svg.querySelectorAll<SVGElement>(selector).forEach((element, index) => {
+      clones[index]?.style.setProperty(property, getComputedStyle(element).getPropertyValue(property));
+    });
+  }
 
   return new XMLSerializer().serializeToString(clone);
 }
@@ -126,7 +134,7 @@ function intrinsicSize(svg: SVGSVGElement) {
   };
 }
 
-function rasterize(markup: string, width: number, height: number, format: DiagramExportFormat) {
+function rasterize(markup: string, width: number, height: number, format: DiagramExportFormat, backgrounds: string[]) {
   return new Promise<Blob | null>((resolve) => {
     const url = URL.createObjectURL(new Blob([markup], { type: MIME.svg }));
     const image = new Image();
@@ -144,8 +152,8 @@ function rasterize(markup: string, width: number, height: number, format: Diagra
       }
 
       // JPEG has no alpha channel, so an unpainted canvas would come out black.
-      if (format === 'jpeg') {
-        context.fillStyle = readBackground();
+      for (const background of backgrounds) {
+        context.fillStyle = background;
         context.fillRect(0, 0, canvas.width, canvas.height);
       }
 
@@ -163,10 +171,29 @@ function rasterize(markup: string, width: number, height: number, format: Diagra
   });
 }
 
-function readBackground() {
-  const value = getComputedStyle(document.documentElement).getPropertyValue('--color-fd-background').trim();
+/**
+ * The page, then the surface the diagram sits on (`--pele-bg`: a callout
+ * body, a tab panel), which may be translucent. Both are resolved to a
+ * colour the canvas reads, as a surface can be a `color-mix()`.
+ */
+function backgrounds(svg: SVGSVGElement) {
+  const page = getComputedStyle(document.documentElement).getPropertyValue('--color-fd-background').trim();
+  const surface = getComputedStyle(svg).getPropertyValue('--pele-bg').trim();
 
-  return value || '#ffffff';
+  return [resolveColor(page) || '#ffffff', resolveColor(surface)].filter(Boolean);
+}
+
+function resolveColor(value: string) {
+  if (!value) return '';
+  const probe = document.createElement('span');
+  probe.style.color = value;
+  // An unparsed value would leave the probe the inherited text colour.
+  if (!probe.style.color) return '';
+  document.body.appendChild(probe);
+  const color = getComputedStyle(probe).color;
+  probe.remove();
+
+  return color;
 }
 
 function download(blob: Blob, filename: string) {
