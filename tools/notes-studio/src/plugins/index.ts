@@ -3,7 +3,9 @@ import { buildEditorConfig } from './registry';
 
 // Every plugin folder under src/plugins/, found at build time. Untyped:
 // vitest 5.0.5 caches a module that calls the typed form on disk, so tests
-// would miss a new plugin (vitest-dev/vitest PR 11666).
+// would miss a new plugin. The typed form can come back once the Studio's
+// vitest includes vitest-dev/vitest PR 11666 (see
+// tests/src/plugins/glob-cache.test.ts).
 export const editorConfig = buildEditorConfig(import.meta.glob('./*/index.{ts,tsx}', { eager: true }));
 
 let syntax: Syntax | null = null;
