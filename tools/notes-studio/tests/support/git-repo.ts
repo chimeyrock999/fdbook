@@ -69,11 +69,12 @@ export type GitRepo = Awaited<ReturnType<typeof makeGitRepo>>;
 
 // A Studio with change requests over a throwaway repo. `prs` and `checks`
 // stand in for gh: set them to the pull requests or check runs (by commit) to
-// report, or to an Error to fail. `branchPrs` is what `gh pr list --head` reads by
-// branch (or an Error); `create` opens one there and lists it in `created`,
-// unless `createError` is set. `forget` moves the readers' clock a minute
-// on, past their caches.
-export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey' }: { pagesProject?: string | null } = {}) {
+// report, or to an Error to fail. `branchPrs` is what `gh pr list --head`
+// reads by branch (or an Error); `create` opens one there and lists it in
+// `created`, unless `createError` is set. `closed` lists the pull requests
+// closed, `closeError` fails closing one. `forget` moves the readers' clock
+// a minute on, past their caches.
+export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey', staleDays }: { pagesProject?: string | null; staleDays?: number } = {}) {
   let clock = Date.now();
   const fake: {
     prs: PullRequest[] | Error;
@@ -81,6 +82,8 @@ export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey' }: 
     branchPrs: Map<string, BranchPullRequest> | Error;
     created: NewPullRequest[];
     createError: Error | null;
+    closed: number[];
+    closeError: Error | null;
     forget: () => void;
   } = {
     prs: [],
@@ -88,6 +91,8 @@ export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey' }: 
     branchPrs: new Map(),
     created: [],
     createError: null,
+    closed: [],
+    closeError: null,
     forget: () => { clock += 60_000; },
   };
   const pullRequestGh: PullRequestGh = {
@@ -114,6 +119,12 @@ export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey' }: 
       builds,
       branchPullRequests: createBranchPullRequestReader(pullRequestGh, () => clock),
       pullRequests: () => (fake.prs instanceof Error ? Promise.reject(fake.prs) : Promise.resolve(fake.prs)),
+      closePullRequest: (number) => {
+        if (fake.closeError !== null) return Promise.reject(fake.closeError);
+        fake.closed.push(number);
+        return Promise.resolve();
+      },
+      staleDays,
     },
   });
   const port = String((studio.server.address() as AddressInfo).port);

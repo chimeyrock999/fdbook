@@ -22,6 +22,8 @@ const cr = (slug: string, status: ChangeRequest['status'], more: Partial<ChangeR
   updatedMs: Date.now() - 12 * 60_000,
   previewUrl: null,
   pr: null,
+  stale: false,
+  drift: status === 'merged' || status === 'closed' ? null : { behind: 0, conflicts: [] },
   ...more,
 });
 
@@ -29,6 +31,7 @@ const LIST: CrList = {
   enabled: true,
   taken: [],
   prError: null,
+  fetchError: null,
   crs: [
     cr('driver-notes', 'draft', { changedPages: 2, uncommitted: 1 }),
     cr('spark-tuning', 'previewing', { changedPages: 5, previewUrl: 'https://cr-spark-tuning.chimey.pages.dev' }),
@@ -185,7 +188,7 @@ describe('CrListPage', () => {
     expect(within(current).getByRole('button', { name: 'Discard Driver Notes' })).toBeTruthy();
     await userEvent.click(within(screen.getByRole('listitem', { name: 'Uc Grants' })).getByRole('button', { name: 'Open' }));
     expect(onOpen).toHaveBeenCalledWith('uc-grants');
-    await userEvent.click(screen.getByRole('button', { name: 'Discard Old Airflow' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Clean up Old Airflow' }));
     expect(onDiscard).toHaveBeenCalledWith(LIST.crs[4]);
     await userEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(onRefresh).toHaveBeenCalled();
@@ -239,23 +242,23 @@ describe('NewCrDialog', () => {
 
 describe('DiscardDialog', () => {
   const plan = (more: Partial<Discard> = {}): Discard => ({
-    slug: 'spark-tuning', branch: 'cr/spark-tuning', worktree: '/home/me/.chimey-studio/worktrees/spark-tuning', commits: 3, uncommitted: 2, pushed: false, pr: null, ...more,
+    slug: 'spark-tuning', branch: 'cr/spark-tuning', worktree: '/home/me/.chimey-studio/worktrees/spark-tuning', status: 'previewing', commits: 3, uncommitted: 2, pushed: false, unpushed: 0, pr: null, closesPr: null, prError: null, ...more,
   });
 
   it('lists what goes from this machine, then discards', async () => {
     const discard = vi.fn((_slug: string, dryRun?: boolean) => Promise.resolve(plan({ ...(dryRun ? {} : { commits: 3 }) })));
     const onDone = vi.fn();
     render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[1]} current={false} onDone={onDone} onClose={vi.fn()} />);
-    const removed = await screen.findByRole('list', { name: 'Removed' });
+    const removed = await screen.findByRole('list', { name: 'From this machine' });
     expect([...removed.querySelectorAll('li')].map((item) => item.textContent)).toEqual([
       'Worktree /home/me/.chimey-studio/worktrees/spark-tuning',
       'Local branch cr/spark-tuning (3 commits)',
       '2 files with changes not committed',
     ]);
     expect(discard).toHaveBeenCalledWith('spark-tuning', true);
-    expect(screen.getByRole('dialog').textContent).not.toContain('origin');
+    expect(screen.queryByRole('list', { name: 'From origin' })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
-    expect(discard).toHaveBeenLastCalledWith('spark-tuning');
+    expect(discard).toHaveBeenLastCalledWith('spark-tuning', false, { pushed: false, closesPr: null });
     await waitFor(() => { expect(onDone).toHaveBeenCalled(); });
   });
 
@@ -267,10 +270,17 @@ describe('DiscardDialog', () => {
     expect(screen.queryByText(/You are working in this change request/)).toBeNull();
   });
 
-  it('says a pushed branch and its pull request stay on the remote', async () => {
-    const discard = vi.fn(() => Promise.resolve(plan({ pushed: true, pr: { number: 81, url: 'u' } })));
-    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[2]} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
-    expect(await screen.findByText('The branch is on origin. The remote branch, pull request #81 and its preview stay there.')).toBeTruthy();
+  it('closes the open pull request and deletes the branch on origin', async () => {
+    const discard = vi.fn(() => Promise.resolve(plan({ pushed: true, unpushed: 1, pr: { number: 81, url: 'u' }, closesPr: { number: 81, url: 'u' } })));
+    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={{ ...LIST.crs[2], previewUrl: 'https://cr-uc-grants.chimey.pages.dev' }} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
+    const origin = await screen.findByRole('list', { name: 'From origin' });
+    expect([...origin.querySelectorAll('li')].map((item) => item.textContent)).toEqual([
+      'Pull request #81 is closed, not merged',
+      'Branch cr/spark-tuning',
+      'Its preview stops updating; Cloudflare keeps the last build',
+    ]);
+    expect(screen.getByText('1 commit never pushed: lost with the local branch.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Discard' }).className).toContain('studio-button-danger');
   });
 });
 

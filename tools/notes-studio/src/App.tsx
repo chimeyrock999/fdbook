@@ -29,6 +29,7 @@ import { usePreview } from './changes/usePreview';
 import { usePush } from './changes/usePush';
 import { DiscardDialog, NewCrDialog } from './cr/CrDialogs';
 import { CrListPage } from './cr/CrListPage';
+import { CrNotice } from './cr/CrNotice';
 import { CrPicker, EditMenu } from './cr/CrMenus';
 import { useCrs } from './cr/useCrs';
 import { DiffPage } from './diff/DiffPage';
@@ -79,6 +80,7 @@ export function App() {
   // Studio over one worktree (enabled: false) edits it as it is.
   const crMode = crs.list?.enabled === true;
   const readOnly = CURRENT_CR === null && crs.list?.enabled !== false;
+  const currentCr = crs.list?.crs.find((cr) => cr.slug === CURRENT_CR) ?? null;
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);
   const preview = usePreview(previewClient, !readOnly);
@@ -268,6 +270,7 @@ export function App() {
               current={diff?.path ?? null}
               onOpen={openChanged}
               readOnly={readOnly}
+              notice={currentCr !== null && <CrNotice cr={currentCr} onCleanUp={() => { setCrDialog({ kind: 'discard', cr: currentCr }); }} />}
               onCommitted={committed}
               unpushed={readOnly ? null : unpushed}
               preview={

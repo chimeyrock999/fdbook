@@ -1,4 +1,4 @@
-import { listenFailure, pagesProject, parseStudioHost, parseStudioPort, repoRoot, studioHome } from './config.ts';
+import { listenFailure, pagesProject, parseStaleDays, parseStudioHost, parseStudioPort, repoRoot, studioHome } from './config.ts';
 import { installProblem } from './deps.ts';
 
 // Each dependency must be installed as its package-lock.json pins: a pull
@@ -15,7 +15,7 @@ try {
   const studio = await startStudioServer({
     host: parseStudioHost(process.env.STUDIO_HOST),
     port: parseStudioPort(process.env.STUDIO_PORT),
-    changeRequests: { repo: repoRoot, home: studioHome(), pagesProject: pagesProject() },
+    changeRequests: { repo: repoRoot, home: studioHome(), pagesProject: pagesProject(), staleDays: parseStaleDays() },
   });
   console.log(`Notes Studio: ${studio.url}`);
 } catch (error) {
