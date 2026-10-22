@@ -851,7 +851,9 @@ runs without asking.
 > person's logins, keys and files. With sign-in on, only an **admin** of
 > the repository may start, answer and cancel runs; readers and writers
 > follow them. Give admin only to people you would hand a shell on this
-> machine. **Agent** in the header shows or hides the agent
+> machine.
+
+**Agent** in the header shows or hides the agent
 panel and counts the runs going on; the picker beside it chooses the
 agent for each role, kept in this browser. Agents that are not installed
 are listed greyed, with how to install them (`GET /api/agents`).
