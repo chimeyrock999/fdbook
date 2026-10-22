@@ -17,6 +17,7 @@ const COPIES = [
   { site: 'components/mdx/svg-diagram.tsx', sha256: '40a429227384ecd79acdcfb6e830c81d6c92eb20bd2cdca8932cd6ea7a8ca015' },
   { site: 'components/mdx/youtube.tsx', sha256: '0d899e93e4320eac099755574130ae30c79249a04381865bb11f9a83ed4c7bca' },
   { site: 'components/mdx/html-embed.tsx', sha256: '58eb89c3dac0c2cb5b628ad8c47f47052ee41eb97a458015720c901c0c0cb91a' },
+  { site: 'components/mdx/diagram.tsx', sha256: '7ad83697a4e5d0eb78bd430a8d70af46c252c16dac28e77528f88af16c8b01a9' },
 ];
 
 const START = /^\/\/ studio-copy start: the Notes Studio mirrors this in (tools\/notes-studio\/\S+)/;

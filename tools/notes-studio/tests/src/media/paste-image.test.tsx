@@ -91,7 +91,7 @@ describe('pasting an image into the editor', () => {
     const img = await vi.waitFor(() => defined(container.querySelector('img[src]'), 'img'));
     expect(img.getAttribute('src')).toBe('/api/file?path=public%2Fnotes%2Fdata-modeling%2Fwarehouse-layers.png');
     const lint = (exists: boolean) =>
-      lintNote(source, { path: 'data-modeling/index.mdx', pages: new Set(['data-modeling/index.mdx']), assetExists: (asset) => exists && written.has(`public/${asset}`) })
+      lintNote(source, { path: 'data-modeling/index.mdx', pages: new Set(['data-modeling/index.mdx']), assetExists: (asset) => exists && written.has(`public/${asset}`), diagramProblem: () => 'missing' })
         .filter((issue) => issue.rule === 'asset-missing');
     expect(lint(true)).toEqual([]);
     // The rule does look at this image.
