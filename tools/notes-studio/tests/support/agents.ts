@@ -6,11 +6,12 @@ import type { RunSummary } from '../../server/agents/shared';
 const FAKE_AGENT = fileURLToPath(new URL('./fake-agent.mjs', import.meta.url));
 
 // A profile that starts the fake ACP agent (fake-agent.mjs) with `env`.
-export function fakeProfile(env: Record<string, string> = {}, id: AgentProfile['id'] = 'claude', fencesReviewer = true): AgentProfile {
+export function fakeProfile(env: Record<string, string> = {}, id: AgentProfile['id'] = 'claude', fencesReviewer = true, mode?: string): AgentProfile {
   return {
     id,
     name: 'Fake Agent',
     fencesReviewer,
+    mode,
     command: () => ({ command: process.execPath, args: [FAKE_AGENT], env }),
     check: () => Promise.resolve({ available: true, reason: null, note: null, version: '1.0.0' }),
   };

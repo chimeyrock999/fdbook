@@ -74,11 +74,20 @@ describe('agent runs', () => {
     await rm(quiet);
   });
 
-  it('says no for a reviewer whose agent cannot be held to reading, when it asks to edit', async () => {
-    const unfenced = make({}, {}, false);
-    const done = await waitForRun(unfenced, startRun('ask-edit\nask', 'reviewer', unfenced).id, ended);
-    expect(done.events.filter((event) => event.type === 'answer')).toMatchObject([{ optionId: null, by: 'studio' }, { optionId: null, by: 'studio' }]);
-    expect(messagesOf(done.events)).toEqual(['answer:cancelled', 'answer:cancelled']);
+  it('says no for any reviewer asking for more than reading, fenced agent or not', async () => {
+    for (const fenced of [true, false]) {
+      const reviewing = make({}, {}, fenced);
+      const done = await waitForRun(reviewing, startRun('ask-edit\nask', 'reviewer', reviewing).id, ended);
+      expect(done.events.filter((event) => event.type === 'answer')).toMatchObject([{ optionId: null, by: 'studio' }, { optionId: null, by: 'studio' }]);
+      expect(messagesOf(done.events)).toEqual(['answer:cancelled', 'answer:cancelled']);
+    }
+  });
+
+  it('starts the session in the profile\'s mode, whatever the agent defaults to', async () => {
+    const asking = createAgentRuns(root, { slug: 'fix-typo', profiles: [fakeProfile({}, 'claude', true, 'default')], transcripts: createTranscripts(home) });
+    open.push(asking);
+    expect(messagesOf((await waitForRun(asking, startRun('mode', 'author', asking).id, ended)).events)).toEqual(['mode:default']);
+    expect(messagesOf((await waitForRun(runs, startRun('mode').id, ended)).events)).toEqual(['mode:acceptEdits']);
   });
 
   it('lets a reviewer read but not write', async () => {

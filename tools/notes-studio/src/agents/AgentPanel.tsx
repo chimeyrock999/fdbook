@@ -87,7 +87,9 @@ export function AgentPanel({ agents, inCr, canRun, onOpenDiff }: { agents: Agent
           <p className="studio-agent-meta">Agents run in a change request, never on main. Open one, or start a new one, to run an agent.</p>
         ) : (
           <>
-            {canRun && <Composer agents={agents} onStarted={open} />}
+            {canRun ? <Composer agents={agents} onStarted={open} /> : (
+              <p className="studio-agent-meta">Starting an agent needs admin access: it runs commands as the person who started the Studio, with their logins. You can follow the runs here.</p>
+            )}
             {agents.error !== null && (
               <p role="alert" className="studio-tree-error">
                 {agents.error} <button type="button" className="studio-agent-link" onClick={agents.clearError}>Dismiss</button>

@@ -18,6 +18,9 @@ export type AgentProfile = {
   command: (role: AgentRole) => { command: string; args: string[]; env?: Record<string, string> };
   // Sent with session/new: what the agent's adapter reads to fence it in.
   sessionMeta?: (role: AgentRole) => Record<string, unknown>;
+  // The session mode to start in (session/set_mode), whatever the person's
+  // own settings make the default.
+  mode?: string;
   // Whether it can run here, and why not.
   check: () => Promise<Omit<AgentInfo, 'id' | 'name' | 'fencesReviewer'>>;
 };
@@ -64,6 +67,8 @@ function installed(command: string, args: string[], install: string) {
 }
 
 // Commands an author must not run: what reaches GitHub is a person's click.
+// Best effort: `git -C . push` or `sh -c "git push"` do not match, so the
+// permission dialog is the fence; these only spare it the obvious asks.
 const CLAUDE_AUTHOR_DENY = ['Bash(git push:*)', 'Bash(gh:*)'];
 // A reviewer reads: no edits, and no shell that could make one.
 const CLAUDE_REVIEWER_DENY = ['Edit', 'MultiEdit', 'Write', 'NotebookEdit', 'Bash'];
@@ -82,6 +87,9 @@ const claude: AgentProfile = {
       },
     },
   }),
+  // Asks before edits and commands, even when the person's settings
+  // default to acceptEdits or auto.
+  mode: 'default',
   check: packaged('@agentclientprotocol/claude-agent-acp', 'claude-agent-acp'),
 };
 

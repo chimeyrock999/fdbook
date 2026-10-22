@@ -109,7 +109,7 @@ export function App() {
   const agentsClient = useMemo(() => createAgentsClient(), []);
   const agents = useAgents(agentsClient, crMode && CURRENT_CR !== null);
   const liveRuns = agents.runs.filter((run) => run.status === 'running');
-  const asking = rights.write ? firstAsk(liveRuns, agents.events) : null;
+  const asking = rights.agents ? firstAsk(liveRuns, agents.events) : null;
   const [agentTotals, setAgentTotals] = useState<Record<string, RunTotals>>({});
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);
@@ -448,7 +448,7 @@ export function App() {
           <p className="m-auto p-6 text-[13px] text-[var(--fde-muted-foreground)]">{readOnly ? 'Pick a note to read.' : 'Pick a note to edit.'}</p>
         )}
         {active !== null && <AgentWrote runs={liveRuns} path={active} onOpenDiff={() => { openDiff(active); }} />}
-        {crMode && agents.open && <AgentPanel agents={agents} inCr={CURRENT_CR !== null} canRun={rights.write} onOpenDiff={openDiff} />}
+        {crMode && agents.open && <AgentPanel agents={agents} inCr={CURRENT_CR !== null} canRun={rights.agents} onOpenDiff={openDiff} />}
         {left && <LeaveNotice notice={left} onBack={() => { switchTo(left.cr); }} onClose={dismissLeft} />}
       </div>
       {crDialog?.kind === 'new' && (

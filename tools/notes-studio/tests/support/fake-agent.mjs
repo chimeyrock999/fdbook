@@ -10,6 +10,7 @@
 //   deaf                waits and ignores a cancel
 //   crash               prints to stderr and exits
 //   env                 says which of the Studio's variables it can see
+//   mode                says the session's mode (it starts in acceptEdits)
 // FAKE_AGENT=auth makes session/new ask for a sign-in.
 import { writeFileSync } from 'node:fs';
 import { Readable, Writable } from 'node:stream';
@@ -28,15 +29,20 @@ const agent = {
   async newSession({ cwd }) {
     if (process.env.FAKE_AGENT === 'auth') throw RequestError.authRequired();
     const sessionId = `s${String(sessions.size + 1)}`;
-    sessions.set(sessionId, { cwd, cancelled: false, cancel: null });
+    sessions.set(sessionId, { cwd, cancelled: false, cancel: null, mode: 'acceptEdits' });
     return {
       sessionId,
+      modes: { currentModeId: 'acceptEdits', availableModes: [{ id: 'default', name: 'Default' }, { id: 'acceptEdits', name: 'Accept edits' }] },
       configOptions: [
         { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'fake-1', options: [{ value: 'fake-1', name: 'Fake One' }] },
       ],
     };
   },
   async authenticate() {
+    return {};
+  },
+  async setSessionMode({ sessionId, modeId }) {
+    sessions.get(sessionId).mode = modeId;
     return {};
   },
   async cancel({ sessionId }) {
@@ -92,6 +98,8 @@ const agent = {
       } else if (command === 'crash') {
         process.stderr.write('boom: the fake agent crashed\n');
         process.exit(3);
+      } else if (command === 'mode') {
+        await say(sessionId, `mode:${session.mode}`);
       } else if (command === 'env') {
         const seen = ['STUDIO_SECRET', 'GH_TOKEN', 'GITHUB_TOKEN', 'FAKE_VISIBLE'].filter((name) => process.env[name] !== undefined);
         await say(sessionId, `env:${seen.join(',')} cwd:${process.cwd()}`);

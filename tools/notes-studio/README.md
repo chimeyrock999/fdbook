@@ -823,13 +823,19 @@ without its own `STUDIO_*`, `GH_*` and `GITHUB_*` variables.
 
 | Agent | Started with | Fenced in by |
 | --- | --- | --- |
-| Claude Code | `@agentclientprotocol/claude-agent-acp`, pinned in `package.json` | `git push` and `gh` denied to an author; edits and the shell denied to a reviewer; bypass mode off |
+| Claude Code | `@agentclientprotocol/claude-agent-acp`, pinned in `package.json` | the `default` mode (it asks before edits and commands, whatever your `permissions.defaultMode`); `git push` and `gh` denied to an author, best effort (`git -C . push` does not match: the dialog is the fence); edits and the shell denied to a reviewer; bypass mode off |
 | Codex | `@agentclientprotocol/codex-acp`, pinned | `workspace-write` sandbox (worktree only, no network) for an author, `read-only` for a reviewer |
-| omp | `omp acp` (installed by you) | its own permission prompts; as a reviewer, the Studio says no to the edits and commands it asks about |
-| Hermes Agent | `hermes acp` (installed with its `[acp]` extra) | the toolsets in your `~/.hermes/config.yaml` (the Studio warns while `terminal` or `code_execution` is on); as a reviewer, as omp |
+| omp | `omp acp` (installed by you) | its own permission prompts |
+| Hermes Agent | `hermes acp` (installed with its `[acp]` extra) | the toolsets in your `~/.hermes/config.yaml` (the Studio warns while `terminal` or `code_execution` is on) |
 
 Your own settings still apply: a command your Claude Code settings allow
-runs without asking. **Agent** in the header shows or hides the agent
+runs without asking.
+
+> An agent runs commands as the person who started the Studio, with that
+> person's logins, keys and files. With sign-in on, only an **admin** of
+> the repository may start, answer and cancel runs; readers and writers
+> follow them. Give admin only to people you would hand a shell on this
+> machine. **Agent** in the header shows or hides the agent
 panel and counts the runs going on; the picker beside it chooses the
 agent for each role, kept in this browser. Agents that are not installed
 are listed greyed, with how to install them (`GET /api/agents`).
@@ -837,8 +843,12 @@ are listed greyed, with how to install them (`GET /api/agents`).
 - **Where.** Only in a change request: the agent's working folder is its
   worktree, never main (`/api/agents/runs` on main answers 409). A Studio
   over one worktree (no change requests) runs no agent.
-- **Roles.** An *author* may write; a *reviewer* only reads. Starting a run
-  needs write access, like any other change.
+- **Roles.** An *author* may write; a *reviewer* only reads: whatever it
+  asks for beyond reading (`read`, `search`, `fetch`, `think` tool calls),
+  the Studio says no without asking you, whichever the agent. omp and
+  Hermes cannot be held to reading from outside, so their own tools may
+  still change a file they do not ask about; the run lists it. Starting,
+  answering and cancelling a run needs an admin (see above).
 - **Files.** `fs/read_text_file` reads any file of the worktree except
   hidden ones (`.git`, `.env`) and none a symlink leads out to;
   `fs/write_text_file` writes only what the Studio itself edits (notes,

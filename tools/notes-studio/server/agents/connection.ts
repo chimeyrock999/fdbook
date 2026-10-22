@@ -117,6 +117,10 @@ export function startAgent(profile: AgentProfile, role: AgentRole, root: string,
       throw error;
     }
     sessionId = session.sessionId;
+    const modes = session.modes?.availableModes.map((mode) => mode.id) ?? [];
+    if (profile.mode !== undefined && session.modes?.currentModeId !== profile.mode && modes.includes(profile.mode)) {
+      await agent.request(methods.agent.session.setMode, { sessionId, modeId: profile.mode });
+    }
     const model = modelOf(session.configOptions);
     if (model !== null) hooks.model(model);
     return agent.request(methods.agent.session.prompt, { sessionId, prompt: [{ type: 'text', text: prompt }] });

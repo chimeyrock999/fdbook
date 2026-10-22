@@ -140,6 +140,7 @@ describe('agents API with sign-in', () => {
   beforeAll(async () => {
     repo = await makeGitRepo();
     const faked = fakeAuth(repo.home);
+    faked.gh.addUser('admin', 'admin');
     faked.gh.addUser('writer', 'write');
     faked.gh.addUser('reader', 'read');
     studio = await startCrStudio(repo, { auth: faked.auth, agents: [fakeProfile()] });
@@ -151,9 +152,10 @@ describe('agents API with sign-in', () => {
     await repo.remove();
   });
 
-  it('lets a reader read runs and a writer start them, recording who did', async () => {
+  it('lets readers and writers follow runs, and only an admin start and answer them, recording who did', async () => {
     const send = sender(studio.origin);
     const gh = (studio as unknown as { gh: Parameters<typeof signInWith>[1] }).gh;
+    const admin = await signInWith(send, gh, 'admin');
     const writer = await signInWith(send, gh, 'writer');
     const reader = await signInWith(send, gh, 'reader');
     const created = await send('/api/crs', { method: 'POST', body: { name: 'Signed' }, ...writer });
@@ -163,10 +165,15 @@ describe('agents API with sign-in', () => {
 
     expect((await send(runs)).status).toBe(401);
     expect((await send(runs, { method: 'POST', body, ...reader })).status).toBe(403);
+    // A run is commands as the host's user: a writer may not start one.
+    expect((await send(runs, { method: 'POST', body, ...writer })).status).toBe(403);
     expect((await send(runs, reader)).status).toBe(200);
-    const started = await send(runs, { method: 'POST', body, ...writer });
+    expect((await send(runs, writer)).status).toBe(200);
+    const started = await send(runs, { method: 'POST', body, ...admin });
     expect(started.status).toBe(200);
-    expect((json(started) as { run: RunSummary }).run.by).toBe('writer');
+    const run = (json(started) as { run: RunSummary }).run;
+    expect(run.by).toBe('admin');
+    expect((await send(`${runs}/${run.id}/cancel`, { method: 'POST', body: {}, ...writer })).status).toBe(403);
     expect((await send(`/cr/${slug}/api/agents/events`, { headers: { Range: 'x' } })).status).toBe(401);
   });
 });

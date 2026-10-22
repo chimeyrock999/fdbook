@@ -154,7 +154,7 @@ describe('agent panel', () => {
     expect(screen.getByRole('region', { name: 'Run of Codex' })).toBeTruthy();
   });
 
-  it('offers no run on main, and none to a reader', async () => {
+  it('offers no run on main, and none to someone who is not an admin', async () => {
     const { client } = fakeClient();
     const { unmount } = render(<Harness client={client} inCr={false} />);
     expect(await screen.findByText(/Agents run in a change request, never on main/)).toBeTruthy();
@@ -163,6 +163,7 @@ describe('agent panel', () => {
     render(<Harness client={client} canRun={false} />);
     await screen.findByRole('region', { name: 'Runs in this change request' });
     expect(screen.queryByRole('textbox', { name: 'Prompt' })).toBeNull();
+    expect(screen.getByText(/Starting an agent needs admin access/)).toBeTruthy();
   });
 });
 

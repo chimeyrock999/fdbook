@@ -16,8 +16,8 @@ import { changedSince, worktreePathOf, worktreeState } from './worktree.ts';
 export const MAX_LIVE_RUNS = 3;
 const PROMPT_MAX = 20_000;
 const HEARTBEAT_MS = 25_000;
-// What a reviewer may not do with an agent that cannot be held to reading.
-const WRITING_KINDS = new Set(['edit', 'delete', 'move', 'execute']);
+// What a reviewer may still ask for; the Studio says no to anything else.
+const READING_KINDS = new Set(['read', 'search', 'fetch', 'think']);
 const EDIT_KINDS = new Set(['edit', 'delete', 'move']);
 
 type Pending = { ask: PermissionAsk; resolve: (optionId: string | null) => void; timer: NodeJS.Timeout };
@@ -102,7 +102,7 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
     changed(run, { writes: [...run.summary.writes, ...fresh] });
   };
 
-  const ask = (run: Live, profile: AgentProfile, request: RequestPermissionRequest) =>
+  const ask = (run: Live, request: RequestPermissionRequest) =>
     new Promise<string | null>((resolve) => {
       const ask: PermissionAsk = { id: randomBytes(6).toString('hex'), toolCall: request.toolCall, options: request.options };
       if (run.stopping || run.summary.status !== 'running') {
@@ -113,8 +113,9 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
       timer.unref();
       run.pending.set(ask.id, { ask, resolve, timer });
       record(run, { type: 'permission', at: Date.now(), ask });
-      // A reviewer whose agent cannot be held to reading: the Studio says no.
-      if (run.summary.role === 'reviewer' && !profile.fencesReviewer && WRITING_KINDS.has(request.toolCall.kind ?? '')) settle(run, ask.id, null, 'studio');
+      // A reviewer reads: whatever else it asks for (an edit, a command, an
+      // escalation out of its sandbox, a tool of no kind), the Studio says no.
+      if (run.summary.role === 'reviewer' && !READING_KINDS.has(request.toolCall.kind ?? '')) settle(run, ask.id, null, 'studio');
     });
 
   // Records the end. `before` is the worktree as the run found it: what
@@ -177,7 +178,7 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
           record(run, { type: 'write', at: Date.now(), path: written.path, bytes: written.bytes });
           if (!run.summary.writes.includes(written.path)) changed(run, { writes: [...run.summary.writes, written.path] });
         },
-        ask: (request) => ask(run, profile, request),
+        ask: (request) => ask(run, request),
       });
     } catch (error) {
       // A profile that cannot even name its command (its package gone).
