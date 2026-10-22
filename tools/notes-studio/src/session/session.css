@@ -9,6 +9,22 @@
     background: var(--fde-background);
     color: var(--fde-foreground);
   }
+  /* Over the Studio once its session ended: the Studio stays behind. */
+  .studio-signin-over {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    min-height: 0;
+    overflow: auto;
+    background: color-mix(in oklab, var(--fde-background) 70%, transparent);
+    backdrop-filter: blur(2px);
+  }
+  .studio-signin-over:focus {
+    outline: none;
+  }
+  .studio-signin-over .studio-signin-card {
+    box-shadow: 0 10px 32px rgb(0 0 0 / 0.18);
+  }
   .studio-signin-card {
     display: grid;
     gap: 14px;

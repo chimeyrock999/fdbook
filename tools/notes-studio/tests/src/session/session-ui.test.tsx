@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeRequest, CrList } from '../../../src/api/crs';
 import { createHistoryClient } from '../../../src/api/history';
-import { confirmSignedIn, onSignedOut, setCsrf, studioFetch, type SessionState } from '../../../src/api/session';
+import { checkSeat, confirmSignedIn, onSignedOut, setCsrf, studioFetch, type SessionState } from '../../../src/api/session';
 import { CrListPage } from '../../../src/cr/CrListPage';
 import { CrPicker } from '../../../src/cr/CrMenus';
 import { CrNotice } from '../../../src/cr/CrNotice';
@@ -252,7 +253,167 @@ describe('the session gate', () => {
     await screen.findByText('Studio for alice');
     state = signedOut();
     await studioFetch('/api/x');
-    expect(await screen.findByRole('heading', { name: 'Sign in to Notes Studio' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Your session ended' })).toBeTruthy();
+  });
+});
+
+// The Studio as a stand-in: counts its mounts and holds typed text in its
+// own state, as an editor holds unsaved edits.
+let mounts = 0;
+function Studio() {
+  const { state } = useSession();
+  const [draft, setDraft] = useState('');
+  useEffect(() => { mounts += 1; }, []);
+  return (
+    <label>
+      Draft of {state.user?.login}
+      <input value={draft} onChange={(event) => { setDraft(event.target.value); }} />
+    </label>
+  );
+}
+
+// Once the Studio was open, a session that ends brings the sign-in over it:
+// the Studio is not mounted again, so nothing it holds is lost (#121).
+describe('the session ending under the Studio', () => {
+  beforeEach(() => {
+    mounts = 0;
+  });
+
+  it('keeps the Studio mounted and inert behind the sign-in, with the session it had', async () => {
+    let state = signedIn('writer');
+    stubFetch({ '/api/session': () => ({ body: state }), '/api/x': () => ({ status: 401, body: { error: 'Sign in to use the Studio.' } }) });
+    render(<SessionGate><Studio /></SessionGate>);
+    await userEvent.type(await screen.findByLabelText('Draft of alice'), 'not saved');
+    state = signedOut();
+    await studioFetch('/api/x');
+    const dialog = await screen.findByRole('dialog', { name: 'Your session ended' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(document.activeElement).toBe(dialog);
+    expect(within(dialog).getByText(/Edits not saved yet are kept/)).toBeTruthy();
+    const draft = screen.getByLabelText<HTMLInputElement>('Draft of alice', { selector: 'input' });
+    expect(draft.value).toBe('not saved');
+    expect(draft.closest('[inert]')).not.toBeNull();
+    expect(mounts).toBe(1);
+  });
+
+  it('closes the sign-in once signed in again, the Studio as it was', async () => {
+    let state = signedIn('writer');
+    stubFetch({
+      '/api/session': () => ({ body: state }),
+      '/api/x': () => ({ status: 401, body: { error: 'Sign in to use the Studio.' } }),
+      '/api/session/device': () => ({ body: { flow: 'f1', userCode: 'WDJB-MJHT', verificationUri: 'https://github.com/login/device', expiresIn: 900, interval: 0 } }),
+      '/api/session/device/poll': () => ({ body: { state: 'done', session: signedIn('writer', { csrf: 'token-2' }) } }),
+    });
+    render(<SessionGate><Studio /></SessionGate>);
+    await userEvent.type(await screen.findByLabelText('Draft of alice'), 'not saved');
+    state = signedOut(['device']);
+    await studioFetch('/api/x');
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign in with a code' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+    const draft = screen.getByLabelText<HTMLInputElement>('Draft of alice', { selector: 'input' });
+    expect(draft.value).toBe('not saved');
+    expect(draft.closest('[inert]')).toBeNull();
+    expect(mounts).toBe(1);
+  });
+
+  // Signs in again through the dialog as `next`, after a 401 ended the session.
+  async function signInAgainAs(next: SessionState) {
+    let state = signedIn('writer');
+    stubFetch({
+      '/api/session': () => ({ body: state }),
+      '/api/x': () => ({ status: 401, body: { error: 'Sign in to use the Studio.' } }),
+      '/api/session/device': () => ({ body: { flow: 'f1', userCode: 'WDJB-MJHT', verificationUri: 'https://github.com/login/device', expiresIn: 900, interval: 0 } }),
+      '/api/session/device/poll': () => ({ body: { state: 'done', session: next } }),
+    });
+    render(<SessionGate><Studio /></SessionGate>);
+    await userEvent.type(await screen.findByLabelText('Draft of alice'), 'not saved');
+    state = signedOut(['device']);
+    await studioFetch('/api/x');
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign in with a code' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+  }
+
+  it('starts the Studio afresh for someone else, so nothing carries over to their account', async () => {
+    await signInAgainAs(signedIn('writer', { user: { login: 'bob', name: 'Bob', avatarUrl: 'https://avatars.example/bob' } }));
+    expect(screen.getByLabelText<HTMLInputElement>('Draft of bob', { selector: 'input' }).value).toBe('');
+    expect(mounts).toBe(2);
+  });
+
+  it('starts the Studio afresh for a writer back as a reader', async () => {
+    await signInAgainAs(signedIn('reader'));
+    expect(screen.getByLabelText<HTMLInputElement>('Draft of alice', { selector: 'input' }).value).toBe('');
+    expect(mounts).toBe(2);
+  });
+
+  // Another tab signs out, then in as `next`: the sync's next reconnect
+  // carries the cookie the browser holds now, and asks the seat check first.
+  async function otherTabSignsInAs(next: SessionState) {
+    let state = signedIn('writer');
+    stubFetch({ '/api/session': () => ({ body: state }), '/api/x': () => ({ status: 401, body: { error: 'Sign in to use the Studio.' } }) });
+    render(<SessionGate><Studio /></SessionGate>);
+    await userEvent.type(await screen.findByLabelText('Draft of alice'), 'not saved');
+    state = signedOut();
+    await studioFetch('/api/x');
+    await screen.findByRole('dialog');
+    state = next;
+    return checkSeat().then(() => 'connects', () => 'refused');
+  }
+
+  it('lets the sync reconnect when the same writer signed in again in another tab, and closes the sign-in', async () => {
+    expect(await otherTabSignsInAs(signedIn('writer'))).toBe('connects');
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+    expect(screen.getByLabelText<HTMLInputElement>('Draft of alice', { selector: 'input' }).value).toBe('not saved');
+    expect(mounts).toBe(1);
+  });
+
+  it('refuses the sync for someone else signed in in another tab, and starts the Studio afresh for them', async () => {
+    expect(await otherTabSignsInAs(signedIn('writer', { user: { login: 'carol', name: 'Carol', avatarUrl: 'https://avatars.example/carol' } }))).toBe('refused');
+    expect(await screen.findByLabelText('Draft of carol')).toBeTruthy();
+    expect(mounts).toBe(2);
+    // The Studio now runs for Carol: her own reconnects go through.
+    expect(await checkSeat().then(() => 'connects', () => 'refused')).toBe('connects');
+  });
+
+  it('refuses the sync for a writer back as a reader in another tab', async () => {
+    expect(await otherTabSignsInAs(signedIn('reader'))).toBe('refused');
+    await waitFor(() => { expect(mounts).toBe(2); });
+  });
+
+  it('makes what the Studio portalled into the page inert while the sign-in is up', async () => {
+    let state = signedIn('writer');
+    stubFetch({
+      '/api/session': () => ({ body: state }),
+      '/api/x': () => ({ status: 401, body: { error: 'Sign in to use the Studio.' } }),
+      '/api/session/device': () => ({ body: { flow: 'f1', userCode: 'WDJB-MJHT', verificationUri: 'https://github.com/login/device', expiresIn: 900, interval: 0 } }),
+      '/api/session/device/poll': () => ({ body: { state: 'done', session: signedIn('writer') } }),
+    });
+    const menu = document.createElement('div');
+    document.body.append(menu);
+    try {
+      render(<SessionGate><Studio /></SessionGate>);
+      await screen.findByLabelText('Draft of alice');
+      state = signedOut(['device']);
+      await studioFetch('/api/x');
+      await screen.findByRole('dialog');
+      expect(menu.inert).toBe(true);
+      await userEvent.click(screen.getByRole('button', { name: 'Sign in with a code' }));
+      await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+      expect(menu.inert).toBe(false);
+    } finally {
+      menu.remove();
+    }
+  });
+
+  it('shows over the Studio why access was taken away', async () => {
+    let state = signedIn('writer');
+    stubFetch({ '/api/session': () => ({ body: state }), '/api/x': () => ({ status: 401, body: { error: 'Sign in to use the Studio.' } }) });
+    render(<SessionGate><Studio /></SessionGate>);
+    await screen.findByLabelText('Draft of alice');
+    state = signedIn('none');
+    await studioFetch('/api/x');
+    const dialog = await screen.findByRole('dialog', { name: 'No access' });
+    expect(within(dialog).getByRole('alert').textContent).toBe('@alice is signed in but has no access to owner/notes.');
+    expect(mounts).toBe(1);
   });
 });
 

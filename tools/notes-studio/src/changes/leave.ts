@@ -1,4 +1,5 @@
 import type { Changes } from '../api/changes';
+import { keepInTab, keptInTab } from '../session-storage';
 
 // A change request left with uncommitted files: its slug (to go back), its
 // branch and how many files.
@@ -18,22 +19,13 @@ export function leaveNotice(changes: Changes | null, cr: string | null): Leave |
 // the reminder is kept for the next page to show. Losing it (storage off)
 // only loses the reminder.
 export function rememberLeave(leave: Leave | null) {
-  try {
-    if (leave === null) sessionStorage.removeItem(STORAGE_KEY);
-    else sessionStorage.setItem(STORAGE_KEY, JSON.stringify(leave));
-  } catch {
-    // No reminder; the switch goes on.
-  }
+  keepInTab(STORAGE_KEY, leave);
 }
 
 // The reminder the last page left, unless it is about the change request
 // this page opens (the user went back).
 export function leftBehind(current: string | null): Leave | null {
-  try {
-    const value = JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? 'null') as Partial<Leave> | null;
-    if (typeof value?.cr !== 'string' || typeof value.branch !== 'string' || typeof value.count !== 'number' || value.cr === current) return null;
-    return { cr: value.cr, branch: value.branch, count: value.count };
-  } catch {
-    return null;
-  }
+  const value = keptInTab(STORAGE_KEY) as Partial<Leave> | null;
+  if (typeof value?.cr !== 'string' || typeof value.branch !== 'string' || typeof value.count !== 'number' || value.cr === current) return null;
+  return { cr: value.cr, branch: value.branch, count: value.count };
 }

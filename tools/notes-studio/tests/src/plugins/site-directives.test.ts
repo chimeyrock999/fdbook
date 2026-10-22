@@ -8,6 +8,8 @@ import { decorateSiteDirectives } from '../../../src/plugins/site-directives/dec
 import { defined, describeDecoration, editorState, nodesOf, syntax, withNode } from '../../support/editor-state';
 import { realNotes } from '../../support/notes';
 
+const notes = await realNotes();
+
 const fixture = () => readFile(join(repoRoot, 'tools/notes-studio/src/plugins/site-directives/fixtures/site-directives.mdx'), 'utf8');
 
 async function groups() {
@@ -114,23 +116,29 @@ describe('accordion groups', () => {
     expect(saved.endsWith(source.slice(source.indexOf('::youtube')))).toBe(true);
   });
 
-  it('reads every group in the real notes and writes its bodies, kinds and titles back unchanged', async () => {
+  // One test per note, each well inside the default timeout; the last one
+  // checks the total (tests in a file run in order).
+  describe('in the real notes', () => {
     let items = 0;
-    for (const { path, source } of await realNotes()) {
+
+    it.each(notes)('reads every group in $path and writes its bodies, kinds and titles back unchanged', ({ source }) => {
       for (const { node } of nodesOf(editorState(source), 'verbatim')) {
         const value = String(node.attrs.value);
         if (!/^:{3,}accordions/.test(value)) continue;
-        const group = defined(parseAccordions(value), path);
-        expect(group.items.length, path).toBe((value.match(/^\s*:::accordion\b/gm) ?? []).length);
+        const group = defined(parseAccordions(value));
+        expect(group.items.length).toBe((value.match(/^\s*:::accordion\b/gm) ?? []).length);
         group.items.forEach((item, index) => {
-          expect(item.title, path).not.toBe('');
-          expect(withAccordionBody(value, index, item.body), path).toBe(value);
-          expect(withAccordionAttributes(value, index, { title: item.title, ...(item.kind && { kind: item.kind }) }), path).toBe(value);
+          expect(item.title).not.toBe('');
+          expect(withAccordionBody(value, index, item.body)).toBe(value);
+          expect(withAccordionAttributes(value, index, { title: item.title, ...(item.kind && { kind: item.kind }) })).toBe(value);
         });
         items += group.items.length;
       }
-    }
-    expect(items).toBeGreaterThan(40);
+    });
+
+    it('finds the accordion items', () => {
+      expect(items).toBeGreaterThan(40);
+    });
   });
 });
 

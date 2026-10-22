@@ -6,6 +6,8 @@ import { CALLOUT_TYPES, DIRECTIVE_TYPES } from '../../../src/plugins/callout/typ
 import { defined, syntax } from '../../support/editor-state';
 import { realNotes } from '../../support/notes';
 
+const notes = await realNotes();
+
 type JSONContent = ParsedDoc['doc'];
 
 const directive = defined(editorConfig.components.find((spec) => spec.name === ':::'));
@@ -36,9 +38,12 @@ describe('callout directives', () => {
   // rules: a callout holding an accordion group (not an admonition, so the
   // editor bails) and one whose title has formatting (the title region is
   // plain text).
-  it('turns the real notes callouts into components', async () => {
+  // One test per note, each well inside the default timeout; the last one
+  // checks the totals (tests in a file run in order).
+  describe('in the real notes', () => {
     const types: Record<string, number> = {};
-    for (const { path, source } of await realNotes()) {
+
+    it.each(notes)('turns the callouts in $path into components', ({ source }) => {
       walk(parseMdxToDoc(source, syntax).doc, (node) => {
         if (node.type === DIRECTIVE) {
           const type = String(typeOf(node));
@@ -47,11 +52,14 @@ describe('callout directives', () => {
         if (node.type !== 'verbatim') return;
         const value = String(node.attrs?.value);
         const name = /^:{3,}([\w-]+)/.exec(value)?.[1];
-        if (name && DIRECTIVE_TYPES.includes(name)) expect(value, path).toMatch(/:{3,}accordion|^:{3,}[\w-]+\[(?![^`*_:<[\]\n]*\])/);
+        if (name && DIRECTIVE_TYPES.includes(name)) expect(value).toMatch(/:{3,}accordion|^:{3,}[\w-]+\[(?![^`*_:<[\]\n]*\])/);
       });
-    }
-    expect(types.example).toBeGreaterThanOrEqual(40);
-    expect(types.caution).toBeGreaterThanOrEqual(4);
+    });
+
+    it('finds the site names among them', () => {
+      expect(types.example).toBeGreaterThanOrEqual(40);
+      expect(types.caution).toBeGreaterThanOrEqual(4);
+    });
   });
 
   it('writes an edited title and type back as the directive', () => {

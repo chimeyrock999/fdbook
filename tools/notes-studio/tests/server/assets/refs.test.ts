@@ -5,6 +5,8 @@ import { findAssetRefs, rewriteAssetRefs } from '../../../server/assets/refs';
 import { repoRoot } from '../../../server/config';
 import { realNotes } from '../../support/notes';
 
+const notes = await realNotes();
+
 const NOTE = `---
 title: Demo
 cover: /notes/guide/a.png
@@ -171,11 +173,21 @@ describe('findAssetRefs', () => {
     expect(findAssetRefs('<HtmlEmbed src="/notes/a.html"\n', 'a.mdx')).toBeNull();
   });
 
-  it('matches the real notes: every reference reaches a file in public/notes', async () => {
-    const refs = (await realNotes()).flatMap(({ path, source }) => findAssetRefs(source, path.slice('content/notes/'.length)) ?? []);
-    expect(refs.length).toBeGreaterThanOrEqual(15);
-    for (const ref of refs) expect(existsSync(join(repoRoot, ref.asset)), ref.asset).toBe(true);
-    expect(new Set(refs.map((ref) => ref.kind))).toEqual(new Set(['image', 'jsx']));
+  // One test per note, each well inside the default timeout; the last one
+  // checks what they found together (tests in a file run in order).
+  describe('on the real notes', () => {
+    const found: { asset: string; kind: string }[] = [];
+
+    it.each(notes)('every reference in $path reaches a file in public/notes', ({ path, source }) => {
+      const refs = findAssetRefs(source, path.slice('content/notes/'.length)) ?? [];
+      for (const ref of refs) expect(existsSync(join(repoRoot, ref.asset)), ref.asset).toBe(true);
+      found.push(...refs);
+    });
+
+    it('finds images and components among them', () => {
+      expect(found.length).toBeGreaterThanOrEqual(15);
+      expect(new Set(found.map((ref) => ref.kind))).toEqual(new Set(['image', 'jsx']));
+    });
   });
 });
 

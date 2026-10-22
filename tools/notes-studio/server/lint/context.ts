@@ -33,6 +33,12 @@ export async function loadLintContext(root: string, path: string) {
   return contextFor(root, await listPages(root), path);
 }
 
+// The context of any note in the worktree, from one listing of its pages.
+export async function loadLintContexts(root: string) {
+  const pages = await listPages(root);
+  return (path: string) => contextFor(root, pages, path);
+}
+
 export type NoteIssues = { path: string; issues: LintIssue[] };
 
 // Every note in the worktree, linted; paths are worktree-relative.
