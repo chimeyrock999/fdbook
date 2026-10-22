@@ -185,7 +185,9 @@ describe('findAssetRefs', () => {
     });
 
     it('finds images and components among them', () => {
-      expect(found.length).toBeGreaterThanOrEqual(15);
+      // Diagrams are <Diagram> (diagrams/, not public/) since #80: the notes
+      // keep their images and one <SvgDiagram>.
+      expect(found.length).toBeGreaterThanOrEqual(8);
       expect(new Set(found.map((ref) => ref.kind))).toEqual(new Set(['image', 'jsx']));
     });
   });
