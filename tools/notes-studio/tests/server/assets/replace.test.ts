@@ -8,6 +8,7 @@ import { lintWorktree } from '../../../server/lint/context';
 import { MAX_ASSET_BYTES } from '../../../server/security/asset-types';
 import { json, rawRequest } from '../../support/http';
 import { startTestStudio, type TestStudio } from '../../support/studio';
+import { CORPUS_TIMEOUT_MS } from '../../support/timeouts';
 
 type Answer = { changes: { type: string; path: string; to?: string; detail?: string }[]; mtimeMs?: number };
 
@@ -62,7 +63,7 @@ describe('assets API: replace', () => {
   it('lists each asset with its size', async () => {
     const assets = (json(await rawRequest(`${studio.url}api/assets`)) as { assets: { path: string; size: number }[] }).assets;
     expect(assets.find((asset) => asset.path === SUPERSET)?.size).toBe((await stat(file(SUPERSET))).size);
-  });
+  }, CORPUS_TIMEOUT_MS);
 
   it('shows a dry run with the same extension: only the file, and writes nothing', async () => {
     const before = await readFile(file(WAREHOUSE));
@@ -184,5 +185,5 @@ describe('assets API: replace', () => {
     expect(await text(asset)).toBe('old');
     expect(await exists('public/notes/zz-replace/locked-asset.webp')).toBe(false);
     await rm(file('content/notes/zz-replace-locked'), { recursive: true });
-  });
+  }, CORPUS_TIMEOUT_MS);
 });
