@@ -42,6 +42,9 @@ const MIME: Record<DiagramExportFormat, string> = {
   webp: 'image/webp',
   svg: 'image/svg+xml',
 };
+const PELE_VARIABLES = ['bg', 'fg', 'muted', 'line', 'surface', 'surface-alt', 'border', 'accent', 'font', 'font-mono'].map(
+  (name) => `--pele-${name}`,
+);
 
 export async function exportSvgElement(
   svg: SVGSVGElement,
@@ -79,9 +82,16 @@ function serializeSvg(svg: SVGSVGElement): string {
 
   if (!clone.getAttribute('viewBox')) clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
-  const { color, fontFamily } = getComputedStyle(svg);
-  clone.style.fontFamily = fontFamily;
-  clone.style.color = color;
+  const style = getComputedStyle(svg);
+  clone.style.fontFamily = style.fontFamily;
+  clone.style.color = style.color;
+
+  // Pele colours a diagram from CSS variables the page sets; a file on its
+  // own would fall back to Pele's light palette.
+  for (const name of PELE_VARIABLES) {
+    const value = style.getPropertyValue(name).trim();
+    if (value) clone.style.setProperty(name, value);
+  }
 
   return new XMLSerializer().serializeToString(clone);
 }

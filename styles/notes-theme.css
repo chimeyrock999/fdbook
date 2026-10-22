@@ -155,3 +155,33 @@
   --color-callout-body-bg: #1a261c;
   --color-callout-separator-alpha: 0.5;
 }
+
+/* Mermaid diagrams (drawn by Pele) in the garden palette. Pele reads these
+   variables on every paint, so a theme switch needs no new render. Scoped
+   like the palette, so the expanded view portalled to <body> matches. */
+:root:has(.notes-theme) svg.pele, .notes-theme svg.pele {
+  --pele-bg: transparent;
+  --pele-fg: var(--garden-ink);
+  --pele-muted: var(--garden-ink-soft);
+  --pele-line: var(--garden-ink-2);
+  --pele-surface: var(--garden-accent-soft);
+  --pele-surface-alt: var(--garden-tint-soft);
+  --pele-border: color-mix(in oklab, var(--garden-accent) 55%, var(--garden-line));
+  --pele-accent: var(--garden-accent);
+  --pele-series-1: var(--color-callout-success);
+  --pele-series-2: var(--color-callout-info);
+  --pele-series-3: var(--color-callout-idea);
+  --pele-series-4: var(--color-callout-example);
+  --pele-series-5: var(--color-callout-warning);
+  --pele-series-6: var(--color-callout-danger);
+  --pele-series-7: var(--color-callout-caution);
+  --pele-series-8: var(--color-callout-note);
+}
+
+/* A node or subgraph the author filled (`style X fill:#…`) keeps that fill
+   in the dark theme, where the light text would vanish on it; an explicit
+   `color:` is inline on the label and still wins. */
+.dark .notes-theme svg.pele :is(.pele-node, .pele-cluster):has(> [style*="fill:#"]) > :is(.pele-label, .pele-cluster-label),
+.dark:has(.notes-theme) svg.pele :is(.pele-node, .pele-cluster):has(> [style*="fill:#"]) > :is(.pele-label, .pele-cluster-label) {
+  fill: var(--color-fd-primary-foreground);
+}
