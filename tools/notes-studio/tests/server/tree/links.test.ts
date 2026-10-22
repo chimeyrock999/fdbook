@@ -102,6 +102,19 @@ describe('rewriteLinks', () => {
     );
   });
 
+  it('reads destinations with angle brackets, escapes and nested parentheses whole', () => {
+    const odd = knownTargets(['index.mdx', 'storage/x y.mdx', 'storage/x)y.mdx', 'storage/x(1).mdx']);
+    const cases: [string, string, string][] = [
+      ['storage/x y.mdx', '[a](<./storage/x y.mdx>)', '[a](<./storage/x-y.mdx>)'],
+      ['storage/x)y.mdx', '[a](./storage/x\\)y.mdx)', '[a](./storage/x-y.mdx)'],
+      ['storage/x(1).mdx', '[a](./storage/x(1).mdx)', '[a](./storage/x-y.mdx)'],
+    ];
+    for (const [from, source, expected] of cases) {
+      const rename: Rename = { from, to: 'storage/x-y.mdx', folder: false };
+      expect(rewriteLinks(`${source}\n`, 'index.mdx', rename, odd)).toEqual({ next: `${expected}\n`, count: 1 });
+    }
+  });
+
   it('leaves a note that does not parse alone', () => {
     const source = '<div>\n[x](./operating-systems/page-cache.mdx)\n';
     expect(rewriteLinks(source, 'computer-systems/index.mdx', page, known)).toEqual({ next: source, count: 0 });
