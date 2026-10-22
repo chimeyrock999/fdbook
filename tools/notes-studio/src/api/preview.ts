@@ -5,7 +5,7 @@
 import { errorOf, readJson } from './json';
 import { API_BASE } from './workspace';
 
-export type BuildState = 'waiting' | 'building' | 'ready' | 'failed' | 'none' | 'unknown';
+export type BuildState = 'waiting' | 'building' | 'ready' | 'failed' | 'skipped' | 'none' | 'unknown';
 export type Build = { state: BuildState; logUrl: string | null; deploymentUrl: string | null; aliasUrl: string | null; at: string | null; error: string | null };
 export type Preview = {
   branch: string | null;

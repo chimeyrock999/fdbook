@@ -82,6 +82,10 @@ export async function pushPreview(root: string, options: PreviewOptions): Promis
     if (error instanceof CommandError && error.killed) throw new HttpError(504, `The push to ${REMOTE} did not finish in time.`);
     throw new HttpError(502, `Could not push to ${REMOTE}: ${message}`);
   }
+  // git moves origin/<branch> after a push only when the clone's fetch
+  // refspec maps the branch (a --single-branch clone does not): move it here,
+  // with the reflog entry pushedAt reads, so the branch reads as pushed.
+  await git(root, 'update-ref', '-m', 'push', `refs/remotes/${REMOTE}/${before.branch}`, head);
   options.builds.pushed(head);
   return loadPreview(root, options);
 }

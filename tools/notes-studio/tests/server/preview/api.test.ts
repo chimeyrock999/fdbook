@@ -129,6 +129,22 @@ describe('preview API', () => {
     expect(await preview()).toMatchObject({ pushed: { sha: second }, unpushed: [] });
   });
 
+  it('reads as pushed in a clone whose fetch refspec covers only main', async () => {
+    const worktree = cr.worktree ?? '';
+    // As a --single-branch clone has it: a push then moves no remote-tracking ref of its own.
+    await git(worktree, 'config', 'remote.origin.fetch', '+refs/heads/main:refs/remotes/origin/main');
+    try {
+      const third = await edit('narrow refspec');
+      expect((await push()).status).toBe(200);
+      const answer = await preview();
+      expect(answer).toMatchObject({ pushed: { sha: third }, unpushed: [] });
+      // The entry pushedAt counts the wait for Cloudflare from.
+      expect(await git(worktree, 'reflog', '-1', '--format=%gs', 'refs/remotes/origin/cr/preview-probe')).toMatch(/^push/);
+    } finally {
+      await git(worktree, 'config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*');
+    }
+  });
+
   it('says why when gh cannot read the build, and still pushes', async () => {
     studio.fake.checks = new Error('gh: not logged in');
     studio.fake.forget();

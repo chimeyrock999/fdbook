@@ -601,6 +601,7 @@ Cloudflare token is needed (#7):
 | Building | the check run is queued or in progress |
 | Ready | it succeeded |
 | Failed | it failed, was cancelled or timed out; the branch's preview still shows its last successful build |
+| Skipped | it finished neither succeeding nor failing (`neutral`, `skipped`): nothing new was built, and the preview still shows its last successful build |
 | No build | no check run 3 minutes after the push: Cloudflare skips a push outside its watch paths (`tools/…`) or branches (`cr/*`) without a trace |
 | Status unknown | gh could not read it (not installed, not logged in, offline) |
 

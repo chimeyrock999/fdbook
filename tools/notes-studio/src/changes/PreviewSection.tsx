@@ -16,6 +16,7 @@ const VERBS: Record<BuildState, string> = {
   building: 'Building',
   ready: 'Built',
   failed: 'Build failed for',
+  skipped: 'Pushed',
   none: 'Pushed',
   unknown: 'Pushed',
 };
@@ -103,6 +104,9 @@ export function PreviewSection({ client, preview, error, unsaved, route, onPushe
         )}
         {pushed !== null && count > 0 && <p className="studio-preview-note" data-tone="warn">The preview is behind: {plural(count, 'commit')} not pushed.</p>}
         {build?.state === 'failed' && <p className="studio-preview-note" data-tone="error">The build failed. The preview still shows the last successful build. See the log.</p>}
+        {build?.state === 'skipped' && (
+          <p className="studio-preview-note" data-tone="quiet">Cloudflare finished this push without building it. The preview still shows the last successful build. See the log.</p>
+        )}
         {build?.state === 'none' && (
           <p className="studio-preview-note" data-tone="quiet">Cloudflare has not built this push after 3 minutes. It skips pushes that change only files outside the site (tools/…).</p>
         )}

@@ -7,6 +7,7 @@ export const BUILD_LABELS: Record<BuildState | 'unpushed', string> = {
   building: 'Building',
   ready: 'Ready',
   failed: 'Failed',
+  skipped: 'Skipped',
   none: 'No build',
   unknown: 'Status unknown',
 };

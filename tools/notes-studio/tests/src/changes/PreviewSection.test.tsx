@@ -116,9 +116,15 @@ describe('PreviewSection', () => {
     expect(pushButton().textContent).toBe('Push 2 commits');
   });
 
-  it('explains a failed build, a skipped one and a build it cannot read', () => {
+  it('explains a failed build, a skipped one, one that never came and a build it cannot read', () => {
     setup(pushed('failed'));
     expect(screen.getByText(/The build failed\. The preview still shows the last successful build/)).toBeTruthy();
+    cleanup();
+    // A check run that finished neither way: it exists, so it is not "no build".
+    setup(pushed('skipped'));
+    expect(screen.getByText(/finished this push without building it/)).toBeTruthy();
+    expect(screen.queryByText(/after 3 minutes/)).toBeNull();
+    expect(screen.getByRole('link', { name: 'View log' })).toBeTruthy();
     cleanup();
     setup(pushed('none', {}, { logUrl: null }));
     expect(screen.getByText(/has not built this push after 3 minutes/)).toBeTruthy();

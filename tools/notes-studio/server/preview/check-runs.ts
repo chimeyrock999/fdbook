@@ -16,7 +16,7 @@ export type CheckRun = {
 // The newest Cloudflare Pages check run on `sha`, or null when there is none.
 export type ReadCheckRun = (root: string, sha: string) => Promise<CheckRun | null>;
 
-export type BuildState = 'waiting' | 'building' | 'ready' | 'failed' | 'none' | 'unknown';
+export type BuildState = 'waiting' | 'building' | 'ready' | 'failed' | 'skipped' | 'none' | 'unknown';
 export type Build = {
   state: BuildState;
   // The build's log in the Cloudflare dashboard.
@@ -89,12 +89,14 @@ export function parseSummary(summary: string | null) {
 const FAILED = new Set(['failure', 'cancelled', 'timed_out', 'action_required', 'stale', 'startup_failure']);
 
 // The build of a pushed commit, from its check run. With none yet, it is
-// waiting until NO_BUILD_AFTER_MS after the push, then there is no build.
+// waiting until NO_BUILD_AFTER_MS after the push, then there is no build. A
+// run that finished neither succeeding nor failing (`neutral`, `skipped`)
+// built nothing new: skipped.
 export function buildOf(check: CheckRun | null, pushedMs: number, now: number): Build {
   const nothing = { logUrl: null, deploymentUrl: null, aliasUrl: null, at: null, error: null };
   if (check === null) return { state: now - pushedMs < NO_BUILD_AFTER_MS ? 'waiting' : 'none', ...nothing };
   const state: BuildState =
-    check.status !== 'completed' ? 'building' : check.conclusion === 'success' ? 'ready' : FAILED.has(check.conclusion ?? '') ? 'failed' : 'none';
+    check.status !== 'completed' ? 'building' : check.conclusion === 'success' ? 'ready' : FAILED.has(check.conclusion ?? '') ? 'failed' : 'skipped';
   return { state, logUrl: check.detailsUrl, ...parseSummary(check.summary), at: check.completedAt ?? check.startedAt, error: null };
 }
 

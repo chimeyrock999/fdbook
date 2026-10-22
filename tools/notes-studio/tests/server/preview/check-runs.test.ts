@@ -63,8 +63,8 @@ describe('buildOf', () => {
     ['completed', 'cancelled', 'failed'],
     ['completed', 'timed_out', 'failed'],
     ['completed', 'action_required', 'failed'],
-    ['completed', 'skipped', 'none'],
-    ['completed', 'neutral', 'none'],
+    ['completed', 'skipped', 'skipped'],
+    ['completed', 'neutral', 'skipped'],
   ])('maps %s / %s to %s', (status, conclusion, state) => {
     expect(buildOf(run({ status, conclusion, summary: null }), pushedMs, pushedMs).state).toBe(state);
   });
