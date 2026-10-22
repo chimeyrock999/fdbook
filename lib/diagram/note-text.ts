@@ -9,30 +9,50 @@ import { remarkNotesDirectives } from '../remark-notes-directives.ts';
 // The text of a diagram note (a node's role and points, a card's items) is
 // MDX, compiled at build time as a note page is: the fumadocs preset plus the
 // site's directives, drawn with the site's MDX components. A note holds no
-// code, so `{expressions}` and `import`/`export` are refused, and so is a
-// component the site does not have: both would compile and then fail when
-// the page renders. Text that is not valid MDX that way shows as written, in
-// plain text: read as Markdown, a `<uuid>` would be dropped as an HTML tag.
+// code and no active HTML: `{expressions}` (in attributes too), `import` and
+// `export`, a component it was not given, and an HTML tag outside a short
+// list of text tags are refused. Code would run at build time, a missing
+// component would fail the page, and `<script>` or `<iframe>` would reach it.
+// Text refused that way shows as written, in plain text: read as Markdown, a
+// `<uuid>` would be dropped as an HTML tag.
 
 export type NoteFormat = 'mdx' | 'text';
+
+interface Attribute {
+  type: string;
+  value?: unknown;
+}
 
 interface Tree {
   type: string;
   name?: string | null;
+  attributes?: Attribute[];
   children?: Tree[];
 }
 
 const CODE = new Set(['mdxFlowExpression', 'mdxTextExpression', 'mdxjsEsm']);
 const JSX = new Set(['mdxJsxFlowElement', 'mdxJsxTextElement']);
+// The HTML a note may write by hand: text-level tags and simple blocks.
+const TEXT_TAGS = new Set([
+  'a', 'abbr', 'b', 'bdi', 'bdo', 'blockquote', 'br', 'cite', 'code', 'del', 'dfn', 'em', 'i', 'ins', 'kbd',
+  'li', 'mark', 'ol', 'p', 'pre', 'q', 's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'ul', 'var', 'wbr',
+]);
 
-// Refuses code, and any JSX element that is neither an HTML tag (lower case)
-// nor one of `components`.
+// An attribute written as `{…}`, or spread as `{...…}`.
+const expressionAttribute = (attribute: Attribute) => attribute.type === 'mdxJsxExpressionAttribute'
+  || (typeof attribute.value === 'object' && attribute.value !== null
+    && (attribute.value as { type?: string }).type === 'mdxJsxAttributeValueExpression');
+
 function remarkNoteOnly(components: object) {
   return () => (tree: Tree) => {
     const walk = (node: Tree) => {
       if (CODE.has(node.type)) throw new Error(`a note holds no code (${node.type})`);
-      if (JSX.has(node.type) && node.name && !/^[a-z][\w-]*$/.test(node.name) && !(node.name in components)) {
-        throw new Error(`no component ${node.name}`);
+      if (JSX.has(node.type)) {
+        if (node.attributes?.some(expressionAttribute)) throw new Error(`a note holds no code (an attribute of ${node.name ?? 'a fragment'})`);
+        // A fragment (`<>…</>`) has no name.
+        if (node.name && (/^[a-z]/.test(node.name) ? !TEXT_TAGS.has(node.name) : !(node.name in components))) {
+          throw new Error(`a note cannot draw <${node.name}>`);
+        }
       }
       node.children?.forEach(walk);
     };

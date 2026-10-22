@@ -24,20 +24,32 @@ const isFile = (path: string) => {
 
 // A diagram checked as components/mdx/diagram.tsx checks it: a file that
 // cannot be laid out shows a placeholder (an error), a layout problem still
-// draws (a warning).
+// draws (a warning). Laying one out takes tens of milliseconds and the lint
+// runs after each pause in typing, so the answer is kept per file until its
+// mtime or size changes.
+const checked = new Map<string, { mtimeMs: number; size: number; problem: DiagramProblem | null }>();
+
 function diagramProblem(root: string, src: string): DiagramProblem | null {
   const file = diagramFilePath(root, src);
-  if (!file || !isFile(file)) return 'missing';
-  let content: unknown;
+  let info;
   try {
-    content = JSON.parse(readFileSync(file, 'utf8'));
+    info = file ? statSync(file) : null;
   } catch {
-    return { severity: 'error', message: 'is not valid JSON' };
+    info = null;
   }
-  const { scene, issues } = validateDiagram(content);
-  const first = issues.find((issue) => issue.severity === 'error') ?? issues.at(0);
-  if (!first) return null;
-  return { severity: scene ? 'warning' : 'error', message: `[${first.code}] ${first.message}` };
+  if (!file || !info?.isFile()) return 'missing';
+  const known = checked.get(file);
+  if (known?.mtimeMs === info.mtimeMs && known.size === info.size) return known.problem;
+  let problem: DiagramProblem | null;
+  try {
+    const { scene, issues } = validateDiagram(JSON.parse(readFileSync(file, 'utf8')));
+    const first = issues.find((issue) => issue.severity === 'error') ?? issues.at(0);
+    problem = first ? { severity: scene ? 'warning' : 'error', message: `[${first.code}] ${first.message}` } : null;
+  } catch {
+    problem = { severity: 'error', message: 'is not valid JSON' };
+  }
+  checked.set(file, { mtimeMs: info.mtimeMs, size: info.size, problem });
+  return problem;
 }
 
 // What the rules need from the worktree at `root`, for the note at `path`
