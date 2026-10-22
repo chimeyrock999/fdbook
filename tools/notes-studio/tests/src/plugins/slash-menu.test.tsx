@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { defined } from '../../support/editor-state';
 import { mountVisual, stubLayout, textAt } from '../../support/visual-editor';
 
 beforeAll(stubLayout);
@@ -33,7 +34,7 @@ describe('slash-menu inserts', () => {
       return found;
     });
     expect(items).toEqual(expect.arrayContaining([
-      'Keyword', 'Tag', 'Graph heading', 'Accordions (directive)', 'Tabs (directive)', 'Steps (directive)', 'YouTube (directive)', 'YouTube',
+      'Keyword', 'Tag', 'Graph heading', 'Accordions (directive)', 'Tabs (directive)', 'Steps (directive)', 'YouTube (directive)', 'YouTube', 'Mermaid diagram',
     ]));
   });
 
@@ -44,9 +45,33 @@ describe('slash-menu inserts', () => {
     ['youtube', 0, '::youtube{url="" title=""}'],
     ['youtube', 1, '<YouTube url="" />'],
     ['graph', 0, '### Title :graph-meta{id="" displayName=""}'],
+    ['mermaid', 0, '```mermaid\nflowchart LR\n    A[Start] --> B[End]\n```'],
   ])('inserts /%s (item %i) as the site writes it', async (query, down, block) => {
     const view = await slash('Intro.\n\nx\n\nAfter.\n', query, down);
     await view.written(`Intro.\n\n${block}\n\nAfter.\n`);
+  });
+
+  it('puts the caret in a new Mermaid diagram and draws it', async () => {
+    const view = await slash('Intro.\n\nx\n', 'mermaid');
+    await vi.waitFor(() => { expect(view.editor.state.selection.$from.parent.type.name).toBe('codeBlock'); });
+    expect(view.editor.state.selection.$from.parent.attrs.language).toBe('mermaid');
+    // The editor draws the starter under the code (Pele, as the site does).
+    const diagram = await vi.waitFor(() => defined(view.container.querySelector('figure svg.pele-flowchart'), 'diagram'), { timeout: 10_000 });
+    expect(diagram.textContent).toContain('Start');
+  }, 20_000);
+
+  // The menu matches labels only: "diagram" finds it next to SVG diagram,
+  // whose order follows the plugin folders.
+  it('lists Mermaid diagram for /diagram', async () => {
+    const view = await mountVisual('Intro.\n\nx\n');
+    const x = textAt(view.editor, 'x');
+    act(() => { view.editor.chain().setTextSelection({ from: x, to: x + 1 }).insertContent('/diagram').run(); });
+    const items = await vi.waitFor(() => {
+      const found = [...document.querySelectorAll('button')].map((button) => button.textContent);
+      expect(found).toContain('Mermaid diagram');
+      return found;
+    });
+    expect(items).toContain('SVG diagram');
   });
 
   it('inserts a Keyword or Tag inline', async () => {

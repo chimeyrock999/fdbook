@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { glob } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { createSyntax, parseMdxToDoc, serializeDocToMdx, type ParsedDoc } from '@fumadocs-editor/core';
 import { describe, expect, it } from 'vitest';
-import { repoRoot } from '../../../server/config';
+import { repoRoot, studioRoot } from '../../../server/config';
 import { editorConfig } from '../../../src/plugins';
 
 // The editor's syntax, as the registered plugins build it, over every real
@@ -13,14 +13,18 @@ import { editorConfig } from '../../../src/plugins';
 type JSONContent = ParsedDoc['doc'];
 
 const syntax = createSyntax(editorConfig.components, editorConfig.syntax);
-const studioRoot = join(repoRoot, 'tools/notes-studio');
 
+// Relative to the repo root, so each test is named after its note.
 async function documents() {
   const paths: string[] = [];
-  for await (const path of glob('content/notes/**/*.mdx', { cwd: repoRoot })) paths.push(join(repoRoot, path));
-  for await (const path of glob('src/plugins/*/fixtures/*.mdx', { cwd: studioRoot })) paths.push(join(studioRoot, path));
+  for await (const path of glob('content/notes/**/*.mdx', { cwd: repoRoot })) paths.push(path);
+  for await (const path of glob('src/plugins/*/fixtures/*.mdx', { cwd: studioRoot })) paths.push(relative(repoRoot, join(studioRoot, path)));
   return paths.sort();
 }
+
+// One test per note: each stays well inside the default timeout however
+// many notes there are, and a failure names the note.
+const paths = await documents();
 
 function find(node: JSONContent, type: string): JSONContent[] {
   const own = node.type === type ? [node] : [];
@@ -28,14 +32,15 @@ function find(node: JSONContent, type: string): JSONContent[] {
 }
 
 describe('editor syntax', () => {
-  it('round-trips every note byte for byte', async () => {
-    const paths = await documents();
+  it('finds every note and fixture', () => {
     expect(paths.length).toBeGreaterThan(50);
-    for (const path of paths) {
-      const source = await readFile(path, 'utf8');
-      const parsed = parseMdxToDoc(source, syntax);
-      expect(serializeDocToMdx(parsed.doc, parsed.snapshot, syntax), path).toBe(source);
-    }
+    expect(paths.some((path) => path.includes('/fixtures/'))).toBe(true);
+  });
+
+  it.each(paths)('round-trips %s byte for byte', async (path) => {
+    const source = await readFile(join(repoRoot, path), 'utf8');
+    const parsed = parseMdxToDoc(source, syntax);
+    expect(serializeDocToMdx(parsed.doc, parsed.snapshot, syntax)).toBe(source);
   });
 
   // An edited block is serialized from the document, not copied from the
