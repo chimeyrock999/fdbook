@@ -13,6 +13,9 @@ const KIND_OF: Partial<Record<string, AssetKind>> = {
   diagram: 'svg',
   img: 'image',
 };
+// Elements whose `src` is no public asset: a `<Diagram>` names a file under
+// diagrams/ (components/mdx/diagram.tsx).
+const NOT_ASSETS = new Set(['Diagram']);
 const EXTENSIONS: Record<Exclude<AssetKind, 'any'>, RegExp> = {
   html: /\.html$/i,
   svg: /\.svg$/i,
@@ -33,6 +36,7 @@ export function assetContext(text: string): { from: number; kind: AssetKind } | 
   // Up to and including the character before `src`, which may be a directive's `{`.
   const head = text.slice(0, src.index + 1);
   const owner = /<([A-Za-z][\w.]*)[^<>]*$/.exec(head)?.[1] ?? /::(\w+)\{[^{}]*$/.exec(head)?.[1];
+  if (owner !== undefined && NOT_ASSETS.has(owner)) return null;
   return { from: text.length - src[2].length, kind: (owner === undefined ? undefined : KIND_OF[owner]) ?? 'any' };
 }
 

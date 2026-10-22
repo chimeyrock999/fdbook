@@ -28,6 +28,8 @@ describe('assetContext', () => {
     expect(assetContext('<SvgDiagram label="x" src="/notes/da')).toEqual({ from: 27, kind: 'svg' });
     expect(assetContext('<HtmlEmbed\n  src="')).toEqual({ from: 18, kind: 'html' });
     expect(assetContext("::html{src='/no")).toEqual({ from: 12, kind: 'html' });
+    // A Diagram's src is a path under diagrams/, not an asset.
+    expect(assetContext('<Diagram src="data-pla')).toBeNull();
     expect(assetContext('::diagram{src="')).toEqual({ from: 15, kind: 'svg' });
     expect(assetContext('<img alt="" src="')).toEqual({ from: 17, kind: 'image' });
     expect(assetContext('<Model src="')).toEqual({ from: 12, kind: 'any' });

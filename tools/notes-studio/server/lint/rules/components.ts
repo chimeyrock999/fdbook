@@ -62,8 +62,38 @@ function decodeUrlPath(url: string) {
   }
 }
 
+// components/mdx/diagram.tsx reads `diagrams/<src>.diagram.json`
+// (lib/read-diagram.ts), so `src` is a path there, not a public URL, and it
+// draws only a diagram that lays out.
+function checkDiagram(node: Nodes, source: string, context: LintContext, report: Report, src: string | null | undefined) {
+  if (src === null) return;
+  if (src === undefined) {
+    report({ rule: 'asset-missing', severity: 'error', message: '<Diagram> has no `src`, so the site shows a placeholder.', ...headOf(node, source) });
+    return;
+  }
+  const problem = context.diagramProblem(src);
+  if (problem === null) return;
+  const file = `diagrams/${src.trim().replace(/^\/+/, '').replace(/\.diagram\.json$/, '')}.diagram.json`;
+  if (problem === 'missing') {
+    report({ rule: 'asset-missing', severity: 'error', message: `\`${file}\` does not exist, so the site shows a placeholder.`, ...headOf(node, source) });
+    return;
+  }
+  report({
+    rule: 'diagram-invalid',
+    severity: problem.severity,
+    message: problem.severity === 'error'
+      ? `\`${file}\` ${problem.message}, so the site shows a placeholder.`
+      : `\`${file}\` draws, but ${problem.message}`,
+    ...headOf(node, source),
+  });
+}
+
 function checkEmbeds(node: Nodes, source: string, context: LintContext, report: Report) {
-  if (isJsx(node, ['HtmlEmbed', 'SvgDiagram'])) {
+  if (isJsx(node, ['Diagram', 'HtmlEmbed', 'SvgDiagram'])) {
+    if (node.name === 'Diagram') {
+      checkDiagram(node, source, context, report, attribute(node, 'src'));
+      return;
+    }
     // Inline markup (`html` or `svg`) needs no file.
     const inline = node.name === 'HtmlEmbed' ? 'html' : 'svg';
     if (attribute(node, inline) === undefined) checkAsset(node, source, context, report, attribute(node, 'src'), `<${node.name ?? ''}>`);
