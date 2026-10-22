@@ -242,7 +242,7 @@ describe('NewCrDialog', () => {
 
 describe('DiscardDialog', () => {
   const plan = (more: Partial<Discard> = {}): Discard => ({
-    slug: 'spark-tuning', branch: 'cr/spark-tuning', worktree: '/home/me/.chimey-studio/worktrees/spark-tuning', status: 'previewing', commits: 3, uncommitted: 2, pushed: false, unpushed: 0, pr: null, closesPr: null, ...more,
+    slug: 'spark-tuning', branch: 'cr/spark-tuning', worktree: '/home/me/.chimey-studio/worktrees/spark-tuning', status: 'previewing', commits: 3, uncommitted: 2, pushed: false, unpushed: 0, pr: null, closesPr: null, prError: null, ...more,
   });
 
   it('lists what goes from this machine, then discards', async () => {

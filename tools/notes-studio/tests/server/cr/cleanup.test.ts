@@ -249,6 +249,25 @@ describe('cleaning up change requests', () => {
       await discard(cr.slug);
     });
 
+    it('keeps a pushed branch on origin while the pull requests cannot be read', async () => {
+      const cr = await create('Gh down');
+      await push(cr);
+      const draft = await create('Gh down draft');
+      studio.fake.prs = new Error('gh: not logged in');
+      // An open pull request would read as Previewing and close unannounced.
+      expect((await discard(cr.slug, true)).body.discard).toMatchObject({ status: 'previewing', pushed: true, closesPr: null, prError: 'gh: not logged in' });
+      const { status, body } = await discard(cr.slug);
+      expect(status).toBe(502);
+      expect(body.error).toBe('Could not read the pull requests: gh: not logged in. Nothing was removed.');
+      expect(await onOrigin(cr.branch)).toBe(true);
+      expect(existsSync(cr.worktree ?? '')).toBe(true);
+      // Nothing on origin: a draft still goes.
+      expect((await discard(draft.slug, true)).body.discard.prError).toBeNull();
+      expect((await discard(draft.slug)).status).toBe(200);
+      studio.fake.prs = [];
+      expect((await discard(cr.slug)).status).toBe(200);
+    });
+
     it('cleans up a merged change request whose branch GitHub already deleted', async () => {
       const cr = await create('Merged elsewhere');
       await commit(cr, FIRST_LOOK, 'merged\n');

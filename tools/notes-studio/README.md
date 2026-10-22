@@ -247,7 +247,10 @@ the dialog shows why. The discard carries what the dry run said about
 origin (pushed, the pull request to close), and when origin changed since
 (pushed or opened from elsewhere), nothing is removed: the dialog never
 does more than it listed. The dry run reads the pull request again rather
-than the list's cached one. A merged or closed change request offers **Clean
+than the list's cached one. While gh cannot read the pull requests, a
+pushed change request cannot be discarded (its pull request would close
+without notice); the dialog says why. A refused discard checks again, so
+the dialog shows what a new try would do. A merged or closed change request offers **Clean
 up** instead, on its card and on top of its Changes view; it removes the
 same things. Cloudflare keeps the preview deployments it built. Discarding
 the change request the page shows goes back to main, and the dialog says

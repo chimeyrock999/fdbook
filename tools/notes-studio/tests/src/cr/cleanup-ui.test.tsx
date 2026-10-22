@@ -77,7 +77,7 @@ describe('the change request list (#21)', () => {
 
 describe('cleaning up in the dialog', () => {
   const plan = (more: Partial<Discard> = {}): Discard => ({
-    slug: 'done', branch: 'cr/done', status: 'merged', worktree: '/w/done', commits: 2, uncommitted: 0, pushed: true, unpushed: 0, pr: { number: 57, url: 'u' }, closesPr: null, ...more,
+    slug: 'done', branch: 'cr/done', status: 'merged', worktree: '/w/done', commits: 2, uncommitted: 0, pushed: true, unpushed: 0, pr: { number: 57, url: 'u' }, closesPr: null, prError: null, ...more,
   });
 
   it('says the pull request was merged, lists both sides and cleans up', async () => {
@@ -97,7 +97,7 @@ describe('cleaning up in the dialog', () => {
   });
 
   it('says when the branch is already gone from origin, and what was never pushed', async () => {
-    const discard = vi.fn(() => Promise.resolve(plan({ status: 'closed', pushed: false, unpushed: 0 })));
+    const discard = vi.fn(() => Promise.resolve(plan({ status: 'closed', pushed: false, unpushed: 0, pr: { number: 44, url: 'u' } })));
     render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'closed', { pr: { number: 44, url: 'u' } })} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
     expect(await screen.findByText('The branch is already gone from origin.')).toBeTruthy();
     expect(screen.getByRole('dialog').textContent).toContain('Pull request #44 was closed without merging.');
@@ -108,6 +108,35 @@ describe('cleaning up in the dialog', () => {
     render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'review', { pr: { number: 57, url: 'u' } })} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
     expect(await screen.findByRole('dialog', { name: 'Clean up “done”?' })).toBeTruthy();
     expect(screen.getByRole('dialog').textContent).toContain('Pull request #57 was merged.');
+  });
+
+  it('takes the pull request from the dry run when the list had none yet', async () => {
+    const discard = vi.fn(() => Promise.resolve(plan({ pr: { number: 58, url: 'u' } })));
+    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'previewing')} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
+    expect(await screen.findByText('Pull request #58 was merged. Its changes are on main.')).toBeTruthy();
+  });
+
+  it('cannot remove a pushed branch while the pull requests cannot be read', async () => {
+    const discard = vi.fn(() => Promise.resolve(plan({ status: 'previewing', pr: null, prError: 'gh: not logged in' })));
+    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'previewing')} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
+    expect((await screen.findByRole('alert')).textContent).toBe('Pull requests could not be read (gh: not logged in). A pull request of this branch would close without notice, so it cannot be discarded until gh works again.');
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Discard' }).disabled).toBe(true);
+  });
+
+  it('checks again after a refused discard, and shows what a new try would do', async () => {
+    let checks = 0;
+    const discard = vi.fn((_slug: string, dryRun?: boolean) => {
+      if (!dryRun) return Promise.reject(new Error('cr/done changed on origin since this was checked. Nothing was removed: look again before discarding.'));
+      checks += 1;
+      return Promise.resolve(plan({ status: checks > 1 ? 'previewing' : 'draft', pr: null, pushed: checks > 1 }));
+    });
+    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'draft')} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
+    expect(await screen.findByText('Never pushed: nothing to remove there.')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(await screen.findByRole('list', { name: 'From origin' })).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('changed on origin since this was checked');
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Discard' }).disabled).toBe(false);
+    expect(discard).toHaveBeenCalledTimes(3);
   });
 
   it('shows why origin refused, and keeps the dialog open', async () => {

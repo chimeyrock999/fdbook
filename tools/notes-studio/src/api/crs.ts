@@ -36,6 +36,8 @@ export type Discard = {
   unpushed: number;
   pr: { number: number; url: string } | null;
   closesPr: { number: number; url: string } | null;
+  // Why gh could not read the pull requests: a pushed one cannot be discarded then.
+  prError: string | null;
 };
 
 export type DiscardSeen = { pushed: boolean; closesPr: number | null };

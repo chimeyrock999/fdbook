@@ -40,7 +40,9 @@ export type DiscardSeen = { pushed: boolean; closesPr: number | null };
 
 // What a discard removes, from the dry run that the dialog shows. `pushed`:
 // the branch on origin goes too; `closesPr`: the open pull request is closed
-// first; `unpushed`: commits of a pushed branch that origin does not have.
+// first; `unpushed`: commits of a pushed branch that origin does not have;
+// `prError`: why gh could not read the pull requests, which blocks the
+// discard of a pushed branch (its pull request would close unannounced).
 export type Discard = {
   slug: string;
   branch: string;
@@ -52,6 +54,7 @@ export type Discard = {
   unpushed: number;
   pr: { number: number; url: string } | null;
   closesPr: { number: number; url: string } | null;
+  prError: string | null;
 };
 
 export type ChangeRequestOptions = {
@@ -313,7 +316,7 @@ export async function openChangeRequests({
       // Offline: go by the last fetch; deleting the remote branch then fails.
       await fetchOrigin().catch(() => undefined);
       // The pull request's state decides whether to close it: read it now.
-      await readPullRequests(true);
+      const prs = await readPullRequests(true);
       const cr = (await list()).crs.find((each) => each.slug === slug);
       if (!cr) throw new HttpError(404, `no such change request: ${slug}`);
       const count = async (...revs: string[]) => Number((await inRepo('rev-list', '--count', ...revs)).trim());
@@ -328,8 +331,12 @@ export async function openChangeRequests({
         unpushed: cr.pushed ? await count(cr.branch, '--not', `refs/remotes/${REMOTE}/${cr.branch}`) : 0,
         pr: cr.pr,
         closesPr: cr.status === 'review' ? cr.pr : null,
+        prError: cr.pushed ? prs.error : null,
       };
       if (dryRun) return answer;
+      if (answer.prError !== null) {
+        throw new HttpError(502, `Could not read the pull requests: ${answer.prError.replace(/\.?$/, '.')} Nothing was removed.`);
+      }
       if (seen !== null && (seen.pushed !== answer.pushed || seen.closesPr !== (answer.closesPr?.number ?? null))) {
         throw new HttpError(409, `${cr.branch} changed on ${REMOTE} since this was checked. Nothing was removed: look again before discarding.`);
       }

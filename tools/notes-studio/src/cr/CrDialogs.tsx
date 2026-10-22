@@ -71,19 +71,23 @@ export function DiscardDialog({ client, cr, current, onDone, onClose }: {
     return () => { current = false; };
   }, [client, cr.slug]);
 
+  // A refused discard (origin changed since the dry run, say) checks again,
+  // so the dialog lists what a new try would do.
   const submit = () => {
-    if (plan === null || busy) return;
+    if (plan === null || busy || plan.prError !== null) return;
     setBusy(true);
     client.discard(cr.slug, false, { pushed: plan.pushed, closesPr: plan.closesPr?.number ?? null }).then(onDone, (reason: unknown) => {
-      setBusy(false);
       setFailed(messageOf(reason));
+      setPlan(null);
+      client.discard(cr.slug, true).then(setPlan, () => undefined).finally(() => { setBusy(false); });
     });
   };
 
   // The dry run read origin and the pull request just now; the list may be older.
   const status = plan?.status ?? cr.status;
   const cleanUp = isDone({ status });
-  const pr = cr.pr === null ? 'The pull request' : `Pull request #${String(cr.pr.number)}`;
+  const known = plan?.pr ?? cr.pr;
+  const pr = known === null ? 'The pull request' : `Pull request #${String(known.number)}`;
   const lead = status === 'merged' ? `${pr} was merged. Its changes are on main.` : status === 'closed' ? `${pr} was closed without merging.` : 'This cannot be undone.';
   const verb = cleanUp ? 'Clean up' : 'Discard';
 
@@ -95,7 +99,7 @@ export function DiscardDialog({ client, cr, current, onDone, onClose }: {
         </p>
       )}
       <p className="text-[13px] text-[var(--fde-muted-foreground)]">{lead}</p>
-      {plan === null && failed === null && <p role="status" className="studio-tree-status">Checking what it removes…</p>}
+      {plan === null && (failed === null || busy) && <p role="status" className="studio-tree-status">Checking what it removes…</p>}
       {plan !== null && (
         <>
           <h3 className="studio-cr-from" id="studio-cr-from-here">From this machine</h3>
@@ -115,12 +119,17 @@ export function DiscardDialog({ client, cr, current, onDone, onClose }: {
             <p className="text-[12.5px] text-[var(--fde-muted-foreground)]">{status === 'draft' ? 'Never pushed: nothing to remove there.' : 'The branch is already gone from origin.'}</p>
           )}
           {plan.unpushed > 0 && <p className="studio-cr-warning">{plural(plan.unpushed, 'commit')} never pushed: lost with the local branch.</p>}
+          {plan.prError !== null && (
+            <p role="alert" className="studio-tree-error">
+              Pull requests could not be read ({plan.prError}). A pull request of this branch would close without notice, so it cannot be {cleanUp ? 'cleaned up' : 'discarded'} until gh works again.
+            </p>
+          )}
         </>
       )}
       {failed !== null && <p role="alert" className="studio-tree-error">{failed}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
-        <button type="submit" className={`studio-button ${cleanUp ? 'studio-button-primary' : 'studio-button-danger'}`} disabled={plan === null || busy}>
+        <button type="submit" className={`studio-button ${cleanUp ? 'studio-button-primary' : 'studio-button-danger'}`} disabled={plan === null || busy || plan.prError !== null}>
           {busy ? (cleanUp ? 'Cleaning up…' : 'Discarding…') : verb}
         </button>
       </div>

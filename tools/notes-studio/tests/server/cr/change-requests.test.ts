@@ -267,7 +267,7 @@ describe('change requests', () => {
       const response = await send(`/api/crs/${cr.slug}/discard`, 'POST', { dryRun: true });
       expect(response.status).toBe(200);
       const { discard } = json(response) as { discard: Discard };
-      expect(discard).toEqual({ slug: cr.slug, branch: cr.branch, worktree: cr.worktree, commits: 0, uncommitted: 1, pushed: false, pr: null, closesPr: null, unpushed: 0, status: 'draft' });
+      expect(discard).toEqual({ slug: cr.slug, branch: cr.branch, worktree: cr.worktree, commits: 0, uncommitted: 1, pushed: false, pr: null, closesPr: null, unpushed: 0, status: 'draft', prError: null });
       expect(existsSync(cr.worktree ?? '')).toBe(true);
     });
 
