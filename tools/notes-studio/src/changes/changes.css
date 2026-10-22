@@ -392,6 +392,44 @@
     align-items: center;
     gap: 4px;
   }
+  /* The Pull request section (src/changes/PullRequestSection.tsx) and the
+     Publish dialog (PublishDialog.tsx). */
+  .studio-preview-head .studio-cr-badge {
+    margin-left: auto;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .studio-pr-title {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+  .studio-pr-title a {
+    overflow: hidden;
+    font-size: 12.5px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-pr-title a:hover {
+    text-decoration: underline;
+  }
+  .studio-pr-title small {
+    overflow-wrap: anywhere;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-publish-body {
+    resize: vertical;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  header .studio-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
   .studio-leave-notice {
     position: absolute;
     right: 14px;

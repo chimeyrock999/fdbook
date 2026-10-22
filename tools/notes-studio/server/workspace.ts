@@ -10,6 +10,7 @@ import { createLintApi } from './lint/api.ts';
 import { createPreviewApi } from './preview/api.ts';
 import { createBuildReader, ghCheckRun } from './preview/check-runs.ts';
 import type { PreviewOptions } from './preview/preview.ts';
+import { createBranchPullRequestReader, ghPullRequest } from './preview/pull-request.ts';
 import { refuseUpgrade } from './routing.ts';
 import { createNotesSync } from './sync/notes-sync.ts';
 import { createTreeApi } from './tree/api.ts';
@@ -27,12 +28,12 @@ const refuseWrites: Handler = (request, response) => {
   return Promise.resolve(true);
 };
 
-// Without a server's own, a workspace reads builds through gh and has no
-// Pages project to name its preview after.
-const defaultPreview = (): PreviewOptions => ({ builds: createBuildReader(ghCheckRun), pagesProject: null });
+// Without a server's own, a workspace reads builds and pull requests through
+// gh and has no Pages project to name its preview after.
+const defaultPreview = (): PreviewOptions => ({ builds: createBuildReader(ghCheckRun), pullRequests: createBranchPullRequestReader(ghPullRequest), pagesProject: null });
 
 // The handlers of one worktree: file API and events, lint, page tree,
-// assets, changes (git status, commit, history), preview (push, build),
+// assets, changes (git status, commit, history), preview (push, build, publish),
 // and the notes sync socket.
 export function createWorkspace(root: string, hosts: string[], { readOnly = false, preview = defaultPreview() }: { readOnly?: boolean; preview?: PreviewOptions } = {}) {
   // Tree and asset changes both write notes: one at a time. A commit waits

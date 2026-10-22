@@ -1,15 +1,9 @@
 import { ArrowUp, ExternalLink, ScrollText } from 'lucide-react';
-import { useState } from 'react';
-import type { BuildState, Preview, PreviewClient } from '../api/preview';
+import type { BuildState, Preview } from '../api/preview';
 import { plural } from '../assets/asset-changes';
 import { timeAgo } from './labels';
 import { BUILD_LABELS } from './preview-labels';
-
-// What the last push did, for the preview it was made on (`key`): a new
-// commit or a push from elsewhere drops it.
-type Result = { text: string; error: boolean; key: string };
-
-const keyOf = (preview: Preview) => `${preview.pushed?.sha ?? ''} ${preview.unpushed.join(' ')}`;
+import { keyOf, type Pusher } from './usePush';
 
 const VERBS: Record<BuildState, string> = {
   waiting: 'Pushed',
@@ -29,6 +23,7 @@ function whyOf(preview: Preview, unsaved: string | null) {
   const count = preview.unpushed.length;
   if (unsaved !== null) return `Saving ${unsaved}…`;
   if (count === 0) return preview.pushed === null ? 'Commit a change to preview it.' : 'Everything committed is pushed.';
+  if (preview.pr?.state === 'OPEN') return `Pushes to the open pull request #${String(preview.pr.number)}; no new pull request.`;
   if (preview.pushed === null) return `Pushes ${plural(count, 'commit')} to origin; Cloudflare builds the preview. No pull request is opened.`;
   return null;
 }
@@ -37,18 +32,18 @@ function whyOf(preview: Preview, unsaved: string | null) {
 // branch (no pull request) so Cloudflare Pages builds it, follows the build
 // and opens the preview on `route`, the page being edited. It says when the
 // preview is behind the commits, and what is not committed. A push waits
-// while the open note has edits not saved yet, as a commit does.
-export function PreviewSection({ client, preview, error, unsaved, route, onPushed }: {
-  client: PreviewClient;
+// while the open note has edits not saved yet, as a commit does. Once a pull
+// request is open, the push is Update PR: it goes to that pull request.
+export function PreviewSection({ pusher, preview, error, unsaved, route }: {
+  // The push, shared with the header's main action (usePush).
+  pusher: Pusher;
   preview: Preview | null;
   error: string | null;
   unsaved: string | null;
   // The site route of what is open (siteRoute).
   route: string;
-  onPushed: (preview: Preview) => void;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<Result | null>(null);
+  const { busy, result } = pusher;
 
   const failed = error === null ? null : <p role="alert" className="studio-changes-note studio-changes-error">Could not read the preview: {error}</p>;
   if (preview === null) return failed;
@@ -70,19 +65,9 @@ export function PreviewSection({ client, preview, error, unsaved, route, onPushe
   const count = preview.unpushed.length;
   const state = build?.state ?? 'unpushed';
   const disabled = busy || unsaved !== null || count === 0;
-  const label = busy ? 'Pushing…' : pushed !== null && count > 0 ? `Push ${plural(count, 'commit')}` : 'Preview';
-
-  const push = () => {
-    setBusy(true);
-    setResult(null);
-    client.push().then(
-      (next) => {
-        setResult({ text: `Pushed ${plural(count, 'commit')}. Cloudflare usually starts a build within a minute.`, error: false, key: keyOf(next) });
-        onPushed(next);
-      },
-      (reason: unknown) => { setResult({ text: reason instanceof Error ? reason.message : String(reason), error: true, key: keyOf(preview) }); },
-    ).finally(() => { setBusy(false); });
-  };
+  const updates = preview.pr?.state === 'OPEN' && count > 0;
+  const label = busy ? 'Pushing…' : updates ? `Update PR (${plural(count, 'commit')})` : pushed !== null && count > 0 ? `Push ${plural(count, 'commit')}` : 'Preview';
+  const push = () => { void pusher.push(preview); };
 
   const shown = result?.key === keyOf(preview) && unsaved === null ? result : null;
   const why = shown?.text ?? whyOf(preview, unsaved);

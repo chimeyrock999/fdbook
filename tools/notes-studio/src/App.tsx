@@ -7,7 +7,7 @@ import { assetChanged } from './api/asset-versions';
 import { createCrClient, type ChangeRequest, type Discard } from './api/crs';
 import { createFilesClient } from './api/files';
 import { createLintClient } from './api/lint';
-import { createPreviewClient } from './api/preview';
+import { createPreviewClient, type Preview } from './api/preview';
 import { createTreeClient } from './api/tree';
 import { CURRENT_CR } from './api/workspace';
 import { movedTo } from './assets/asset-changes';
@@ -20,8 +20,13 @@ import { LeaveNotice } from './changes/LeaveNotice';
 import { titlesOf } from './changes/labels';
 import { treeMarks } from './changes/marks';
 import { PreviewSection } from './changes/PreviewSection';
+import { primaryActionOf, type PrimaryKind } from './changes/primary-action';
+import { PrimaryActionButton } from './changes/PrimaryActionButton';
+import { PublishDialog } from './changes/PublishDialog';
+import { PullRequestSection } from './changes/PullRequestSection';
 import { useChanges } from './changes/useChanges';
 import { usePreview } from './changes/usePreview';
+import { usePush } from './changes/usePush';
 import { DiscardDialog, NewCrDialog } from './cr/CrDialogs';
 import { CrListPage } from './cr/CrListPage';
 import { CrPicker, EditMenu } from './cr/CrMenus';
@@ -79,6 +84,17 @@ export function App() {
   const previewClient = useMemo(() => createPreviewClient(), []);
   const preview = usePreview(previewClient, !readOnly);
   const unpushed = useMemo(() => (preview.preview ? new Set(preview.preview.unpushed) : null), [preview.preview]);
+  const { set: setPreview } = preview;
+  const { reload: reloadChanges } = git;
+  const { reload: reloadCrs } = crs;
+  const pushed = useCallback((next: Preview) => {
+    setPreview(next);
+    void reloadChanges();
+    void reloadCrs();
+  }, [setPreview, reloadChanges, reloadCrs]);
+  // One push for the Preview section and the header's main action.
+  const pusher = usePush(previewClient, pushed);
+  const [publishing, setPublishing] = useState(false);
   const [crDialog, setCrDialog] = useState<{ kind: 'new' } | { kind: 'discard'; cr: ChangeRequest } | null>(null);
   // The change request the last page left with uncommitted files (switchTo).
   const [left, setLeft] = useState(() => leftBehind(CURRENT_CR));
@@ -198,6 +214,27 @@ export function App() {
     await git.reload();
     await preview.reload();
   };
+  const published = (next: Preview) => {
+    setPublishing(false);
+    setPreview(next);
+    void git.reload();
+    // The list reads pull requests on its own: read them again for In review.
+    void crs.reload(true);
+  };
+
+  // The header's main action (#20): Commit → Preview → Publish → View PR.
+  const action = readOnly ? null : primaryActionOf({ uncommitted: git.changes?.files.length ?? 0, preview: preview.preview, unsaved, busy: pusher.busy });
+  const act = (kind: PrimaryKind) => {
+    if (kind === 'commit') {
+      // The files are picked and the message written in Changes.
+      openView('changes');
+      requestAnimationFrame(() => { document.getElementById('studio-commit-message')?.focus(); });
+    } else if (kind === 'publish') setPublishing(true);
+    else if (preview.preview !== null) {
+      // A failed push says why in the Preview section.
+      void pusher.push(preview.preview).then((ok) => { if (!ok) openView('changes'); });
+    }
+  };
 
   return (
     <div className="flex h-dvh flex-col bg-[var(--fde-background)] text-[var(--fde-foreground)]">
@@ -211,6 +248,7 @@ export function App() {
         {crMode && CURRENT_CR === null && <EditMenu list={crs.list} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} />}
         {!readOnly && <OpenPreview preview={preview.preview} route={route} />}
         {pagePath !== null && page?.kind !== 'diff' && <OpenOnSite path={pagePath} />}
+        {action !== null && <PrimaryActionButton action={action} onAction={act} />}
       </header>
       <div className="relative flex min-h-0 flex-1">
         <Sidebar
@@ -236,18 +274,10 @@ export function App() {
               unpushed={readOnly ? null : unpushed}
               preview={
                 readOnly ? null : (
-                  <PreviewSection
-                    client={previewClient}
-                    preview={preview.preview}
-                    error={preview.error}
-                    unsaved={unsaved}
-                    route={route}
-                    onPushed={(next) => {
-                      preview.set(next);
-                      void git.reload();
-                      void crs.reload();
-                    }}
-                  />
+                  <>
+                    <PreviewSection pusher={pusher} preview={preview.preview} error={preview.error} unsaved={unsaved} route={route} />
+                    <PullRequestSection preview={preview.preview} unsaved={unsaved} busy={pusher.busy} onPublish={() => { setPublishing(true); }} />
+                  </>
                 )
               }
             />
@@ -334,6 +364,9 @@ export function App() {
           onCreated={(cr) => { switchTo(cr.slug); }}
           onClose={() => { setCrDialog(null); }}
         />
+      )}
+      {publishing && preview.preview !== null && (
+        <PublishDialog client={previewClient} preview={preview.preview} onPublished={published} onClose={() => { setPublishing(false); }} />
       )}
       {crDialog?.kind === 'discard' && <DiscardDialog client={crClient} cr={crDialog.cr} current={crDialog.cr.slug === CURRENT_CR} onDone={discarded} onClose={() => { setCrDialog(null); }} />}
     </div>

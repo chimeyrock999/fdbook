@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { git } from '../../server/cr/git';
 import type { PullRequest } from '../../server/cr/pull-requests';
 import { createBuildReader, type CheckRun } from '../../server/preview/check-runs';
+import { createBranchPullRequestReader, type BranchPullRequest, type NewPullRequest, type PullRequestGh } from '../../server/preview/pull-request';
 import { startStudioServer } from '../../server/studio-server';
 
 const NOTES: Record<string, string> = {
@@ -68,14 +69,37 @@ export type GitRepo = Awaited<ReturnType<typeof makeGitRepo>>;
 
 // A Studio with change requests over a throwaway repo. `prs` and `checks`
 // stand in for gh: set them to the pull requests or check runs (by commit) to
-// report, or to an Error to fail. `forget` moves the build reader's clock a
-// minute on, past its cache.
+// report, or to an Error to fail. `branchPrs` is what `gh pr view` reads by
+// branch (or an Error); `create` opens one there and lists it in `created`,
+// unless `createError` is set. `forget` moves the readers' clock a minute
+// on, past their caches.
 export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey' }: { pagesProject?: string | null } = {}) {
   let clock = Date.now();
-  const fake: { prs: PullRequest[] | Error; checks: Map<string, CheckRun> | Error; forget: () => void } = {
+  const fake: {
+    prs: PullRequest[] | Error;
+    checks: Map<string, CheckRun> | Error;
+    branchPrs: Map<string, BranchPullRequest> | Error;
+    created: NewPullRequest[];
+    createError: Error | null;
+    forget: () => void;
+  } = {
     prs: [],
     checks: new Map(),
+    branchPrs: new Map(),
+    created: [],
+    createError: null,
     forget: () => { clock += 60_000; },
+  };
+  const pullRequestGh: PullRequestGh = {
+    view: (_root, branch) => (fake.branchPrs instanceof Error ? Promise.reject(fake.branchPrs) : Promise.resolve(fake.branchPrs.get(branch) ?? null)),
+    create: (_root, request) => {
+      if (fake.createError !== null) return Promise.reject(fake.createError);
+      if (fake.branchPrs instanceof Error) return Promise.reject(fake.branchPrs);
+      fake.created.push(request);
+      const number = 100 + fake.created.length;
+      fake.branchPrs.set(request.branch, { number, url: `https://github.com/o/r/pull/${String(number)}`, state: 'OPEN', title: request.title });
+      return Promise.resolve();
+    },
   };
   const builds = createBuildReader(
     (_root, sha) => (fake.checks instanceof Error ? Promise.reject(fake.checks) : Promise.resolve(fake.checks.get(sha) ?? null)),
@@ -88,6 +112,7 @@ export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey' }: 
       home: repo.home,
       pagesProject,
       builds,
+      branchPullRequests: createBranchPullRequestReader(pullRequestGh, () => clock),
       pullRequests: () => (fake.prs instanceof Error ? Promise.reject(fake.prs) : Promise.resolve(fake.prs)),
     },
   });
