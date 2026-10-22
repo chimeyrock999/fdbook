@@ -13,6 +13,9 @@ const MAX_BODY_BYTES = 1024;
 // redirect 10. Bounded, so nobody can fill the memory by starting them.
 const MAX_PENDING = 200;
 const WEB_STATE_MS = 10 * 60_000;
+// How often the viewers of open sockets are checked for an expired session
+// or a role taken away. A sign-out ends them at once.
+const CHECK_EVERY_MS = 15_000;
 
 export type AuthOptions = {
   config: AuthConfig;
@@ -20,6 +23,7 @@ export type AuthOptions = {
   repo: RepoAccess;
   roles: RoleReader;
   sessions: SessionStore;
+  checkEveryMs?: number | undefined;
 };
 
 function cookiesOf(request: IncomingMessage) {
@@ -63,7 +67,7 @@ export function createAuth(options: AuthOptions | null, port: number, host = `12
       gateUpgrade: (() => Promise.resolve(null)) as (request: IncomingMessage, needed: Role) => Promise<number | null>,
     };
   }
-  const { config, github, repo, roles, sessions } = options;
+  const { config, github, repo, roles, sessions, checkEveryMs = CHECK_EVERY_MS } = options;
   // A device code GitHub has confirmed keeps its token until sign-in is done,
   // so a failure after it (gh offline for the role) can be retried.
   const devices = new Map<string, { deviceCode: string; expiresAt: number; token?: string }>();
@@ -81,6 +85,38 @@ export function createAuth(options: AuthOptions | null, port: number, host = `12
   const clearSession = `${sessionCookie}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
 
   const repoName = () => repo.name().catch(() => null);
+
+  // Viewers watched for their end (Viewer.watch), by the session id they
+  // came with. Checked on a timer while there are any.
+  type Watched = { id: string; current: () => Role; onLost: () => void };
+  const watched = new Set<Watched>();
+  let checking: NodeJS.Timeout | null = null;
+  const unwatch = (entry: Watched) => {
+    watched.delete(entry);
+    if (watched.size === 0 && checking !== null) {
+      clearInterval(checking);
+      checking = null;
+    }
+  };
+  const lose = (entry: Watched) => {
+    unwatch(entry);
+    entry.onLost();
+  };
+  // A viewer already lost (signed out between the gate and the upgrade) ends at once.
+  const watch = (entry: Watched) => {
+    if (!atLeast(entry.current(), 'reader')) {
+      entry.onLost();
+      return () => undefined;
+    }
+    watched.add(entry);
+    if (checking === null) {
+      checking = setInterval(() => {
+        for (const each of [...watched]) if (!atLeast(each.current(), 'reader')) lose(each);
+      }, checkEveryMs);
+      checking.unref();
+    }
+    return () => { unwatch(entry); };
+  };
 
   async function stateOf(session: Session | null): Promise<SessionState> {
     const base = { auth: 'github' as const, flows: config.flows, repo: await repoName() };
@@ -192,6 +228,7 @@ export function createAuth(options: AuthOptions | null, port: number, host = `12
       const session = sessions.get(id);
       if (session !== null && !sameToken(String(request.headers[CSRF_HEADER] ?? ''), session.csrf)) throw new HttpError(403, 'missing or wrong csrf token');
       await sessions.remove(id);
+      for (const entry of [...watched]) if (entry.id === id) lose(entry);
       response.setHeader('Set-Cookie', clearSession);
       sendJson(response, 200, await stateOf(null));
       return;
@@ -206,7 +243,7 @@ export function createAuth(options: AuthOptions | null, port: number, host = `12
     if (needed === 'none') return null;
     const id = sessionId(request);
     const session = sessions.get(id);
-    if (session === null) return { status: 401, error: 'Sign in to use the Studio.' };
+    if (id === null || session === null) return { status: 401, error: 'Sign in to use the Studio.' };
     let role: Role;
     try {
       role = await roles(session.user.login);
@@ -214,7 +251,8 @@ export function createAuth(options: AuthOptions | null, port: number, host = `12
       return { status: 503, error: `Could not read your access to the repository: ${(error as Error).message}` };
     }
     const { login } = session.user;
-    const viewer: Viewer = { user: session.user, role, current: () => (sessions.get(id) === null ? 'none' : (roles.peek(login) ?? role)) };
+    const current = () => (sessions.get(id) === null ? 'none' : (roles.peek(login) ?? role));
+    const viewer: Viewer = { user: session.user, role, current, watch: (onLost) => watch({ id, current, onLost }) };
     setViewer(request, viewer);
     if (!atLeast(role, needed)) {
       return { status: 403, error: role === 'none' ? `@${session.user.login} has no access to this repository.` : `This needs ${needed} access; @${session.user.login} is a ${role}.` };
