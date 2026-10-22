@@ -11,7 +11,7 @@ import { remarkNotesDirectives } from '../remark-notes-directives.ts';
 // site's directives, drawn with the site's MDX components. A note holds no
 // code and no active HTML: `{expressions}` (in attributes too), `import` and
 // `export`, a component it was not given, and an HTML tag outside a short
-// list of text tags are refused. Code would run at build time, a missing
+// list of text tags, or with an attribute outside a short list, are refused. Code would run at build time, a missing
 // component would fail the page, and `<script>` or `<iframe>` would reach it.
 // Text refused that way shows as written, in plain text: read as Markdown, a
 // `<uuid>` would be dropped as an HTML tag.
@@ -20,6 +20,7 @@ export type NoteFormat = 'mdx' | 'text';
 
 interface Attribute {
   type: string;
+  name?: string;
   value?: unknown;
 }
 
@@ -38,10 +39,19 @@ const TEXT_TAGS = new Set([
   'li', 'mark', 'ol', 'p', 'pre', 'q', 's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'ul', 'var', 'wbr',
 ]);
 
+// The attributes a hand-written text tag may carry, as plain strings. React
+// refuses a string `style` when it renders, and `on*` handlers or a
+// `javascript:` link would be active HTML.
+const TEXT_ATTRIBUTES = new Set(['href', 'title', 'class', 'className', 'id', 'lang', 'dir', 'cite', 'datetime', 'dateTime', 'start', 'reversed']);
+
 // An attribute written as `{…}`, or spread as `{...…}`.
 const expressionAttribute = (attribute: Attribute) => attribute.type === 'mdxJsxExpressionAttribute'
   || (typeof attribute.value === 'object' && attribute.value !== null
     && (attribute.value as { type?: string }).type === 'mdxJsxAttributeValueExpression');
+
+const plainTextAttribute = ({ name, value }: Attribute) => typeof name === 'string'
+  && (TEXT_ATTRIBUTES.has(name) || name.startsWith('aria-'))
+  && !(name === 'href' && typeof value === 'string' && /^\s*javascript:/i.test(value));
 
 function remarkNoteOnly(components: object) {
   return () => (tree: Tree) => {
@@ -50,9 +60,11 @@ function remarkNoteOnly(components: object) {
       if (JSX.has(node.type)) {
         if (node.attributes?.some(expressionAttribute)) throw new Error(`a note holds no code (an attribute of ${node.name ?? 'a fragment'})`);
         // A fragment (`<>…</>`) has no name.
-        if (node.name && (/^[a-z]/.test(node.name) ? !TEXT_TAGS.has(node.name) : !(node.name in components))) {
+        const text = /^[a-z]/.test(node.name ?? '');
+        if (node.name && (text ? !TEXT_TAGS.has(node.name) : !(node.name in components))) {
           throw new Error(`a note cannot draw <${node.name}>`);
         }
+        if (text && !node.attributes?.every(plainTextAttribute)) throw new Error(`a note cannot set that attribute of <${node.name}>`);
       }
       node.children?.forEach(walk);
     };

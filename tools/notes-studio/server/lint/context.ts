@@ -40,14 +40,15 @@ function diagramProblem(root: string, src: string): DiagramProblem | null {
   if (!file || !info?.isFile()) return 'missing';
   const known = checked.get(file);
   if (known?.mtimeMs === info.mtimeMs && known.size === info.size) return known.problem;
-  let problem: DiagramProblem | null;
+  let content: unknown;
   try {
-    const { scene, issues } = validateDiagram(JSON.parse(readFileSync(file, 'utf8')));
-    const first = issues.find((issue) => issue.severity === 'error') ?? issues.at(0);
-    problem = first ? { severity: scene ? 'warning' : 'error', message: `[${first.code}] ${first.message}` } : null;
+    content = JSON.parse(readFileSync(file, 'utf8'));
   } catch {
-    problem = { severity: 'error', message: 'is not valid JSON' };
+    return { severity: 'error', message: 'is not valid JSON' };
   }
+  const { scene, issues } = validateDiagram(content);
+  const first = issues.find((issue) => issue.severity === 'error') ?? issues.at(0);
+  const problem: DiagramProblem | null = first ? { severity: scene ? 'warning' : 'error', message: `[${first.code}] ${first.message}` } : null;
   checked.set(file, { mtimeMs: info.mtimeMs, size: info.size, problem });
   return problem;
 }
