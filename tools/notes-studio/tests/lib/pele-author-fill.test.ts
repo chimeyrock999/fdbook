@@ -42,6 +42,16 @@ describe('markAuthorFills', () => {
     expect(marked(root, '.pele-cluster')).toEqual(['G1']);
   });
 
+  it('reads the fill as written, spaces and case included', () => {
+    const root = svgOf(
+      ['fill: none', 'FILL: Transparent', 'fill: #fde', 'rx:4px; fill :rgb(1 2 3)'].map((style, index) =>
+        `<svg class="pele"><g class="pele-node" data-id="N${String(index)}"><rect style="${style}"/><text class="pele-label">x</text></g></svg>`,
+      ).join(''),
+    );
+    markAuthorFills(root);
+    expect(marked(root, '.pele-node')).toEqual(['N2', 'N3']);
+  });
+
   it('marks a subgraph title Pele lifted out of its subgraph (MapReduce note)', async () => {
     const note = readFileSync(join(process.cwd(), '../../content/notes/distributed-systems/mapreduce/index.mdx'), 'utf8');
     const start = note.lastIndexOf('```mermaid', note.indexOf('HDFS_INT'));
@@ -51,7 +61,7 @@ describe('markAuthorFills', () => {
     markAuthorFills(root);
     const title = root.querySelector<SVGGElement>('.pele-cluster-title[data-id="HDFS_INT"]');
     expect(title?.hasAttribute('data-author-fill')).toBe(true);
-    expect(title?.getAttribute('style')).toBe('--author-fill: #FFF9C4');
+    expect(title?.style.getPropertyValue('--author-fill')).toBe('#FFF9C4');
     expect(root.querySelector('.pele-cluster-title[data-id="HDFS_INT"] > .pele-cluster-label')?.textContent).toBe('HDFS Internals');
   });
 

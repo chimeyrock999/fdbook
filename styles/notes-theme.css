@@ -161,8 +161,8 @@
    like the palette, so the expanded view portalled to <body> matches.
    `--pele-bg` is the plate behind each edge label, which keeps the line off
    the text, so it takes the surface the diagram sits on: the page, unless a
-   container sets `--notes-diagram-bg` (the expanded view, the Studio's
-   editor card). */
+   container sets `--notes-diagram-bg` (a callout body, a tab panel, the
+   expanded view, the Studio's code block frame). */
 :root:has(.notes-theme) svg.pele, .notes-theme svg.pele {
   --pele-bg: var(--notes-diagram-bg, var(--color-fd-background));
   --pele-fg: var(--garden-ink);

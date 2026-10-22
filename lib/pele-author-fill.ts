@@ -9,9 +9,10 @@
  */
 
 const MARK = 'data-author-fill';
-// Pele writes an author's fill inline on the shape; `fill:none` is no colour
-// for the label to sit on.
-const AUTHOR_FILL = /(?:^|;)\s*fill\s*:\s*(?!none\b|transparent\b)([^;]+)/i;
+// Pele writes an author's fill inline on the shape; `none` and
+// `transparent` are no colour for the label to sit on.
+const AUTHOR_FILL = /(?:^|;)\s*fill\s*:([^;]+)/i;
+const NO_FILL = /^(?:none|transparent)$/i;
 
 export function markAuthorFills(root: ParentNode): void {
   const filled = new Map<string, string>();
@@ -19,16 +20,16 @@ export function markAuthorFills(root: ParentNode): void {
   root.querySelectorAll('svg.pele :is(.pele-node, .pele-cluster)').forEach((group) => {
     const shape = [...group.children].find((child) => !child.matches('text, .pele-label, .pele-cluster-label'));
     const fill = AUTHOR_FILL.exec(shape?.getAttribute('style') ?? '')?.[1].trim();
-    if (!fill) return;
+    if (!fill || NO_FILL.test(fill)) return;
     group.setAttribute(MARK, '');
     if (group.matches('.pele-cluster')) filled.set(group.getAttribute('data-id') ?? '', fill);
   });
 
-  root.querySelectorAll('svg.pele .pele-cluster-title[data-id]').forEach((title) => {
+  root.querySelectorAll<SVGElement>('svg.pele .pele-cluster-title[data-id]').forEach((title) => {
     const fill = filled.get(title.getAttribute('data-id') ?? '');
     if (fill === undefined) return;
     title.setAttribute(MARK, '');
-    title.setAttribute('style', `--author-fill: ${fill}`);
+    title.style.setProperty('--author-fill', fill);
   });
 }
 
