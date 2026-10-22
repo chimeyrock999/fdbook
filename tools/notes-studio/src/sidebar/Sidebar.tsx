@@ -132,10 +132,12 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
           changeCount > 0 && <span className="studio-activity-count" data-info>{changeCount}</span>,
         )}
         {changeRequests && (
+          // A page in the main pane, not a view: it sits at the foot and is
+          // filled, not railed, while the list is open.
           <button
             type="button"
-            className="studio-activity-button"
-            aria-pressed={changeRequests.shown}
+            className="studio-activity-button studio-activity-page"
+            aria-current={changeRequests.shown ? 'page' : undefined}
             aria-label="Change requests"
             title="Change requests"
             onClick={changeRequests.onOpen}

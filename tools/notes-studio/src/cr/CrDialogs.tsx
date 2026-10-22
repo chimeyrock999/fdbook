@@ -1,3 +1,4 @@
+import { Info } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { crSlug } from '../../server/cr/slug';
 import type { ChangeRequest, CrClient, Discard } from '../api/crs';
@@ -48,10 +49,12 @@ export function NewCrDialog({ client, taken, onCreated, onClose }: {
 
 // Asks before a change request is discarded, listing what goes from this
 // machine (a dry run on the server). A pushed branch and its pull request
-// stay on the remote.
-export function DiscardDialog({ client, cr, onDone, onClose }: {
+// stay on the remote. The one being worked in can go too: the Studio then
+// goes back to main.
+export function DiscardDialog({ client, cr, current, onDone, onClose }: {
   client: CrClient;
   cr: ChangeRequest;
+  current: boolean;
   onDone: (discard: Discard) => void;
   onClose: () => void;
 }) {
@@ -79,6 +82,11 @@ export function DiscardDialog({ client, cr, onDone, onClose }: {
 
   return (
     <Dialog title={`Discard “${cr.name}”?`} onClose={onClose} onSubmit={submit}>
+      {current && (
+        <p className="studio-cr-inside">
+          <Info size={15} aria-hidden /> You are working in this change request. Studio goes back to main afterwards.
+        </p>
+      )}
       <p className="text-[13px] text-[var(--fde-muted-foreground)]">This cannot be undone. It removes from this machine:</p>
       {plan === null && failed === null && <p role="status" className="studio-tree-status">Checking what it removes…</p>}
       {plan !== null && (

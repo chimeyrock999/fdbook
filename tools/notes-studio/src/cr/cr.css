@@ -87,6 +87,20 @@
     font-size: 12.5px;
     color: var(--fde-warning);
   }
+  .studio-cr-inside {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    font-size: 12.5px;
+  }
+  .studio-cr-inside svg {
+    flex: none;
+    margin-top: 2px;
+    color: var(--fde-info);
+  }
   .studio-cr-lost {
     display: grid;
     gap: 4px;
@@ -127,14 +141,29 @@
   }
   .studio-cr-group {
     display: grid;
-    gap: 8px;
+    gap: 10px;
   }
+  /* Section headings, above the cards' own titles. */
   .studio-cr-group h2 {
-    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid var(--fde-border);
+    font-size: 14px;
     font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+  }
+  .studio-cr-count {
+    min-width: 20px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--fde-muted);
     color: var(--fde-muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
   }
   .studio-cr-empty {
     padding: 4px 2px;
@@ -185,7 +214,20 @@
     grid-column: 2;
     grid-row: 1 / span 2;
     display: flex;
+    align-items: center;
     gap: 6px;
+  }
+  /* In place of Open on the change request already open. */
+  .studio-cr-here {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--fde-accent);
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
   }
   @media (max-width: 767px) {
     .studio-cr-card {

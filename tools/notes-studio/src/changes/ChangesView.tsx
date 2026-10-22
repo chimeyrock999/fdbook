@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ChangedFile, Changes, ChangesClient, Commit, History } from '../api/changes';
 import { plural } from '../assets/asset-changes';
 import { MAIN_BRANCH } from '../../server/git/branch';
@@ -66,7 +66,7 @@ function FileGroup({ name, files, excluded, titles, readOnly, current, onToggle,
   );
 }
 
-function CommitItem({ commit, open, onToggle, onOpen }: { commit: Commit; open: boolean; onToggle: () => void; onOpen: (file: ChangedFile) => void }) {
+function CommitItem({ commit, open, unpushed, onToggle, onOpen }: { commit: Commit; open: boolean; unpushed: boolean; onToggle: () => void; onOpen: (file: ChangedFile) => void }) {
   return (
     <li className="studio-changes-commit">
       <button type="button" aria-expanded={open} onClick={onToggle}>
@@ -76,6 +76,7 @@ function CommitItem({ commit, open, onToggle, onOpen }: { commit: Commit; open: 
           <time dateTime={commit.date} title={new Date(commit.date).toLocaleString()}>{timeAgo(commit.date)}</time>
           <span className="font-mono">{commit.sha.slice(0, 7)}</span>
           <span>{plural(commit.files.length, 'file')}</span>
+          {unpushed && <span className="studio-changes-unpushed" title="Not pushed: not in the preview yet">↑ not pushed</span>}
         </span>
       </button>
       {open && (
@@ -105,10 +106,11 @@ function CommitItem({ commit, open, onToggle, onOpen }: { commit: Commit; open: 
 // (suggestMessage) until it is edited. Commit waits while the open note has
 // edits not saved yet (`unsaved`), as a rename does.
 // `readOnly` (main with change requests) lists the changes and commits
-// without the commit box: commits are made in a change request. A file,
-// listed or in a commit, opens its diff against main (#18); `current` is
-// the one open.
-export function ChangesView({ client, changes, history, error, titles, unsaved, readOnly = false, current = null, onOpen, onCommitted }: {
+// without the commit box: commits are made in a change request. `preview`
+// (PreviewSection) goes above the history, whose commits in `unpushed` are
+// marked as not pushed. A file, listed or in a commit, opens its diff
+// against main (#18); `current` is the one open.
+export function ChangesView({ client, changes, history, error, titles, unsaved, readOnly = false, preview = null, unpushed = null, current = null, onOpen, onCommitted }: {
   client: ChangesClient;
   changes: Changes | null;
   history: History | null;
@@ -117,6 +119,8 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
   titles: Map<string, string>;
   unsaved: string | null;
   readOnly?: boolean;
+  preview?: ReactNode;
+  unpushed?: ReadonlySet<string> | null;
   current?: string | null;
   // Opens a file's diff against main.
   onOpen: (file: ChangedFile) => void;
@@ -240,6 +244,7 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
             onToggle={(path, pick) => { toggle([path], pick); }} onToggleAll={(group, pick) => { toggle(group.map((file) => file.path), pick); }} />
         </>
       )}
+      {preview}
       <section className="studio-changes-history" aria-label="History">
         <button type="button" className="studio-changes-history-toggle" aria-expanded={historyOpen} onClick={() => { setHistoryOpen(!historyOpen); }}>
           <ChevronRight size={14} data-open={historyOpen || undefined} className="studio-changes-chevron" />
@@ -249,7 +254,7 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
         {historyOpen && (
           <ul className="studio-changes-commits">
             {commits.map((each) => (
-              <CommitItem key={each.sha} commit={each} open={openCommit === each.sha} onToggle={() => { setOpenCommit(openCommit === each.sha ? null : each.sha); }} onOpen={onOpen} />
+              <CommitItem key={each.sha} commit={each} open={openCommit === each.sha} unpushed={unpushed?.has(each.sha) === true} onToggle={() => { setOpenCommit(openCommit === each.sha ? null : each.sha); }} onOpen={onOpen} />
             ))}
           </ul>
         )}

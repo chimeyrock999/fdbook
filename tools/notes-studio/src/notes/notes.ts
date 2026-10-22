@@ -66,6 +66,24 @@ export function noteRoute(path: string) {
   return ['/notes', ...slugs.map(encodeURIComponent)].join('/');
 }
 
+// What the site serves for a worktree path: a note's page, a file under
+// public/ as it is (`/notes/…`), and the notes' home for anything else.
+export function siteRoute(path: string | null) {
+  if (path === null) return '/notes';
+  if (path.startsWith('public/')) return `/${path.slice('public/'.length).split('/').map(encodeURIComponent).join('/')}`;
+  return noteRoute(path);
+}
+
+// Where Open preview goes for the page shown: its route on the site, or the
+// notes home when the page has none there. A diff has the route of the file
+// as it is now; a meta.yaml has no page, and a file the change request
+// deleted (`exists` says no) is no longer served.
+export function previewRoute(page: Page | null, exists: (path: string) => boolean) {
+  if (page === null || page.kind === 'crs') return siteRoute(null);
+  if (page.kind === 'diff' && (page.path.endsWith('/meta.yaml') || !exists(page.path))) return siteRoute(null);
+  return siteRoute(page.path);
+}
+
 // The site's dev server (`npm run dev` at the repo root) unless
 // STUDIO_SITE_URL names another.
 export function siteUrlFrom(configured: string | undefined) {

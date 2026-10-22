@@ -7,6 +7,7 @@ import { assetChanged } from './api/asset-versions';
 import { createCrClient, type ChangeRequest, type Discard } from './api/crs';
 import { createFilesClient } from './api/files';
 import { createLintClient } from './api/lint';
+import { createPreviewClient } from './api/preview';
 import { createTreeClient } from './api/tree';
 import { CURRENT_CR } from './api/workspace';
 import { movedTo } from './assets/asset-changes';
@@ -18,7 +19,9 @@ import { leaveNotice, leftBehind, rememberLeave } from './changes/leave';
 import { LeaveNotice } from './changes/LeaveNotice';
 import { titlesOf } from './changes/labels';
 import { treeMarks } from './changes/marks';
+import { PreviewSection } from './changes/PreviewSection';
 import { useChanges } from './changes/useChanges';
+import { usePreview } from './changes/usePreview';
 import { DiscardDialog, NewCrDialog } from './cr/CrDialogs';
 import { CrListPage } from './cr/CrListPage';
 import { CrPicker, EditMenu } from './cr/CrMenus';
@@ -29,7 +32,8 @@ import { ASSETS_PREFIX } from './media/asset-names';
 import { useAssets } from './media/useAssets';
 import { NoteGate } from './notes/NoteGate';
 import { OpenOnSite } from './notes/OpenOnSite';
-import { NOTES_PREFIX, pageFromUrl, pageQuery, syncPath, unsavedNote, type Page } from './notes/notes';
+import { OpenPreview } from './notes/OpenPreview';
+import { NOTES_PREFIX, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote, type Page } from './notes/notes';
 import { Sidebar, type IssueCount } from './sidebar/Sidebar';
 import { useSidebar, type SidebarView } from './sidebar/useSidebar';
 import { PageTree } from './tree/PageTree';
@@ -71,6 +75,10 @@ export function App() {
   // Studio over one worktree (enabled: false) edits it as it is.
   const crMode = crs.list?.enabled === true;
   const readOnly = CURRENT_CR === null && crs.list?.enabled !== false;
+  // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
+  const previewClient = useMemo(() => createPreviewClient(), []);
+  const preview = usePreview(previewClient, !readOnly);
+  const unpushed = useMemo(() => (preview.preview ? new Set(preview.preview.unpushed) : null), [preview.preview]);
   const [crDialog, setCrDialog] = useState<{ kind: 'new' } | { kind: 'discard'; cr: ChangeRequest } | null>(null);
   // The change request the last page left with uncommitted files (switchTo).
   const [left, setLeft] = useState(() => leftBehind(CURRENT_CR));
@@ -184,6 +192,12 @@ export function App() {
   };
 
   const pagePath = page === null || page.kind === 'crs' ? null : page.path;
+  // A file is there when the page tree lists the note or the asset list the asset.
+  const route = previewRoute(page, (path) => (path.startsWith(NOTES_PREFIX) ? titles.has(path) : assets.includes(path)));
+  const committed = async () => {
+    await git.reload();
+    await preview.reload();
+  };
 
   return (
     <div className="flex h-dvh flex-col bg-[var(--fde-background)] text-[var(--fde-foreground)]">
@@ -195,6 +209,7 @@ export function App() {
         {crMode && <CrPicker list={crs.list} current={CURRENT_CR} waiting={unsaved !== null} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} onList={openList} />}
         <span className={`min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)] ${crMode ? 'max-md:hidden' : ''}`}>{pagePath ?? ''}</span>
         {crMode && CURRENT_CR === null && <EditMenu list={crs.list} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} />}
+        {!readOnly && <OpenPreview preview={preview.preview} route={route} />}
         {pagePath !== null && page?.kind !== 'diff' && <OpenOnSite path={pagePath} />}
       </header>
       <div className="relative flex min-h-0 flex-1">
@@ -217,7 +232,24 @@ export function App() {
               current={diff?.path ?? null}
               onOpen={openChanged}
               readOnly={readOnly}
-              onCommitted={git.reload}
+              onCommitted={committed}
+              unpushed={readOnly ? null : unpushed}
+              preview={
+                readOnly ? null : (
+                  <PreviewSection
+                    client={previewClient}
+                    preview={preview.preview}
+                    error={preview.error}
+                    unsaved={unsaved}
+                    route={route}
+                    onPushed={(next) => {
+                      preview.set(next);
+                      void git.reload();
+                      void crs.reload();
+                    }}
+                  />
+                )
+              }
             />
           }
           changeRequests={crMode ? { shown: page?.kind === 'crs', onOpen: openList } : null}
@@ -303,7 +335,7 @@ export function App() {
           onClose={() => { setCrDialog(null); }}
         />
       )}
-      {crDialog?.kind === 'discard' && <DiscardDialog client={crClient} cr={crDialog.cr} onDone={discarded} onClose={() => { setCrDialog(null); }} />}
+      {crDialog?.kind === 'discard' && <DiscardDialog client={crClient} cr={crDialog.cr} current={crDialog.cr.slug === CURRENT_CR} onDone={discarded} onClose={() => { setCrDialog(null); }} />}
     </div>
   );
 }

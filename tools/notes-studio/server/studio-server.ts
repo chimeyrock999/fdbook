@@ -7,6 +7,7 @@ import { createChangeRequestsApi } from './cr/api.ts';
 import { openChangeRequests, type ChangeRequestOptions, type ChangeRequests } from './cr/manager.ts';
 import { apiNotFound, pathnameOf } from './http.ts';
 import { createIconsApi } from './icons/api.ts';
+import { createBuildReader, ghCheckRun } from './preview/check-runs.ts';
 import { createRequestListener, routeUpgrades } from './routing.ts';
 import { ownHosts } from './security/guard.ts';
 import { createWorkspace, createWorkspaceRouter } from './workspace.ts';
@@ -68,9 +69,11 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
     await closeServer(server);
     throw error;
   }
-  const main = createWorkspace(crs?.mainRoot ?? root, hosts, { readOnly: crs !== null });
+  // One reader for every workspace, so its cache and push times are shared.
+  const preview = { builds: changeRequests?.builds ?? createBuildReader(ghCheckRun), pagesProject: changeRequests?.pagesProject ?? null };
+  const main = createWorkspace(crs?.mainRoot ?? root, hosts, { readOnly: crs !== null, preview });
   const shared = [createIconsApi(), apiNotFound];
-  const workspaces = createWorkspaceRouter(hosts, (slug) => crs?.worktreeOf(slug) ?? Promise.resolve(null), shared);
+  const workspaces = createWorkspaceRouter(hosts, (slug) => crs?.worktreeOf(slug) ?? Promise.resolve(null), shared, preview);
   // A discarded change request's watchers and sync close before its worktree goes.
   crs?.onDiscard((slug) => workspaces.close(slug));
 
