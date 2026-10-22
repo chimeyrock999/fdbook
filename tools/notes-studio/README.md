@@ -378,8 +378,10 @@ Visual:
   written with its Markdown and MDX characters escaped (`\*`, `` \` ``,
   `\[`, `\{`, `\<`), so the site shows it as typed. A value with both `"` and `'` is saved with its
   `"` turned into `'`. The rest of the marker's paragraph is written the
-  way the editor writes Markdown, as it is for any edit in Visual: wrapping
-  or removing a marker in `_a_ __b__ c` writes `*a* **b**`.
+  way the editor writes Markdown, as it is for any edit in Visual. The
+  notes use `*a*` and `**b**`, the markers the editor writes, and lint
+  warns on `_a_` and `__b__` (`emphasis-marker`), so that rewrite never
+  shows in a diff.
 
 ## Page tree
 
@@ -743,7 +745,8 @@ note.
 
 The rules live in `server/lint/` and follow what the site does, not a style
 guide: the site turns many mistakes into plain text or a placeholder instead
-of failing the build.
+of failing the build. The one style rule, `emphasis-marker`, keeps the
+markers the editor writes.
 
 | Rule | Level | Reports |
 | --- | --- | --- |
@@ -757,6 +760,7 @@ of failing the build.
 | `asset-missing` | error | `src` of `HtmlEmbed`, `SvgDiagram`, `::html`, `::svg`, `::diagram`, or a `/…` image, that is not a file in `public/` (a URL such as `https://…` included: the site only reads `public/`) |
 | `graph-id-duplicate` | error | Two sections with one id in a note: `GraphMeta`, `:graph-meta`, `SectionTitle`, `GraphSection`, or any marker with `graphType`/`graphKind="section"`. Keywords may reuse a section's id, and the same id on two notes is how the graph links them. |
 | `graph-meta-incomplete` | error, warning | A marker with no `id`, a Keyword, Tag or SectionTitle with no `displayName` (the graph drops it); a warning for GraphMeta with no `displayName`, since the heading text stands in |
+| `emphasis-marker` | warning | Emphasis or strong written with `_` / `__`: the notes use `*text*` / `**text**`, as the editor writes them, so a Visual edit leaves them as they are |
 | `mdx-parse` | error | The note does not parse |
 
 Code blocks and inline code are never checked. Directive names, callout

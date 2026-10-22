@@ -11,7 +11,8 @@ export type LintRule =
   | 'link-broken'
   | 'asset-missing'
   | 'graph-id-duplicate'
-  | 'graph-meta-incomplete';
+  | 'graph-meta-incomplete'
+  | 'emphasis-marker';
 
 export type LintSeverity = 'error' | 'warning';
 
