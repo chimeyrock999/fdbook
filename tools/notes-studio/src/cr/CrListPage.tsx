@@ -1,4 +1,4 @@
-import { ExternalLink, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Check, ExternalLink, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import type { ChangeRequest, CrList } from '../api/crs';
 import { CrBadge } from './CrMenus';
 import { GROUPS, plural, updatedAgo } from './cr-status';
@@ -29,7 +29,13 @@ function Card({ cr, current, waiting, onOpen, onDiscard }: { cr: ChangeRequest; 
         )}
       </div>
       <div className="studio-cr-card-ops">
-        <button type="button" className="studio-button" disabled={current || waiting} title={waiting && !current ? WAIT_HINT : undefined} onClick={onOpen}>{current ? 'Open here' : 'Open'}</button>
+        {current ? (
+          <span className="studio-cr-here">
+            <Check size={13} aria-hidden /> Current
+          </span>
+        ) : (
+          <button type="button" className="studio-button" disabled={waiting} title={waiting ? WAIT_HINT : undefined} onClick={onOpen}>Open</button>
+        )}
         <button type="button" className="studio-button gap-1.5" aria-label={`Discard ${cr.name}`} onClick={onDiscard}>
           <Trash2 size={14} aria-hidden /> <span className="max-md:hidden">Discard</span>
         </button>
@@ -74,7 +80,9 @@ export function CrListPage({ list, error, current, waiting = false, onOpen, onNe
           const crs = list.crs.filter((cr) => group.statuses.includes(cr.status));
           return (
             <div key={group.title} className="studio-cr-group">
-              <h2>{group.title} · {crs.length}</h2>
+              <h2>
+                {group.title} <span className="studio-cr-count">{crs.length}</span>
+              </h2>
               {crs.length === 0 ? (
                 <p className="studio-cr-empty">{group.empty}</p>
               ) : (
