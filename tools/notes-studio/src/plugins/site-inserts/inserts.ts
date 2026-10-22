@@ -4,7 +4,9 @@ import type { JSONContent } from '@tiptap/core';
 // it: inline JSX as text marked `mdxJsxTag`, text directives as
 // `verbatimInline` atoms and block directives as `verbatim` blocks. All of
 // them serialize as their source, byte for byte. A graph marker starts with
-// an empty id; the Studio's graph fields open on it (src/graph).
+// an empty id; the Studio's graph fields open on it (src/graph). A Mermaid
+// diagram is the editor's own code block, which draws it, with a starter
+// indented as the notes indent theirs.
 
 function jsxTag(text: string): JSONContent {
   return { type: 'text', text, marks: [{ type: 'mdxJsxTag', attrs: { self: false } }] };
@@ -31,3 +33,9 @@ export const tabs = verbatim('::::tabs{items="Tab 1 | Tab 2"}\n:::tab[Tab 1]\nCo
 export const steps = verbatim('::::steps\n:::step[Step 1]\nContent\n:::\n\n:::step[Step 2]\nContent\n:::\n::::');
 
 export const youtube = verbatim('::youtube{url="" title=""}');
+
+export const mermaid: JSONContent = {
+  type: 'codeBlock',
+  attrs: { language: 'mermaid' },
+  content: [{ type: 'text', text: 'flowchart LR\n    A[Start] --> B[End]' }],
+};

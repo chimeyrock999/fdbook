@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { glob } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseMdxToDoc } from '@fumadocs-editor/core';
+import { parseMdxToDoc, serializeDocToMdx } from '@fumadocs-editor/core';
 import { describe, expect, it } from 'vitest';
 import { repoRoot } from '../../../server/config';
 import { editorConfig } from '../../../src/plugins';
@@ -16,7 +16,18 @@ describe('insert-only specs', () => {
   it('are registered for every insert', () => {
     expect(inserts.map((spec) => spec.label)).toEqual([
       'Keyword', 'Tag', 'Graph heading', 'Accordions (directive)', 'Tabs (directive)', 'Steps (directive)', 'YouTube (directive)',
+      'Mermaid diagram',
     ]);
+  });
+
+  // A Mermaid diagram is the editor's own code block, which draws the
+  // preview; it is written as the plain fence the notes use.
+  it('inserts a Mermaid diagram as a mermaid code block', () => {
+    const spec = inserts.find((candidate) => candidate.label === 'Mermaid diagram');
+    const block = spec?.insert?.(new Map());
+    expect(block).toMatchObject({ type: 'codeBlock', attrs: { language: 'mermaid' } });
+    const doc = { type: 'doc', content: [block as object] };
+    expect(serializeDocToMdx(doc, undefined, syntax)).toBe('```mermaid\nflowchart LR\n    A[Start] --> B[End]\n```\n');
   });
 
   // Their node types exist only so the slash menu lists them: no note may
