@@ -80,4 +80,9 @@ describe('own hosts', () => {
   it('brackets an IPv6 address', () => {
     expect(ownHosts('fd7a::1', 4310)).toEqual(['[fd7a::1]:4310']);
   });
+
+  it('answers to the form of an IPv6 address browsers send', () => {
+    expect(ownHosts('FD7A:115C:A1E0::1', 4310)).toEqual(['[fd7a:115c:a1e0::1]:4310']);
+    expect(ownHosts('::ffff:100.71.207.12', 4310)).toEqual(['[::ffff:6447:cf0c]:4310']);
+  });
 });

@@ -14,8 +14,9 @@ export function rejectForeignRequest(request: IncomingMessage, hosts: string[]):
 }
 
 // The Host headers the Studio answers to when bound to `address`: on
-// loopback, 127.0.0.1 and localhost; elsewhere (STUDIO_HOST), that address.
+// loopback, 127.0.0.1 and localhost; elsewhere (STUDIO_HOST), that address,
+// IPv6 in the bracketed, lowercase, compressed form browsers send.
 export function ownHosts(address: string, port: number) {
-  const host = address.includes(':') ? `[${address}]` : address;
+  const host = address.includes(':') ? new URL(`http://[${address}]/`).hostname : address;
   return address === '127.0.0.1' ? [`127.0.0.1:${String(port)}`, `localhost:${String(port)}`] : [`${host}:${String(port)}`];
 }

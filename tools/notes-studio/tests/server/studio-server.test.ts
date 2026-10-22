@@ -1,6 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { repoRoot } from '../../server/config';
+import { rawRequest } from '../support/http';
 import { startStudioServer, type StudioServer } from '../../server/studio-server';
 
 describe('studio server', () => {
@@ -50,5 +51,17 @@ describe('studio server', () => {
   it('rejects a busy port without leaving a server behind', async () => {
     const { port } = studio.server.address() as AddressInfo;
     await expect(startStudioServer({ port })).rejects.toMatchObject({ code: 'EADDRINUSE' });
+  });
+
+  it('answers to the Host a browser sends for an IPv6 address written out in full', async () => {
+    const ipv6 = await startStudioServer({ host: '0:0:0:0:0:0:0:1', port: 0 });
+    try {
+      const { port } = ipv6.server.address() as AddressInfo;
+      expect(ipv6.url).toBe(`http://[::1]:${String(port)}/`);
+      const response = await rawRequest(ipv6.url, { headers: { Host: `[::1]:${String(port)}` } });
+      expect(response.status).toBe(200);
+    } finally {
+      await ipv6.close();
+    }
   });
 });

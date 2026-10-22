@@ -1,4 +1,4 @@
-import { pagesProject, parseStudioHost, parseStudioPort, repoRoot, studioHome } from './config.ts';
+import { listenFailure, pagesProject, parseStudioHost, parseStudioPort, repoRoot, studioHome } from './config.ts';
 import { installProblem } from './deps.ts';
 
 // Each dependency must be installed as its package-lock.json pins: a pull
@@ -19,10 +19,6 @@ try {
   });
   console.log(`Notes Studio: ${studio.url}`);
 } catch (error) {
-  if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
-    console.error('The Notes Studio port is already in use. Stop the other process or set STUDIO_PORT.');
-  } else {
-    console.error((error as Error).message);
-  }
+  console.error(listenFailure(error as NodeJS.ErrnoException, process.env.STUDIO_HOST?.trim() ?? ''));
   process.exit(1);
 }

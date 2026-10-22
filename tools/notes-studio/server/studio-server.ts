@@ -45,8 +45,9 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
       resolve();
     });
   });
-  const { port: boundPort } = server.address() as AddressInfo;
-  const hosts = ownHosts(host, boundPort);
+  // The address as bound, not as given: Node reports it canonically.
+  const { address, port: boundPort } = server.address() as AddressInfo;
+  const hosts = ownHosts(address, boundPort);
 
   let vite;
   try {
