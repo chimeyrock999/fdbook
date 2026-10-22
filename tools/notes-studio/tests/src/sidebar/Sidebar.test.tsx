@@ -221,6 +221,8 @@ describe('Sidebar', () => {
     expect(crs.hasAttribute('aria-pressed')).toBe(false);
     expect(crs.getAttribute('aria-current')).toBe('page');
     expect(crs.classList.contains('studio-activity-page')).toBe(true);
+    // It sits at the foot through .studio-activity-page + .studio-activity-bottom.
+    expect(crs.nextElementSibling).toBe(screen.getByRole('button', { name: 'Hide the sidebar' }));
     const pressed = screen.getAllByRole('button', { pressed: true }).map((button) => button.getAttribute('aria-label'));
     expect(pressed).toEqual(['Assets']);
   });
