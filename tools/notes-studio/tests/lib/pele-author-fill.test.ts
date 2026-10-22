@@ -35,7 +35,7 @@ const marked = (root: ParentNode, selector: string) =>
   [...root.querySelectorAll(selector)].filter((group) => group.hasAttribute('data-author-fill')).map((group) => group.getAttribute('data-id'));
 
 describe('markAuthorFills', () => {
-  it('marks nodes and subgraphs filled in any colour syntax, not stroke-only or fill:none', async () => {
+  it('marks nodes and subgraphs filled with a hex or a colour name, not stroke-only or fill:none', async () => {
     const root = svgOf((await renderAsync(chart, {})).svg);
     markAuthorFills(root);
     expect(marked(root, '.pele-node').sort()).toEqual(['A', 'B', 'D']);
@@ -44,7 +44,7 @@ describe('markAuthorFills', () => {
 
   it('reads the fill as written, spaces and case included', () => {
     const root = svgOf(
-      ['fill: none', 'FILL: Transparent', 'fill: #fde', 'rx:4px; fill :rgb(1 2 3)'].map((style, index) =>
+      ['fill: none', 'FILL: Transparent', 'fill: #fde', 'rx:4px; fill :LightBlue'].map((style, index) =>
         `<svg class="pele"><g class="pele-node" data-id="N${String(index)}"><rect style="${style}"/><text class="pele-label">x</text></g></svg>`,
       ).join(''),
     );

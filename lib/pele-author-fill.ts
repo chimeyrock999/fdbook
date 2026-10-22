@@ -2,10 +2,10 @@
  * Marks the parts of a Pele diagram the author filled (`style X fill:…`,
  * `classDef`), so the dark theme can give their labels dark ink
  * (styles/notes-theme.css). CSS alone misses two cases: a fill written as a
- * name or `rgb()`, and a subgraph title Pele lifts out of its subgraph, into
- * `.pele-cluster-titles`, when an edge crosses it; only its `data-id` ties it
- * back to the subgraph. Such a title also carries the subgraph's fill as
- * `--author-fill`, for the halo Pele draws behind it.
+ * colour name (`fill:lightblue`), and a subgraph title Pele lifts out of its
+ * subgraph, into `.pele-cluster-titles`, when an edge crosses it; only its
+ * `data-id` ties it back to the subgraph. Such a title also carries the
+ * subgraph's fill as `--author-fill`, for the halo Pele draws behind it.
  */
 
 const MARK = 'data-author-fill';
