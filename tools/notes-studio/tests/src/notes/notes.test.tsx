@@ -2,9 +2,8 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { NoteGate } from '../../../src/notes/NoteGate';
-import { OpenOnSite } from '../../../src/notes/OpenOnSite';
 import type { createFilesClient } from '../../../src/api/files';
-import { noteFromUrl, noteRoute, pageFromUrl, pageQuery, previewRoute, siteUrlFrom, syncPath, unsavedNote } from '../../../src/notes/notes';
+import { noteFromUrl, noteRoute, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote } from '../../../src/notes/notes';
 
 afterEach(cleanup);
 
@@ -96,26 +95,6 @@ function fakeFiles(contents: Record<string, string>) {
     },
   } as unknown as ReturnType<typeof createFilesClient>;
 }
-
-describe('OpenOnSite', () => {
-  it("links to the note's page on the site, in a new tab", () => {
-    render(<OpenOnSite path="content/notes/database/index.mdx" siteUrl="http://127.0.0.1:3001/" />);
-    const link = screen.getByRole('link', { name: 'Open on site' });
-    expect(link.getAttribute('href')).toBe('http://127.0.0.1:3001/notes/database');
-    expect(link.getAttribute('target')).toBe('_blank');
-  });
-
-  it('links a file under public/notes to the file the site serves', () => {
-    render(<OpenOnSite path="public/notes/guide/a b.png" siteUrl="http://127.0.0.1:3001" />);
-    expect(screen.getByRole('link', { name: 'Open on site' }).getAttribute('href')).toBe('http://127.0.0.1:3001/notes/guide/a%20b.png');
-  });
-
-  it('defaults to the dev server on localhost:3000', () => {
-    expect(siteUrlFrom(undefined)).toBe('http://localhost:3000');
-    expect(siteUrlFrom('  ')).toBe('http://localhost:3000');
-    expect(siteUrlFrom(' http://127.0.0.1:3001 ')).toBe('http://127.0.0.1:3001');
-  });
-});
 
 describe('NoteGate', () => {
   it('opens a readable note and explains one that cannot be read', async () => {
