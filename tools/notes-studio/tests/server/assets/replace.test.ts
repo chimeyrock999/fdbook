@@ -7,6 +7,7 @@ import { repoRoot } from '../../../server/config';
 import { lintWorktree } from '../../../server/lint/context';
 import { MAX_ASSET_BYTES } from '../../../server/security/asset-types';
 import { json, rawRequest } from '../../support/http';
+import { generatedAsset, plantGeneratedAsset } from '../../support/generated-asset';
 import { startTestStudio, type TestStudio } from '../../support/studio';
 
 type Answer = { changes: { type: string; path: string; to?: string; detail?: string }[]; mtimeMs?: number };
@@ -14,7 +15,8 @@ type Answer = { changes: { type: string; path: string; to?: string; detail?: str
 const SUPERSET = 'public/notes/data-platform/stacks-integration/superset-trino-impersonate.jpg';
 const SUPERSET_NOTE = 'content/notes/data-platform/stacks-integration/index.mdx';
 const WAREHOUSE = 'public/notes/data-modeling/data_warehouse_architecture.webp';
-const GENERATED = 'public/notes/data-platform/processing/apache-spark/spark-logic-to-execution.html';
+// A generated asset the tests plant (support/generated-asset.ts).
+const GENERATED = generatedAsset('made');
 const NEW_BYTES = Buffer.from('new image bytes');
 
 // Replacing an asset's content on a copy of the real content/notes,
@@ -53,6 +55,7 @@ describe('assets API: replace', () => {
     studio = await startTestStudio();
     await cp(join(repoRoot, 'public/notes'), file('public/notes'), { recursive: true });
     await cp(join(repoRoot, 'diagrams'), file('diagrams'), { recursive: true });
+    await plantGeneratedAsset(studio.root, 'made');
   });
 
   afterAll(async () => {
@@ -108,12 +111,12 @@ describe('assets API: replace', () => {
   }, 20_000);
 
   it('refuses a generated asset, and names its source', async () => {
-    const before = await readFile(file(GENERATED));
-    const response = await put({ path: GENERATED, extension: 'html', baseMtime: await mtime(GENERATED) });
+    const before = await readFile(file(GENERATED.asset));
+    const response = await put({ path: GENERATED.asset, extension: 'html', baseMtime: await mtime(GENERATED.asset) });
     expect(response.status).toBe(409);
-    expect((json(response) as { error: string }).error).toContain('spark-logic-to-execution.architecture.json generates');
-    expect((await dryRun({ path: GENERATED, extension: 'html', baseMtime: await mtime(GENERATED) })).status).toBe(409);
-    expect(await readFile(file(GENERATED))).toEqual(before);
+    expect((json(response) as { error: string }).error).toMatch(/made\.architecture\.json, .*made\.regen\.sh generates made\.html/);
+    expect((await dryRun({ path: GENERATED.asset, extension: 'html', baseMtime: await mtime(GENERATED.asset) })).status).toBe(409);
+    expect(await readFile(file(GENERATED.asset))).toEqual(before);
   });
 
   it('refuses a type the Studio does not store, and a missing extension', async () => {
