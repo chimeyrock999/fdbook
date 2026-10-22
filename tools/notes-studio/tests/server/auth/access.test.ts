@@ -33,6 +33,16 @@ describe('requiredRole', () => {
     ['POST', '/cr/x/api/agents/runs', 'admin'],
     ['POST', '/cr/x/api/agents/runs/r1/cancel', 'admin'],
     ['POST', '/cr/x/api/agents/runs/r1/permissions/a1', 'admin'],
+    // Keeping or reverting what a run changed is an edit.
+    ['GET', '/cr/x/api/agents/runs/r1/changes', 'reader'],
+    ['POST', '/cr/x/api/agents/runs/r1/changes', 'writer'],
+    // The MCP server checks its own bearer token; its token API is a write.
+    ['POST', '/api/mcp', 'none'],
+    ['POST', '/api/mcp/tokens', 'reader'],
+    ['DELETE', '/api/mcp/tokens', 'reader'],
+    ['POST', '/cr/x/api/mcp', 'writer'],
+    ['POST', '/cr/x/api/proposals/p1', 'writer'],
+    ['GET', '/cr/x/api/proposals', 'reader'],
     // A change request's own /api/session is no sign-in endpoint.
     ['POST', '/cr/x/api/session/logout', 'writer'],
   ])('%s %s needs %s', (method, path, role) => {

@@ -35,25 +35,34 @@ function trimSlash(pathname: string) {
   return pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
 }
 
-// Why `href` from the note at `context.path` reaches no page, or null when it
-// does (or reaches a file under public/notes). Follows source.resolveHref
-// (app/notes/[[...slug]]/page.tsx): `./` and `../` are first looked up as
-// files next to the note; anything else that is relative is left to the
-// browser, against the page URL. A link to an `.mdx` file only works through
-// the file lookup.
-export function brokenLink(href: string, context: LintContext, urls: ReadonlySet<string>): string | null {
+// Where `href` from the note at `from` (relative to content/notes) leads,
+// as source.resolveHref does (app/notes/[[...slug]]/page.tsx): `./` and
+// `../` are first looked up as files next to the note (`page`, or `missing`
+// for an `.mdx` file that is not there, which only that lookup reaches);
+// anything else that is relative is left to the browser, against the page
+// URL (`url`, a path under /notes). Null for what leaves the notes: another
+// scheme, `//`, an anchor, an empty href, a URL outside /notes.
+export function resolveHref(href: string, from: string, pages: ReadonlySet<string>): { page: string } | { missing: string } | { url: string } | null {
   if (href === '' || href.startsWith('#') || href.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(href)) return null;
   const [value = ''] = href.split('#');
   if (value.startsWith('./') || value.startsWith('../')) {
-    const directory = context.path.includes('/') ? context.path.slice(0, context.path.lastIndexOf('/')) : '';
+    const directory = from.includes('/') ? from.slice(0, from.lastIndexOf('/')) : '';
     const file = joinPath(directory, decode(value, decodeURI));
-    if (context.pages.has(file)) return null;
-    if (file.endsWith('.mdx')) return `There is no note at \`content/notes/${file}\`.`;
+    if (pages.has(file)) return { page: file };
+    if (file.endsWith('.mdx')) return { missing: file };
   }
-  const target = trimSlash(decode(new URL(href, `http://site${pageUrl(context.path)}`).pathname, decodeURIComponent));
-  if (target !== BASE && !target.startsWith(`${BASE}/`)) return null;
-  if (urls.has(target) || context.assetExists(target.slice(1))) return null;
-  return value.startsWith('/') ? 'No note has that URL.' : `It resolves to \`${target}\`, which no note has.`;
+  const target = trimSlash(decode(new URL(href, `http://site${pageUrl(from)}`).pathname, decodeURIComponent));
+  return target === BASE || target.startsWith(`${BASE}/`) ? { url: target } : null;
+}
+
+// Why `href` from the note at `context.path` reaches no page, or null when it
+// does (or reaches a file under public/notes).
+export function brokenLink(href: string, context: LintContext, urls: ReadonlySet<string>): string | null {
+  const resolved = resolveHref(href, context.path, context.pages);
+  if (resolved === null || 'page' in resolved) return null;
+  if ('missing' in resolved) return `There is no note at \`content/notes/${resolved.missing}\`.`;
+  if (urls.has(resolved.url) || context.assetExists(resolved.url.slice(1))) return null;
+  return href.startsWith('/') ? 'No note has that URL.' : `It resolves to \`${resolved.url}\`, which no note has.`;
 }
 
 // Markdown links and link definitions that reach no page.
