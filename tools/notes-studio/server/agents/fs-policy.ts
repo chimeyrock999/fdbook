@@ -39,7 +39,8 @@ export async function readForAgent(root: string, path: string, line?: number | n
 }
 
 // Writes `content` and answers the worktree path and its size.
-export async function writeForAgent(root: string, path: string, content: string) {
+// `beforeWrite` is told what the file held (null: missing) just before.
+export async function writeForAgent(root: string, path: string, content: string, beforeWrite?: (path: string, previous: Buffer | null) => void) {
   const worktreePath = insideOf(root, path) ?? insideOf(await realpath(root), path);
   if (worktreePath === null || !isTextPath(worktreePath)) {
     throw refuse(`the Studio lets agents write only notes, meta.yaml and SVG or HTML assets in this change request: ${path}`);
@@ -48,6 +49,7 @@ export async function writeForAgent(root: string, path: string, content: string)
   if (resolved === null) throw refuse(`${worktreePath} goes through a symlink or is not a file`);
   const bytes = Buffer.byteLength(content);
   if (bytes > WRITE_MAX_BYTES) throw refuse(`${worktreePath} would be larger than ${String(WRITE_MAX_BYTES)} bytes`);
+  beforeWrite?.(worktreePath, await readFile(resolved.absolute).catch(() => null));
   await writeAtomic(resolved.absolute, content);
   return { path: worktreePath, bytes };
 }

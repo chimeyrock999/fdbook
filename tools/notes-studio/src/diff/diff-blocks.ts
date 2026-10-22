@@ -1,6 +1,8 @@
-import { parseMdxToDoc, type Syntax } from '@fumadocs-editor/core';
+import type { Syntax } from '@fumadocs-editor/core';
 import { parseDocument, stringify } from 'yaml';
 import { findBlock } from '../frontmatter/block';
+import { align } from './align';
+import { blockSpans } from './block-spans';
 
 // A run of top-level blocks, unchanged, removed (on main only) or added
 // (in the change request only), as one stretch of the note it came from:
@@ -20,16 +22,8 @@ type Blocks = { body: string; sources: string[]; starts: number[]; ends: number[
 // each sits in the body. Throws when the note does not parse.
 function blocksOf(source: string, syntax: Syntax): Blocks {
   const body = source.slice(findBlock(source)?.end ?? 0);
-  const { snapshot } = parseMdxToDoc(body, syntax);
-  const starts: number[] = [];
-  const ends: number[] = [];
-  let offset = snapshot.leading.length;
-  snapshot.blocks.forEach((block, index) => {
-    starts.push(offset);
-    ends.push(offset + block.source.length);
-    offset += block.source.length + (snapshot.gaps[index]?.length ?? 0);
-  });
-  return { body, sources: snapshot.blocks.map((block) => block.source), starts, ends };
+  const spans = blockSpans(body, syntax);
+  return { body, sources: spans.map((span) => span.text), starts: spans.map((span) => span.start), ends: spans.map((span) => span.end) };
 }
 
 // Blocks `from` to `to` (exclusive) of one side, as a run.
@@ -42,51 +36,6 @@ function runOf(kind: Run['kind'], side: Blocks, from: number, to: number): Run {
     starts: side.starts.slice(from, to).map((offset) => offset - start),
     ends: side.ends.slice(from, to).map((offset) => offset - start),
   };
-}
-
-// The most cells the alignment table may have (a million: under 10 MB, a
-// few milliseconds). A middle larger than that, a note rewritten through,
-// shows as all removed then all added rather than hold up the page.
-const MAX_CELLS = 1_000_000;
-
-// Which blocks of `a` and `b` are the same, by exact text: a longest common
-// subsequence, after the common start and end are taken off. On a tie a
-// block of `a` goes first, so an edit shows as removed then added.
-function align(a: string[], b: string[]): ('same' | 'removed' | 'added')[] {
-  let head = 0;
-  while (head < a.length && head < b.length && a[head] === b[head]) head += 1;
-  let tail = 0;
-  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail += 1;
-  const x = a.slice(head, a.length - tail);
-  const y = b.slice(head, b.length - tail);
-  const same = (count: number) => new Array<'same'>(count).fill('same');
-  if (x.length * y.length > MAX_CELLS) {
-    return [...same(head), ...new Array<'removed'>(x.length).fill('removed'), ...new Array<'added'>(y.length).fill('added'), ...same(tail)];
-  }
-  // lengths[i][j]: the longest common subsequence of x[i..] and y[j..].
-  const lengths = Array.from({ length: x.length + 1 }, () => new Array<number>(y.length + 1).fill(0));
-  for (let i = x.length - 1; i >= 0; i -= 1) {
-    for (let j = y.length - 1; j >= 0; j -= 1) {
-      lengths[i][j] = x[i] === y[j] ? lengths[i + 1][j + 1] + 1 : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
-    }
-  }
-  const steps: ('same' | 'removed' | 'added')[] = same(head);
-  let i = 0;
-  let j = 0;
-  while (i < x.length || j < y.length) {
-    if (i < x.length && j < y.length && x[i] === y[j]) {
-      steps.push('same');
-      i += 1;
-      j += 1;
-    } else if (j >= y.length || (i < x.length && lengths[i + 1][j] >= lengths[i][j + 1])) {
-      steps.push('removed');
-      i += 1;
-    } else {
-      steps.push('added');
-      j += 1;
-    }
-  }
-  return steps.concat(same(tail));
 }
 
 // The note's body on main (`before`) against the change request (`after`),
