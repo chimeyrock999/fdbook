@@ -36,7 +36,6 @@ import { NoteEditor, type SourcePlace } from './editor/NoteEditor';
 import { ASSETS_PREFIX } from './media/asset-names';
 import { useAssets } from './media/useAssets';
 import { NoteGate } from './notes/NoteGate';
-import { OpenOnSite } from './notes/OpenOnSite';
 import { OpenPreview } from './notes/OpenPreview';
 import { NOTES_PREFIX, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote, type Page } from './notes/notes';
 import { Sidebar, type IssueCount } from './sidebar/Sidebar';
@@ -247,7 +246,6 @@ export function App() {
         <span className={`min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)] ${crMode ? 'max-md:hidden' : ''}`}>{pagePath ?? ''}</span>
         {crMode && CURRENT_CR === null && <EditMenu list={crs.list} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} />}
         {!readOnly && <OpenPreview preview={preview.preview} route={route} />}
-        {pagePath !== null && page?.kind !== 'diff' && <OpenOnSite path={pagePath} />}
         {action !== null && <PrimaryActionButton action={action} onAction={act} />}
       </header>
       <div className="relative flex min-h-0 flex-1">

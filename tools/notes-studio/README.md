@@ -32,10 +32,6 @@ the same way. A package put in place with `npm link` is skipped. A pull without 
 reinstall once left fumadocs-core 16.8.11 in place, where every page tree
 folder got the same id.
 
-**Open on site** in the header opens the note's page on the site's dev server
-(`npm run dev` at the repo root, `http://localhost:3000` unless
-`STUDIO_SITE_URL` says otherwise). The Studio does not start the site (#43).
-
 The Studio replaces the Chimey Notes Obsidian plugin, removed in #44. Its
 checks that the site gets wrong live on in Lint, its JSX snippets, graph
 markers and directive blocks in the `/` menu and the graph bar (see Graph
@@ -481,7 +477,8 @@ a phone, opening an asset closes the drawer. The page shows:
 - the file: an image fitted to the pane, or at 100%, on a checkerboard; an
   `.html` embed in a sandboxed frame, where its scripts do not run (the
   file API serves it that way), so an interactive embed may show only its
-  static part (**Open on site** in the header opens the file on the site);
+  static part (**Open preview** in the header opens the file on the
+  change request's preview once it is pushed);
   other types get an icon;
 - its path under `public/notes`, size, dimensions (for an image) and
   modified time;
@@ -626,10 +623,12 @@ the window comes back and after each commit. The 3 minutes count from when
 fetch that saw a push made elsewhere). gh reads the check runs of origin's
 GitHub repository.
 
-**Open preview**, in the section and in the header beside Open on site
-once the branch is pushed, opens the branch's preview (the alias from the
-check run, else `https://cr-<slug>.<STUDIO_PAGES_PROJECT>.pages.dev`) at
-the page that is open, as Open on site does; its dot is the build's state.
+**Open preview**, in the section and in the header once the branch is
+pushed, opens the branch's preview (the alias from the check run, else
+`https://cr-<slug>.<STUDIO_PAGES_PROJECT>.pages.dev`) at the page that is
+open; its dot is the build's state. It is the Studio's only link to the
+site: the editor's Visual mode already renders the note, and the Studio
+does not run the site's dev server (#43).
 On a diff it opens the file at its path now; a `meta.yaml`, or a file the
 change request deleted, opens the notes home (`previewRoute`).
 Previews sit behind Cloudflare Access: the first one asks for the one-time
