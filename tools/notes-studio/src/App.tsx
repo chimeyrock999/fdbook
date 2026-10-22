@@ -33,6 +33,8 @@ import { CrNotice } from './cr/CrNotice';
 import { CrPicker, EditMenu } from './cr/CrMenus';
 import { useCrs } from './cr/useCrs';
 import { DiffPage } from './diff/DiffPage';
+import { createHistoryClient } from './api/history';
+import { HistoryPage } from './history/HistoryPage';
 import { NoteEditor, type SourcePlace } from './editor/NoteEditor';
 import { ASSETS_PREFIX } from './media/asset-names';
 import { useAssets } from './media/useAssets';
@@ -72,6 +74,10 @@ export function App() {
   const active = page?.kind === 'note' ? page.path : null;
   const asset = page?.kind === 'asset' ? page.path : null;
   const diff = page?.kind === 'diff' ? page : null;
+  const history = page?.kind === 'history' ? page.path : null;
+  // The note the page tree marks: the one open, or the one whose history is.
+  const treeNote = active ?? history;
+  const historyClient = useMemo(() => createHistoryClient(), []);
   // The open note's autosave state, by path: a rename waits until it is saved.
   const [saved, setSaved] = useState<{ path: string; status: DocumentStatus } | null>(null);
   const unsaved = unsavedNote(active, saved);
@@ -303,7 +309,7 @@ export function App() {
               <PageTree
                 root={tree}
                 client={treeClient}
-                active={active === null ? null : syncPath(active)}
+                active={treeNote === null ? null : syncPath(treeNote)}
                 onOpen={(path) => { open(NOTES_PREFIX + path); }}
                 onRenamed={renamed}
                 unsaved={unsaved}
@@ -328,6 +334,7 @@ export function App() {
               onIssueCount={setIssueCount}
               onShowIssues={showIssues}
               onIssueShown={closeDrawer}
+              onShowHistory={() => { go({ kind: 'history', path: active }); }}
               place={place?.note === active ? place : null}
             />
           </NoteGate>
@@ -341,6 +348,16 @@ export function App() {
             titles={titles}
             onOpen={(path) => { if (path.startsWith(NOTES_PREFIX)) open(path); else openAsset(path); }}
             onBack={() => { openView('changes'); }}
+          />
+        ) : history ? (
+          <HistoryPage
+            client={historyClient}
+            path={history}
+            title={titles.get(history) ?? history.slice(history.lastIndexOf('/') + 1)}
+            readOnly={readOnly}
+            revision={git.changes}
+            onOpen={() => { open(history); }}
+            onRestored={() => { void git.reload(); }}
           />
         ) : page?.kind === 'crs' && crMode ? (
           <CrListPage

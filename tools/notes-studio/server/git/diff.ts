@@ -33,11 +33,11 @@ async function sizeAtBase(root: string, base: string, path: string) {
   return size !== null && Number.isFinite(size) ? size : null;
 }
 
-const readBlob = (root: string, base: string, path: string) => runGitBytes(root, ['cat-file', 'blob', `${base}:${path}`], MAX_ASSET_BYTES + 1024);
+export const readBlob = (root: string, base: string, path: string) => runGitBytes(root, ['cat-file', 'blob', `${base}:${path}`], MAX_ASSET_BYTES + 1024);
 
 // One side as commit `base` holds it: the text when it is text and small
 // enough, else only the size, which git tells without reading the file.
-async function sideAtBase(root: string, base: string, path: string): Promise<DiffSide | null> {
+export async function sideAtBase(root: string, base: string, path: string): Promise<DiffSide | null> {
   const size = await sizeAtBase(root, base, path);
   if (size === null) return null;
   if (!isTextPath(path) || size > MAX_TEXT_BYTES) return { kind: 'binary', size };
@@ -45,7 +45,7 @@ async function sideAtBase(root: string, base: string, path: string): Promise<Dif
 }
 
 // The worktree's side, read only when it is shown as text.
-async function sideOnDisk(absolute: string, path: string): Promise<DiffSide | null> {
+export async function sideOnDisk(absolute: string, path: string): Promise<DiffSide | null> {
   const info = await statOrNull(absolute);
   if (!info?.isFile()) return null;
   if (!isTextPath(path) || info.size > MAX_TEXT_BYTES) return { kind: 'binary', size: info.size };
@@ -54,7 +54,7 @@ async function sideOnDisk(absolute: string, path: string): Promise<DiffSide | nu
 }
 
 // A path the path policy allows and no link leads to.
-function checked(root: string, path: string) {
+export function checked(root: string, path: string) {
   const resolved = resolveWorktreePath(root, path);
   if (!resolved) throw new HttpError(403, `not an editable path: ${path}`);
   return resolved.absolute;

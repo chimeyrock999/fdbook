@@ -59,6 +59,17 @@ describe('note helpers', () => {
     expect(pageQuery({ kind: 'diff', path: 'content/notes/a.mdx', from: 'content/notes/b.mdx' }, 'sinks')).toBe('?cr=sinks&diff=content%2Fnotes%2Fa.mdx&from=content%2Fnotes%2Fb.mdx');
   });
 
+  it('reads a page history to open: ?history= for a note only', () => {
+    expect(pageFromUrl('?history=content%2Fnotes%2Fa%2Fb.mdx')).toEqual({ kind: 'history', path: 'content/notes/a/b.mdx' });
+    expect(pageFromUrl('?history=content/notes/a/meta.yaml')).toBeNull();
+    expect(pageFromUrl('?history=public/notes/a.png')).toBeNull();
+    expect(pageFromUrl('?history=content/notes/../package.mdx')).toBeNull();
+    const page = { kind: 'history', path: 'content/notes/a b/c#d.mdx' } as const;
+    expect(pageFromUrl(pageQuery(page))).toEqual(page);
+    expect(pageQuery(page, 'sinks')).toBe('?cr=sinks&history=content%2Fnotes%2Fa%20b%2Fc%23d.mdx');
+    expect(previewRoute(page, () => true)).toBe('/notes/a%20b/c%23d');
+  });
+
   it('opens the preview at the page shown, and at the notes home where the page has none', () => {
     const there = (path: string) => !path.includes('gone');
     expect(previewRoute(null, there)).toBe('/notes');

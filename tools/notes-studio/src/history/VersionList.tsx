@@ -1,0 +1,63 @@
+import type { PageVersion } from '../api/history';
+import { NOW } from '../api/history';
+import { timeAgo } from '../changes/labels';
+import { fileNameOf, shortVersion } from './versions';
+
+function Tags({ version }: { version: PageVersion }) {
+  return (
+    <span className="studio-history-tags">
+      {version.inChangeRequest && <span className="studio-history-tag" data-tag="cr">In this CR</span>}
+      {version.from !== undefined && <span className="studio-history-tag" data-tag="renamed" title={version.from}>Renamed from {fileNameOf(version.from)}</span>}
+      {version.status === 'A' && <span className="studio-history-tag" data-tag="created">Created</span>}
+    </span>
+  );
+}
+
+// The page's versions, newest first, on a rail: Now when `ids` starts with
+// it, then the commits. `selected` is the one shown.
+export function VersionList({ ids, versions, selected, restored, onSelect }: {
+  ids: readonly string[];
+  versions: readonly PageVersion[];
+  selected: string | null;
+  restored: string | null;
+  onSelect: (version: string) => void;
+}) {
+  const bySha = new Map(versions.map((version) => [version.sha, version]));
+  return (
+    <ol className="studio-history-list">
+      {ids.map((id) => {
+        const version = bySha.get(id);
+        return (
+          <li key={id}>
+            <button
+              type="button"
+              className="studio-history-version"
+              aria-current={id === selected || undefined}
+              data-own={id === NOW || version?.inChangeRequest ? '' : undefined}
+              data-now={id === NOW ? '' : undefined}
+              onClick={() => { onSelect(id); }}
+            >
+              <span className="studio-history-rail" aria-hidden />
+              {version === undefined ? (
+                <>
+                  <span className="studio-history-message">{restored === null ? 'Now' : `Restored to ${shortVersion(restored)}, not committed`}</span>
+                  <span className="studio-history-sub">On disk, committed or not</span>
+                </>
+              ) : (
+                <>
+                  <span className="studio-history-message">{version.message}</span>
+                  <span className="studio-history-sub">
+                    <span className="font-mono">{shortVersion(version.sha)}</span>
+                    <time dateTime={version.date} title={new Date(version.date).toLocaleString()}>{timeAgo(version.date)}</time>
+                    <span className="truncate">{version.author}</span>
+                  </span>
+                  <Tags version={version} />
+                </>
+              )}
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}

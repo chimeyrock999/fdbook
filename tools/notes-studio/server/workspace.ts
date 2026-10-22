@@ -5,6 +5,7 @@ import { createFilesApi } from './files/api.ts';
 import { createFileEvents } from './files/events.ts';
 import { createKeyedLock } from './files/store.ts';
 import { createChangesApi } from './git/api.ts';
+import { createPageHistoryApi } from './git/page-history-api.ts';
 import { pathnameOf, sendJson, type Handler } from './http.ts';
 import { createLintApi } from './lint/api.ts';
 import { createPreviewApi } from './preview/api.ts';
@@ -33,7 +34,7 @@ const refuseWrites: Handler = (request, response) => {
 const defaultPreview = (): PreviewOptions => ({ builds: createBuildReader(ghCheckRun), pullRequests: createBranchPullRequestReader(ghPullRequest), pagesProject: null });
 
 // The handlers of one worktree: file API and events, lint, page tree,
-// assets, changes (git status, commit, history), preview (push, build, publish),
+// assets, changes (git status, commit, history), page history, preview (push, build, publish),
 // and the notes sync socket.
 export function createWorkspace(root: string, hosts: string[], { readOnly = false, preview = defaultPreview() }: { readOnly?: boolean; preview?: PreviewOptions } = {}) {
   // Tree and asset changes both write notes: one at a time. A commit waits
@@ -50,6 +51,7 @@ export function createWorkspace(root: string, hosts: string[], { readOnly = fals
     createTreeApi(root, notesLock),
     createAssetsApi(root, notesLock),
     createChangesApi(root, notesLock),
+    createPageHistoryApi(root, notesLock),
     createPreviewApi(root, preview, { readOnly, lock: notesLock }),
   ];
   return {

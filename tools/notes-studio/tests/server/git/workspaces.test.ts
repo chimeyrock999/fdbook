@@ -69,4 +69,21 @@ describe('changes API per change request', () => {
     expect(await history(`/cr/${two.slug}`)).toEqual({ base: 'origin/main', commits: [] });
     expect(await history('')).toEqual({ base: 'origin/main', commits: [] });
   });
+  it('reads a page history on main and in a change request, and restores only in one', async () => {
+    type Versions = { mtimeMs: number; versions: { sha: string; message: string; inChangeRequest: boolean }[] };
+    const historyOf = async (base: string) => json(await send(`${base}/api/history?path=${encodeURIComponent(PAGE)}`)) as Versions;
+    const onMain = await historyOf('');
+    expect(onMain.versions.map(({ message, inChangeRequest }) => ({ message, inChangeRequest }))).toEqual([{ message: 'notes', inChangeRequest: false }]);
+    const inOne = await historyOf(`/cr/${one.slug}`);
+    expect(inOne.versions.map(({ message, inChangeRequest }) => ({ message, inChangeRequest }))).toEqual([
+      { message: 'docs(notes): update first-look', inChangeRequest: true },
+      { message: 'notes', inChangeRequest: false },
+    ]);
+    const oldest = onMain.versions[0].sha;
+    expect((await send('/api/history/restore', 'POST', { path: PAGE, sha: oldest, mtimeMs: onMain.mtimeMs })).status).toBe(403);
+    const restored = await send(`/cr/${one.slug}/api/history/restore`, 'POST', { path: PAGE, sha: oldest, mtimeMs: inOne.mtimeMs });
+    expect(restored.status).toBe(200);
+    expect(await readFile(join(one.worktree ?? '', PAGE), 'utf8')).toBe('---\ntitle: First look\n---\n\nA first look.\n');
+    expect((await changes(`/cr/${one.slug}`)).files).toEqual([{ path: PAGE, status: 'M' }]);
+  });
 });

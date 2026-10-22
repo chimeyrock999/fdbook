@@ -23,19 +23,22 @@ export function noteFromUrl(search: string): string | null {
 }
 
 // What the main pane shows: a note or an asset, by worktree path, a file's
-// diff against main (renamed `from` an old path), or the list of change
-// requests.
-export type Page = { kind: 'note' | 'asset'; path: string } | { kind: 'diff'; path: string; from?: string } | { kind: 'crs' };
+// diff against main (renamed `from` an old path), a note's history, or the
+// list of change requests.
+export type Page = { kind: 'note' | 'asset' | 'history'; path: string } | { kind: 'diff'; path: string; from?: string } | { kind: 'crs' };
 
 // The page to open from the URL: `?path=` names a note, `?asset=` a file
 // under public/notes, `?diff=` (with `&from=` for a rename) any file the
-// Studio may touch, `?view=crs` the change requests. Paths take the
-// server's own lexical check, so the page opens only what it serves.
+// Studio may touch, `?history=` a note, `?view=crs` the change requests.
+// Paths take the server's own lexical check, so the page opens only what it
+// serves.
 export function pageFromUrl(search: string): Page | null {
   const note = noteFromUrl(search);
   if (note !== null) return { kind: 'note', path: note };
   const params = new URLSearchParams(search);
   if (params.get('view') === 'crs') return { kind: 'crs' };
+  const history = params.get('history');
+  if (history !== null && isNote(history) && classifyPath(history) === 'note') return { kind: 'history', path: history };
   const asset = params.get('asset');
   if (asset !== null && classifyPath(asset) === 'asset') return { kind: 'asset', path: asset };
   const diff = params.get('diff');
@@ -52,7 +55,7 @@ export function pageQuery(page: Page | null, cr: string | null = CURRENT_CR) {
   else if (page?.kind === 'diff') {
     parts.push(`diff=${encodeURIComponent(page.path)}`);
     if (page.from !== undefined) parts.push(`from=${encodeURIComponent(page.from)}`);
-  } else if (page) parts.push(`${page.kind === 'note' ? 'path' : 'asset'}=${encodeURIComponent(page.path)}`);
+  } else if (page) parts.push(`${{ note: 'path', asset: 'asset', history: 'history' }[page.kind]}=${encodeURIComponent(page.path)}`);
   return `?${parts.join('&')}`;
 }
 
