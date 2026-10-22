@@ -67,8 +67,9 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
 - `src/`: the React UI.
   - `api/` holds the clients for the server; `workspace.ts` says which
     worktree the page edits (`?cr=`).
-  - `cr/` is the change request picker, the Edit menu, their dialogs and
-    the list page.
+  - `cr/` is the change request picker, the Edit menu, their dialogs, the
+    list page and the notice on top of the Changes view (merged, behind
+    main).
   - `editor/` is the note editor: Visual and Source modes, save status and
     the conflict dialog.
   - `frontmatter/` reads and writes a note's YAML frontmatter and holds the
@@ -214,12 +215,42 @@ link once it is pushed (`https://cr-<slug>.<project>.pages.dev`, with the
 project from `STUDIO_PAGES_PROJECT`) and the pull request. The card of the
 change request the page shows says Current instead of an Open button. It
 loads again when the window gets the focus back and when files change.
+**Refresh** fetches origin first (main and every `cr/*` branch, checking
+`_main` out again), then reads the pull requests again; when the fetch
+fails, the list says so and shows the refs as last fetched.
 
-**Discard** (on a card) asks first, listing what goes from this machine: the
-worktree, with what was not committed, and the local branch with its
-commits. A branch already on origin, its pull request and its preview stay
-there (#21). Discarding the change request the page shows goes back to main,
-and the dialog says so.
+An open change request (Draft, Previewing, In review) also shows how far
+it is from origin/main as last fetched (#21): up to date, how many commits
+behind, or the files a merge of main would conflict in (`git merge-tree`,
+in memory, so no worktree is touched; only commits count, not what is left
+uncommitted). One that cannot be read (a history unrelated to main) shows
+nothing rather than failing the list. One not updated for 30 days (`STUDIO_STALE_DAYS` sets
+another whole number) is marked Stale, with a hint to discard it; nothing
+is removed on its own. The Changes view of the change request the page
+shows says the same on top: the conflicting files and the command that
+merges main in a terminal (`cd <worktree> && git merge origin/main`, with a
+copy button). The Studio does not merge main itself yet.
+
+**Discard** (on a card) asks first, listing what goes from origin and from
+this machine, as a dry run that fetches origin first. On origin: the open
+pull request is closed (`gh pr close`, with a comment) and the branch is
+deleted (`git push origin --delete`); a branch already gone there, as
+GitHub deletes a merged pull request's, is skipped. Then on this machine:
+the worktree, with what was not committed, and the local branch with its
+commits; commits that were never pushed are counted, since they are lost.
+Origin goes first: when the push or gh fails, nothing is removed here and
+the dialog shows why. The discard carries what the dry run said about
+origin (pushed, the pull request to close), and when origin changed since
+(pushed or opened from elsewhere), nothing is removed: the dialog never
+does more than it listed. The dry run reads the pull request again rather
+than the list's cached one. While gh cannot read the pull requests, a
+pushed change request cannot be discarded (its pull request would close
+without notice); the dialog says why. A refused discard checks again, so
+the dialog shows what a new try would do. A merged or closed change request offers **Clean
+up** instead, on its card and on top of its Changes view; it removes the
+same things. Cloudflare keeps the preview deployments it built. Discarding
+the change request the page shows goes back to main, and the dialog says
+so.
 
 ## Editor
 

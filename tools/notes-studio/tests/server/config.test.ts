@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_STUDIO_HOST, DEFAULT_STUDIO_PORT, listenFailure, parseStudioHost, parseStudioPort } from '../../server/config';
+import { DEFAULT_STALE_DAYS, DEFAULT_STUDIO_HOST, DEFAULT_STUDIO_PORT, listenFailure, parseStaleDays, parseStudioHost, parseStudioPort } from '../../server/config';
 
 describe('parseStudioPort', () => {
   it('uses the default port when unset or empty', () => {
@@ -64,5 +64,21 @@ describe('listenFailure', () => {
 
   it('passes other errors through', () => {
     expect(listenFailure(failure('EACCES'), '127.0.0.1')).toBe('listen EACCES');
+  });
+});
+
+describe('parseStaleDays', () => {
+  it('uses 30 days when unset or empty', () => {
+    expect(DEFAULT_STALE_DAYS).toBe(30);
+    expect(parseStaleDays(undefined)).toBe(30);
+    expect(parseStaleDays(' ')).toBe(30);
+  });
+
+  it('accepts a whole number of days', () => {
+    expect(parseStaleDays(' 14 ')).toBe(14);
+  });
+
+  it.each(['0', '-3', '1.5', 'abc', '1e2'])('rejects %s', (value) => {
+    expect(() => parseStaleDays(value)).toThrow(/STUDIO_STALE_DAYS/);
   });
 });
