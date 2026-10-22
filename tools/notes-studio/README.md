@@ -201,11 +201,15 @@ read (gh logged out, offline), requests answer `503` rather than guess. The
 page and Vite's modules need no role and never wait for gh. That also
 means anyone who reaches the address can read the Studio's own code and
 what Vite serves from the repository (`lib/`, `components/`, `styles/`)
-before signing in; the notes and assets stay behind the gate. An open notes
-sync checks on every read and write that its session still exists and its
-role allows it, and the file events stream ends at its next event once the
-session is gone, so signing out or losing access stops open connections
-too.
+before signing in; the notes and assets stay behind the gate. The notes
+sync checks on every document it opens and every write that its session
+still exists and its role allows it. Its socket is closed when the session
+signs out, and within 15 seconds once the session expired or the role read
+from GitHub fell below reader (that is, once the five-minute role cache read
+it again; while gh cannot answer, the last role read stands). The page
+then asks who is signed in and shows the sign-in page again. The file
+events stream ends at its next event once the session is gone. So signing
+out or losing access stops open connections too.
 
 Set up a GitHub OAuth App (Settings → Developer settings → OAuth Apps)
 and tick **Enable Device Flow**. Then:

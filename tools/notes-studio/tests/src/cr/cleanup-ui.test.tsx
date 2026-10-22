@@ -164,6 +164,20 @@ describe('CrNotice', () => {
     expect(await within(notice).findByRole('button', { name: 'Copied' })).toBeTruthy();
   });
 
+  it('selects the command when the browser blocks copying (#116)', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    Object.defineProperty(document, 'execCommand', { value: () => false, configurable: true });
+    try {
+      render(<CrNotice cr={cr('clash', 'draft', { drift: { behind: 2, conflicts: [] } })} onCleanUp={vi.fn()} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Copy command' }));
+      expect(await screen.findByRole('button', { name: 'Copying is blocked: the command is selected, copy it with Ctrl+C' })).toBeTruthy();
+      expect(window.getSelection()?.toString()).toBe('cd /home/me/.chimey-studio/worktrees/clash && git merge origin/main');
+    } finally {
+      Reflect.deleteProperty(document, 'execCommand');
+      Reflect.deleteProperty(navigator, 'clipboard');
+    }
+  });
+
   it('says a change request behind main merges cleanly', () => {
     render(<CrNotice cr={cr('behind', 'draft', { drift: { behind: 1, conflicts: [] } })} onCleanUp={vi.fn()} />);
     expect(screen.getByRole('status').textContent).toContain('Main is 1 commit ahead of this change request. It merges without conflicts.');
