@@ -41,13 +41,15 @@ import { CrPicker, EditMenu } from './cr/CrMenus';
 import { useCrs } from './cr/useCrs';
 import { DiffPage } from './diff/DiffPage';
 import { createHistoryClient } from './api/history';
+import { DeletedPagesPage } from './history/DeletedPagesPage';
 import { HistoryPage } from './history/HistoryPage';
+import { useDeletedPages } from './history/useDeletedPages';
 import { NoteEditor, type SourcePlace } from './editor/NoteEditor';
 import { ASSETS_PREFIX } from './media/asset-names';
 import { useAssets } from './media/useAssets';
 import { NoteGate } from './notes/NoteGate';
 import { OpenPreview } from './notes/OpenPreview';
-import { movedPage, NOTES_PREFIX, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote, type Page } from './notes/notes';
+import { isList, movedPage, NOTES_PREFIX, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote, type Page } from './notes/notes';
 import { Sidebar, type IssueCount } from './sidebar/Sidebar';
 import { useSidebar, type SidebarView } from './sidebar/useSidebar';
 import { rightsOf, useSession } from './session/session';
@@ -84,8 +86,11 @@ export function App() {
   const diff = page?.kind === 'diff' ? page : null;
   const history = page?.kind === 'history' ? page.path : null;
   // The note the page tree marks: the one open, or the one whose history is.
-  const treeNote = active ?? history;
+  const treeNote = active ?? (history?.startsWith(NOTES_PREFIX) ? history : null);
   const historyClient = useMemo(() => createHistoryClient(), []);
+  // A page is deleted on HEAD by a commit: the list follows the commits.
+  const deleted = useDeletedPages(historyClient, git.history);
+  const deletedPage = history === null ? undefined : deleted.pages?.find((each) => each.path === history);
   // The open note's autosave state, by path: a rename waits until it is saved.
   const [saved, setSaved] = useState<{ path: string; status: DocumentStatus } | null>(null);
   const unsaved = unsavedNote(active, saved);
@@ -248,7 +253,12 @@ export function App() {
     setPage(next);
   };
 
-  const pagePath = page === null || page.kind === 'crs' ? null : page.path;
+  const pagePath = page === null || isList(page) ? null : page.path;
+  // A history restore wrote files: what lists them loads again.
+  const restored = () => {
+    void git.reload();
+    deleted.reload();
+  };
   // A file is there when the page tree lists the note or the asset list the asset.
   const route = previewRoute(page, (path) => (path.startsWith(NOTES_PREFIX) ? titles.has(path) : assets.includes(path)));
   const committed = async () => {
@@ -326,6 +336,7 @@ export function App() {
             />
           }
           changeRequests={crMode ? { shown: page?.kind === 'crs', onOpen: openList } : null}
+          deletedPages={{ shown: page?.kind === 'deleted' || deletedPage !== undefined, count: deleted.pages?.length ?? null, onOpen: () => { go({ kind: 'deleted' }); } }}
           assets={
             <AssetsView
               client={assetsClient}
@@ -375,7 +386,16 @@ export function App() {
             />
           </NoteGate>
         ) : asset ? (
-          <AssetPage client={assetsClient} list={assetList} path={asset} unsaved={unsaved !== null} readOnly={readOnly} onOpenUsage={openUsage} onChanged={assetChangedBy} />
+          <AssetPage
+            client={assetsClient}
+            list={assetList}
+            path={asset}
+            unsaved={unsaved !== null}
+            readOnly={readOnly}
+            onOpenUsage={openUsage}
+            onChanged={assetChangedBy}
+            onShowHistory={() => { go({ kind: 'history', path: asset }); }}
+          />
         ) : diff ? (
           <DiffPage
             client={changesClient}
@@ -389,13 +409,28 @@ export function App() {
           <HistoryPage
             client={historyClient}
             path={history}
-            title={titles.get(history) ?? history.slice(history.lastIndexOf('/') + 1)}
+            title={titles.get(history) ?? deletedPage?.title ?? history.slice(history.lastIndexOf('/') + 1)}
             readOnly={onMain}
             reader={!rights.write}
             revision={git.changes}
-            onOpen={() => { open(history); }}
-            onRestored={() => { void git.reload(); }}
+            onOpen={() => { if (history.startsWith(NOTES_PREFIX)) open(history); else openAsset(history); }}
+            onRestored={(path) => {
+              restored();
+              // An asset restored under another extension: its history follows it.
+              if (path === history) return;
+              const next: Page = { kind: 'history', path };
+              window.history.replaceState(null, '', pageQuery(next));
+              setPage(next);
+            }}
+            onBroughtBack={(path) => {
+              restored();
+              void reload();
+              open(path);
+            }}
+            onDeletedList={() => { go({ kind: 'deleted' }); }}
           />
+        ) : page?.kind === 'deleted' ? (
+          <DeletedPagesPage pages={deleted.pages} error={deleted.error} readOnly={onMain} onOpen={(path) => { go({ kind: 'history', path }); }} />
         ) : page?.kind === 'crs' && crMode ? (
           <CrListPage
             list={crs.list}

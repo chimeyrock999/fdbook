@@ -57,8 +57,9 @@
   }
 
   .studio-cr-menu {
-    max-width: 300px;
-    min-width: 240px;
+    /* Within the viewport on a phone: PopupMenu keeps 8px on each side. */
+    max-width: min(300px, calc(100vw - 16px));
+    min-width: min(240px, calc(100vw - 16px));
   }
   .studio-cr-menu button .studio-cr-menu-name {
     flex: 1;

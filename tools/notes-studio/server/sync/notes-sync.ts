@@ -1,5 +1,7 @@
 import { existsSync } from 'node:fs';
+import type { IncomingMessage } from 'node:http';
 import { join } from 'node:path';
+import type { Duplex } from 'node:stream';
 import { createSyncServer } from '@fumadocs-editor/core/node';
 import { atLeast } from '../auth/shared.ts';
 import { viewerOf } from '../security/access.ts';
@@ -13,6 +15,9 @@ import { NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 // stay out. Its media endpoints are not mounted: assets go through the file
 // API into public/. A `readOnly` sync (main) opens notes but writes none,
 // and neither does a connection from someone signed in as a reader.
+// The sync server asks `read` only when a document opens, then relays every
+// update of it: a socket is closed once its viewer may no longer read
+// (Viewer.watch), and its reconnect meets the sign-in gate (#115).
 export function createNotesSync(root: string, hosts: string[], { readOnly = false } = {}) {
   const note = (path: string) => {
     const resolved = resolveWorktreePath(root, `${NOTES_DIR}/${path}`);
@@ -26,13 +31,13 @@ export function createNotesSync(root: string, hosts: string[], { readOnly = fals
     const absolute = note(path);
     return absolute !== null && existsSync(absolute);
   };
-  return createSyncServer({
+  const server = createSyncServer({
     root: join(root, NOTES_DIR),
     // The upgrade already passed the guard; checking again here keeps the
     // sync server safe even if it is mounted somewhere else later.
     authenticate: ({ request }) => {
       if (rejectForeignRequest(request, hosts)) return null;
-      // Asked on every read and write: the socket stays open after a sign-out or a role taken away.
+      // Asked on every open and write, so a writer turned reader writes no more.
       const viewer = viewerOf(request);
       return {
         read: (path) => atLeast(viewer.current(), 'reader') && note(path) !== null,
@@ -40,4 +45,18 @@ export function createNotesSync(root: string, hosts: string[], { readOnly = fals
       };
     },
   });
+  return {
+    handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer) {
+      // The gate and the change request lookup ran before: the browser may
+      // have gone, or the session ended since.
+      const viewer = viewerOf(request);
+      if (socket.destroyed || !atLeast(viewer.current(), 'reader')) {
+        socket.destroy();
+        return;
+      }
+      socket.once('close', viewer.watch(() => { socket.destroy(); }));
+      server.handleUpgrade(request, socket, head);
+    },
+    close: () => server.close(),
+  };
 }

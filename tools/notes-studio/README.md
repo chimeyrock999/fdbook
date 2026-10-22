@@ -92,7 +92,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     action, the change marks on the page tree and the reminder on leaving a
     change request.
   - `diff/` is a file's diff against main in the main pane (see Diff).
-  - `history/` is a note's history in the main pane (see History).
+  - `history/` is a note's or an asset's history in the main pane, and
+    the deleted pages (see History).
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
   - `agents/` is the header's agent control, the agent panel, a run's
@@ -205,11 +206,15 @@ read (gh logged out, offline), requests answer `503` rather than guess. The
 page and Vite's modules need no role and never wait for gh. That also
 means anyone who reaches the address can read the Studio's own code and
 what Vite serves from the repository (`lib/`, `components/`, `styles/`)
-before signing in; the notes and assets stay behind the gate. An open notes
-sync checks on every read and write that its session still exists and its
-role allows it, and the file events stream ends at its next event once the
-session is gone, so signing out or losing access stops open connections
-too.
+before signing in; the notes and assets stay behind the gate. The notes
+sync checks on every document it opens and every write that its session
+still exists and its role allows it. Its socket is closed when the session
+signs out, and within 15 seconds once the session expired or the role read
+from GitHub fell below reader (that is, once the five-minute role cache read
+it again; while gh cannot answer, the last role read stands). The page
+then asks who is signed in and shows the sign-in page again. The file
+events stream ends at its next event once the session is gone. So signing
+out or losing access stops open connections too.
 
 Set up a GitHub OAuth App (Settings → Developer settings → OAuth Apps)
 and tick **Enable Device Flow**. Then:
@@ -423,10 +428,10 @@ view (the page tree), the **Assets** view (see Assets), the **Issues**
 view (the open note's lint issues, with their count on the icon) and the
 **Changes** view (see Changes, with the number of changed files); picking
 the open view again hides the sidebar, and so does the button at the foot of
-the bar. A rail marks the open view. The **Change requests** button (in
-change request mode) sits at the foot, above that button: it opens a page in
-the main pane rather than a view, so it is filled, not railed, while the list
-is open. Drag the sidebar's right edge to resize it (220–480px), or focus
+the bar. A rail marks the open view. The **Deleted pages** button (with
+their count) and, in change request mode, the **Change requests** button sit
+at the foot, above that button: each opens a page in the main pane rather
+than a view, so it is filled, not railed, while its page is open. Drag the sidebar's right edge to resize it (220–480px), or focus
 the edge and use the arrow keys, Shift for bigger steps, Home and End for
 the limits; double-click resets it to 284px. It never takes more than the
 window leaves the editor (420px); resizing starts from the width it shows.
@@ -442,7 +447,10 @@ Visual:
 - The `/` menu inserts a Keyword or Tag (`<Keyword id="" displayName="">`),
   a Graph heading (`### Title :graph-meta{…}`) and the site's directive
   blocks: accordions, tabs, steps and `::youtube`, next to the JSX
-  components (`<YouTube>` among them).
+  components (`<YouTube>` among them). **Mermaid diagram** (`/mermaid`;
+  `/diagram` lists it next to SVG diagram) inserts a ` ```mermaid ` code
+  block with a starter flowchart, drawn under the code as you type, with
+  the caret in the code.
 - Select text and the graph bar under it wraps it as a **Keyword**
   (`Mod-Alt-K`) or **Tag** (`Mod-Alt-T`). With the caret in a heading,
   **Graph node** (`Mod-Alt-G`) adds `:graph-meta{…}` from its title. Some
@@ -924,15 +932,54 @@ server writes under the notes lock and only over the page as the history
 read it (its mtime): if the page changed since, it answers 409 and the
 history loads again. Main refuses it (`403`), and so does a reader's
 session (it needs a writer, see Sign-in); the button is off for both,
-on Now and for a page gone from the worktree. An open editor takes the
-restored text as it takes any edit made on disk.
+and on Now. An open editor takes the restored text as it takes any edit
+made on disk.
 
-The API: `GET /api/history?path=` (`{ path, mtimeMs, versions }`),
-`GET /api/history/compare?path=&to=[&from=]` (each a full sha or `now`;
+**Assets** have a history too (#114): **History** on the asset page opens
+it, on main as well. Preview shows the two versions side by side, an image
+with its size and pixel box (the diff page's preview), any other file by
+its size; an SVG has Source too. Restore goes the way Replace writes an
+asset (see Assets): off for an asset a diagram generates (the history
+says so, and the server refuses it too), and a
+version under another extension (a `.png` before a `.webp`) gives the
+asset that extension, every note's link following; the history then follows
+the asset to its new name. Git follows an asset's rename only while its
+content stays alike, so a rename made together with new content starts a
+new history.
+
+**Deleted pages**, at the foot of the activity bar (see Sidebar), lists the
+pages deleted on HEAD, grouped by the commit that deleted them, newest
+first: `git log -M --diff-filter=D` under `content/notes`, so a rename is
+no delete, and a page the worktree has again is left out. A page deleted
+but not committed yet is in Changes instead. Opening one shows its history
+with the delete on top of the versions (**Deleted**). **Restore page…**
+first lists every file it writes (a dry run), then brings the picked
+version back, uncommitted, and opens it: the page; each folder deleted
+with it, as the commit before the delete held it (its `index.mdx`, and its
+`meta.yaml` listing only what comes back, `index` included when it was
+listed: a listed index is a child of its folder, not the folder's page);
+and the topmost of these listed again in the `meta.yaml` above, after the
+entry it followed when it was deleted (first when none of those is left),
+unless that list shows every page by itself (`...`) or did not list it
+before the delete (it stays out of the sidebar, as it was). A path the worktree has is refused (`409`): its own
+history restores it.
+
+`meta.yaml` has no history: a folder's order, title and visibility are
+redone from the page tree, and restoring a whole older file would drop the
+pages made since and bring back entries for pages gone.
+
+The API: `GET /api/history?path=` (`{ path, mtimeMs, deleted, generated,
+versions }`, `deleted` naming the commit that deleted a file the worktree
+no longer has, `generated` whether a diagram generates the asset), `GET /api/history/compare?path=&to=[&from=]` (each a full sha or `now`;
 without `from`, nothing is before), `POST /api/history/restore` with JSON
-`{ path, sha, mtimeMs }`. A sha must be one of the page's versions, and the
-path read at it comes from git. Only notes have a history here: a
-`meta.yaml`, an asset or a deleted page do not. The URL is `?history=<path>`.
+`{ path, sha, mtimeMs }` (answers `{ path, mtimeMs }`, `path` being where
+the file is now), `GET /api/history/deleted` (`{ pages: [{ path, title, sha,
+date, author, message, folderGone }] }`, the latest 200) and `POST
+/api/history/restore-deleted` with JSON `{ path, sha, dryRun? }` (answers
+`{ path, open, changes }`). A sha must be one of the file's versions, and
+the path read at it comes from git; an image of a version is served by
+`GET /api/changes/blob?path=&base=<sha>`. The URLs are `?history=<path>`
+and `?view=deleted`.
 
 ## Lint
 
@@ -1008,8 +1055,9 @@ export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] })
   covers.
 - Two plugins may not share an `id` or define the same component.
 - `tests/src/plugins/round-trip.test.ts` parses and writes back every note
-  with all plugins loaded and fails if a byte changes. Put sample MDX for a
-  new component in `src/plugins/<name>/fixtures/*.mdx` to add it to that test.
+  with all plugins loaded, one test per note, and fails if a byte changes.
+  Put sample MDX for a new component in `src/plugins/<name>/fixtures/*.mdx`
+  to add it to that test.
 
 Plugins today:
 
@@ -1036,11 +1084,13 @@ Plugins today:
   site shows (character references and label escapes decoded) and are
   written so they read back the same. The MDX button shows the block's
   source.
-- `site-inserts`: the `/` menu items for graph markers and directive
-  blocks. The menu lists components, so each is a spec named
-  `studio-insert-…` whose `insert` returns the site's syntax instead of a
-  node of its own; no note has such a tag, and
-  `tests/src/plugins/site-inserts.test.ts` checks that none parses.
+- `site-inserts`: the `/` menu items for graph markers, directive blocks
+  and a Mermaid diagram. The menu lists components, so each is a spec named
+  `studio-insert-…` whose `insert` returns the site's syntax (or, for
+  Mermaid, the editor's code block) instead of a node of its own; no note
+  has such a tag, and `tests/src/plugins/site-inserts.test.ts` checks that
+  none parses. The menu matches the query against labels only, hence the
+  label "Mermaid diagram".
 - `youtube`: `<YouTube>` as the same card as `::youtube`, its title edited in
   place and its url in the props panel.
 - `fumadocs-ui`: Cards, Steps, Tabs and Accordions.
@@ -1059,3 +1109,10 @@ npm --prefix tools/notes-studio test
 npm --prefix tools/notes-studio run lint   # strict typescript-eslint + React hooks
 npm --prefix tools/notes-studio run types:check
 ```
+
+Tests that render the editor run in jsdom (`// @vitest-environment jsdom`).
+`tests/setup/jsdom.ts` runs before every test file and gives the window the
+`matchMedia` jsdom lacks, which the live editor asks once it replaces the
+first paint (`tests/jsdom-setup.test.ts` checks it); `stubLayout` in
+`tests/support/visual-editor.tsx` adds the layout stubs the editor's menus
+need.

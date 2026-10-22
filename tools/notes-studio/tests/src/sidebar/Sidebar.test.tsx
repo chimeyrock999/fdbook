@@ -5,18 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Sidebar, type IssueCount } from '../../../src/sidebar/Sidebar';
 import { useSidebar } from '../../../src/sidebar/useSidebar';
 
-function Harness({ drawer = false, issues = null, hasNote = false, onCloseDrawer = () => undefined, changeCount = 0, changeRequests = null }: {
+function Harness({ drawer = false, issues = null, hasNote = false, onCloseDrawer = () => undefined, changeCount = 0, changeRequests = null, deletedPages = null }: {
   drawer?: boolean;
   issues?: IssueCount;
   hasNote?: boolean;
   onCloseDrawer?: () => void;
   changeCount?: number;
   changeRequests?: { shown: boolean; onOpen: () => void } | null;
+  deletedPages?: { shown: boolean; count: number | null; onOpen: () => void } | null;
 }) {
   const state = useSidebar();
   return (
     <Sidebar state={state} drawer={drawer} onCloseDrawer={onCloseDrawer} issues={issues} hasNote={hasNote} notes={<p>tree</p>} assets={<p>asset list</p>}
-      issuesRef={() => undefined} changes={<p>change list</p>} changeCount={changeCount} changeRequests={changeRequests} />
+      issuesRef={() => undefined} changes={<p>change list</p>} changeCount={changeCount} changeRequests={changeRequests} deletedPages={deletedPages} />
   );
 }
 
@@ -225,6 +226,19 @@ describe('Sidebar', () => {
     expect(crs.nextElementSibling).toBe(screen.getByRole('button', { name: 'Hide the sidebar' }));
     const pressed = screen.getAllByRole('button', { pressed: true }).map((button) => button.getAttribute('aria-label'));
     expect(pressed).toEqual(['Assets']);
+  });
+
+  it('opens the deleted pages from a page button above the change requests, with their count', async () => {
+    const onOpen = vi.fn();
+    const { rerender } = render(<Harness changeRequests={{ shown: false, onOpen: () => undefined }} deletedPages={{ shown: false, count: null, onOpen }} />);
+    const labels = () => [...screen.getByRole('navigation', { name: 'Sidebar views' }).querySelectorAll('button')].map((button) => button.getAttribute('aria-label'));
+    expect(labels()).toEqual(['Notes', 'Assets', 'Issues', 'Changes', 'Deleted pages', 'Change requests', 'Hide the sidebar']);
+    rerender(<Harness changeRequests={{ shown: false, onOpen: () => undefined }} deletedPages={{ shown: true, count: 6, onOpen }} />);
+    const deleted = screen.getByRole('button', { name: 'Deleted pages (6)' });
+    expect(deleted.querySelector('.studio-activity-count')?.textContent).toBe('6');
+    expect(deleted.getAttribute('aria-current')).toBe('page');
+    await userEvent.click(deleted);
+    expect(onOpen).toHaveBeenCalledOnce();
   });
 
   it('leaves the change requests button unmarked while the list is not open', () => {

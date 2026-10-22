@@ -1,6 +1,7 @@
 import { Check, Copy, ExternalLink, KeyRound, LogIn } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { DeviceStart, SessionClient, SessionState } from '../api/session';
+import { useCopy } from '../clipboard';
 
 type Step = { kind: 'choose' } | { kind: 'device'; code: DeviceStart } | { kind: 'starting' };
 
@@ -11,7 +12,8 @@ function DeviceCode({ code, client, onDone, onCancel, onError }: {
   onCancel: () => void;
   onError: (message: string) => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  // `blocked`: the browser refused every way to copy; the code is selected instead.
+  const { copied, ref: codeRef, copy } = useCopy<HTMLOutputElement>(code.userCode);
   const [trouble, setTrouble] = useState<string | null>(null);
   const callbacks = useRef({ onDone, onError });
   useEffect(() => { callbacks.current = { onDone, onError }; });
@@ -40,22 +42,20 @@ function DeviceCode({ code, client, onDone, onCancel, onError }: {
       clearTimeout(timer);
     };
   }, [client, code]);
-  const copy = () => {
-    navigator.clipboard.writeText(code.userCode).then(() => { setCopied(true); }, () => { setCopied(false); });
-  };
   return (
     <>
       <h1>Enter the code on GitHub</h1>
       <p>Open {code.verificationUri.replace(/^https:\/\//, '')} and enter this code. It expires in {Math.round(code.expiresIn / 60)} minutes.</p>
-      <output className="studio-signin-code" aria-label="Sign-in code">{code.userCode}</output>
+      <output ref={codeRef} className="studio-signin-code" aria-label="Sign-in code">{code.userCode}</output>
       <div className="studio-signin-row">
         <button type="button" className="studio-button gap-1.5" onClick={copy}>
-          {copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />} {copied ? 'Copied' : 'Copy code'}
+          {copied === true ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />} {copied === true ? 'Copied' : 'Copy code'}
         </button>
         <a className="studio-button studio-button-primary gap-1.5" href={code.verificationUri} target="_blank" rel="noreferrer">
           <ExternalLink size={14} aria-hidden /> Open GitHub
         </a>
       </div>
+      {copied === 'blocked' && <p role="status">This browser blocked copying. The code is selected: copy it with Ctrl+C (⌘C on a Mac), or type it on GitHub.</p>}
       <p className="studio-signin-wait" role="status"><span aria-hidden /> Waiting for GitHub…</p>
       {trouble !== null && <p className="studio-signin-error" role="alert">{trouble} Trying again…</p>}
       <button type="button" className="studio-button self-start" onClick={onCancel}>Cancel</button>

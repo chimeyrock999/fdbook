@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeRequest, CrList } from '../../../src/api/crs';
 import { createHistoryClient } from '../../../src/api/history';
-import { onSignedOut, setCsrf, studioFetch, type SessionState } from '../../../src/api/session';
+import { confirmSignedIn, onSignedOut, setCsrf, studioFetch, type SessionState } from '../../../src/api/session';
 import { CrListPage } from '../../../src/cr/CrListPage';
 import { CrPicker } from '../../../src/cr/CrMenus';
 import { CrNotice } from '../../../src/cr/CrNotice';
@@ -99,6 +99,43 @@ describe('studioFetch', () => {
   });
 });
 
+// A closed sync socket cannot show the 401 its reconnect gets (#115).
+describe('confirmSignedIn', () => {
+  const after = async (state: SessionState | Error) => {
+    if (state instanceof Error) vi.stubGlobal('fetch', () => Promise.reject(state));
+    else stubFetch({ '/api/session': () => ({ body: state }) });
+    const listener = vi.fn();
+    const stop = onSignedOut(listener);
+    await confirmSignedIn();
+    stop();
+    return listener;
+  };
+
+  it('tells the page when nobody is signed in any more', async () => {
+    expect(await after(signedOut())).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells the page when the access was taken away', async () => {
+    expect(await after(signedIn('none'))).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks once for editors going offline together', async () => {
+    const calls = stubFetch({ '/api/session': () => ({ body: signedOut() }) });
+    const listener = vi.fn();
+    const stop = onSignedOut(listener);
+    await Promise.all([confirmSignedIn(), confirmSignedIn(), confirmSignedIn()]);
+    stop();
+    expect(calls).toHaveLength(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays quiet while signed in, with sign-in off, or when the server is down', async () => {
+    expect(await after(signedIn('writer'))).not.toHaveBeenCalled();
+    expect(await after({ ...signedOut(), auth: 'off' })).not.toHaveBeenCalled();
+    expect(await after(new TypeError('Failed to fetch'))).not.toHaveBeenCalled();
+  });
+});
+
 describe('the session gate', () => {
   it('shows the Studio straight away when sign-in is off', async () => {
     stubFetch({ '/api/session': () => ({ body: { auth: 'off', flows: [], repo: null, user: null, role: 'admin', csrf: null } }) });
@@ -140,6 +177,48 @@ describe('the session gate', () => {
     expect(JSON.parse(calls.find((call) => call.path === '/api/session/device/poll')?.init?.body as string)).toEqual({ flow: 'f1' });
     await studioFetch('/api/x', { method: 'POST' });
     expect(new Headers(calls.at(-1)?.init?.headers).get('x-studio-csrf')).toBe('token-1');
+  });
+
+  it('selects the code and says how to copy it when the browser blocks copying (#116)', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    Object.defineProperty(document, 'execCommand', { value: () => false, configurable: true });
+    stubFetch({
+      '/api/session': () => ({ body: signedOut(['device']) }),
+      '/api/session/device': () => ({ body: { flow: 'f1', userCode: 'WDJB-MJHT', verificationUri: 'https://github.com/login/device', expiresIn: 900, interval: 0 } }),
+      '/api/session/device/poll': () => ({ body: { state: 'pending', interval: 60 } }),
+    });
+    try {
+      render(<SessionGate><Inside /></SessionGate>);
+      await userEvent.click(await screen.findByRole('button', { name: 'Sign in with a code' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Copy code' }));
+      expect((await screen.findByText(/This browser blocked copying/)).textContent).toBe('This browser blocked copying. The code is selected: copy it with Ctrl+C (⌘C on a Mac), or type it on GitHub.');
+      expect(window.getSelection()?.toString()).toBe('WDJB-MJHT');
+    } finally {
+      Reflect.deleteProperty(document, 'execCommand');
+      Reflect.deleteProperty(navigator, 'clipboard');
+    }
+  });
+
+  it('copies the code through the fallback over plain http (#116)', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    const execCommand = vi.fn(() => true);
+    Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+    stubFetch({
+      '/api/session': () => ({ body: signedOut(['device']) }),
+      '/api/session/device': () => ({ body: { flow: 'f1', userCode: 'WDJB-MJHT', verificationUri: 'https://github.com/login/device', expiresIn: 900, interval: 0 } }),
+      '/api/session/device/poll': () => ({ body: { state: 'pending', interval: 60 } }),
+    });
+    try {
+      render(<SessionGate><Inside /></SessionGate>);
+      await userEvent.click(await screen.findByRole('button', { name: 'Sign in with a code' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Copy code' }));
+      expect(await screen.findByRole('button', { name: 'Copied' })).toBeTruthy();
+      expect(execCommand).toHaveBeenCalledWith('copy');
+      expect(screen.queryByText(/This browser blocked copying/)).toBeNull();
+    } finally {
+      Reflect.deleteProperty(document, 'execCommand');
+      Reflect.deleteProperty(navigator, 'clipboard');
+    }
   });
 
   it('says why a sign-in failed and lets the person start again', async () => {

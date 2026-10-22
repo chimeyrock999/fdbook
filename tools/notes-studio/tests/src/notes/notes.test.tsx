@@ -59,15 +59,21 @@ describe('note helpers', () => {
     expect(pageQuery({ kind: 'diff', path: 'content/notes/a.mdx', from: 'content/notes/b.mdx' }, 'sinks')).toBe('?cr=sinks&diff=content%2Fnotes%2Fa.mdx&from=content%2Fnotes%2Fb.mdx');
   });
 
-  it('reads a page history to open: ?history= for a note only', () => {
+  it('reads a page history to open: ?history= for a note or an asset', () => {
     expect(pageFromUrl('?history=content%2Fnotes%2Fa%2Fb.mdx')).toEqual({ kind: 'history', path: 'content/notes/a/b.mdx' });
     expect(pageFromUrl('?history=content/notes/a/meta.yaml')).toBeNull();
-    expect(pageFromUrl('?history=public/notes/a.png')).toBeNull();
+    expect(pageFromUrl('?history=public/notes/a.png')).toEqual({ kind: 'history', path: 'public/notes/a.png' });
+    expect(pageFromUrl('?history=public/notes/a.exe')).toBeNull();
     expect(pageFromUrl('?history=content/notes/../package.mdx')).toBeNull();
     const page = { kind: 'history', path: 'content/notes/a b/c#d.mdx' } as const;
     expect(pageFromUrl(pageQuery(page))).toEqual(page);
     expect(pageQuery(page, 'sinks')).toBe('?cr=sinks&history=content%2Fnotes%2Fa%20b%2Fc%23d.mdx');
     expect(previewRoute(page, () => true)).toBe('/notes/a%20b/c%23d');
+  });
+
+  it('opens the deleted pages from ?view=deleted', () => {
+    expect(pageFromUrl('?view=deleted')).toEqual({ kind: 'deleted' });
+    expect(pageQuery({ kind: 'deleted' }, 'sinks')).toBe('?cr=sinks&view=deleted');
   });
 
   it('follows a rename to the open note or the note whose history is shown', () => {
@@ -82,6 +88,7 @@ describe('note helpers', () => {
     const there = (path: string) => !path.includes('gone');
     expect(previewRoute(null, there)).toBe('/notes');
     expect(previewRoute({ kind: 'crs' }, there)).toBe('/notes');
+    expect(previewRoute({ kind: 'deleted' }, there)).toBe('/notes');
     expect(previewRoute({ kind: 'note', path: 'content/notes/database/index.mdx' }, there)).toBe('/notes/database');
     expect(previewRoute({ kind: 'asset', path: 'public/notes/a b/c.png' }, there)).toBe('/notes/a%20b/c.png');
     expect(previewRoute({ kind: 'diff', path: 'content/notes/streaming/sinks.mdx' }, there)).toBe('/notes/streaming/sinks');

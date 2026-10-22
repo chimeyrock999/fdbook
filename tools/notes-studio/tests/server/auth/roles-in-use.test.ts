@@ -1,49 +1,14 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createSyncClient, SYNC_ENDPOINT, wsTransport, type DocumentEditor } from '@fumadocs-editor/core/sync';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { git } from '../../../server/cr/git';
 import type { ChangeRequest, Discard } from '../../../server/cr/manager';
 import { fakeAuth, sender, signInWith, startAuthStudio, type AuthStudio, type FakeGitHub, type Send } from '../../support/auth';
 import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '../../support/git-repo';
 import { json } from '../../support/http';
+import { syncWith, TextEditor } from '../../support/sync';
 
 const NOTE = 'content/notes/database/index.mdx';
-
-class TextEditor implements DocumentEditor {
-  text = '';
-  getMarkdown() {
-    return this.text;
-  }
-  applyExternalMarkdown(text: string) {
-    this.text = text;
-    return Promise.resolve([]);
-  }
-  setMarkdown(text: string) {
-    this.text = text;
-    return Promise.resolve();
-  }
-  markSaved() {
-    // keeps no base
-  }
-}
-
-// Opens the notes sync as the browser would, with the session cookie.
-function syncWith(studio: AuthStudio, cookie: string) {
-  const original = globalThis.WebSocket;
-  class WithCookie extends original {
-    constructor(url: string | URL) {
-      // undici's WebSocket takes headers in its init; browsers send the cookie themselves.
-      super(url, { headers: { Cookie: cookie, Origin: studio.origin } } as unknown as string[]);
-    }
-  }
-  globalThis.WebSocket = WithCookie;
-  try {
-    return createSyncClient({ transport: wsTransport(`ws://127.0.0.1:${studio.port}${SYNC_ENDPOINT}`) });
-  } finally {
-    queueMicrotask(() => { globalThis.WebSocket = original; });
-  }
-}
 
 describe('what each role may do', () => {
   let studio: AuthStudio;
@@ -59,8 +24,8 @@ describe('what each role may do', () => {
   });
 
   it('opens notes read only for a reader, writable for a writer', async () => {
-    const reader = syncWith(studio, (await studio.signIn('reader')).cookie);
-    const writer = syncWith(studio, (await studio.signIn('writer')).cookie);
+    const reader = syncWith(studio.origin, (await studio.signIn('reader')).cookie);
+    const writer = syncWith(studio.origin, (await studio.signIn('writer')).cookie);
     try {
       expect((await reader.open('database/index.mdx', { editor: new TextEditor() }).opened).writable).toBe(false);
       expect((await writer.open('database/index.mdx', { editor: new TextEditor() }).opened).writable).toBe(true);
@@ -72,7 +37,7 @@ describe('what each role may do', () => {
 
   it('stops writing through an open socket once its session is signed out', async () => {
     const { cookie, csrf } = await studio.signIn('writer');
-    const sync = syncWith(studio, cookie);
+    const sync = syncWith(studio.origin, cookie);
     try {
       const editor = new TextEditor();
       const doc = sync.open('streaming/index.mdx', { editor });
@@ -81,11 +46,12 @@ describe('what each role may do', () => {
       expect((await studio.send('/api/session/logout', { method: 'POST', body: {}, cookie, csrf })).status).toBe(200);
       editor.text = `${opened.text}\nafter signing out\n`;
       doc.changed();
-      await doc.flush().catch(() => undefined);
+      // The socket is closed (#115): the save waits for a connection that never comes back.
+      void doc.flush().catch(() => undefined);
       await new Promise((resolve) => setTimeout(resolve, 300));
       expect(await readFile(join(studio.root, 'content/notes/streaming/index.mdx'), 'utf8')).toBe(opened.text);
-      // Nor does it read any more.
-      await expect(sync.open('database/index.mdx', { editor: new TextEditor() }).opened).rejects.toThrow();
+      // Nor does it read any more: the socket is gone and its reconnects are refused.
+      expect(sync.status()).toBe('offline');
     } finally {
       sync.close();
     }

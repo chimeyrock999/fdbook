@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { repoRoot } from '../../../server/config';
-import { insertEntry, metaTemplate, moveEntry, quote, readPages, removeKey, replaceEntry, setDefaultOpen, setFlag } from '../../../server/tree/meta-edit';
+import { insertEntry, keepEntries, metaTemplate, moveEntry, quote, readPages, removeKey, replaceEntry, setDefaultOpen, setFlag } from '../../../server/tree/meta-edit';
 
 const real = (path: string) => readFileSync(join(repoRoot, 'content/notes', path), 'utf8');
 
@@ -132,5 +132,15 @@ describe('meta.yaml edits', () => {
     expect(() => removeKey('visible:\n  a: b\n', 'visible')).toThrow('visible is not a value');
     expect(() => removeKey('{ visible: false }\n', 'visible')).toThrow('not a block map');
     expect(() => setFlag('title: [\n', 'visible', false, 'frontmatter')).toThrow('frontmatter does not parse');
+  });
+
+  it('keeps only the entries asked for, with every other line as it was', () => {
+    const block = 'title: X # the shelf\npages:\n  - "one" # first\n  # a note\n  - "two"\n  - "---Later---"\nicon: Book\n';
+    expect(keepEntries(block, (value) => value !== 'two')).toBe('title: X # the shelf\npages:\n  - "one" # first\n  # a note\n  - "---Later---"\nicon: Book\n');
+    expect(keepEntries('pages:\n  - a\n  - b', (value) => value === 'a')).toBe('pages:\n  - a');
+    expect(keepEntries('pages: [a, "b", c]\n', (value) => value !== 'b')).toBe('pages: [a, c]\n');
+    expect(keepEntries('title: X\npages:\n  - a\n', () => false)).toBe('title: X\npages: []\n');
+    expect(keepEntries('title: X\n', () => false)).toBe('title: X\n');
+    expect(readPages(keepEntries('pages: [a, b]\n', () => false))).toEqual([]);
   });
 });

@@ -602,6 +602,9 @@
     position: fixed;
     z-index: 60;
     display: grid;
+    /* One column no wider than the menu: a long row ellipsizes instead of
+       running out of it with its badge, outline and dividers (#117). */
+    grid-template-columns: minmax(0, 1fr);
     min-width: 190px;
     max-width: 240px;
     padding: 4px;

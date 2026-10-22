@@ -6,6 +6,7 @@ import { useAssetUrl } from '../api/asset-versions';
 import { formatSize, isImage } from '../assets/asset-facts';
 import { CHANGE_NAME } from '../changes/marks';
 import { labelOf } from '../changes/labels';
+import { ImageSide } from './ImageSide';
 import { RenderedDiff } from './RenderedDiff';
 import { SourceDiff } from './SourceDiff';
 
@@ -35,25 +36,6 @@ function tooLarge(diff: FileDiff) {
 
 const sizeOf = (side: DiffSide | null, missing: string) => (side === null ? missing : formatSize(side.size));
 
-function ImageSide({ label, side, url, empty }: { label: string; side: DiffSide | null; url: string; empty: string }) {
-  const [box, setBox] = useState<string | null>(null);
-  return (
-    <figure className="studio-diff-image" data-side={label === 'Main' ? 'before' : 'after'}>
-      <figcaption>
-        <b>{label}</b>
-        <span>{side === null ? '—' : [formatSize(side.size), box].filter(Boolean).join(' · ')}</span>
-      </figcaption>
-      {side === null ? (
-        <p className="studio-diff-note">{empty}</p>
-      ) : (
-        <div className="studio-diff-checker">
-          <img src={url} alt={`${label} version`} onLoad={(event) => { setBox(`${String(event.currentTarget.naturalWidth)} × ${String(event.currentTarget.naturalHeight)} px`); }} />
-        </div>
-      )}
-    </figure>
-  );
-}
-
 // An asset on main and now, side by side: an image as it looks, any other
 // file as its size.
 function AssetPreview({ client, diff }: { client: ChangesClient; diff: FileDiff }) {
@@ -72,8 +54,8 @@ function AssetPreview({ client, diff }: { client: ChangesClient; diff: FileDiff 
   const before = diff.base === null ? '' : client.baseFileUrl(diff.from ?? diff.path, diff.base);
   return (
     <div className="studio-diff-images">
-      <ImageSide label="Main" side={diff.before} url={before} empty="Not on main: new in this change request." />
-      <ImageSide label="Now" side={diff.after} url={after} empty="Deleted in this change request." />
+      <ImageSide label="Main" place="before" side={diff.before} url={before} empty="Not on main: new in this change request." />
+      <ImageSide label="Now" place="after" side={diff.after} url={after} empty="Deleted in this change request." />
     </div>
   );
 }
