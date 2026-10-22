@@ -1,6 +1,7 @@
 import { Brush, Check, Copy, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import type { ChangeRequest } from '../api/crs';
+import { ADMIN_HINT } from '../session/session';
 import { isDone, mergeCommand, plural, shortPath } from './cr-status';
 
 function CopyCommand({ command }: { command: string }) {
@@ -21,8 +22,9 @@ function CopyCommand({ command }: { command: string }) {
 // On top of the Changes view of the change request the page shows: once its
 // pull request is merged or closed, an offer to clean it up; while main has
 // moved on, how far, the files a merge would conflict in, and the command
-// to merge main in a terminal.
-export function CrNotice({ cr, onCleanUp }: { cr: ChangeRequest; onCleanUp: () => void }) {
+// to merge main in a terminal. `cleanUp`: whether this person may clean it
+// up, or only an admin may (it is on origin), or nobody here (a reader).
+export function CrNotice({ cr, cleanUp = 'yes', onCleanUp }: { cr: ChangeRequest; cleanUp?: 'yes' | 'admin' | 'no'; onCleanUp: () => void }) {
   if (isDone(cr)) {
     const pr = cr.pr === null ? 'The pull request' : `Pull request #${String(cr.pr.number)}`;
     return (
@@ -35,11 +37,13 @@ export function CrNotice({ cr, onCleanUp }: { cr: ChangeRequest; onCleanUp: () =
               : <><b>{pr} was closed</b> without merging. Clean it up once it is no longer needed.</>}
           </span>
         </p>
-        <div>
-          <button type="button" className="studio-button studio-button-primary gap-1.5" onClick={onCleanUp}>
-            <Brush size={14} aria-hidden /> Clean up
-          </button>
-        </div>
+        {cleanUp !== 'no' && (
+          <div>
+            <button type="button" className="studio-button studio-button-primary gap-1.5" disabled={cleanUp === 'admin'} title={cleanUp === 'admin' ? ADMIN_HINT : undefined} onClick={onCleanUp}>
+              <Brush size={14} aria-hidden /> Clean up
+            </button>
+          </div>
+        )}
       </div>
     );
   }

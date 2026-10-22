@@ -1,7 +1,8 @@
 import { createKeyedLock } from '../files/store.ts';
 import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '../http.ts';
 import { ASSET_TYPES, extensionOf } from '../security/paths.ts';
-import { commitChanges } from './commit.ts';
+import { viewerOf } from '../security/access.ts';
+import { authorOf, commitChanges } from './commit.ts';
 import { loadBaseFile, loadDiff } from './diff.ts';
 import { loadHistory } from './history.ts';
 import { loadChanges } from './status.ts';
@@ -12,6 +13,7 @@ const MAX_BODY_BYTES = 1024 * 1024;
 // (server/git/status.ts). POST /api/changes with JSON `{ message, paths }`
 // commits those files and answers the commit (server/git/commit.ts).
 // GET /api/changes/history: the change request's commits, `{ base, commits }`.
+// The commit's author is the signed-in user, if any.
 // GET /api/changes/diff?path=…[&from=…]: the file against main
 // (server/git/diff.ts); GET /api/changes/blob?path=…: the file as main holds
 // it at `&base=<sha>` (else at the merge base), for an image's before side.
@@ -32,7 +34,8 @@ export function createChangesApi(root: string, lock = createKeyedLock()): Handle
     }
     if (typeof body !== 'object' || body === null || Array.isArray(body)) throw new HttpError(400, 'body must be an object');
     const { message, paths } = body as Record<string, unknown>;
-    return lock('notes', () => commitChanges(root, { message, paths }));
+    const { user } = viewerOf(request);
+    return lock('notes', () => commitChanges(root, { message, paths }, user === null ? null : authorOf(user)));
   }
 
   const paths = ['/api/changes', '/api/changes/history', '/api/changes/diff', '/api/changes/blob'];

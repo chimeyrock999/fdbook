@@ -58,8 +58,11 @@ function draftOf(value: Record<string, unknown>): PublishDraft {
 // change request's branch to main with gh. The pull request is read fresh
 // first, so a second one is never opened. When gh fails after the push, the
 // push stays and the error says so. Answers the preview with its pull request.
-export async function publish(root: string, options: PreviewOptions, value: Record<string, unknown>): Promise<Preview> {
-  const draft = draftOf(value);
+// gh opens it as the host's account, so the body names who published it
+// (`by`, a GitHub login) when someone signed in did.
+export async function publish(root: string, options: PreviewOptions, value: Record<string, unknown>, by: string | null = null): Promise<Preview> {
+  const typed = draftOf(value);
+  const draft = by === null ? typed : { ...typed, body: `${typed.body.trimEnd()}\n\nOpened in Notes Studio by @${by}.`.trimStart() };
   const before = await loadPreview(root, options, { freshPr: true });
   const refusal = refusalOf(before);
   if (refusal !== null) throw new HttpError(before.prError === null ? 409 : 502, refusal);

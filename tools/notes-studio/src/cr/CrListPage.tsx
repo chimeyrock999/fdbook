@@ -1,5 +1,6 @@
 import { ArrowDown, Brush, Check, Clock, ExternalLink, Plus, RefreshCw, Trash2, TriangleAlert } from 'lucide-react';
 import type { ChangeRequest, CrList } from '../api/crs';
+import { ADMIN_HINT } from '../session/session';
 import { CrBadge } from './CrMenus';
 import { daysSince, GROUPS, isDone, plural, shortPath, updatedAgo } from './cr-status';
 
@@ -13,7 +14,11 @@ function DriftMeta({ cr }: { cr: ChangeRequest }) {
   );
 }
 
-function Card({ cr, current, waiting, onOpen, onDiscard }: { cr: ChangeRequest; current: boolean; waiting: boolean; onOpen: () => void; onDiscard: () => void }) {
+// `discard`: whether this person may discard it, or only an admin may (it is on origin), or nobody here (a reader).
+type DiscardRight = 'yes' | 'admin' | 'no';
+
+function Card({ cr, current, waiting, discard, onOpen, onDiscard }: { cr: ChangeRequest; current: boolean; waiting: boolean; discard: DiscardRight; onOpen: () => void; onDiscard: () => void }) {
+  const blocked = discard === 'admin';
   return (
     <li className="studio-cr-card" aria-current={current || undefined} aria-label={cr.name}>
       <div className="studio-cr-card-title">
@@ -48,12 +53,12 @@ function Card({ cr, current, waiting, onOpen, onDiscard }: { cr: ChangeRequest; 
         ) : (
           <button type="button" className="studio-button" disabled={waiting} title={waiting ? WAIT_HINT : undefined} onClick={onOpen}>Open</button>
         )}
-        {isDone(cr) ? (
-          <button type="button" className="studio-button studio-button-primary gap-1.5" aria-label={`Clean up ${cr.name}`} onClick={onDiscard}>
+        {discard === 'no' ? null : isDone(cr) ? (
+          <button type="button" className="studio-button studio-button-primary gap-1.5" aria-label={`Clean up ${cr.name}`} disabled={blocked} title={blocked ? ADMIN_HINT : undefined} onClick={onDiscard}>
             <Brush size={14} aria-hidden /> Clean up
           </button>
         ) : (
-          <button type="button" className="studio-button gap-1.5" aria-label={`Discard ${cr.name}`} onClick={onDiscard}>
+          <button type="button" className="studio-button gap-1.5" aria-label={`Discard ${cr.name}`} disabled={blocked} title={blocked ? ADMIN_HINT : undefined} onClick={onDiscard}>
             <Trash2 size={14} aria-hidden /> <span className="max-md:hidden">Discard</span>
           </button>
         )}
@@ -82,15 +87,18 @@ const WAIT_HINT = 'The open note has unsaved changes. Switch once it shows Saved
 // waiting to merge (In review) and to clean up (Merged, Closed), with how
 // far each is from main and whether it went stale. Merged and closed ones
 // offer Clean up instead of Discard. Opening another one (or a new one)
-// waits while the open note has unsaved edits.
-export function CrListPage({ list, error, current, waiting = false, onOpen, onNew, onDiscard, onRefresh }: {
+// waits while the open note has unsaved edits. Without `onNew` and
+// `onDiscard` (a reader) it only lists; `canDiscard` says which ones this
+// person may remove (the others need an admin).
+export function CrListPage({ list, error, current, waiting = false, onOpen, onNew, onDiscard, canDiscard = () => true, onRefresh }: {
   list: CrList | null;
   error: string | null;
   current: string | null;
   waiting?: boolean;
   onOpen: (slug: string) => void;
-  onNew: () => void;
-  onDiscard: (cr: ChangeRequest) => void;
+  onNew: (() => void) | null;
+  onDiscard: ((cr: ChangeRequest) => void) | null;
+  canDiscard?: (cr: ChangeRequest) => boolean;
   onRefresh: () => void;
 }) {
   return (
@@ -100,9 +108,11 @@ export function CrListPage({ list, error, current, waiting = false, onOpen, onNe
         <button type="button" className="studio-button gap-1.5" onClick={onRefresh} title="Fetch origin, then read the branches and pull requests again">
           <RefreshCw size={14} aria-hidden /> <span className="max-md:hidden">Refresh</span>
         </button>
-        <button type="button" className="studio-button studio-button-primary gap-1.5" disabled={waiting} title={waiting ? WAIT_HINT : undefined} onClick={onNew}>
-          <Plus size={14} aria-hidden /> New change request
-        </button>
+        {onNew !== null && (
+          <button type="button" className="studio-button studio-button-primary gap-1.5" disabled={waiting} title={waiting ? WAIT_HINT : undefined} onClick={onNew}>
+            <Plus size={14} aria-hidden /> New change request
+          </button>
+        )}
       </div>
       {error !== null && <p role="alert" className="studio-tree-error">Could not load the change requests: {error}</p>}
       {list?.fetchError != null && (
@@ -125,7 +135,15 @@ export function CrListPage({ list, error, current, waiting = false, onOpen, onNe
               ) : (
                 <ul className="grid gap-2">
                   {crs.map((cr) => (
-                    <Card key={cr.slug} cr={cr} current={cr.slug === current} waiting={waiting} onOpen={() => { onOpen(cr.slug); }} onDiscard={() => { onDiscard(cr); }} />
+                    <Card
+                      key={cr.slug}
+                      cr={cr}
+                      current={cr.slug === current}
+                      waiting={waiting}
+                      discard={onDiscard === null ? 'no' : canDiscard(cr) ? 'yes' : 'admin'}
+                      onOpen={() => { onOpen(cr.slug); }}
+                      onDiscard={() => { onDiscard?.(cr); }}
+                    />
                   ))}
                 </ul>
               )}

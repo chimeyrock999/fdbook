@@ -1,10 +1,8 @@
 import { Check, ChevronDown, Eye, GitBranch, List, Pencil, Plus } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import type { ChangeRequest, CrList, CrStatus } from '../api/crs';
 import { isOpen, STATUS_LABELS } from './cr-status';
-
-const MENU_WIDTH = 300;
+import { PopupMenu } from './PopupMenu';
+import { useMenu } from './use-menu';
 
 export function CrBadge({ status }: { status: CrStatus | 'read-only' }) {
   return (
@@ -12,49 +10,6 @@ export function CrBadge({ status }: { status: CrStatus | 'read-only' }) {
       {status === 'read-only' ? 'Read only' : STATUS_LABELS[status]}
     </span>
   );
-}
-
-// A menu under `anchor`, portalled to <body> like the Studio's other
-// popups. Escape or a press outside closes it; a press on the anchor is left
-// to the anchor, which toggles the menu.
-function PopupMenu({ anchor, label, onClose, children }: { anchor: HTMLElement; label: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const close = useRef(onClose);
-  useEffect(() => { close.current = onClose; });
-  useEffect(() => {
-    const onEvent = (event: Event) => {
-      if (event instanceof KeyboardEvent) {
-        if (event.key === 'Escape') close.current();
-        return;
-      }
-      const target = event.target as Node;
-      if (!ref.current?.contains(target) && !anchor.contains(target)) close.current();
-    };
-    window.addEventListener('mousedown', onEvent);
-    window.addEventListener('keydown', onEvent);
-    ref.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
-    return () => {
-      window.removeEventListener('mousedown', onEvent);
-      window.removeEventListener('keydown', onEvent);
-    };
-  }, [anchor]);
-  const box = anchor.getBoundingClientRect();
-  const left = Math.max(8, Math.min(box.left, window.innerWidth - MENU_WIDTH - 8));
-  return createPortal(
-    <div ref={ref} role="menu" aria-label={label} className="studio-menu studio-cr-menu" style={{ top: box.bottom + 4, left }}>
-      {children}
-    </div>,
-    document.body,
-  );
-}
-
-function useMenu() {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  return {
-    anchor,
-    toggle: (element: HTMLElement) => { setAnchor((open) => (open === null ? element : null)); },
-    close: () => { setAnchor(null); },
-  };
 }
 
 function CrItem({ cr, checked, disabled = false, onPick }: { cr: ChangeRequest; checked?: boolean; disabled?: boolean; onPick: () => void }) {
@@ -71,13 +26,14 @@ function CrItem({ cr, checked, disabled = false, onPick }: { cr: ChangeRequest; 
 // request this page edits, with its status. Its menu switches between them,
 // starts a new one or opens the list. Merged and closed change requests are
 // in the list only. While the open note has unsaved edits (`waiting`), it
-// does not switch: the page load would drop them.
+// does not switch: the page load would drop them. Without `onNew` (a
+// reader) it offers no new one.
 export function CrPicker({ list, current, waiting = false, onSwitch, onNew, onList }: {
   list: CrList | null;
   current: string | null;
   waiting?: boolean;
   onSwitch: (slug: string | null) => void;
-  onNew: () => void;
+  onNew: (() => void) | null;
   onList: () => void;
 }) {
   const menu = useMenu();
@@ -117,10 +73,12 @@ export function CrPicker({ list, current, waiting = false, onSwitch, onNew, onLi
             <CrItem key={each.slug} cr={each} checked={each.slug === current} disabled={waiting && each.slug !== current} onPick={pick(() => { if (each.slug !== current) onSwitch(each.slug); })} />
           ))}
           <hr />
-          <button type="button" role="menuitem" disabled={waiting} onClick={pick(onNew)}>
-            <span className="studio-menu-check" />
-            <Plus size={14} aria-hidden /> New change request…
-          </button>
+          {onNew !== null && (
+            <button type="button" role="menuitem" disabled={waiting} onClick={pick(onNew)}>
+              <span className="studio-menu-check" />
+              <Plus size={14} aria-hidden /> New change request…
+            </button>
+          )}
           <button type="button" role="menuitem" onClick={pick(onList)}>
             <span className="studio-menu-check" />
             <List size={14} aria-hidden /> All change requests

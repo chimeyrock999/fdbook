@@ -1,6 +1,7 @@
 import { createKeyedLock } from '../files/store.ts';
 import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '../http.ts';
 import { blockedOnly, loadPreview, pushPreview, type PreviewOptions } from './preview.ts';
+import { viewerOf } from '../security/access.ts';
 import { BODY_MAX, loadDraft, publish } from './publish.ts';
 
 const MAX_BODY_BYTES = 1024;
@@ -27,7 +28,7 @@ export function createPreviewApi(root: string, options: PreviewOptions, { readOn
     if (readOnly) throw new HttpError(409, READ_ONLY);
     if (request.method === 'GET') return loadDraft(root, options);
     const body = await readJsonObject(request, MAX_PUBLISH_BYTES, 'a publish');
-    return lock('notes', () => publish(root, options, body));
+    return lock('notes', () => publish(root, options, body, viewerOf(request).user?.login ?? null));
   }
 
   return async (request, response) => {

@@ -6,6 +6,7 @@ import { git } from '../../server/cr/git';
 import type { PullRequest } from '../../server/cr/pull-requests';
 import { createBuildReader, type CheckRun } from '../../server/preview/check-runs';
 import { createBranchPullRequestReader, type BranchPullRequest, type NewPullRequest, type PullRequestGh } from '../../server/preview/pull-request';
+import type { AuthOptions } from '../../server/auth/auth';
 import { startStudioServer } from '../../server/studio-server';
 
 const NOTES: Record<string, string> = {
@@ -73,8 +74,8 @@ export type GitRepo = Awaited<ReturnType<typeof makeGitRepo>>;
 // reads by branch (or an Error); `create` opens one there and lists it in
 // `created`, unless `createError` is set. `closed` lists the pull requests
 // closed, `closeError` fails closing one. `forget` moves the readers' clock
-// a minute on, past their caches.
-export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey', staleDays }: { pagesProject?: string | null; staleDays?: number } = {}) {
+// a minute on, past their caches. `auth` turns sign-in on (support/auth.ts).
+export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey', staleDays, auth = null }: { pagesProject?: string | null; staleDays?: number; auth?: AuthOptions | null } = {}) {
   let clock = Date.now();
   const fake: {
     prs: PullRequest[] | Error;
@@ -112,6 +113,7 @@ export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey', st
   );
   const studio = await startStudioServer({
     port: 0,
+    auth,
     changeRequests: {
       repo: repo.repo,
       home: repo.home,

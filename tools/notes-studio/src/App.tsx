@@ -41,6 +41,8 @@ import { OpenPreview } from './notes/OpenPreview';
 import { NOTES_PREFIX, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote, type Page } from './notes/notes';
 import { Sidebar, type IssueCount } from './sidebar/Sidebar';
 import { useSidebar, type SidebarView } from './sidebar/useSidebar';
+import { rightsOf, useSession } from './session/session';
+import { UserMenu } from './session/UserMenu';
 import { PageTree } from './tree/PageTree';
 import { renamedPath } from './tree/tree';
 import { useTree } from './tree/useTree';
@@ -79,11 +81,17 @@ export function App() {
   // With change requests, main is read only until one is opened (`?cr=`); a
   // Studio over one worktree (enabled: false) edits it as it is.
   const crMode = crs.list?.enabled === true;
-  const readOnly = CURRENT_CR === null && crs.list?.enabled !== false;
+  // What the signed-in person may do (#99): a reader reads everything, edits nothing.
+  const rights = rightsOf(useSession().state.role);
+  const onMain = CURRENT_CR === null && crs.list?.enabled !== false;
+  const readOnly = onMain || !rights.write;
+  const newCr = rights.write ? () => { setCrDialog({ kind: 'new' }); } : null;
+  const discardRight = (cr: ChangeRequest) => (!rights.write ? 'no' : rights.discard(cr) ? 'yes' : 'admin');
   const currentCr = crs.list?.crs.find((cr) => cr.slug === CURRENT_CR) ?? null;
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);
-  const preview = usePreview(previewClient, !readOnly);
+  // A reader follows a change request's preview too, without pushing or publishing.
+  const preview = usePreview(previewClient, !onMain);
   const unpushed = useMemo(() => (preview.preview ? new Set(preview.preview.unpushed) : null), [preview.preview]);
   const { set: setPreview } = preview;
   const { reload: reloadChanges } = git;
@@ -244,11 +252,12 @@ export function App() {
           Notes
         </button>
         <span className={`font-semibold whitespace-nowrap ${crMode ? 'max-md:hidden' : ''}`}>Notes Studio</span>
-        {crMode && <CrPicker list={crs.list} current={CURRENT_CR} waiting={unsaved !== null} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} onList={openList} />}
+        {crMode && <CrPicker list={crs.list} current={CURRENT_CR} waiting={unsaved !== null} onSwitch={(cr) => { switchTo(cr); }} onNew={newCr} onList={openList} />}
         <span className={`min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)] ${crMode ? 'max-md:hidden' : ''}`}>{pagePath ?? ''}</span>
-        {crMode && CURRENT_CR === null && <EditMenu list={crs.list} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} />}
-        {!readOnly && <OpenPreview preview={preview.preview} route={route} />}
+        {crMode && CURRENT_CR === null && rights.write && <EditMenu list={crs.list} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} />}
+        {!onMain && <OpenPreview preview={preview.preview} route={route} />}
         {action !== null && <PrimaryActionButton action={action} onAction={act} />}
+        <UserMenu />
       </header>
       <div className="relative flex min-h-0 flex-1">
         <Sidebar
@@ -270,7 +279,7 @@ export function App() {
               current={diff?.path ?? null}
               onOpen={openChanged}
               readOnly={readOnly}
-              notice={currentCr !== null && <CrNotice cr={currentCr} onCleanUp={() => { setCrDialog({ kind: 'discard', cr: currentCr }); }} />}
+              notice={currentCr !== null && <CrNotice cr={currentCr} cleanUp={discardRight(currentCr)} onCleanUp={() => { setCrDialog({ kind: 'discard', cr: currentCr }); }} />}
               onCommitted={committed}
               unpushed={readOnly ? null : unpushed}
               preview={
@@ -349,8 +358,9 @@ export function App() {
             current={CURRENT_CR}
             waiting={unsaved !== null}
             onOpen={(cr) => { switchTo(cr, null); }}
-            onNew={() => { setCrDialog({ kind: 'new' }); }}
-            onDiscard={(cr) => { setCrDialog({ kind: 'discard', cr }); }}
+            onNew={newCr}
+            onDiscard={rights.write ? (cr) => { setCrDialog({ kind: 'discard', cr }); } : null}
+            canDiscard={rights.discard}
             onRefresh={() => { void crs.reload(true); }}
           />
         ) : (

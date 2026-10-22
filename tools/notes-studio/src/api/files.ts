@@ -2,6 +2,7 @@
 
 import { assetUrl } from './asset-versions';
 import { errorOf, readJson } from './json';
+import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
 export type FileKind = 'note' | 'meta' | 'asset';
@@ -39,13 +40,13 @@ export function createFilesClient(base = API_BASE) {
 
   return {
     async listFiles(): Promise<FileEntry[]> {
-      const response = await fetch(`${base}/api/files`);
+      const response = await studioFetch(`${base}/api/files`);
       if (!response.ok) return failed(response);
       return (await readJson<{ files: FileEntry[] }>(response)).files;
     },
 
     async readFile(path: string): Promise<TextFile> {
-      const response = await fetch(fileUrl(path));
+      const response = await studioFetch(fileUrl(path));
       if (!response.ok) return failed(response);
       return readJson<TextFile>(response);
     },
@@ -53,7 +54,7 @@ export function createFilesClient(base = API_BASE) {
     // Saves a note or meta.yaml edited from `baseMtime` (null: a new file) and
     // returns the new mtime, or throws FileConflictError.
     async writeFile(path: string, content: string, baseMtime: number | null): Promise<number> {
-      const response = await fetch(fileUrl(path), {
+      const response = await studioFetch(fileUrl(path), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content, baseMtime }),
@@ -66,7 +67,7 @@ export function createFilesClient(base = API_BASE) {
     async writeAsset(path: string, data: Blob, baseMtime: number | null): Promise<number> {
       const headers: Record<string, string> = { 'X-Studio-Write': '1' };
       if (baseMtime !== null) headers['X-Base-Mtime'] = String(baseMtime);
-      const response = await fetch(fileUrl(path), { method: 'PUT', headers, body: data });
+      const response = await studioFetch(fileUrl(path), { method: 'PUT', headers, body: data });
       if (response.status === 409) return conflict(path, response);
       if (!response.ok) return failed(response);
       return (await readJson<{ mtimeMs: number }>(response)).mtimeMs;

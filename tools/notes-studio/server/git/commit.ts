@@ -10,6 +10,11 @@ const MAX_PATHS = 5000;
 
 export type CommitRequest = { message: unknown; paths: unknown };
 
+// The commit author for a GitHub user, with GitHub's no-reply address so
+// the commit links to them; the committer stays the host's git identity.
+export const authorOf = ({ id, login, name }: { id: number; login: string; name: string | null }) =>
+  `${(name ?? '').replace(/[<>\n]/g, '').trim() || login} <${String(id)}+${login}@users.noreply.github.com>`;
+
 // Commits the picked files, and only them, with the message. Every path must
 // be one `git status` lists now (a rename brings its old path along). Files
 // not picked stay as they were: `git commit -- <paths>` commits those paths
@@ -19,8 +24,9 @@ export type CommitRequest = { message: unknown; paths: unknown };
 // commit, which records it from HEAD. If the commit then fails (a hook,
 // no user.email, a merge in progress), the index is put back as it was, so a
 // failed commit stages nothing. The message is kept as written, `#` lines
-// too (an issue reference), only trimmed.
-export async function commitChanges(root: string, { message, paths }: CommitRequest): Promise<Commit> {
+// too (an issue reference), only trimmed. `author` (authorOf) names who
+// made it, when someone signed in did.
+export async function commitChanges(root: string, { message, paths }: CommitRequest, author: string | null = null): Promise<Commit> {
   const text = typeof message === 'string' ? message.trim() : '';
   if (text === '') throw new HttpError(400, 'write a commit message');
   if (!Array.isArray(paths) || paths.length === 0 || paths.length > MAX_PATHS || !paths.every((path) => typeof path === 'string')) {
@@ -41,7 +47,7 @@ export async function commitChanges(root: string, { message, paths }: CommitRequ
   try {
     const onDisk = [...specs].filter((path) => existsSync(join(root, path)));
     if (onDisk.length > 0) await runGit(root, ['add', '--all', '--', ...onDisk]);
-    await runGit(root, ['commit', '--quiet', '--cleanup=whitespace', '-m', text, '--', ...specs]);
+    await runGit(root, ['commit', '--quiet', '--cleanup=whitespace', ...(author === null ? [] : [`--author=${author}`]), '-m', text, '--', ...specs]);
   } catch (error) {
     await runGit(root, ['read-tree', index]);
     throw error;

@@ -1,4 +1,5 @@
 import { errorOf, readJson } from './json';
+import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
 // Client for the assets API (server/assets/api.ts). Types mirror
@@ -38,14 +39,14 @@ export function createAssetsClient(base = API_BASE) {
 
   return {
     async listAssets(): Promise<AssetInfo[]> {
-      const response = await fetch(`${base}/api/assets`);
+      const response = await studioFetch(`${base}/api/assets`);
       if (!response.ok) return failed(response);
       return (await readJson<{ assets: AssetInfo[] }>(response)).assets;
     },
 
     // Applies the change, or with `dryRun` only says what it would write.
     async change(request: AssetRequest, dryRun = false): Promise<AssetAnswer> {
-      const response = await fetch(`${base}/api/assets`, {
+      const response = await studioFetch(`${base}/api/assets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...request, dryRun }),
@@ -58,7 +59,7 @@ export function createAssetsClient(base = API_BASE) {
     // path or, with another extension, its name with that one.
     async replace(path: string, extension: string, file: Blob, baseMtime: number): Promise<AssetAnswer & { mtimeMs: number }> {
       const query = new URLSearchParams({ path, extension, baseMtime: String(baseMtime) });
-      const response = await fetch(`${base}/api/assets?${query.toString()}`, { method: 'PUT', headers: { 'X-Studio-Write': '1' }, body: file });
+      const response = await studioFetch(`${base}/api/assets?${query.toString()}`, { method: 'PUT', headers: { 'X-Studio-Write': '1' }, body: file });
       if (!response.ok) return failed(response);
       return readJson<AssetAnswer & { mtimeMs: number }>(response);
     },
