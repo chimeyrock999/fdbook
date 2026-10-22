@@ -189,6 +189,14 @@
   margin-bottom: 0.9rem;
 }
 
+/* Colours come from styles/notes-theme.css. */
+svg.pele {
+  display: block;
+  margin: 1.5rem auto 0;
+  max-width: 100%;
+  height: auto;
+}
+
 /* Step markers reuse the numbered-list badge, centred on the steps rail. */
 .notes-prose .fd-step::before {
   inset-inline-start: calc(-1 * (1.5rem + 0.775rem));
