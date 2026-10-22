@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { diagramPathOf } from './diagram/source.ts';
 
 /**
  * The file `<Diagram src>` names: `<root>/diagrams/<src>.diagram.json`, where
@@ -9,12 +10,8 @@ import path from 'node:path';
  * resolve `src` here.
  */
 export function diagramFilePath(root: string, src: string): string | null {
-  const cleaned = src.trim().replace(/^\/+/, '').replace(/\.diagram\.json$/, '');
-  if (!cleaned) return null;
-
-  const diagramsRoot = path.join(root, 'diagrams');
-  const resolved = path.resolve(diagramsRoot, `${cleaned}.diagram.json`);
-  return resolved.startsWith(`${diagramsRoot}${path.sep}`) ? resolved : null;
+  const relative = diagramPathOf(src);
+  return relative ? path.join(root, relative) : null;
 }
 
 /**

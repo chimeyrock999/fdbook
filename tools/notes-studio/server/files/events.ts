@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { atLeast } from '../auth/shared.ts';
 import { pathnameOf, type Handler } from '../http.ts';
 import { viewerOf, type Viewer } from '../security/access.ts';
-import { ASSETS_DIR, classifyPath, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
+import { classifyPath, EDITABLE_AREAS, resolveWorktreePath } from '../security/paths.ts';
 import { listEditableFiles } from './store.ts';
 
 export type FileEvent = { type: 'add' | 'change' | 'unlink'; path: string; mtimeMs: number | null };
@@ -74,7 +74,7 @@ export function createFileEvents(root: string) {
     }
   };
 
-  for (const area of [NOTES_DIR, ASSETS_DIR]) {
+  for (const area of EDITABLE_AREAS) {
     try {
       const watcher = watch(join(root, area), { recursive: true }, (_type, name) => {
         if (!name) return;

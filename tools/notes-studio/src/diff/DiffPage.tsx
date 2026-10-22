@@ -1,6 +1,6 @@
 import { ChevronLeft, FileCode, Pencil } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { extensionOf, isTextPath } from '../../server/security/asset-types';
+import { classifyPath, extensionOf, isTextPath } from '../../server/security/asset-types';
 import type { ChangesClient, DiffSide, FileDiff } from '../api/changes';
 import { useAssetUrl } from '../api/asset-versions';
 import { formatSize, isImage } from '../assets/asset-facts';
@@ -18,14 +18,14 @@ type Mode = 'rendered' | 'source';
 const textOf = (side: DiffSide | null) => (side?.kind === 'text' ? side.text : null);
 
 // Which views a file has: a note renders and has its source; an image
-// previews, and an SVG has its source too; a meta.yaml or an HTML asset has
-// its source only; any other asset previews as its sizes. A text file too
+// previews, and an SVG has its source too; a meta.yaml, a diagram or an HTML
+// asset has its source only; any other asset previews as its sizes. A text file too
 // large to send as text has none (`tooLarge`).
 function modesOf(diff: FileDiff): Mode[] {
   const text = [diff.before, diff.after].every((side) => side === null || side.kind === 'text');
   if (tooLarge(diff)) return [];
   if (diff.path.endsWith('.mdx')) return ['rendered', 'source'];
-  if (diff.path.endsWith('/meta.yaml') || extensionOf(diff.path) === 'html') return ['source'];
+  if (diff.path.endsWith('/meta.yaml') || classifyPath(diff.path) === 'diagram' || extensionOf(diff.path) === 'html') return ['source'];
   return text ? ['rendered', 'source'] : ['rendered'];
 }
 
@@ -110,8 +110,9 @@ export function DiffPage({ client, target, revision, titles, onOpen, onBack }: {
   const title = labelOf({ path: target.path, status: 'M' }, titles);
   const modes = diff ? modesOf(diff) : [];
   const shown = mode !== null && modes.includes(mode) ? mode : (modes[0] ?? null);
-  // A file still there opens in the editor or on its asset page; a meta.yaml has neither.
-  const editable = (diff?.after ?? null) !== null && !target.path.endsWith('/meta.yaml');
+  // A file still there opens in the editor or on its asset page; a meta.yaml
+  // and a diagram (drawn by the <Diagram> cards of its notes) have neither.
+  const editable = (diff?.after ?? null) !== null && !target.path.endsWith('/meta.yaml') && classifyPath(target.path) !== 'diagram';
   const status = diff?.status ?? null;
   // The old name the server read main under: asked for, or a rename it found.
   const from = diff?.from ?? target.from;
