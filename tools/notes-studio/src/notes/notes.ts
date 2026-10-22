@@ -83,10 +83,3 @@ export function previewRoute(page: Page | null, exists: (path: string) => boolea
   if (page.kind === 'diff' && (page.path.endsWith('/meta.yaml') || !exists(page.path))) return siteRoute(null);
   return siteRoute(page.path);
 }
-
-// The site's dev server (`npm run dev` at the repo root) unless
-// STUDIO_SITE_URL names another.
-export function siteUrlFrom(configured: string | undefined) {
-  const url = configured?.trim() ?? '';
-  return url === '' ? 'http://localhost:3000' : url;
-}
