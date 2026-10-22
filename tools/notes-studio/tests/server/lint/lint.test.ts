@@ -209,6 +209,42 @@ describe('graph markers', () => {
   });
 });
 
+describe('emphasis markers', () => {
+  it('warns on `_` emphasis and `__` strong, over the whole node', () => {
+    const issues = lint('An _a_ and a __b__.\n');
+    expect(summary(issues)).toEqual(['emphasis-marker@1', 'emphasis-marker@1']);
+    expect(issues[0]).toMatchObject({
+      severity: 'warning',
+      start: { line: 1, column: 4, offset: 3 },
+      end: { line: 1, column: 7, offset: 6 },
+    });
+    expect(issues[0]?.message).toContain('*text*');
+    expect(issues[1]).toMatchObject({ start: { line: 1, column: 14, offset: 13 }, end: { line: 1, column: 19, offset: 18 } });
+    expect(issues[1]?.message).toContain('**text**');
+  });
+
+  it('accepts `*` and `**`, nested or not', () => {
+    expect(lint('An *a*, a **b** and ***c***.\n\n*x **y** z*\n')).toEqual([]);
+  });
+
+  it('flags only the inner `_` node of a nested pair', () => {
+    expect(lint('*a _b_ c*\n')).toMatchObject([{ rule: 'emphasis-marker', start: { offset: 3 }, end: { offset: 6 } }]);
+  });
+
+  it('leaves underscores that are not emphasis alone', () => {
+    const source = [
+      'snake_case_name and foo_bar_baz.',
+      '',
+      'Code `_code_` and [link](a_b_c) and $a_b$.',
+      '',
+      '```',
+      '_fenced_',
+      '```',
+    ].join('\n');
+    expect(lint(source, { pages: [...PAGES, 'guide/a_b_c.mdx'] })).toEqual([]);
+  });
+});
+
 describe('the file as a whole', () => {
   it('keeps line numbers of the file when there is frontmatter', () => {
     const issues = lint('---\ntitle: T\ngraph:\n  id: x\n---\n\n:::nope\nx\n:::\n');
