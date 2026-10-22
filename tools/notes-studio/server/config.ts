@@ -1,8 +1,9 @@
+import { isIP } from 'node:net';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const STUDIO_HOST = '127.0.0.1';
+export const DEFAULT_STUDIO_HOST = '127.0.0.1';
 export const DEFAULT_STUDIO_PORT = 4310;
 
 export const studioRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -29,4 +30,28 @@ export function parseStudioPort(value: string | undefined): number {
     throw new Error(`STUDIO_PORT must be a port number between 1 and 65535, got "${value}".`);
   }
   return port;
+}
+
+// The address to bind: empty or unset means 127.0.0.1. Only an IP address,
+// so the Host check still stops DNS rebinding, and not a wildcard, which
+// would answer on every network the machine is on. IPv6 comes back in the
+// form browsers send in Host (lowercase, compressed), so ::0 or
+// 0:0:0:0:0:0:0:0 is refused like ::. A zone id (fe80::1%en0) is refused
+// too: it binds, but no browser sends it.
+export function parseStudioHost(value: string | undefined): string {
+  if (value === undefined || value.trim() === '') return DEFAULT_STUDIO_HOST;
+  const host = value.trim();
+  const version = isIP(host);
+  const address = version === 6 && !host.includes('%') ? new URL(`http://[${host}]/`).hostname.slice(1, -1) : version === 4 ? host : null;
+  if (address === null || ['0.0.0.0', '::', '::ffff:0:0'].includes(address)) {
+    throw new Error(`STUDIO_HOST must be one IP address of this machine, not a name, a wildcard such as 0.0.0.0 or an IPv6 zone id, got "${value}".`);
+  }
+  return address;
+}
+
+// What to tell the user when the server cannot bind.
+export function listenFailure(error: NodeJS.ErrnoException, host: string): string {
+  if (error.code === 'EADDRINUSE') return 'The Notes Studio port is already in use. Stop the other process or set STUDIO_PORT.';
+  if (error.code === 'EADDRNOTAVAIL') return `STUDIO_HOST ${host} is not an address of this machine; is the interface up?`;
+  return error.message;
 }
