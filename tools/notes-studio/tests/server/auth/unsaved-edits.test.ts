@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { ConnectionStatus, SyncClient } from '@fumadocs-editor/core/sync';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { startAuthStudio, type AuthStudio } from '../../support/auth';
+import { json } from '../../support/http';
 import { syncSignedIn, TextEditor } from '../../support/sync';
 
 const PAGE = 'streaming/index.mdx';
@@ -66,6 +67,39 @@ describe('an edit made as the session ends', () => {
     jar.cookie = (await studio.signIn('alice')).cookie;
     await until(async () => (await page()) === edited, 'the edit to be saved');
     expect(doc.status()).toBe('synced');
+  }, 15_000);
+
+  // Another tab signs out, then in as someone else: the browser's cookie is
+  // Carol's now. The page's seat check (checkSeat, here a stand-in that
+  // reads the session the same way) refuses each reconnect, so Alice's
+  // edit is not written as Carol.
+  it('is not saved as someone else signed in from another tab', async () => {
+    studio.gh.addUser('carol', 'write');
+    const { cookie, csrf } = await studio.signIn('alice');
+    const jar = { cookie };
+    const login = async () => (json(await studio.send('/api/session', { cookie: jar.cookie })) as { user: { login: string } | null }).user?.login;
+    let refused = 0;
+    const client = syncSignedIn(studio.origin, jar, async () => {
+      if ((await login()) !== 'alice') {
+        refused += 1;
+        throw new Error('someone else');
+      }
+    });
+    clients.push(client);
+    const seen: ConnectionStatus[] = [];
+    client.onStatus((status) => { seen.push(status); });
+    const editor = new TextEditor();
+    const doc = client.open(PAGE, { editor });
+    const opened = await doc.opened;
+
+    expect((await studio.send('/api/session/logout', { method: 'POST', body: {}, cookie, csrf })).status).toBe(200);
+    await until(() => seen.includes('offline'), 'the socket to close');
+    editor.text = `${opened.text}\nAlice's, not Carol's.\n`;
+    doc.changed();
+    jar.cookie = (await studio.signIn('carol')).cookie;
+    await until(() => refused >= 2, 'reconnects as Carol to be refused');
+    expect(client.status()).not.toBe('online');
+    expect(await page()).toBe(opened.text);
   }, 15_000);
 
   it('is not saved for someone signed in again as a reader', async () => {

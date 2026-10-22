@@ -46,10 +46,12 @@ export function syncWith(origin: string, cookie: string, base = '') {
 // The notes sync as a signed-in page keeps it: every connection, reconnects
 // included, carries the cookie in `jar` at that moment, as the browser sends
 // the one it holds. Signing in again (a new cookie in the jar) lets the next
-// reconnect through.
-export function syncSignedIn(origin: string, jar: { cookie: string }) {
+// reconnect through. `auth` is the client's hook, asked before each one
+// (the page's checkSeat).
+export function syncSignedIn(origin: string, jar: { cookie: string }, auth?: () => Promise<unknown>) {
   const url = `${origin.replace(/^http/, 'ws')}${SYNC_ENDPOINT}`;
   return createSyncClient({
+    auth,
     transport: {
       connect(listener) {
         const cookie = jar.cookie;

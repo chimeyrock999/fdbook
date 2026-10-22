@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeRequest, CrList } from '../../../src/api/crs';
 import { createHistoryClient } from '../../../src/api/history';
-import { confirmSignedIn, onSignedOut, setCsrf, studioFetch, type SessionState } from '../../../src/api/session';
+import { checkSeat, confirmSignedIn, onSignedOut, setCsrf, studioFetch, type SessionState } from '../../../src/api/session';
 import { CrListPage } from '../../../src/cr/CrListPage';
 import { CrPicker } from '../../../src/cr/CrMenus';
 import { CrNotice } from '../../../src/cr/CrNotice';
@@ -343,6 +343,40 @@ describe('the session ending under the Studio', () => {
     await signInAgainAs(signedIn('reader'));
     expect(screen.getByLabelText<HTMLInputElement>('Draft of alice', { selector: 'input' }).value).toBe('');
     expect(mounts).toBe(2);
+  });
+
+  // Another tab signs out, then in as `next`: the sync's next reconnect
+  // carries the cookie the browser holds now, and asks the seat check first.
+  async function otherTabSignsInAs(next: SessionState) {
+    let state = signedIn('writer');
+    stubFetch({ '/api/session': () => ({ body: state }), '/api/x': () => ({ status: 401, body: { error: 'Sign in to use the Studio.' } }) });
+    render(<SessionGate><Studio /></SessionGate>);
+    await userEvent.type(await screen.findByLabelText('Draft of alice'), 'not saved');
+    state = signedOut();
+    await studioFetch('/api/x');
+    await screen.findByRole('dialog');
+    state = next;
+    return checkSeat().then(() => 'connects', () => 'refused');
+  }
+
+  it('lets the sync reconnect when the same writer signed in again in another tab, and closes the sign-in', async () => {
+    expect(await otherTabSignsInAs(signedIn('writer'))).toBe('connects');
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+    expect(screen.getByLabelText<HTMLInputElement>('Draft of alice', { selector: 'input' }).value).toBe('not saved');
+    expect(mounts).toBe(1);
+  });
+
+  it('refuses the sync for someone else signed in in another tab, and starts the Studio afresh for them', async () => {
+    expect(await otherTabSignsInAs(signedIn('writer', { user: { login: 'carol', name: 'Carol', avatarUrl: 'https://avatars.example/carol' } }))).toBe('refused');
+    expect(await screen.findByLabelText('Draft of carol')).toBeTruthy();
+    expect(mounts).toBe(2);
+    // The Studio now runs for Carol: her own reconnects go through.
+    expect(await checkSeat().then(() => 'connects', () => 'refused')).toBe('connects');
+  });
+
+  it('refuses the sync for a writer back as a reader in another tab', async () => {
+    expect(await otherTabSignsInAs(signedIn('reader'))).toBe('refused');
+    await waitFor(() => { expect(mounts).toBe(2); });
   });
 
   it('makes what the Studio portalled into the page inert while the sign-in is up', async () => {

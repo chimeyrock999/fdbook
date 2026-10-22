@@ -264,7 +264,10 @@ it: a note's edits not saved yet stay in the editor, and once signed in
 again its socket reconnects with the new session and the autosave writes
 them. Someone else signing in, or the same person back without write
 access, gets the Studio afresh instead, so nothing saves under another
-account. **Sign out** leaves the Studio for the sign-in page. Until a
+account. That holds for a sign-in in another tab too: before each
+connection, reconnects included, the notes sync reads the session the
+browser holds now (`checkSeat` in `src/api/session.ts`) and refuses it
+unless it is the person the Studio runs for. **Sign out** leaves the Studio for the sign-in page. Until a
 note's edits are saved, the page also keeps them in the tab's
 sessionStorage, per person, change request and note
 (`src/editor/unsaved.ts`), so a page that goes away first (the web

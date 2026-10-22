@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { createSessionClient, onSignedOut, setCsrf, type SessionState } from '../api/session';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createSessionClient, onSeatCheck, onSignedOut, setCsrf, type SessionState } from '../api/session';
 import { NoAccessPage, SignInPage } from './SignInPage';
 import { rightsOf, SessionContext, type SessionValue } from './session';
 
@@ -17,10 +17,13 @@ function takeSignInError() {
 // Read once when the page loads (StrictMode runs state initializers twice).
 const SIGNIN_ERROR = typeof window === 'undefined' ? null : takeSignInError();
 
+// Whether `state` lets someone into the Studio.
+const allows = (state: SessionState) => !(state.auth === 'github' && state.user === null) && state.role !== 'none';
+
 // Whether the Studio can carry on for `next` as it ran for `before`: the
 // same person, still allowed to write if they were.
-function sameSeat(before: SessionValue, next: SessionValue) {
-  return before.state.user?.login === next.state.user?.login && (rightsOf(next.state.role).write || !rightsOf(before.state.role).write);
+function sameSeat(before: SessionState, next: SessionState) {
+  return before.user?.login === next.user?.login && (rightsOf(next.role).write || !rightsOf(before.role).write);
 }
 
 // Reads who is signed in before the Studio loads. With sign-in on and
@@ -32,7 +35,9 @@ function sameSeat(before: SessionValue, next: SessionValue) {
 // reconnects with the new session (#121). Someone else signing in, or the
 // same person no longer allowed to write, gets the Studio afresh: open
 // notes keep their unsaved edits for that person (src/editor/unsaved.ts)
-// and do not save them under another account.
+// and do not save them under another account. A sign-in in another tab
+// shows when the sync reconnects: its seat check reads the session and
+// refuses the connection unless it is the Studio's seat.
 export function SessionGate({ children }: { children: ReactNode }) {
   const client = useMemo(() => createSessionClient(), []);
   const [state, setState] = useState<SessionState | null>(null);
@@ -42,6 +47,8 @@ export function SessionGate({ children }: { children: ReactNode }) {
   const [shown, setShown] = useState<SessionValue | null>(null);
   // Changes when the Studio must be mounted afresh.
   const [mount, setMount] = useState(0);
+  const seat = useRef<SessionState | null>(null);
+  useEffect(() => { seat.current = shown?.state ?? null; }, [shown]);
 
   const apply = useCallback((next: SessionState) => {
     setCsrf(next.csrf);
@@ -56,6 +63,17 @@ export function SessionGate({ children }: { children: ReactNode }) {
     return onSignedOut(load);
   }, [load]);
 
+  // The session the browser holds now, as the sync sees it on a reconnect.
+  useEffect(() => {
+    onSeatCheck(async () => {
+      const next = await client.load();
+      const before = seat.current;
+      apply(next);
+      return before === null || (allows(next) && sameSeat(before, next));
+    });
+    return () => { onSeatCheck(null); };
+  }, [client, apply]);
+
   // Signing out leaves the Studio: the sign-in page stands in for it.
   const signOut = useCallback(() => {
     client.logout().then((next) => {
@@ -64,9 +82,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
     }, (reason: unknown) => { setError((reason as Error).message); });
   }, [client, apply]);
   const value = useMemo(() => (state === null ? null : { state, signOut }), [state, signOut]);
-  const allowed = value !== null && !(value.state.auth === 'github' && value.state.user === null) && value.state.role !== 'none';
+  const allowed = value !== null && allows(value.state);
   if (allowed && shown !== value) {
-    if (shown !== null && !sameSeat(shown, value)) setMount(mount + 1);
+    if (shown !== null && !sameSeat(shown.state, value.state)) setMount(mount + 1);
     setShown(value);
   }
 
