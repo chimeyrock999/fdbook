@@ -1,4 +1,4 @@
-import { CircleAlert, FolderTree, GitBranch, GitCommitHorizontal, Images, PanelLeft } from 'lucide-react';
+import { CircleAlert, FileX, FolderTree, GitBranch, GitCommitHorizontal, Images, PanelLeft } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { clampWidth, SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, type Sidebar as SidebarState, type SidebarView } from './useSidebar';
 
@@ -36,8 +36,9 @@ function useWidthCap() {
 // (`onCloseDrawer`), leaving the desktop layout as it was. The Issues
 // view is filled by the editor through a portal into `issuesRef`, since the
 // lint lives with the open note. With change requests, `changeRequests`
-// adds a button under the views that opens their list in the main pane.
-export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, assets, issuesRef, changes = null, changeCount = 0, changeRequests = null }: {
+// adds a button under the views that opens their list in the main pane;
+// `deletedPages` one above it for the pages deleted on HEAD (#114).
+export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, assets, issuesRef, changes = null, changeCount = 0, changeRequests = null, deletedPages = null }: {
   state: SidebarState;
   drawer: boolean;
   onCloseDrawer: () => void;
@@ -51,6 +52,8 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
   changes?: ReactNode;
   changeCount?: number;
   changeRequests?: { shown: boolean; onOpen: () => void } | null;
+  // `count` is null until the list loads.
+  deletedPages?: { shown: boolean; count: number | null; onOpen: () => void } | null;
 }) {
   const pane = useRef<HTMLDivElement>(null);
   const shown = state.shown || drawer;
@@ -130,6 +133,20 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
           changeCount === 0 ? 'Changes' : `Changes (${String(changeCount)})`,
           <GitCommitHorizontal size={20} strokeWidth={1.8} />,
           changeCount > 0 && <span className="studio-activity-count" data-info>{changeCount}</span>,
+        )}
+        {deletedPages && (
+          // A page in the main pane, as Change requests below it.
+          <button
+            type="button"
+            className="studio-activity-button studio-activity-page"
+            aria-current={deletedPages.shown ? 'page' : undefined}
+            aria-label={deletedPages.count ? `Deleted pages (${String(deletedPages.count)})` : 'Deleted pages'}
+            title="Deleted pages"
+            onClick={deletedPages.onOpen}
+          >
+            <FileX size={20} strokeWidth={1.8} />
+            {deletedPages.count ? <span className="studio-activity-count" data-muted>{deletedPages.count}</span> : null}
+          </button>
         )}
         {changeRequests && (
           // A page in the main pane, not a view: it sits at the foot and is

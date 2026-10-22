@@ -1,4 +1,4 @@
-import { FileCode, Pencil, Trash2, Upload } from 'lucide-react';
+import { FileCode, History, Pencil, Trash2, Upload } from 'lucide-react';
 import { useState, type DragEvent } from 'react';
 import { ASSETS_DIR, extensionOf } from '../../server/security/asset-types';
 import type { AssetAnswer, AssetInfo, AssetsClient, AssetUsage } from '../api/assets';
@@ -46,7 +46,8 @@ function Preview({ asset, zoom, onBox }: { asset: AssetInfo; zoom: 'fit' | 'actu
 // replace and delete wait while the open note is `unsaved`, as in the
 // sidebar.
 // `onChanged` hears every change, so the URL can follow a move.
-export function AssetPage({ client, list, path, unsaved, readOnly = false, onOpenUsage, onChanged }: {
+// `onShowHistory` opens the asset's history (#114), on main too.
+export function AssetPage({ client, list, path, unsaved, readOnly = false, onOpenUsage, onChanged, onShowHistory }: {
   client: AssetsClient;
   list: ReturnType<typeof useAssetList>;
   path: string;
@@ -55,6 +56,7 @@ export function AssetPage({ client, list, path, unsaved, readOnly = false, onOpe
   readOnly?: boolean;
   onOpenUsage: (usage: AssetUsage) => void;
   onChanged: (answer: AssetAnswer) => void;
+  onShowHistory?: () => void;
 }) {
   const [zoom, setZoom] = useState<'fit' | 'actual'>('fit');
   const [box, setBox] = useState<{ path: string; text: string } | null>(null);
@@ -116,31 +118,38 @@ export function AssetPage({ client, list, path, unsaved, readOnly = false, onOpe
           <h1>{name}</h1>
           <span>{asset.path}</span>
         </div>
-        {!readOnly && (
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              className="studio-button gap-1.5"
-              disabled={generated || unsaved}
-              title={generated ? 'A diagram generates it: change the diagram instead' : waitHint}
-              onClick={() => { setDialog({ kind: 'replace', file: null }); }}
-            >
-              <Upload size={14} aria-hidden /> Replace…
+        <div className="flex flex-wrap gap-1.5">
+          {onShowHistory && (
+            <button type="button" className="studio-button gap-1.5" onClick={onShowHistory}>
+              <History size={14} aria-hidden /> History
             </button>
-            <button type="button" className="studio-button gap-1.5" disabled={unsaved} title={waitHint} onClick={() => { setDialog({ kind: 'rename' }); }}>
-              <Pencil size={14} aria-hidden /> Rename…
-            </button>
-            <button
-              type="button"
-              className="studio-button studio-asset-delete gap-1.5"
-              disabled={unsaved || used > 0 || generated}
-              title={deleteHint}
-              onClick={() => { setDialog({ kind: 'delete' }); }}
-            >
-              <Trash2 size={14} aria-hidden /> Delete…
-            </button>
-          </div>
-        )}
+          )}
+          {!readOnly && (
+            <>
+              <button
+                type="button"
+                className="studio-button gap-1.5"
+                disabled={generated || unsaved}
+                title={generated ? 'A diagram generates it: change the diagram instead' : waitHint}
+                onClick={() => { setDialog({ kind: 'replace', file: null }); }}
+              >
+                <Upload size={14} aria-hidden /> Replace…
+              </button>
+              <button type="button" className="studio-button gap-1.5" disabled={unsaved} title={waitHint} onClick={() => { setDialog({ kind: 'rename' }); }}>
+                <Pencil size={14} aria-hidden /> Rename…
+              </button>
+              <button
+                type="button"
+                className="studio-button studio-asset-delete gap-1.5"
+                disabled={unsaved || used > 0 || generated}
+                title={deleteHint}
+                onClick={() => { setDialog({ kind: 'delete' }); }}
+              >
+                <Trash2 size={14} aria-hidden /> Delete…
+              </button>
+            </>
+          )}
+        </div>
       </div>
       <div className="studio-asset-page-body">
         {shownStatus !== null && <p role="status" className="studio-tree-status">{shownStatus}</p>}

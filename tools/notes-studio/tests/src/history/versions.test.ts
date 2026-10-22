@@ -6,6 +6,7 @@ const sha = (digit: string) => digit.repeat(40);
 const history = (mtimeMs: number | null): PageHistory => ({
   path: 'content/notes/a.mdx',
   mtimeMs,
+  deleted: null,
   versions: [sha('c'), sha('b'), sha('a')].map((each) => ({ sha: each, date: '2026-10-01T10:00:00Z', author: 'A', message: 'm', path: 'content/notes/a.mdx', status: 'M' as const, inChangeRequest: false })),
 });
 
@@ -33,7 +34,9 @@ describe('page versions', () => {
     // A reader on a change request has no Edit to turn to (#99).
     expect(restoreBlocked({ selected: sha('a'), readOnly: false, reader: true, mtimeMs: 1 })).toBe('Restoring needs write access to the repository; you are signed in as a reader.');
     expect(restoreBlocked({ selected: NOW, readOnly: false, mtimeMs: 1 })).toMatch(/older version/);
-    expect(restoreBlocked({ selected: sha('a'), readOnly: false, mtimeMs: null })).toMatch(/not in this change request/);
+    // A deleted page comes back whole; a deleted asset does not.
+    expect(restoreBlocked({ selected: sha('a'), readOnly: false, mtimeMs: null })).toBeNull();
+    expect(restoreBlocked({ selected: sha('a'), readOnly: false, mtimeMs: null, asset: true })).toMatch(/not in this change request/);
     expect(shortVersion(NOW)).toBe('Now');
     expect(shortVersion(sha('a'))).toBe('aaaaaaa');
   });
