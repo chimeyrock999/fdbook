@@ -35,6 +35,11 @@ describe('websocket upgrades', () => {
     );
   });
 
+  it('lets no cross-site page load through while sign-in is off, not even the sign-in callback', async () => {
+    const response = await rawRequest(`${studio.origin}/api/session/callback?code=x&state=y`, { headers: { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate' } });
+    expect(response.status).toBe(403);
+  });
+
   it('closes upgrades nobody handles instead of leaving them open', async () => {
     expect(await tryUpgrade(`${studio.url}somewhere`)).toBe('refused 404');
     // Vite would ignore its protocol on another path and leave the socket open.

@@ -30,6 +30,8 @@ describe('page versions', () => {
   it('says why Restore is off', () => {
     expect(restoreBlocked({ selected: sha('a'), readOnly: false, mtimeMs: 1 })).toBeNull();
     expect(restoreBlocked({ selected: sha('a'), readOnly: true, mtimeMs: 1 })).toMatch(/read only/);
+    // A reader on a change request has no Edit to turn to (#99).
+    expect(restoreBlocked({ selected: sha('a'), readOnly: false, reader: true, mtimeMs: 1 })).toBe('Restoring needs write access to the repository; you are signed in as a reader.');
     expect(restoreBlocked({ selected: NOW, readOnly: false, mtimeMs: 1 })).toMatch(/older version/);
     expect(restoreBlocked({ selected: sha('a'), readOnly: false, mtimeMs: null })).toMatch(/not in this change request/);
     expect(shortVersion(NOW)).toBe('Now');

@@ -16,8 +16,9 @@ npm run studio           # http://127.0.0.1:4310
 Set `STUDIO_PORT` to use another port. Set `STUDIO_HOST` to one IP address
 of this machine to serve there instead of loopback, for example a Tailscale
 address: `STUDIO_HOST=100.71.207.12 npm run studio` serves
-`http://100.71.207.12:4310`. The Studio has no login, so anyone who can reach
-that address can edit; `0.0.0.0`, host names and IPv6 zone ids are refused.
+`http://100.71.207.12:4310`; `0.0.0.0`, host names and IPv6 zone ids are
+refused. Off loopback everyone signs in with GitHub first, and the Studio
+does not start until that is set up (see Sign-in).
 Needs Node 22.18 or newer (the server runs TypeScript directly). The Studio
 opens main read only and edits in change requests, each a branch with its own
 worktree (see Change requests below), so it needs git, an `origin` with a
@@ -101,7 +102,7 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
 
 ## Server
 
-Everything the server touches goes through two checks.
+Everything the server touches goes through these checks.
 
 - **Origin guard** (`server/security/guard.ts`). Every request and every
   websocket upgrade must carry `Host: 127.0.0.1:<port>` or `localhost:<port>`
@@ -116,6 +117,12 @@ Everything the server touches goes through two checks.
   `.obsidian` are refused, and so is any symlink on the path, even one that
   points inside: a save replaces the file, so it would turn a linked note into
   a copy. The file API, the file events and the notes sync all use this check.
+- **Sign-in** (`server/auth/`, `server/security/access.ts`), when it is on.
+  After the guard, every `/api` request and the notes sync need a session
+  with enough access to the repository, decided from the method and path
+  alone (`requiredRole`): reads need a reader, every other `/api` request a
+  writer, so a new write endpoint is closed until it is listed there. Writes
+  also carry the session's token in `X-Studio-Csrf`. See Sign-in.
 
 `npm run studio` serves main read only and each change request's worktree
 under `/cr/<slug>/` (see Change requests). `startStudioServer({ root })`
@@ -145,7 +152,11 @@ without `changeRequests`, as the tests start it, edits the one worktree at
 | `GET /api/changes/blob?path=…[&base=<sha>]` | The file's bytes as commit `base` (the diff's own base, else the merge base now) holds it, for an image's before side; 404 when it has none. Served like an asset, with `Content-Security-Policy: sandbox`. |
 | `GET /api/crs` | The change requests: `{ enabled, crs: [{ slug, name, branch, status, pushed, worktree, changedPages, uncommitted, updatedMs, previewUrl, pr }], taken, prError }`, `taken` being the slugs a new one cannot take; `?fresh=1` reads the pull requests again (see Change requests) |
 | `POST /api/crs` | Takes JSON `{ name }`, fetches origin, adds the branch and its worktree, and returns `{ cr }` |
-| `POST /api/crs/<slug>/discard` | Takes JSON `{ dryRun? }`, removes the worktree and the local branch, and returns `{ discard: { slug, branch, worktree, commits, uncommitted, pushed, pr } }`. With `dryRun` it removes nothing. |
+| `POST /api/crs/<slug>/discard` | Takes JSON `{ dryRun? }`, removes the worktree and the local branch, and returns `{ discard: { slug, branch, worktree, commits, uncommitted, pushed, pr } }`. With `dryRun` it removes nothing. With sign-in on, removing what is on origin (the branch, an open pull request) needs an admin (`403`). |
+| `GET /api/session` | Who is signed in: `{ auth: "github" \| "off", flows, repo, user: { login, name, avatarUrl } \| null, role, csrf }` (see Sign-in), or `503` when their role cannot be read. Sign-in off answers `auth: "off"` with every right. |
+| `POST /api/session/device`, `POST /api/session/device/poll` | The device flow: JSON `{}` answers `{ flow, userCode, verificationUri, expiresIn, interval }`; `{ flow }` answers `{ state: "pending", interval }` or `{ state: "done", session }` with the session cookie, `410` once the code expired, `403` when GitHub cancelled it or the person has no access. |
+| `GET /api/session/web`, `GET /api/session/callback` | The web flow: a redirect to GitHub, and GitHub's redirect back, which signs in and goes on to `/` (or `/?signin_error=…`). |
+| `POST /api/session/logout` | Takes JSON `{}` and the csrf header, ends the session. |
 | `/cr/<slug>/api/…`, `/cr/<slug>/__fde_sync` | The endpoints above (but `/api/crs`) for the change request's worktree. An unknown slug answers `404`. |
 | any other `/api/…` | `404` with a JSON `{ error }`, never the app's page (see below) |
 | `/__fde_sync` (websocket) | The fumadocs-editor sync server for `content/notes`. It reads `.mdx` only, writes only notes that already exist (no page or folder creation; that goes through the file API), and merges changes made on disk into open documents. Known gap: its tree `delete` command still removes an existing note, without updating `meta.yaml` or checking the mtime, because the scope cannot tell it apart from a save on the same path. Don't wire the editor's tree delete until upstream can authorize tree commands separately (fuma-nama/fumadocs-editor#24). |
@@ -166,6 +177,87 @@ temp file and renames it over the target, keeping the file's mode.
 `src/api/files.ts` is the UI client. `writeFile` throws a
 `FileConflictError` that holds the disk version. `subscribeFileEvents` follows
 `/api/events`.
+
+## Sign-in
+
+On `127.0.0.1` the Studio is one person's on one machine, and sign-in is
+off unless `STUDIO_AUTH=github`. With `STUDIO_HOST` it is always on (#99):
+`STUDIO_AUTH=off` is refused there, and so is starting without the settings
+below. People sign in with GitHub, and what they may do comes from their
+access to this repository, read with the host's `gh` (`gh api
+repos/<owner>/<repo>/collaborators/<login>/permission`), so the GitHub token
+asks for no scope and is dropped once the Studio knows who signed in.
+
+| Role | Access to the repository | May |
+| --- | --- | --- |
+| Reader | `read`, `triage` | read main and change requests, diffs, previews, lint |
+| Writer | `write`, `maintain` | also create, edit, commit, preview and publish a change request, and discard one that is only on this machine |
+| Admin | `admin` | also discard or clean up what is on origin: the branch and an open pull request (#21) |
+
+Anyone else is refused after signing in, with the reason. The role is read
+again after five minutes (requests that need it together share one `gh`
+call), so access taken away on GitHub shows within that; when it cannot be
+read (gh logged out, offline), requests answer `503` rather than guess. The
+page and Vite's modules need no role and never wait for gh. That also
+means anyone who reaches the address can read the Studio's own code and
+what Vite serves from the repository (`lib/`, `components/`, `styles/`)
+before signing in; the notes and assets stay behind the gate. An open notes
+sync checks on every read and write that its session still exists and its
+role allows it, and the file events stream ends at its next event once the
+session is gone, so signing out or losing access stops open connections
+too.
+
+Set up a GitHub OAuth App (Settings → Developer settings → OAuth Apps)
+and tick **Enable Device Flow**. Then:
+
+| Variable | Value |
+| --- | --- |
+| `STUDIO_AUTH` | `github` or `off`. Unset: off on `127.0.0.1`, on everywhere else. |
+| `STUDIO_GITHUB_CLIENT_ID` | The OAuth App's client ID. Required when sign-in is on. |
+| `STUDIO_GITHUB_FLOWS` | `device` (the default), `web`, or both in the order the sign-in page shows them, the first as its main button: `device,web`. |
+| `STUDIO_GITHUB_CLIENT_SECRET` | The OAuth App's client secret; only `web` needs it. |
+| `STUDIO_ALLOWED_USERS` | GitHub logins, comma-separated; when set, only they get in, whatever their access. |
+| `STUDIO_SESSION_DAYS` | How long a sign-in lasts, 7 days by default. |
+
+- **Device flow** (`device`): the page shows a code to enter at
+  github.com/login/device. It needs no callback URL, so it works on any
+  address of the machine, and no secret on it. Once GitHub confirms the
+  code, a failure after it (gh down for the role) is retried on the next
+  poll without a new code.
+- **Web flow** (`web`): the browser goes to GitHub and comes back to
+  `http://<STUDIO_HOST>:<port>/api/session/callback`, which the server
+  prints at start and which must be the OAuth App's callback URL. An OAuth
+  App has one callback URL, so each address the Studio is served on needs
+  its own App; on loopback a sign-in started on `localhost` starts again on
+  `127.0.0.1`. That page load is cross-site, so the origin guard lets it
+  through on that one path (a `GET` with `Sec-Fetch-Mode: navigate`), and it
+  signs in only with the `state` the Studio set in this browser.
+
+The session is a random id in an `HttpOnly`, `SameSite=Strict` cookie named
+after the port (browsers share cookies between the ports of one host). The
+server keeps only its hash, with the GitHub user, in
+`sessions-<port>.json` of the Studio home (`STUDIO_HOME`, `~/.chimey-studio`
+by default; mode `0600`), so a restart keeps everyone signed in and Studios
+on other ports keep their own. The cookie is not `Secure`: the Studio
+serves plain `http://`, where a browser would not send a `Secure` cookie;
+on a tailnet the traffic is already encrypted. Every write also sends the
+session's token in `X-Studio-Csrf` (`src/api/session.ts`, `studioFetch`),
+on top of the cookie and the origin guard.
+
+A commit from the UI has the signed-in person as its author, `Name
+<id+login@users.noreply.github.com>`, so GitHub links it to them; the
+committer stays the host's git identity. Pushes and pull requests still run
+as the host's `gh`, so Publish ends the description with `Opened in Notes
+Studio by @login.`
+
+The page asks `GET /api/session` before it loads the Studio
+(`src/session/SessionGate.tsx`): with nobody signed in it shows the
+sign-in page, and a request answering `401` later (the session expired)
+brings it back. The header ends with the signed-in person (their picture
+alone on a phone) and a menu with their role and **Sign out**. A reader's
+Studio is read only, as main is, without New change request, Commit,
+Preview, Publish or Discard, but with a change request's **Open preview**; a writer sees Discard and Clean up off, with
+the reason, on a change request that is on origin.
 
 ## Change requests
 
@@ -762,7 +854,8 @@ the page under its current name, in the change request: nothing is
 committed, the page shows in Changes and is committed from there. The
 server writes under the notes lock and only over the page as the history
 read it (its mtime): if the page changed since, it answers 409 and the
-history loads again. Main refuses it (`403`), and the button is off there,
+history loads again. Main refuses it (`403`), and so does a reader's
+session (it needs a writer, see Sign-in); the button is off for both,
 on Now and for a page gone from the worktree. An open editor takes the
 restored text as it takes any edit made on disk.
 

@@ -2,6 +2,7 @@
 // server/cr/manager.ts. Always at /api/crs, whichever worktree the page edits.
 
 import { errorOf, readJson } from './json';
+import { studioFetch } from './session';
 
 export type CrStatus = 'draft' | 'previewing' | 'review' | 'merged' | 'closed';
 
@@ -49,7 +50,7 @@ export type CrList = { enabled: boolean; crs: ChangeRequest[]; taken: string[]; 
 
 export function createCrClient(base = '') {
   async function post<T>(path: string, body: unknown): Promise<T> {
-    const response = await fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const response = await studioFetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!response.ok) throw await errorOf(response);
     return readJson<T>(response);
   }
@@ -57,7 +58,7 @@ export function createCrClient(base = '') {
   return {
     // `fresh` fetches origin and reads the pull requests again instead of the server's cached ones.
     async list(fresh = false): Promise<CrList> {
-      const response = await fetch(`${base}/api/crs${fresh ? '?fresh=1' : ''}`);
+      const response = await studioFetch(`${base}/api/crs${fresh ? '?fresh=1' : ''}`);
       if (!response.ok) throw await errorOf(response);
       return readJson<CrList>(response);
     },

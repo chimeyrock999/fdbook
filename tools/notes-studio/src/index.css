@@ -15,6 +15,7 @@
 @import './graph/graph.css';
 @import './cr/cr.css';
 @import './sidebar/sidebar.css';
+@import './session/session.css';
 /* Site components whose classes the Studio draws with (src/plugins). */
 @source '../../../components/graph-objects.tsx';
 

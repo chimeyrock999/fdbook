@@ -2,7 +2,9 @@ import { watch, type FSWatcher } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import type { ServerResponse } from 'node:http';
 import { join } from 'node:path';
+import { atLeast } from '../auth/shared.ts';
 import { pathnameOf, type Handler } from '../http.ts';
+import { viewerOf, type Viewer } from '../security/access.ts';
 import { ASSETS_DIR, classifyPath, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 import { listEditableFiles } from './store.ts';
 
@@ -14,15 +16,25 @@ const HEARTBEAT_MS = 25_000;
 // Watches the editable areas of the worktree and streams changes as
 // server-sent events on GET /api/events. Saves made by the Studio show up
 // too; a client tells its own save apart by the mtime the save returned.
+// A stream ends once its viewer may no longer read (signed out, access
+// taken away), at the next event or heartbeat.
 export function createFileEvents(root: string) {
-  const clients = new Set<ServerResponse>();
+  const clients = new Map<ServerResponse, Viewer>();
+  const send = (frame: string) => {
+    for (const [client, viewer] of clients) {
+      if (atLeast(viewer.current(), 'reader')) client.write(frame);
+      else {
+        clients.delete(client);
+        client.end();
+      }
+    }
+  };
   const known = new Map<string, number>();
   const pending = new Map<string, NodeJS.Timeout>();
   const watchers: FSWatcher[] = [];
 
   const broadcast = (event: FileEvent) => {
-    const frame = `data: ${JSON.stringify(event)}\n\n`;
-    for (const client of clients) client.write(frame);
+    send(`data: ${JSON.stringify(event)}\n\n`);
   };
 
   const emitChange = async (path: string) => {
@@ -85,7 +97,7 @@ export function createFileEvents(root: string) {
     .catch(() => undefined);
 
   const heartbeat = setInterval(() => {
-    for (const client of clients) client.write(': heartbeat\n\n');
+    send(': heartbeat\n\n');
   }, HEARTBEAT_MS);
   heartbeat.unref();
 
@@ -98,7 +110,7 @@ export function createFileEvents(root: string) {
       Connection: 'keep-alive',
     });
     response.write('retry: 1000\n\n');
-    clients.add(response);
+    clients.set(response, viewerOf(request));
     request.on('close', () => clients.delete(response));
     return true;
   };
@@ -109,7 +121,7 @@ export function createFileEvents(root: string) {
       clearInterval(heartbeat);
       for (const timer of pending.values()) clearTimeout(timer);
       for (const watcher of watchers) watcher.close();
-      for (const client of clients) client.end();
+      for (const client of clients.keys()) client.end();
       clients.clear();
     },
   };

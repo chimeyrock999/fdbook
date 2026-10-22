@@ -4,6 +4,7 @@
 // server/preview/publish.ts.
 
 import { errorOf, readJson } from './json';
+import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
 export type BuildState = 'waiting' | 'building' | 'ready' | 'failed' | 'skipped' | 'none' | 'unknown';
@@ -27,28 +28,28 @@ export type Preview = {
 export function createPreviewClient(base = API_BASE) {
   return {
     async load(): Promise<Preview> {
-      const response = await fetch(`${base}/api/preview`);
+      const response = await studioFetch(`${base}/api/preview`);
       if (!response.ok) throw await errorOf(response);
       return readJson<Preview>(response);
     },
 
     // Pushes the change request's commits; answers the preview after the push.
     async push(): Promise<Preview> {
-      const response = await fetch(`${base}/api/preview`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const response = await studioFetch(`${base}/api/preview`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
       if (!response.ok) throw await errorOf(response);
       return readJson<Preview>(response);
     },
 
     // The pull request's title and description to start from.
     async draft(): Promise<PublishDraft> {
-      const response = await fetch(`${base}/api/publish`);
+      const response = await studioFetch(`${base}/api/publish`);
       if (!response.ok) throw await errorOf(response);
       return readJson<PublishDraft>(response);
     },
 
     // Pushes what is not pushed and opens the pull request; answers the preview with it.
     async publish(title: string, body: string): Promise<Preview> {
-      const response = await fetch(`${base}/api/publish`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, body }) });
+      const response = await studioFetch(`${base}/api/publish`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, body }) });
       if (!response.ok) throw await errorOf(response);
       return readJson<Preview>(response);
     },

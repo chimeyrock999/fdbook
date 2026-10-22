@@ -3,6 +3,7 @@
 // server/git/history.ts and server/git/diff.ts; paths are worktree paths.
 
 import { errorOf, readJson } from './json';
+import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
 export type ChangeStatus = 'M' | 'A' | 'D' | 'R';
@@ -22,13 +23,13 @@ export function createChangesClient(base = API_BASE) {
 
   return {
     async loadChanges(): Promise<Changes> {
-      const response = await fetch(`${base}/api/changes`);
+      const response = await studioFetch(`${base}/api/changes`);
       if (!response.ok) return failed(response);
       return readJson<Changes>(response);
     },
 
     async loadHistory(): Promise<History> {
-      const response = await fetch(`${base}/api/changes/history`);
+      const response = await studioFetch(`${base}/api/changes/history`);
       if (!response.ok) return failed(response);
       return readJson<History>(response);
     },
@@ -36,7 +37,7 @@ export function createChangesClient(base = API_BASE) {
     // `path` against main; `from` is its old name, for a rename.
     async loadDiff(path: string, from?: string): Promise<FileDiff> {
       const query = new URLSearchParams({ path, ...(from === undefined ? {} : { from }) });
-      const response = await fetch(`${base}/api/changes/diff?${query.toString()}`);
+      const response = await studioFetch(`${base}/api/changes/diff?${query.toString()}`);
       if (!response.ok) return failed(response);
       return readJson<FileDiff>(response);
     },
@@ -49,7 +50,7 @@ export function createChangesClient(base = API_BASE) {
 
     // Commits `paths`, and only them, with `message`; answers the new commit.
     async commit(message: string, paths: string[]): Promise<Commit> {
-      const response = await fetch(`${base}/api/changes`, {
+      const response = await studioFetch(`${base}/api/changes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, paths }),

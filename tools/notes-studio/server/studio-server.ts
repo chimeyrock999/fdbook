@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { SYNC_ENDPOINT } from '@fumadocs-editor/core/sync';
 import { createServer as createViteServer } from 'vite';
+import { createAuth, type AuthOptions } from './auth/auth.ts';
 import { DEFAULT_STUDIO_HOST, DEFAULT_STUDIO_PORT, repoRoot, studioRoot } from './config.ts';
 import { createChangeRequestsApi } from './cr/api.ts';
 import { openChangeRequests, type ChangeRequestOptions, type ChangeRequests } from './cr/manager.ts';
@@ -32,11 +33,14 @@ function closeServer(server: Server) {
 // With `changeRequests` the Studio opens main read-only (unprefixed /api/…
 // and /__fde_sync) and each change request's worktree under /cr/<slug>/
 // (see workspace.ts). Without it, it edits the one worktree at `root`.
-export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEFAULT_STUDIO_PORT, root = repoRoot, changeRequests }: {
+// With `auth`, everyone signs in with GitHub first and may do what their
+// access to the repository allows (auth/auth.ts).
+export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEFAULT_STUDIO_PORT, root = repoRoot, changeRequests, auth: authOptions = null }: {
   host?: string;
   port?: number;
   root?: string;
   changeRequests?: ChangeRequestOptions;
+  auth?: AuthOptions | null;
 } = {}): Promise<StudioServer> {
   const server = createServer();
   // Bind first so a busy port fails before Vite starts its watcher.
@@ -50,6 +54,7 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
   // The address as bound, not as given: Node reports it canonically.
   const { address, port: boundPort } = server.address() as AddressInfo;
   const hosts = ownHosts(address, boundPort);
+  const auth = createAuth(authOptions, boundPort, hosts[0]);
 
   let vite;
   try {
@@ -82,20 +87,21 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
   // A discarded change request's watchers and sync close before its worktree goes.
   crs?.onDiscard((slug) => workspaces.close(slug));
 
-  server.on('request', createRequestListener(hosts, [workspaces.handle, createChangeRequestsApi(crs), ...main.handlers, ...shared], vite.middlewares));
+  server.on('request', createRequestListener(hosts, [workspaces.handle, createChangeRequestsApi(crs), ...main.handlers, ...shared], vite.middlewares, auth));
   routeUpgrades(server, hosts, (viteHmr) => [
     {
       matches: (request) => pathnameOf(request) === SYNC_ENDPOINT,
       handle: main.handleUpgrade,
+      needs: 'reader',
     },
-    workspaces.syncRoute(SYNC_ENDPOINT),
+    { ...workspaces.syncRoute(SYNC_ENDPOINT), needs: 'reader' },
     {
       // Vite only answers on its base path; elsewhere it would leave the socket open.
       matches: (request) =>
         pathnameOf(request) === '/' && ['vite-hmr', 'vite-ping'].includes(request.headers['sec-websocket-protocol'] ?? ''),
       handle: viteHmr,
     },
-  ]);
+  ], auth);
 
   return {
     server,

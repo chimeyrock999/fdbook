@@ -3,6 +3,7 @@
 // content/notes.
 
 import { errorOf, readJson } from './json';
+import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
 export type Hidden = 'unlisted' | 'visible-false';
@@ -59,14 +60,14 @@ export function createTreeClient(base = API_BASE) {
 
   return {
     async loadTree(): Promise<TreeFolder> {
-      const response = await fetch(`${base}/api/tree`);
+      const response = await studioFetch(`${base}/api/tree`);
       if (!response.ok) return failed(response);
       return (await readJson<{ tree: TreeFolder }>(response)).tree;
     },
 
     // Applies the change, or with `dryRun` only says what it would write.
     async change(request: TreeRequest, dryRun = false): Promise<TreeAnswer> {
-      const response = await fetch(`${base}/api/tree`, {
+      const response = await studioFetch(`${base}/api/tree`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...request, dryRun }),

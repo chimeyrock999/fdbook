@@ -1,3 +1,4 @@
+import { touchesOrigin } from '../auth/shared.ts';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -313,7 +314,9 @@ export async function openChangeRequests({
   // `dryRun`, only says what goes. `seen` is what the dry run the user
   // confirmed said about origin: when origin has changed since, nothing is
   // removed, so the discard never touches what the dialog did not list.
-  async function discard(slug: string, dryRun: boolean, seen: DiscardSeen | null = null): Promise<Discard> {
+  // Without `onOrigin` (a writer, not an admin) a discard that would close a
+  // pull request or delete a branch on origin is refused.
+  async function discard(slug: string, dryRun: boolean, seen: DiscardSeen | null = null, onOrigin = true): Promise<Discard> {
     return lock('cr', async () => {
       if (!isCrSlug(slug)) throw new HttpError(404, `no such change request: ${slug}`);
       // Offline: go by the last fetch; deleting the remote branch then fails.
@@ -337,6 +340,9 @@ export async function openChangeRequests({
         prError: cr.pushed ? prs.error : null,
       };
       if (dryRun) return answer;
+      if (!onOrigin && touchesOrigin(cr)) {
+        throw new HttpError(403, `${cr.branch} is on ${REMOTE}: cleaning it up there needs admin access to the repository. Nothing was removed.`);
+      }
       if (answer.prError !== null) {
         throw new HttpError(502, `Could not read the pull requests: ${answer.prError.replace(/\.?$/, '.')} Nothing was removed.`);
       }
