@@ -438,7 +438,10 @@ Visual:
 - The `/` menu inserts a Keyword or Tag (`<Keyword id="" displayName="">`),
   a Graph heading (`### Title :graph-meta{…}`) and the site's directive
   blocks: accordions, tabs, steps and `::youtube`, next to the JSX
-  components (`<YouTube>` among them).
+  components (`<YouTube>` among them). **Mermaid diagram** (`/mermaid`;
+  `/diagram` lists it next to SVG diagram) inserts a ` ```mermaid ` code
+  block with a starter flowchart, drawn under the code as you type, with
+  the caret in the code.
 - Select text and the graph bar under it wraps it as a **Keyword**
   (`Mod-Alt-K`) or **Tag** (`Mod-Alt-T`). With the caret in a heading,
   **Graph node** (`Mod-Alt-G`) adds `:graph-meta{…}` from its title. Some
@@ -969,11 +972,13 @@ Plugins today:
   site shows (character references and label escapes decoded) and are
   written so they read back the same. The MDX button shows the block's
   source.
-- `site-inserts`: the `/` menu items for graph markers and directive
-  blocks. The menu lists components, so each is a spec named
-  `studio-insert-…` whose `insert` returns the site's syntax instead of a
-  node of its own; no note has such a tag, and
-  `tests/src/plugins/site-inserts.test.ts` checks that none parses.
+- `site-inserts`: the `/` menu items for graph markers, directive blocks
+  and a Mermaid diagram. The menu lists components, so each is a spec named
+  `studio-insert-…` whose `insert` returns the site's syntax (or, for
+  Mermaid, the editor's code block) instead of a node of its own; no note
+  has such a tag, and `tests/src/plugins/site-inserts.test.ts` checks that
+  none parses. The menu matches the query against labels only, hence the
+  label "Mermaid diagram".
 - `youtube`: `<YouTube>` as the same card as `::youtube`, its title edited in
   place and its url in the props panel.
 - `fumadocs-ui`: Cards, Steps, Tabs and Accordions.
