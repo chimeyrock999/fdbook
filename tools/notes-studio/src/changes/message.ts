@@ -6,10 +6,11 @@ const VERB: Record<ChangeStatus, string> = { M: 'update', A: 'add', D: 'remove',
 
 const isPage = (file: ChangedFile) => file.path.startsWith(NOTES_PREFIX) && file.path.endsWith('.mdx');
 const isMeta = (file: ChangedFile) => file.path.startsWith(NOTES_PREFIX) && file.path.endsWith('/meta.yaml');
+const isDiagram = (file: ChangedFile) => file.path.startsWith('diagrams/') && file.path.endsWith('.diagram.json');
 
 // The folder a file sits in, by name ('notes' at the top of content/notes).
 function folderOf(path: string) {
-  const segments = path.replace(/^(content|public)\/notes\//, '').split('/');
+  const segments = path.replace(/^((content|public)\/notes|diagrams)\//, '').split('/');
   return segments.length > 1 ? segments[segments.length - 2] : 'notes';
 }
 
@@ -24,7 +25,7 @@ const unique = <T>(values: T[]) => [...new Set(values)];
 
 // The commit message the Changes view starts from, for the picked files: what
 // happened to the pages, else to the page order (meta.yaml), else to the
-// assets. A page's own meta.yaml and images go without saying.
+// diagrams, else to the assets. A page's own meta.yaml and images go without saying.
 export function suggestMessage(files: ChangedFile[]): string {
   const pages = files.filter(isPage);
   if (pages.length === 1) {
@@ -46,6 +47,9 @@ export function suggestMessage(files: ChangedFile[]): string {
   }
   const metas = files.filter(isMeta);
   if (metas.length > 0) return `${PREFIX}reorder ${unique(metas.map((meta) => folderOf(meta.path))).join(', ')}`;
+  const diagrams = files.filter(isDiagram);
+  if (diagrams.length === 1) return `${PREFIX}${VERB[diagrams[0].status]} diagram ${diagrams[0].path.slice(diagrams[0].path.lastIndexOf('/') + 1).replace(/\.diagram\.json$/, '')}`;
+  if (diagrams.length > 1) return `${PREFIX}update ${String(diagrams.length)} diagrams`;
   if (files.length > 0) return `${PREFIX}update assets of ${unique(files.map((file) => folderOf(file.path))).join(', ')}`;
   return '';
 }
