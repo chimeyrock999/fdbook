@@ -167,6 +167,15 @@ describe('sign-in', () => {
       expect(json(write)).toEqual({ error: 'This needs writer access; @reader is a reader.' });
     });
 
+    it('lets a reader read page history but not restore it (#110)', async () => {
+      const { cookie, csrf } = await studio.signIn('reader');
+      expect((await studio.send(`/api/history?path=${encodeURIComponent(NOTE)}`)).status).toBe(401);
+      expect((await studio.send(`/api/history?path=${encodeURIComponent(NOTE)}`, { cookie })).status).not.toBe(401);
+      const restore = await studio.send('/api/history/restore', { method: 'POST', body: { path: NOTE, sha: 'HEAD', mtimeMs: 0 }, cookie, csrf });
+      expect(restore.status).toBe(403);
+      expect(json(restore)).toEqual({ error: 'This needs writer access; @reader is a reader.' });
+    });
+
     it('lets a writer write, with the csrf token only', async () => {
       const { cookie, csrf } = await studio.signIn('writer');
       const { mtimeMs, content } = json(await studio.send(fileApi(NOTE), { cookie })) as { mtimeMs: number; content: string };

@@ -4,6 +4,7 @@
 
 import type { DiffSide } from './changes';
 import { errorOf, readJson } from './json';
+import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
 export type PageVersion = { sha: string; date: string; author: string; message: string; path: string; status: 'A' | 'M' | 'R'; from?: string; inChangeRequest: boolean };
@@ -21,7 +22,7 @@ export function createHistoryClient(base = API_BASE) {
 
   return {
     async loadHistory(path: string): Promise<PageHistory> {
-      const response = await fetch(`${base}/api/history?${new URLSearchParams({ path }).toString()}`);
+      const response = await studioFetch(`${base}/api/history?${new URLSearchParams({ path }).toString()}`);
       if (!response.ok) return failed(response);
       return readJson<PageHistory>(response);
     },
@@ -29,7 +30,7 @@ export function createHistoryClient(base = API_BASE) {
     // Version `from` (null: nothing) against version `to`, each a sha or NOW.
     async compare(path: string, from: string | null, to: string): Promise<Comparison> {
       const query = new URLSearchParams({ path, to, ...(from === null ? {} : { from }) });
-      const response = await fetch(`${base}/api/history/compare?${query.toString()}`);
+      const response = await studioFetch(`${base}/api/history/compare?${query.toString()}`);
       if (!response.ok) return failed(response);
       return readJson<Comparison>(response);
     },
@@ -37,7 +38,7 @@ export function createHistoryClient(base = API_BASE) {
     // Writes version `sha` over the page, as long as the page is still the
     // one read at `mtimeMs`.
     async restore(path: string, sha: string, mtimeMs: number): Promise<{ path: string; mtimeMs: number }> {
-      const response = await fetch(`${base}/api/history/restore`, {
+      const response = await studioFetch(`${base}/api/history/restore`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path, sha, mtimeMs }),
