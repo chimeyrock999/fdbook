@@ -15,7 +15,8 @@ import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api.js';
 import { rectsOverlap, textUnits, type Rect } from './geometry.ts';
 import { buildScene } from './scene.ts';
 import { diagramSchema, type DiagramInput } from './schema.ts';
-import { validateDiagram } from './validate.ts';
+import { DiagramOpError } from './ops.ts';
+import { checkBeforeLayout, validateDiagram } from './validate.ts';
 
 type Input = DiagramInput;
 type Box = { x: number; y: number; w: number; h: number };
@@ -181,15 +182,16 @@ function estimatedFrames(diagram: Input, placed: Map<string, Box>) {
 // The nearest free spot to `want`, on the grid, stepping outwards in rings.
 // It stays within `maxRight`: a wider canvas would shrink every label once
 // the note fits it to the reading column, while a taller one costs nothing.
-function freeSpot(want: Box, nodeId: string, diagram: Input, placed: Map<string, Box>, maxRight: number) {
-  const inGroups = memberships(diagram).get(nodeId) ?? new Set<string>();
+function freeSpot(want: Box, inGroups: Set<string>, diagram: Input, placed: Map<string, Box>, maxRight: number) {
   const frames = frameRects(diagram, placed).filter((frame) => !inGroups.has(frame.id));
+  const others = [...placed.values()].map(rectOf);
   const fits = (box: Box) => box.x >= MARGIN / 2 && box.y >= MARGIN / 2 && box.x + box.w <= maxRight
-    && [...placed.values()].every((other) => !rectsOverlap(rectOf(box), rectOf(other), FREE_GAP))
+    && others.every((other) => !rectsOverlap(rectOf(box), other, FREE_GAP))
     && frames.every((frame) => !rectsOverlap(rectOf(box), frame.rect, FREE_GAP / 2));
   const start = { ...want, x: Math.min(snap(want.x), Math.max(MARGIN, snap(maxRight - want.w))), y: snap(want.y) };
   if (fits(start)) return start;
-  for (let ring = 1; ring < 200; ring += 1) {
+  // Rings of 40px: a spot is found well before the last on any real diagram.
+  for (let ring = 1; ring < 100; ring += 1) {
     const candidates: Box[] = [];
     for (let i = -ring; i <= ring; i += 1) {
       for (const [dx, dy] of [[i, -ring], [i, ring], [-ring, i], [ring, i]]) {
@@ -208,11 +210,21 @@ export interface LayoutResult {
   placed: string[];
 }
 
+// Throws DiagramOpError (op/invalid-diagram) when the diagram cannot be laid
+// out: a schema error, an unknown id, a group cycle.
 export async function layoutDiagram(diagram: Input, { all = false }: { all?: boolean } = {}): Promise<LayoutResult> {
   const next = structuredClone(diagram);
-  const kept = new Map<string, Box>(all ? [] : Object.entries(next.layout.nodes).filter(([id]) => next.nodes.some((node) => node.id === id)));
+  // Nothing to place leaves even a broken diagram as it is, so an edit that
+  // fixes it can still be saved.
+  const nodes = Array.isArray(next.nodes) ? next.nodes : [];
+  const kept = new Map<string, Box>(all ? [] : Object.entries(next.layout?.nodes ?? {}).filter(([id]) => nodes.some((node) => node.id === id)));
+  if (nodes.every((node) => kept.has(node.id))) return { diagram: next, placed: [] };
+  const blocking = checkBeforeLayout(diagram);
+  if (blocking.length) {
+    const listed = blocking.slice(0, 5).map((issue) => `[${issue.code}${issue.path ? ` at ${issue.path}` : ''}] ${issue.message}`).join(' ');
+    throw new DiagramOpError('op/invalid-diagram', `The diagram cannot be laid out until it is fixed: ${listed}`);
+  }
   const missing = next.nodes.filter((node) => !kept.has(node.id));
-  if (!missing.length) return { diagram: next, placed: [] };
 
   const sizes = new Map(next.nodes.map((node) => {
     const box = kept.get(node.id) ?? (all ? next.layout.nodes[node.id] : undefined);
@@ -237,6 +249,7 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
         const box = elk.get(node.id)!;
         candidate.layout.nodes[node.id] = { x: snap(box.x + offsetX), y: snap(box.y + offsetY), w: box.w, h: box.h };
       }
+      growCanvas(candidate, next.nodes.map((node) => candidate.layout.nodes[node.id]));
       const errors = validateDiagram(candidate).issues.filter((issue) => issue.severity === 'error').length;
       if (!best || errors < best.errors) best = { diagram: candidate, errors };
     }
@@ -248,6 +261,7 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
   // Neighbours first: a node joined to a placed one has an anchor.
   const neighbours = (id: string) => (next.edges ?? []).flatMap((edge) => (edge.from === id ? [edge.to] : edge.to === id ? [edge.from] : []));
   const inGroups = memberships(next);
+  const noGroups = new Set<string>();
   const placed: string[] = [];
   // As wide as the canvas, or the drawing, or the reading column, whichever is widest.
   const contentRight = Math.max(...[...kept.values()].map((box) => box.x + box.w)) + MARGIN;
@@ -272,18 +286,20 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
       const bottom = Math.max(...[...kept.values()].map((box) => box.y + box.h));
       want = { x: MARGIN, y: bottom + LAYER_GAP / 2, ...size };
     }
-    const box = freeSpot(want, node.id, next, kept, maxRight);
+    const box = freeSpot(want, inGroups.get(node.id) ?? noGroups, next, kept, maxRight);
     kept.set(node.id, box);
     next.layout.nodes[node.id] = box;
     placed.push(node.id);
   }
-  // A set canvas grows to hold what was added.
-  if (next.layout.canvas) {
-    const added = placed.map((id) => kept.get(id)!);
-    const right = Math.max(...added.map((box) => box.x + box.w)) + MARGIN;
-    const bottom = Math.max(...added.map((box) => box.y + box.h)) + MARGIN;
-    const [width, height] = next.layout.canvas;
-    if (right > width || bottom > height) next.layout.canvas = [Math.max(width, right), Math.max(height, bottom)];
-  }
+  growCanvas(next, placed.map((id) => kept.get(id)!));
   return { diagram: next, placed };
+}
+
+// A set canvas grows to hold what was placed.
+function growCanvas(diagram: Input, added: Box[]) {
+  if (!diagram.layout.canvas || !added.length) return;
+  const right = Math.max(...added.map((box) => box.x + box.w)) + MARGIN;
+  const bottom = Math.max(...added.map((box) => box.y + box.h)) + MARGIN;
+  const [width, height] = diagram.layout.canvas;
+  if (right > width || bottom > height) diagram.layout.canvas = [Math.max(width, right), Math.max(height, bottom)];
 }

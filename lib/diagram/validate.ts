@@ -202,17 +202,26 @@ export interface DiagramReport {
   issues: DiagramIssue[];
 }
 
-// Parses, checks and lays out a diagram file's content. The scene is only
-// built when the structure is sound.
-export function validateDiagram(value: unknown): DiagramReport {
-  let diagram: Diagram;
+// The errors that stop a diagram from being laid out automatically: all but
+// the positions the layout is about to fill in.
+export function checkBeforeLayout(value: unknown): DiagramIssue[] {
+  const parsed = parseIssues(value);
+  if (!('diagram' in parsed)) return parsed.issues;
+  return checkStructure(parsed.diagram).filter((issue) => issue.severity === 'error' && issue.code !== 'layout/missing-position');
+}
+
+// Schema errors only: the file's shape, before any id is looked up.
+export function checkSchema(value: unknown): DiagramIssue[] {
+  const parsed = parseIssues(value);
+  return 'issues' in parsed ? parsed.issues : [];
+}
+
+function parseIssues(value: unknown): { diagram: Diagram } | { issues: DiagramIssue[] } {
   try {
-    diagram = diagramSchema.parse(value);
+    return { diagram: diagramSchema.parse(value) };
   } catch (error) {
     if (!(error instanceof ZodError)) throw error;
     return {
-      diagram: null,
-      scene: null,
       issues: error.issues.map((issue) => ({
         code: 'schema/invalid',
         severity: 'error' as const,
@@ -221,6 +230,14 @@ export function validateDiagram(value: unknown): DiagramReport {
       })),
     };
   }
+}
+
+// Parses, checks and lays out a diagram file's content. The scene is only
+// built when the structure is sound.
+export function validateDiagram(value: unknown): DiagramReport {
+  const parsed = parseIssues(value);
+  if (!('diagram' in parsed)) return { diagram: null, scene: null, issues: parsed.issues };
+  const { diagram } = parsed;
   const issues = checkStructure(diagram);
   if (issues.some((issue) => issue.severity === 'error')) return { diagram, scene: null, issues };
   const scene = buildScene(diagram);

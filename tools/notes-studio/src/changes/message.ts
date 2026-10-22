@@ -1,4 +1,5 @@
 import type { ChangedFile, ChangeStatus } from '../api/changes';
+import { classifyPath } from '../../server/security/asset-types';
 import { NOTES_PREFIX } from '../notes/notes';
 
 const PREFIX = 'docs(notes): ';
@@ -6,7 +7,7 @@ const VERB: Record<ChangeStatus, string> = { M: 'update', A: 'add', D: 'remove',
 
 const isPage = (file: ChangedFile) => file.path.startsWith(NOTES_PREFIX) && file.path.endsWith('.mdx');
 const isMeta = (file: ChangedFile) => file.path.startsWith(NOTES_PREFIX) && file.path.endsWith('/meta.yaml');
-const isDiagram = (file: ChangedFile) => file.path.startsWith('diagrams/') && file.path.endsWith('.diagram.json');
+const isDiagram = (file: ChangedFile) => classifyPath(file.path) === 'diagram';
 
 // The folder a file sits in, by name ('notes' at the top of content/notes).
 function folderOf(path: string) {

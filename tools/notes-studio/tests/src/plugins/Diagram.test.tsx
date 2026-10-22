@@ -51,6 +51,20 @@ describe('Diagram card', () => {
     expect(urls[1]).toBe(`/api/file?path=${encodeURIComponent(PATH)}&v=42`);
   });
 
+  it('says so when the file is gone', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', (url: string) => {
+      urls.push(url);
+      const gone = urls.length > 1;
+      const body = gone ? { error: `no such file: ${PATH}` } : { path: PATH, content: real, mtimeMs: 1 };
+      return Promise.resolve(new Response(JSON.stringify(body), { status: gone ? 404 : 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+    const container = draw({ src: SRC });
+    await waitFor(() => { expect(container.querySelector('svg.dg-svg')).not.toBeNull(); });
+    act(() => { assetChanged(PATH, -7); });
+    await waitFor(() => { expect(container.querySelector('.studio-diagram-problem')?.textContent).toBe(`no such file: ${PATH}`); });
+  });
+
   it('says why a diagram does not draw, and counts its issues', async () => {
     const broken = JSON.parse(real) as { edges: { to: string }[] };
     broken.edges[0].to = 'ghost';

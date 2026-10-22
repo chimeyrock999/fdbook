@@ -115,6 +115,22 @@ describe('diagram tools', () => {
     expect(text(result)).toContain('changed since it was read');
   });
 
+  it('answers a diagram it cannot lay out, or a malformed one, with what to fix', async () => {
+    const created = await call('diagram_create', { src: 'demo/broken', content: { title: 'Broken', kinds: [{ id: 'k', label: 'K', tone: 'blue' }], nodes: [{ id: 'a', kind: 'k', label: 'A' }], layout: { canvas: [800, 600] } } });
+    expect(created.isError).toBe(true);
+    expect(text(created)).toContain('schema/invalid at layout.nodes');
+
+    const diagram = await onDisk();
+    diagram.groups = [{ id: 'g', label: 'G', members: ['h'] }, { id: 'h', label: 'H', members: ['g', 'logic'] }];
+    await writeFile(join(worktree.root, DEMO_DIAGRAM), JSON.stringify(diagram));
+    const added = await call('diagram_add_node', { src: SRC, id: 'extra', kind: 'backend', label: 'Extra' });
+    expect(added.isError).toBe(true);
+    expect(text(added)).toContain('op/invalid-diagram');
+    expect(text(added)).toContain('structure/group-cycle');
+    // An edit that places nothing still saves, so the cycle can be undone.
+    expect((await call('diagram_move', { src: SRC, id: 'logic', dx: 10 })).isError).toBeUndefined();
+  });
+
   it('refuses a src outside diagrams/', async () => {
     for (const src of ['../content/notes/index', '../../package']) {
       const result = await call('diagram_read', { src });
@@ -139,6 +155,7 @@ describe('diagram tools', () => {
     // An existing file is not overwritten.
     const again = await call('diagram_create', { src: 'demo/new/pipeline', content: { title: 'x', kinds: [], nodes: [] } });
     expect(again.isError).toBe(true);
+    expect(text(again)).toContain('already exists');
   });
 
   it('validates and draws a PNG an agent can look at', async () => {

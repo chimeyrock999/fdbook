@@ -1,19 +1,22 @@
 import { z } from 'zod';
-import { layoutDiagram } from '../../../../lib/diagram/auto-layout.ts';
 import { formatDiagramJson } from '../../../../lib/diagram/format.ts';
 import { addNode, connect, DiagramOpError, moveNode, removeNode, setNote } from '../../../../lib/diagram/ops.ts';
 import { EDGE_VARIANTS, type DiagramInput } from '../../../../lib/diagram/schema.ts';
-import { validateDiagram, type DiagramIssue } from '../../../../lib/diagram/validate.ts';
+import { diagramPathOf } from '../../../../lib/diagram/source.ts';
+import { checkSchema, validateDiagram, type DiagramIssue } from '../../../../lib/diagram/validate.ts';
 import { listEditableFiles } from '../files/store.ts';
 import { classifyPath, DIAGRAM_SUFFIX, DIAGRAMS_DIR } from '../security/asset-types.ts';
 import type { StudioTool, StudioToolContext, ToolResult } from './tool.ts';
 
-// The diagram tools of the Studio MCP (server/mcp/registry.ts mounts them):
+// The diagram tools of the Studio MCP, which its host (server/mcp/registry.ts,
+// coming with #85) mounts:
 // small edits to `diagrams/**/*.diagram.json` in the change request's
 // worktree, so an agent never rewrites a whole file or a coordinate by hand.
 // Every write goes through ctx.files with the mtime it read, lays out any
 // node left without a position, and answers with the checks of
-// lib/diagram/validate.ts. The format is in diagrams/README.md.
+// lib/diagram/validate.ts. The format is in diagrams/README.md. Layout
+// (elkjs) and drawing (resvg) load on first use, from the repository root's
+// packages, so the server starts without them.
 
 class ToolError extends Error {}
 
@@ -26,8 +29,8 @@ const note = z.object({
 });
 
 function pathOf(name: string) {
-  const path = `${DIAGRAMS_DIR}/${name.trim().replace(/^\/+/, '').replace(/\.diagram\.json$/, '')}${DIAGRAM_SUFFIX}`;
-  if (classifyPath(path) !== 'diagram') throw new ToolError(`not a diagram path: ${name}`);
+  const path = diagramPathOf(name);
+  if (path === null || classifyPath(path) !== 'diagram') throw new ToolError(`not a diagram path: ${name}`);
   return path;
 }
 
@@ -42,6 +45,13 @@ async function load(ctx: StudioToolContext, name: string) {
     throw new ToolError(`${path} is not JSON: ${(error as Error).message}`);
   }
   return { path, diagram, mtimeMs: file.mtimeMs };
+}
+
+// An edit needs the file's shape (kinds, nodes, layout.nodes) to be sound;
+// one the schema refuses is fixed by hand first.
+function editable(path: string, diagram: unknown) {
+  const issues = checkSchema(diagram);
+  if (issues.length) throw new ToolError(`${path} does not match the diagram format; fix it by hand first:\n${issues.map(issueLine).join('\n')}`);
 }
 
 const conflict = (error: unknown) => error instanceof Error && error.name === 'FileConflictError';
@@ -66,6 +76,8 @@ function report(lead: string, issues: DiagramIssue[], structured: Record<string,
 // Runs one edit: read, change, place what has no position, save, check.
 async function edit(ctx: StudioToolContext, name: string, change: (diagram: DiagramInput) => DiagramInput, verb: string) {
   const { path, diagram, mtimeMs } = await load(ctx, name);
+  editable(path, diagram);
+  const { layoutDiagram } = await import('../../../../lib/diagram/auto-layout.ts');
   const { diagram: laid, placed } = await layoutDiagram(change(diagram));
   const saved = await save(ctx, path, laid, mtimeMs);
   const placedNote = placed.length ? ` Placed ${placed.join(', ')}.` : '';
@@ -152,10 +164,13 @@ export const diagramTools: StudioTool[] = [
     }),
     async run({ src: name, content }, ctx) {
       const path = pathOf(name);
+      if (await ctx.files.read(path)) throw new ToolError(`${path} already exists; change it with the other diagram_* tools`);
       const depth = path.split('/').length - 2;
       // The file's own fields come first, whatever the content says of them.
       const rest = Object.fromEntries(Object.entries(content).filter(([key]) => key !== '$schema' && key !== 'version' && key !== 'layout'));
       const diagram = { $schema: `${'../'.repeat(depth)}diagram.schema.json`, version: 1, ...rest, layout: content.layout ?? { nodes: {} } } as DiagramInput;
+      editable(path, diagram);
+      const { layoutDiagram } = await import('../../../../lib/diagram/auto-layout.ts');
       const { diagram: laid, placed } = await layoutDiagram(diagram);
       const saved = await save(ctx, path, laid, null);
       return report(`Created ${path}. Placed ${String(placed.length)} node${placed.length === 1 ? '' : 's'}.`, validateDiagram(laid).issues, { path, mtimeMs: saved, placed });
@@ -253,6 +268,8 @@ export const diagramTools: StudioTool[] = [
     input: z.object({ src, all: z.boolean().optional() }),
     async run({ src: name, all }, ctx) {
       const { path, diagram, mtimeMs } = await load(ctx, name);
+      editable(path, diagram);
+      const { layoutDiagram } = await import('../../../../lib/diagram/auto-layout.ts');
       const { diagram: laid, placed } = await layoutDiagram(diagram, { all });
       const saved = placed.length ? await save(ctx, path, laid, mtimeMs) : mtimeMs;
       return report(placed.length ? `Placed ${placed.join(', ')} in ${path}.` : `Every node of ${path} already has a position.`, validateDiagram(laid).issues, { path, mtimeMs: saved, placed });

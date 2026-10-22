@@ -1,5 +1,6 @@
 import type { ComponentRenderProps } from '@fumadocs-editor/ui';
 import { renderDiagramSvg } from '@site/lib/diagram/render';
+import { diagramPathOf } from '@site/lib/diagram/source';
 import { validateDiagram, type DiagramIssue } from '@site/lib/diagram/validate';
 import { Workflow } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -16,7 +17,7 @@ type Drawn = { svg: string | null; issues: DiagramIssue[] } | { failed: string }
 // the site's renderer. Its URL carries the file's version once it changed on
 // disk (App's file events), so a save from an agent or the CLI redraws it.
 function useDiagram(src: string | undefined): Drawn | null {
-  const path = src ? `diagrams/${src.trim().replace(/^\/+/, '').replace(/\.diagram\.json$/, '')}.diagram.json` : null;
+  const path = src ? diagramPathOf(src) : null;
   const url = useAssetUrl(path ?? '');
   const [drawn, setDrawn] = useState<Drawn | null>(null);
   useEffect(() => {

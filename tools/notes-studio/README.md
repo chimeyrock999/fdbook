@@ -1061,14 +1061,16 @@ they are listed, watched and diffed, and show in Changes (a commit of only
 diagrams is named after them).
 
 Agents change diagrams through the Studio MCP server's `diagram_*` tools
-(`server/mcp/diagram-tools.ts`, mounted by `server/mcp/registry.ts`):
+(`server/mcp/diagram-tools.ts`; the MCP host that mounts them,
+`server/mcp/registry.ts` at `/api/mcp`, comes with #85):
 `diagram_create`, `diagram_add_node`, `diagram_connect`, `diagram_move`,
 `diagram_set_note`, `diagram_remove_node` and `diagram_layout` write through
 `ctx.files` with the mtime they read, so a save made meanwhile is refused,
 not overwritten; `diagram_list`, `diagram_read`, `diagram_validate` and
 `diagram_render_png` (a PNG the agent can look at) only read. Each write lays
 out what has no position (`lib/diagram/auto-layout.ts`, which never moves a
-placed node) and answers with the checks. `server/mcp/tool.ts` is the tool
+placed node) and answers with the checks; elkjs and resvg load on first
+use, from the repository root's packages. `server/mcp/tool.ts` is the tool
 contract the MCP host and the tools share. The skill
 `skills/chimeyrock-diagram` (at the repository root) is how an agent uses
 them.

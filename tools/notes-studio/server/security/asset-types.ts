@@ -1,6 +1,8 @@
 // The asset types the Studio serves and saves under public/notes. No Node
 // imports: the UI reads the same list to name an upload before it is sent.
 
+import { DIAGRAM_SUFFIX, DIAGRAMS_DIR } from '../../../../lib/diagram/source.ts';
+
 // Where assets live, as a worktree path.
 export const ASSETS_DIR = 'public/notes';
 
@@ -52,9 +54,8 @@ export function isTextPath(path: string) {
 // The only files the Studio may touch, as worktree-relative posix paths.
 // Every surface (file API, file events, notes sync) asks this one module.
 export const NOTES_DIR = 'content/notes';
-// The diagrams <Diagram src> draws (lib/read-diagram.ts).
-export const DIAGRAMS_DIR = 'diagrams';
-export const DIAGRAM_SUFFIX = '.diagram.json';
+// The diagrams <Diagram src> draws (lib/diagram/source.ts).
+export { DIAGRAM_SUFFIX, DIAGRAMS_DIR };
 // Every area the Studio lists, watches and diffs.
 export const EDITABLE_AREAS = [NOTES_DIR, ASSETS_DIR, DIAGRAMS_DIR];
 

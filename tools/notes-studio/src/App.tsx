@@ -170,10 +170,13 @@ export function App() {
     return () => { query.removeEventListener('change', onChange); };
   }, []);
 
-  // An asset or a diagram changed on disk: what shows it loads it again.
+  // An asset or a diagram changed on disk: what shows it loads it again. A
+  // deleted diagram gets a version of its own too, so its cards read it
+  // again and say it is gone.
   useEffect(() => files.subscribeFileEvents((event) => {
-    const shown = event.path.startsWith(ASSETS_PREFIX) || classifyPath(event.path) === 'diagram';
-    if (shown && event.type !== 'unlink' && event.mtimeMs !== null) assetChanged(event.path, event.mtimeMs);
+    const diagram = classifyPath(event.path) === 'diagram';
+    if (diagram && event.type === 'unlink') assetChanged(event.path, -Date.now());
+    else if ((diagram || event.path.startsWith(ASSETS_PREFIX)) && event.type !== 'unlink' && event.mtimeMs !== null) assetChanged(event.path, event.mtimeMs);
   }), [files]);
 
   // Back and forward move between opened notes and assets.
