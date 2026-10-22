@@ -315,7 +315,8 @@ through the notes sync socket:
   version changes it).
 - Mermaid previews take the site's diagram palette. The editor draws them, so
   `NoteEditor` marks the author's fills on each one as the site does
-  (`lib/pele-author-fill.ts`), for the dark theme's label ink; the code block
+  (`lib/pele-author-fill.ts`), for the dark theme's node ink, subgraph tint
+  and title halos; the code block
   frame sets `--notes-diagram-bg`, the colour of the plate behind each edge
   label.
 

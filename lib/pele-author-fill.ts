@@ -1,36 +1,62 @@
 /**
  * Marks the parts of a Pele diagram the author filled (`style X fill:…`,
- * `classDef`), so the dark theme can give their labels dark ink
- * (styles/notes-theme.css). CSS alone misses two cases: a fill written as a
- * colour name (`fill:lightblue`), and a subgraph title Pele lifts out of its
- * subgraph, into `.pele-cluster-titles`, when an edge crosses it; only its
- * `data-id` ties it back to the subgraph. Such a title also carries the
- * subgraph's fill as `--author-fill`, for the halo Pele draws behind it.
+ * `classDef`) for the dark theme (styles/notes-theme.css): a node keeps its
+ * fill and gets dark ink, a subgraph is tinted instead. CSS alone misses two
+ * cases: a fill written as a colour name (`fill:lightblue`), and a subgraph
+ * title Pele lifts out of its subgraph, into `.pele-cluster-titles`, when an
+ * edge crosses it; only its `data-id` ties it back to the subgraph.
+ *
+ * Such a title also carries what is behind it as `--author-fill`, for the
+ * halo Pele draws there: the subgraph's fill, or the surface (marked `none`)
+ * when the author cleared it. A subgraph whose label has the author's
+ * `color:` is marked `data-author-color` on both parts, as that ink was
+ * picked for the fill at full strength.
  */
 
 const MARK = 'data-author-fill';
+const COLOR_MARK = 'data-author-color';
 // Pele writes an author's fill inline on the shape; `none` and
 // `transparent` are no colour for the label to sit on.
 const AUTHOR_FILL = /(?:^|;)\s*fill\s*:([^;]+)/i;
 const NO_FILL = /^(?:none|transparent)$/i;
+// Pele mixes a title's halo deeper for each subgraph it sits in; only a
+// top-level one sits on its own rect over the surface.
+const TOP_LEVEL_HALO = /var\(--_a\) 50%/;
 
 export function markAuthorFills(root: ParentNode): void {
-  const filled = new Map<string, string>();
+  const filled = new Map<string, string | null>();
+  const colored = new Set<string>();
 
   root.querySelectorAll('svg.pele :is(.pele-node, .pele-cluster)').forEach((group) => {
     const shape = [...group.children].find((child) => !child.matches('text, .pele-label, .pele-cluster-label'));
     const fill = AUTHOR_FILL.exec(shape?.getAttribute('style') ?? '')?.[1].trim();
-    if (!fill || NO_FILL.test(fill)) return;
-    group.setAttribute(MARK, '');
-    if (group.matches('.pele-cluster')) filled.set(group.getAttribute('data-id') ?? '', fill);
+    if (!fill) return;
+    const cleared = NO_FILL.test(fill);
+    if (!cleared) group.setAttribute(MARK, '');
+    if (!group.matches('.pele-cluster')) return;
+    const id = group.getAttribute('data-id') ?? '';
+    filled.set(id, cleared ? null : fill);
+    if (hasAuthorColor(group)) colored.add(id);
   });
 
   root.querySelectorAll<SVGElement>('svg.pele .pele-cluster-title[data-id]').forEach((title) => {
-    const fill = filled.get(title.getAttribute('data-id') ?? '');
+    const id = title.getAttribute('data-id') ?? '';
+    const fill = filled.get(id);
     if (fill === undefined) return;
-    title.setAttribute(MARK, '');
-    title.style.setProperty('--author-fill', fill);
+    if (hasAuthorColor(title)) colored.add(id);
+    const halo = title.querySelector(':scope > text:not(.pele-cluster-label)');
+    if (!TOP_LEVEL_HALO.test(halo?.getAttribute('stroke') ?? '')) return;
+    title.setAttribute(MARK, fill === null ? 'none' : '');
+    title.style.setProperty('--author-fill', fill ?? 'var(--_bg)');
   });
+
+  root.querySelectorAll('svg.pele :is(.pele-cluster, .pele-cluster-title)[data-id]').forEach((group) => {
+    if (colored.has(group.getAttribute('data-id') ?? '')) group.setAttribute(COLOR_MARK, '');
+  });
+}
+
+function hasAuthorColor(group: Element) {
+  return AUTHOR_FILL.test(group.querySelector(':scope > .pele-cluster-label')?.getAttribute('style') ?? '');
 }
 
 /** The same, on markup Pele returned: what the site caches and shows. */

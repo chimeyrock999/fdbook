@@ -126,7 +126,8 @@ describe('notes prose', () => {
       'var(--notes-diagram-bg, var(--color-fd-background))',
     );
     expect(site).not.toMatch(/fill:#"\]/);
-    expect(site).toContain('.dark .notes-theme svg.pele [data-author-fill] > :is(.pele-label, .pele-cluster-label)');
+    expect(site).toContain('.dark .notes-theme svg.pele .pele-node[data-author-fill] > .pele-label');
+    expect(site).not.toMatch(/\[data-author-fill\] > :is\(.pele-label, .pele-cluster-label\)/);
     expect(await read('components/graph-view.module.css')).toMatch(/--notes-diagram-bg:[^;]+;\s*background: var\(--notes-diagram-bg\);/);
     const prose = await read('styles/notes-prose.css');
     expect(prose).toContain('--notes-diagram-bg: var(--color-callout-body-bg);');
@@ -134,6 +135,22 @@ describe('notes prose', () => {
     const studio = await read('tools/notes-studio/src/notes-prose.css');
     expect(studio.match(/--notes-diagram-bg:[^;]+;/g)).toHaveLength(2);
     expect(studio.match(/background: var\(--notes-diagram-bg\);/g)).toHaveLength(2);
+  });
+
+  // Pele fills a subgraph at half strength over the background: pale on the
+  // light page, muddy on the dark one. The dark theme tints it instead, and
+  // the halo of a lifted title mixes at the same strength to match.
+  it('tints author-filled subgraphs in the dark theme, halo included', async () => {
+    const site = await read('styles/notes-theme.css');
+    expect(values(block(site, ':root:has(.notes-theme) svg.pele, .notes-theme svg.pele'))['--notes-cluster-tint']).toBe('0.5');
+    expect(values(block(site, '.dark .notes-theme svg.pele, .dark:has(.notes-theme) svg.pele'))['--notes-cluster-tint']).toBe('0.22');
+    expect(values(block(site, '.notes-theme svg.pele [data-author-color]'))['--notes-cluster-tint']).toBe('0.5');
+    expect(block(site, '.notes-theme svg.pele .pele-cluster[data-author-fill] > rect')).toContain(
+      'fill-opacity: var(--notes-cluster-tint);',
+    );
+    expect(block(site, '.notes-theme svg.pele .pele-cluster-title[data-author-fill] > text:not(.pele-cluster-label)')).toContain(
+      'stroke: color-mix(in srgb, var(--author-fill) calc(var(--notes-cluster-tint) * 100%), var(--_bg));',
+    );
   });
 
   it('leaves no prose rule in the page module', async () => {

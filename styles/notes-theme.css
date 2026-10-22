@@ -180,23 +180,43 @@
   --pele-series-6: var(--color-callout-danger);
   --pele-series-7: var(--color-callout-caution);
   --pele-series-8: var(--color-callout-note);
+  --notes-cluster-tint: 0.5;
 }
 
-/* A node or subgraph the author filled (`style X fill:…`, `classDef`) keeps
-   that fill in the dark theme, where the light text would vanish on it; an
-   explicit `color:` is inline on the label and still wins. The fill is
-   marked by lib/pele-author-fill.ts, which also finds a subgraph title Pele
-   lifted out of its subgraph. */
-.dark .notes-theme svg.pele [data-author-fill] > :is(.pele-label, .pele-cluster-label),
-.dark:has(.notes-theme) svg.pele [data-author-fill] > :is(.pele-label, .pele-cluster-label) {
+/* Pele fills a subgraph the author filled (`style X fill:…`, `classDef`) at
+   half strength over the background: pale on the light page, muddy on the
+   dark one, where its light lines and dark nodes both lose contrast. The
+   dark theme tints it instead, and its title keeps the theme's ink, unless
+   the author also set the title's `color:` for that fill. The marks come
+   from lib/pele-author-fill.ts. */
+.dark .notes-theme svg.pele, .dark:has(.notes-theme) svg.pele {
+  --notes-cluster-tint: 0.22;
+}
+
+:root:has(.notes-theme) svg.pele [data-author-color],
+.notes-theme svg.pele [data-author-color] {
+  --notes-cluster-tint: 0.5;
+}
+
+:root:has(.notes-theme) svg.pele .pele-cluster[data-author-fill] > rect,
+.notes-theme svg.pele .pele-cluster[data-author-fill] > rect {
+  fill-opacity: var(--notes-cluster-tint);
+}
+
+/* A node the author filled keeps that fill in the dark theme, where the
+   light text would vanish on it; an explicit `color:` is inline on the
+   label and still wins. */
+.dark .notes-theme svg.pele .pele-node[data-author-fill] > .pele-label,
+.dark:has(.notes-theme) svg.pele .pele-node[data-author-fill] > .pele-label {
   fill: var(--color-fd-primary-foreground);
 }
 
 /* Pele draws a halo behind a subgraph title it lifted out of its subgraph,
    mixed from its own subgraph colour; on an author's fill, mix it from that
-   fill instead (like the subgraph, at half strength over the background),
-   or it smears around the dark ink above. */
+   fill at the subgraph's strength over the background, or it smears around
+   the ink above. lib/pele-author-fill.ts finds the title and gives it the
+   fill, or the surface when the author cleared it (`fill:transparent`). */
 :root:has(.notes-theme) svg.pele .pele-cluster-title[data-author-fill] > text:not(.pele-cluster-label),
 .notes-theme svg.pele .pele-cluster-title[data-author-fill] > text:not(.pele-cluster-label) {
-  stroke: color-mix(in srgb, var(--author-fill) 50%, var(--_bg));
+  stroke: color-mix(in srgb, var(--author-fill) calc(var(--notes-cluster-tint) * 100%), var(--_bg));
 }
