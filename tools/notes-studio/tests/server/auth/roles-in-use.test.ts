@@ -84,6 +84,8 @@ describe('what each role may do', () => {
       await doc.flush().catch(() => undefined);
       await new Promise((resolve) => setTimeout(resolve, 300));
       expect(await readFile(join(studio.root, 'content/notes/streaming/index.mdx'), 'utf8')).toBe(opened.text);
+      // Nor does it read any more.
+      await expect(sync.open('database/index.mdx', { editor: new TextEditor() }).opened).rejects.toThrow();
     } finally {
       sync.close();
     }

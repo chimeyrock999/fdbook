@@ -198,9 +198,14 @@ Anyone else is refused after signing in, with the reason. The role is read
 again after five minutes (requests that need it together share one `gh`
 call), so access taken away on GitHub shows within that; when it cannot be
 read (gh logged out, offline), requests answer `503` rather than guess. The
-page and Vite's modules need no role and never wait for gh. An open notes
-sync checks on every write that its session still exists and its role
-still writes, so signing out or losing access stops it too.
+page and Vite's modules need no role and never wait for gh. That also
+means anyone who reaches the address can read the Studio's own code and
+what Vite serves from the repository (`lib/`, `components/`, `styles/`)
+before signing in; the notes and assets stay behind the gate. An open notes
+sync checks on every read and write that its session still exists and its
+role allows it, and the file events stream ends at its next event once the
+session is gone, so signing out or losing access stops open connections
+too.
 
 Set up a GitHub OAuth App (Settings → Developer settings → OAuth Apps)
 and tick **Enable Device Flow**. Then:
@@ -849,7 +854,8 @@ the page under its current name, in the change request: nothing is
 committed, the page shows in Changes and is committed from there. The
 server writes under the notes lock and only over the page as the history
 read it (its mtime): if the page changed since, it answers 409 and the
-history loads again. Main refuses it (`403`), and the button is off there,
+history loads again. Main refuses it (`403`), and so does a reader's
+session (it needs a writer, see Sign-in); the button is off for both,
 on Now and for a page gone from the worktree. An open editor takes the
 restored text as it takes any edit made on disk.
 

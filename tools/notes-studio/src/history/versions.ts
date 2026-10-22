@@ -19,8 +19,10 @@ export const shortVersion = (version: string) => (version === NOW ? 'Now' : vers
 
 export const fileNameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
-// Why Restore is off for `selected`, or null when it is on.
-export function restoreBlocked({ selected, readOnly, mtimeMs }: { selected: string; readOnly: boolean; mtimeMs: number | null }) {
+// Why Restore is off for `selected`, or null when it is on. `reader`: the
+// signed-in person may read but not write (#99).
+export function restoreBlocked({ selected, readOnly, reader = false, mtimeMs }: { selected: string; readOnly: boolean; reader?: boolean; mtimeMs: number | null }) {
+  if (reader) return 'Restoring needs write access to the repository; you are signed in as a reader.';
   if (readOnly) return 'Main is read only: use Edit to restore in a change request.';
   if (mtimeMs === null) return 'The page is not in this change request any more.';
   if (selected === NOW) return 'Pick an older version to restore it.';

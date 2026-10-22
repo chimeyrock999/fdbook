@@ -44,14 +44,15 @@ function ComparisonBody({ comparison, mode, onUnparsed }: { comparison: Comparis
 // newest first and across renames, and the one picked against the one
 // before it, or any other ("Compare with"), on the right. Restore writes
 // the picked version over the page, uncommitted, in the change request;
-// main is read only. `revision` changes when the page may have (a save, a
+// main is read only, and so is every page for a `reader`. `revision` changes when the page may have (a save, a
 // commit), and the history loads again. `onOpen` opens the note in the
 // editor; `onRestored` follows a restore (the changes list).
-export function HistoryPage({ client, path, title, readOnly, revision, onOpen, onRestored }: {
+export function HistoryPage({ client, path, title, readOnly, reader = false, revision, onOpen, onRestored }: {
   client: HistoryClient;
   path: string;
   title: string;
   readOnly: boolean;
+  reader?: boolean;
   revision: unknown;
   onOpen: () => void;
   onRestored: () => void;
@@ -127,7 +128,7 @@ export function HistoryPage({ client, path, title, readOnly, revision, onOpen, o
     setConfirming(false);
     setPane('detail');
   };
-  const blocked = shown === null || data === null ? 'Loading.' : restoreBlocked({ selected: shown, readOnly, mtimeMs: data.mtimeMs });
+  const blocked = shown === null || data === null ? 'Loading.' : restoreBlocked({ selected: shown, readOnly, reader, mtimeMs: data.mtimeMs });
 
   const restore = async () => {
     if (shown === null || data?.mtimeMs == null) return;

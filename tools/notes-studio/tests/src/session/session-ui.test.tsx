@@ -3,6 +3,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeRequest, CrList } from '../../../src/api/crs';
+import { createHistoryClient } from '../../../src/api/history';
 import { onSignedOut, setCsrf, studioFetch, type SessionState } from '../../../src/api/session';
 import { CrListPage } from '../../../src/cr/CrListPage';
 import { CrPicker } from '../../../src/cr/CrMenus';
@@ -78,6 +79,13 @@ describe('studioFetch', () => {
     const write = new Headers(calls[1]?.init?.headers);
     expect(write.get('x-studio-csrf')).toBe('tok');
     expect(write.get('content-type')).toBe('application/json');
+  });
+
+  it('carries the csrf token on a page history restore (#110)', async () => {
+    const calls = stubFetch({ '/cr/x/api/history/restore': () => ({ body: { path: 'content/notes/a.mdx', mtimeMs: 2 } }) });
+    setCsrf('tok');
+    await createHistoryClient('/cr/x').restore('content/notes/a.mdx', 'abc', 1);
+    expect(new Headers(calls[0]?.init?.headers).get('x-studio-csrf')).toBe('tok');
   });
 
   it('tells the page when the session is gone', async () => {

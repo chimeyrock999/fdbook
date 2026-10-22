@@ -32,9 +32,12 @@ export function createNotesSync(root: string, hosts: string[], { readOnly = fals
     // sync server safe even if it is mounted somewhere else later.
     authenticate: ({ request }) => {
       if (rejectForeignRequest(request, hosts)) return null;
-      // Asked on every write: the socket stays open after a sign-out or a role taken away.
+      // Asked on every read and write: the socket stays open after a sign-out or a role taken away.
       const viewer = viewerOf(request);
-      return { read: (path) => note(path) !== null, write: (path) => !readOnly && atLeast(viewer.current(), 'writer') && writable(path) };
+      return {
+        read: (path) => atLeast(viewer.current(), 'reader') && note(path) !== null,
+        write: (path) => !readOnly && atLeast(viewer.current(), 'writer') && writable(path),
+      };
     },
   });
 }

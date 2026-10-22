@@ -361,7 +361,8 @@ export function App() {
             client={historyClient}
             path={history}
             title={titles.get(history) ?? history.slice(history.lastIndexOf('/') + 1)}
-            readOnly={readOnly}
+            readOnly={onMain}
+            reader={!rights.write}
             revision={git.changes}
             onOpen={() => { open(history); }}
             onRestored={() => { void git.reload(); }}

@@ -1,3 +1,6 @@
+import { writeFile } from 'node:fs/promises';
+import { request } from 'node:http';
+import { join } from 'node:path';
 import { SYNC_ENDPOINT } from '@fumadocs-editor/core/sync';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { json, tryUpgrade } from '../../support/http';
@@ -217,6 +220,34 @@ describe('sign-in', () => {
         expect((await studio.send('/', { cookie })).status).toBe(200);
       } finally {
         clock.mockRestore();
+      }
+    });
+
+    it('ends an open file events stream once its session is signed out', async () => {
+      const { cookie, csrf } = await studio.signIn('reader');
+      const frames: string[] = [];
+      let ended = false;
+      const stream = request(`${studio.origin}/api/events`, { headers: { Cookie: cookie } });
+      await new Promise<void>((resolve, reject) => {
+        stream.on('response', (response) => {
+          response.setEncoding('utf8');
+          response.on('data', (chunk: string) => frames.push(chunk));
+          response.on('end', () => { ended = true; });
+          resolve();
+        });
+        stream.on('error', reject);
+        stream.end();
+      });
+      try {
+        await writeFile(join(studio.root, NOTE), '---\ntitle: Database\n---\n\nBefore signing out.\n');
+        await expect.poll(() => frames.join('').includes('"type":"change"'), { timeout: 5000 }).toBe(true);
+        expect((await studio.send('/api/session/logout', { method: 'POST', body: {}, cookie, csrf })).status).toBe(200);
+        const seen = frames.join('').length;
+        await writeFile(join(studio.root, NOTE), '---\ntitle: Database\n---\n\nAfter signing out.\n');
+        await expect.poll(() => ended, { timeout: 5000 }).toBe(true);
+        expect(frames.join('').slice(seen)).not.toContain('"type"');
+      } finally {
+        stream.destroy();
       }
     });
 
