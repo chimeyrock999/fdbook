@@ -90,7 +90,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     action, the change marks on the page tree and the reminder on leaving a
     change request.
   - `diff/` is a file's diff against main in the main pane (see Diff).
-  - `history/` is a note's history in the main pane (see History).
+  - `history/` is a note's or an asset's history in the main pane, and
+    the deleted pages (see History).
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
   - `plugins/` holds the editor plugins (see below).
@@ -423,10 +424,10 @@ view (the page tree), the **Assets** view (see Assets), the **Issues**
 view (the open note's lint issues, with their count on the icon) and the
 **Changes** view (see Changes, with the number of changed files); picking
 the open view again hides the sidebar, and so does the button at the foot of
-the bar. A rail marks the open view. The **Change requests** button (in
-change request mode) sits at the foot, above that button: it opens a page in
-the main pane rather than a view, so it is filled, not railed, while the list
-is open. Drag the sidebar's right edge to resize it (220–480px), or focus
+the bar. A rail marks the open view. The **Deleted pages** button (with
+their count) and, in change request mode, the **Change requests** button sit
+at the foot, above that button: each opens a page in the main pane rather
+than a view, so it is filled, not railed, while its page is open. Drag the sidebar's right edge to resize it (220–480px), or focus
 the edge and use the arrow keys, Shift for bigger steps, Home and End for
 the limits; double-click resets it to 284px. It never takes more than the
 window leaves the editor (420px); resizing starts from the width it shows.
@@ -863,15 +864,54 @@ server writes under the notes lock and only over the page as the history
 read it (its mtime): if the page changed since, it answers 409 and the
 history loads again. Main refuses it (`403`), and so does a reader's
 session (it needs a writer, see Sign-in); the button is off for both,
-on Now and for a page gone from the worktree. An open editor takes the
-restored text as it takes any edit made on disk.
+and on Now. An open editor takes the restored text as it takes any edit
+made on disk.
 
-The API: `GET /api/history?path=` (`{ path, mtimeMs, versions }`),
-`GET /api/history/compare?path=&to=[&from=]` (each a full sha or `now`;
+**Assets** have a history too (#114): **History** on the asset page opens
+it, on main as well. Preview shows the two versions side by side, an image
+with its size and pixel box (the diff page's preview), any other file by
+its size; an SVG has Source too. Restore goes the way Replace writes an
+asset (see Assets): off for an asset a diagram generates (the history
+says so, and the server refuses it too), and a
+version under another extension (a `.png` before a `.webp`) gives the
+asset that extension, every note's link following; the history then follows
+the asset to its new name. Git follows an asset's rename only while its
+content stays alike, so a rename made together with new content starts a
+new history.
+
+**Deleted pages**, at the foot of the activity bar (see Sidebar), lists the
+pages deleted on HEAD, grouped by the commit that deleted them, newest
+first: `git log -M --diff-filter=D` under `content/notes`, so a rename is
+no delete, and a page the worktree has again is left out. A page deleted
+but not committed yet is in Changes instead. Opening one shows its history
+with the delete on top of the versions (**Deleted**). **Restore page…**
+first lists every file it writes (a dry run), then brings the picked
+version back, uncommitted, and opens it: the page; each folder deleted
+with it, as the commit before the delete held it (its `index.mdx`, and its
+`meta.yaml` listing only what comes back, `index` included when it was
+listed: a listed index is a child of its folder, not the folder's page);
+and the topmost of these listed again in the `meta.yaml` above, after the
+entry it followed when it was deleted (first when none of those is left),
+unless that list shows every page by itself (`...`) or did not list it
+before the delete (it stays out of the sidebar, as it was). A path the worktree has is refused (`409`): its own
+history restores it.
+
+`meta.yaml` has no history: a folder's order, title and visibility are
+redone from the page tree, and restoring a whole older file would drop the
+pages made since and bring back entries for pages gone.
+
+The API: `GET /api/history?path=` (`{ path, mtimeMs, deleted, generated,
+versions }`, `deleted` naming the commit that deleted a file the worktree
+no longer has, `generated` whether a diagram generates the asset), `GET /api/history/compare?path=&to=[&from=]` (each a full sha or `now`;
 without `from`, nothing is before), `POST /api/history/restore` with JSON
-`{ path, sha, mtimeMs }`. A sha must be one of the page's versions, and the
-path read at it comes from git. Only notes have a history here: a
-`meta.yaml`, an asset or a deleted page do not. The URL is `?history=<path>`.
+`{ path, sha, mtimeMs }` (answers `{ path, mtimeMs }`, `path` being where
+the file is now), `GET /api/history/deleted` (`{ pages: [{ path, title, sha,
+date, author, message, folderGone }] }`, the latest 200) and `POST
+/api/history/restore-deleted` with JSON `{ path, sha, dryRun? }` (answers
+`{ path, open, changes }`). A sha must be one of the file's versions, and
+the path read at it comes from git; an image of a version is served by
+`GET /api/changes/blob?path=&base=<sha>`. The URLs are `?history=<path>`
+and `?view=deleted`.
 
 ## Lint
 

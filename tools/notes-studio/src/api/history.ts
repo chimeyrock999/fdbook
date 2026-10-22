@@ -1,6 +1,7 @@
 // Client for the page history API (server/git/page-history-api.ts), in the
 // worktree the page edits (src/api/workspace.ts). Types mirror
-// server/git/page-history.ts; paths are worktree paths.
+// server/git/page-history.ts and server/git/deleted-pages.ts; paths are
+// worktree paths, of a note or an asset.
 
 import type { DiffSide } from './changes';
 import { errorOf, readJson } from './json';
@@ -8,7 +9,10 @@ import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
 export type PageVersion = { sha: string; date: string; author: string; message: string; path: string; status: 'A' | 'M' | 'R'; from?: string; inChangeRequest: boolean };
-export type PageHistory = { path: string; mtimeMs: number | null; versions: PageVersion[] };
+export type DeletedIn = { sha: string; date: string; author: string; message: string };
+export type PageHistory = { path: string; mtimeMs: number | null; deleted: DeletedIn | null; generated: boolean; versions: PageVersion[] };
+export type DeletedPage = { path: string; title: string; sha: string; date: string; author: string; message: string; folderGone: boolean };
+export type DeletedRestore = { path: string; open: string; changes: { type: 'add' | 'change'; path: string; detail?: string }[] };
 export type VersionRef = { version: string; path: string };
 export type Comparison = { path: string; from: VersionRef | null; to: VersionRef; before: DiffSide | null; after: DiffSide | null };
 
@@ -35,8 +39,9 @@ export function createHistoryClient(base = API_BASE) {
       return readJson<Comparison>(response);
     },
 
-    // Writes version `sha` over the page, as long as the page is still the
-    // one read at `mtimeMs`.
+    // Writes version `sha` over the file, as long as it is still the one
+    // read at `mtimeMs`. An asset may come back under another extension:
+    // `path` is where it is now.
     async restore(path: string, sha: string, mtimeMs: number): Promise<{ path: string; mtimeMs: number }> {
       const response = await studioFetch(`${base}/api/history/restore`, {
         method: 'POST',
@@ -45,6 +50,30 @@ export function createHistoryClient(base = API_BASE) {
       });
       if (!response.ok) return failed(response);
       return readJson<{ path: string; mtimeMs: number }>(response);
+    },
+
+    // Where version `sha` of a file is served, for an image's side.
+    versionUrl(path: string, sha: string) {
+      return `${base}/api/changes/blob?${new URLSearchParams({ path, base: sha }).toString()}`;
+    },
+
+    // The pages deleted on HEAD, newest delete first.
+    async loadDeleted(): Promise<DeletedPage[]> {
+      const response = await studioFetch(`${base}/api/history/deleted`);
+      if (!response.ok) return failed(response);
+      return (await readJson<{ pages: DeletedPage[] }>(response)).pages;
+    },
+
+    // Brings back deleted page `path` as version `sha` held it, with the
+    // folders deleted with it; with `dryRun`, only what that would write.
+    async restoreDeleted(path: string, sha: string, dryRun = false): Promise<DeletedRestore> {
+      const response = await studioFetch(`${base}/api/history/restore-deleted`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, sha, dryRun }),
+      });
+      if (!response.ok) return failed(response);
+      return readJson<DeletedRestore>(response);
     },
   };
 }

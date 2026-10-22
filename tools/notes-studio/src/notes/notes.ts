@@ -24,22 +24,28 @@ export function noteFromUrl(search: string): string | null {
 }
 
 // What the main pane shows: a note or an asset, by worktree path, a file's
-// diff against main (renamed `from` an old path), a note's history, or the
-// list of change requests.
-export type Page = { kind: 'note' | 'asset' | 'history'; path: string } | { kind: 'diff'; path: string; from?: string } | { kind: 'crs' };
+// diff against main (renamed `from` an old path), a note's or an asset's
+// history, the list of change requests, or the deleted pages.
+export type Page = { kind: 'note' | 'asset' | 'history'; path: string } | { kind: 'diff'; path: string; from?: string } | { kind: 'crs' | 'deleted' };
+
+// Whether a page shows no file of its own: a list.
+export const isList = (page: Page | null): page is { kind: 'crs' | 'deleted' } => page?.kind === 'crs' || page?.kind === 'deleted';
 
 // The page to open from the URL: `?path=` names a note, `?asset=` a file
 // under public/notes, `?diff=` (with `&from=` for a rename) any file the
-// Studio may touch, `?history=` a note, `?view=crs` the change requests.
+// Studio may touch, `?history=` a note or an asset, `?view=crs` the change
+// requests, `?view=deleted` the deleted pages.
 // Paths take the server's own lexical check, so the page opens only what it
 // serves.
 export function pageFromUrl(search: string): Page | null {
   const note = noteFromUrl(search);
   if (note !== null) return { kind: 'note', path: note };
   const params = new URLSearchParams(search);
-  if (params.get('view') === 'crs') return { kind: 'crs' };
+  const view = params.get('view');
+  if (view === 'crs' || view === 'deleted') return { kind: view };
   const history = params.get('history');
-  if (history !== null && isNote(history) && classifyPath(history) === 'note') return { kind: 'history', path: history };
+  const historyKind = history === null ? null : classifyPath(history);
+  if (history !== null && ((historyKind === 'note' && isNote(history)) || historyKind === 'asset')) return { kind: 'history', path: history };
   const asset = params.get('asset');
   if (asset !== null && classifyPath(asset) === 'asset') return { kind: 'asset', path: asset };
   const diff = params.get('diff');
@@ -61,7 +67,7 @@ export function movedPage(page: Page | null, from: string, to: string): Page | n
 // inverse of pageFromUrl and crFromSearch.
 export function pageQuery(page: Page | null, cr: string | null = CURRENT_CR) {
   const parts = cr === null ? [] : [`cr=${cr}`];
-  if (page?.kind === 'crs') parts.push('view=crs');
+  if (isList(page)) parts.push(`view=${page.kind}`);
   else if (page?.kind === 'diff') {
     parts.push(`diff=${encodeURIComponent(page.path)}`);
     if (page.from !== undefined) parts.push(`from=${encodeURIComponent(page.from)}`);
@@ -92,7 +98,7 @@ export function siteRoute(path: string | null) {
 // as it is now; a meta.yaml has no page, and a file the change request
 // deleted (`exists` says no) is no longer served.
 export function previewRoute(page: Page | null, exists: (path: string) => boolean) {
-  if (page === null || page.kind === 'crs') return siteRoute(null);
+  if (page === null || isList(page)) return siteRoute(null);
   if (page.kind === 'diff' && (page.path.endsWith('/meta.yaml') || !exists(page.path))) return siteRoute(null);
   return siteRoute(page.path);
 }

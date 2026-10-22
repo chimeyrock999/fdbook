@@ -48,12 +48,13 @@ function setup(path: string, { unsaved = false, readOnly = false, assets = ASSET
   const reload = vi.fn();
   const onOpenUsage = vi.fn();
   const onChanged = vi.fn();
+  const onShowHistory = vi.fn();
   const page = (at: string, list: AssetInfo[] | null) => (
-    <AssetPage client={client} list={{ assets: list, error: null, reload }} path={at} unsaved={unsaved} readOnly={readOnly} onOpenUsage={onOpenUsage} onChanged={onChanged} />
+    <AssetPage client={client} list={{ assets: list, error: null, reload }} path={at} unsaved={unsaved} readOnly={readOnly} onOpenUsage={onOpenUsage} onChanged={onChanged} onShowHistory={onShowHistory} />
   );
   // StrictMode, as src/main.tsx renders the Studio.
   const { rerender } = render(page(path, assets), { wrapper: StrictMode });
-  return { change, replace, reload, onOpenUsage, onChanged, rerender: (at: string, list: AssetInfo[] | null = assets) => { rerender(page(at, list)); } };
+  return { change, replace, reload, onOpenUsage, onChanged, onShowHistory, rerender: (at: string, list: AssetInfo[] | null = assets) => { rerender(page(at, list)); } };
 }
 
 const button = (name: string) => screen.getByRole<HTMLButtonElement>('button', { name });
@@ -257,10 +258,12 @@ describe('AssetPage', () => {
     expect(within(screen.getByRole('dialog')).getByRole('figure', { name: 'picked' }).textContent).toContain('dropped.png');
   });
 
-  it('shows the file without Replace, Rename, Delete or the drop zone when read only (main)', () => {
-    setup(SPARE.path, { readOnly: true });
+  it('shows the file without Replace, Rename, Delete or the drop zone when read only (main), and still its history', async () => {
+    const { onShowHistory } = setup(SPARE.path, { readOnly: true });
     expect(screen.getByRole('heading', { name: 'spare.svg' })).toBeTruthy();
     for (const name of [/Replace/, /Rename/, /Delete/]) expect(screen.queryByRole('button', { name })).toBeNull();
     expect(screen.queryByText('Drop a file here to replace it')).toBeNull();
+    await userEvent.click(button('History'));
+    expect(onShowHistory).toHaveBeenCalledOnce();
   });
 });

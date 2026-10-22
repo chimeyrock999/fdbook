@@ -124,6 +124,29 @@ export function replaceEntry(text: string, index: number, value: string) {
   return splice(text, [{ start: entry.start, end: entry.end, text: quote(value, entry.type) }]);
 }
 
+// Keeps only the entries `keep` says yes to, and every other line as it
+// was. A block list drops each removed entry's line; a flow list is written
+// again with the kept entries as they were. With none left, `pages: []`.
+export function keepEntries(text: string, keep: (value: unknown) => boolean) {
+  const pages = pagesOf(text);
+  if (!pages) return text;
+  const kept = pages.entries.filter((entry) => keep(entry.value));
+  if (kept.length === pages.entries.length) return text;
+  // A block list's range runs past its last line: stop at the last value.
+  if (kept.length === 0) return splice(text, [{ start: pages.keyEnd, end: pages.seq.flow ? pages.end : (pages.entries.at(-1)?.end ?? pages.end), text: ': []' }]);
+  if (pages.seq.flow) {
+    const [start, end] = pages.seq.range ?? [0, 0];
+    return splice(text, [{ start, end, text: `[${kept.map((entry) => text.slice(entry.start, entry.end)).join(', ')}]` }]);
+  }
+  const places = spans(text, pages);
+  return splice(text, pages.entries.flatMap((entry, index) => {
+    if (keep(entry.value)) return [];
+    const { start, end } = places[index];
+    // The line and the newline after it; the last line takes the one before.
+    return [end < text.length ? { start, end: end + 1, text: '' } : { start: Math.max(0, start - 1), end, text: '' }];
+  }));
+}
+
 // The meta.yaml of a new folder, with or without an index page. It starts
 // closed in the site's sidebar unless `open`.
 export function metaTemplate(title: string, pages: string[], open = false) {
