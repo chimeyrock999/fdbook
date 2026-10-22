@@ -617,6 +617,8 @@ GitHub repository.
 once the branch is pushed, opens the branch's preview (the alias from the
 check run, else `https://cr-<slug>.<STUDIO_PAGES_PROJECT>.pages.dev`) at
 the page that is open, as Open on site does; its dot is the build's state.
+On a diff it opens the file at its path now; a `meta.yaml`, or a file the
+change request deleted, opens the notes home (`previewRoute`).
 Previews sit behind Cloudflare Access: the first one asks for the one-time
 PIN in the browser. **View log** opens the build in the Cloudflare
 dashboard. Commits made after the push show "↑ not pushed" in History, the

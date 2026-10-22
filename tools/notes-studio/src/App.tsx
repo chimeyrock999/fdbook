@@ -33,7 +33,7 @@ import { useAssets } from './media/useAssets';
 import { NoteGate } from './notes/NoteGate';
 import { OpenOnSite } from './notes/OpenOnSite';
 import { OpenPreview } from './notes/OpenPreview';
-import { NOTES_PREFIX, pageFromUrl, pageQuery, siteRoute, syncPath, unsavedNote, type Page } from './notes/notes';
+import { NOTES_PREFIX, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote, type Page } from './notes/notes';
 import { Sidebar, type IssueCount } from './sidebar/Sidebar';
 import { useSidebar, type SidebarView } from './sidebar/useSidebar';
 import { PageTree } from './tree/PageTree';
@@ -192,9 +192,8 @@ export function App() {
   };
 
   const pagePath = page === null || page.kind === 'crs' ? null : page.path;
-  // A diff of a meta.yaml has no page of its own: the preview opens at the
-  // site's notes home, as with no page open.
-  const route = siteRoute(page?.kind === 'diff' && page.path.endsWith('/meta.yaml') ? null : pagePath);
+  // A file is there when the page tree lists the note or the asset list the asset.
+  const route = previewRoute(page, (path) => (path.startsWith(NOTES_PREFIX) ? titles.has(path) : assets.includes(path)));
   const committed = async () => {
     await git.reload();
     await preview.reload();
