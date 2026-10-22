@@ -92,11 +92,13 @@ export async function signInWith(send: Send, gh: FakeGitHub, login: string) {
   return { cookie, csrf: session.csrf };
 }
 
-// Sign-in options over a faked GitHub, sessions in `home`.
-export function fakeAuth(home: string, config = testAuthConfig()) {
+// Sign-in options over a faked GitHub, sessions in `home`; `checkEveryMs`
+// is how often open sockets are checked (auth.ts).
+export function fakeAuth(home: string, config = testAuthConfig(), { checkEveryMs }: { checkEveryMs?: number } = {}) {
   const gh = fakeGitHub();
   const auth: AuthOptions = {
     config,
+    checkEveryMs,
     github: gh.github,
     repo: { name: () => Promise.resolve('owner/notes'), permission: gh.permission },
     roles: createRoleReader(gh.permission, config.allowedUsers),
@@ -108,10 +110,10 @@ export function fakeAuth(home: string, config = testAuthConfig()) {
 // A Studio with sign-in on, over a throwaway worktree (with `git`, a
 // repository on a change request branch), GitHub faked. `signIn` goes
 // through the device flow and answers the cookie and csrf token to send.
-export async function startAuthStudio({ git = false, config = testAuthConfig() }: { git?: boolean; config?: AuthConfig } = {}) {
+export async function startAuthStudio({ git = false, config = testAuthConfig(), checkEveryMs }: { git?: boolean; config?: AuthConfig; checkEveryMs?: number } = {}) {
   const worktree = git ? await makeGitWorktree() : await makeWorktree();
   const home = await mkdtemp(join(tmpdir(), 'notes-studio-home-'));
-  const { gh, auth } = fakeAuth(home, config);
+  const { gh, auth } = fakeAuth(home, config, { checkEveryMs });
   const studio = await startStudioServer({ port: 0, root: worktree.root, auth });
   const port = String((studio.server.address() as AddressInfo).port);
   const origin = `http://127.0.0.1:${port}`;

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { createFilesClient } from '../api/files';
 import type { LintClient, LintIssue } from '../api/lint';
+import { confirmSignedIn } from '../api/session';
 import { workspaceSyncClient } from '../api/sync';
 import { frontmatterPathAt } from '../frontmatter/frontmatter';
 import type { FieldReveal } from '../frontmatter/MetadataStrip';
@@ -76,6 +77,8 @@ export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
         onStatus: (next) => {
           setStatus(next);
           onStatus?.(next);
+          // The server closes the socket of a session that ended (#115).
+          if (next === 'offline') void confirmSignedIn();
         },
       }}
       components={editorConfig.components}

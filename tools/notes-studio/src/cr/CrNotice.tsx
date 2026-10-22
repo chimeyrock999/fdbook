@@ -1,19 +1,18 @@
 import { Brush, Check, Copy, TriangleAlert } from 'lucide-react';
-import { useState } from 'react';
 import type { ChangeRequest } from '../api/crs';
+import { useCopy } from '../clipboard';
 import { ADMIN_HINT } from '../session/session';
 import { isDone, mergeCommand, plural, shortPath } from './cr-status';
 
+// When the browser blocks copying (#116), the command is selected instead.
 function CopyCommand({ command }: { command: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard.writeText(command).then(() => { setCopied(true); }, () => { setCopied(false); });
-  };
+  const { copied, ref, copy } = useCopy<HTMLElement>(command);
+  const label = copied === true ? 'Copied' : copied === 'blocked' ? 'Copying is blocked: the command is selected, copy it with Ctrl+C' : 'Copy command';
   return (
     <div className="studio-cr-command">
-      <code>{command}</code>
-      <button type="button" aria-label={copied ? 'Copied' : 'Copy command'} title={copied ? 'Copied' : 'Copy command'} onClick={copy}>
-        {copied ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
+      <code ref={ref}>{command}</code>
+      <button type="button" aria-label={label} title={label} onClick={copy}>
+        {copied === true ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
       </button>
     </div>
   );
