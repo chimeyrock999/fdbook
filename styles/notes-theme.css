@@ -158,9 +158,13 @@
 
 /* Mermaid diagrams (drawn by Pele) in the garden palette. Pele reads these
    variables on every paint, so a theme switch needs no new render. Scoped
-   like the palette, so the expanded view portalled to <body> matches. */
+   like the palette, so the expanded view portalled to <body> matches.
+   `--pele-bg` is the plate behind each edge label, which keeps the line off
+   the text, so it takes the surface the diagram sits on: the page, unless a
+   container sets `--notes-diagram-bg` (the expanded view, the Studio's
+   editor card). */
 :root:has(.notes-theme) svg.pele, .notes-theme svg.pele {
-  --pele-bg: transparent;
+  --pele-bg: var(--notes-diagram-bg, var(--color-fd-background));
   --pele-fg: var(--garden-ink);
   --pele-muted: var(--garden-ink-soft);
   --pele-line: var(--garden-ink-2);
@@ -178,10 +182,21 @@
   --pele-series-8: var(--color-callout-note);
 }
 
-/* A node or subgraph the author filled (`style X fill:#…`) keeps that fill
-   in the dark theme, where the light text would vanish on it; an explicit
-   `color:` is inline on the label and still wins. */
-.dark .notes-theme svg.pele :is(.pele-node, .pele-cluster):has(> [style*="fill:#"]) > :is(.pele-label, .pele-cluster-label),
-.dark:has(.notes-theme) svg.pele :is(.pele-node, .pele-cluster):has(> [style*="fill:#"]) > :is(.pele-label, .pele-cluster-label) {
+/* A node or subgraph the author filled (`style X fill:…`, `classDef`) keeps
+   that fill in the dark theme, where the light text would vanish on it; an
+   explicit `color:` is inline on the label and still wins. The fill is
+   marked by lib/pele-author-fill.ts, which also finds a subgraph title Pele
+   lifted out of its subgraph. */
+.dark .notes-theme svg.pele [data-author-fill] > :is(.pele-label, .pele-cluster-label),
+.dark:has(.notes-theme) svg.pele [data-author-fill] > :is(.pele-label, .pele-cluster-label) {
   fill: var(--color-fd-primary-foreground);
+}
+
+/* Pele draws a halo behind a subgraph title it lifted out of its subgraph,
+   mixed from its own subgraph colour; on an author's fill, mix it from that
+   fill instead (like the subgraph, at half strength over the background),
+   or it smears around the dark ink above. */
+:root:has(.notes-theme) svg.pele .pele-cluster-title[data-author-fill] > text:not(.pele-cluster-label),
+.notes-theme svg.pele .pele-cluster-title[data-author-fill] > text:not(.pele-cluster-label) {
+  stroke: color-mix(in srgb, var(--author-fill) 50%, var(--_bg));
 }

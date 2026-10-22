@@ -1,5 +1,6 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { MdxEditor, useEditorMode, useSourceText, useSyncStatus } from '@fumadocs-editor/ui';
+import { observeAuthorFills } from '@site/lib/pele-author-fill';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { createFilesClient } from '../api/files';
@@ -116,6 +117,9 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, readO
   const [field, setField] = useState<FieldReveal | null>(null);
   const editor = useRef<HTMLElement>(null);
   useEditorPlugin(editor, decorations);
+  // The editor draws mermaid previews itself; mark the author's fills on
+  // each one for the dark theme's label ink, as the site does.
+  useEffect(() => (editor.current ? observeAuthorFills(editor.current) : undefined), []);
   const completion = useMemo(() => assetCompletion(assets, notePath), [assets, notePath]);
   // Only once the server sent the note: before that (still opening, denied,
   // offline) the text is empty, and an empty note would pass as clean.

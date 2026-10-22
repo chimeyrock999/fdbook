@@ -78,12 +78,15 @@
 }
 
 /* Code blocks: the editor's frame (a figure with a [data-fde-row] header)
-   takes the colours of the site's (.notes-code-block). */
+   takes the colours of the site's (.notes-code-block). A mermaid preview
+   sits on the frame, so its edge label plates take the same colour
+   (`--notes-diagram-bg`, styles/notes-theme.css). */
 .notes-prose figure[dir='ltr'] {
+  --notes-diagram-bg: var(--notes-code-surface);
   overflow: hidden;
   border: 1px solid var(--notes-code-border);
   border-radius: 0.75rem;
-  background: var(--notes-code-surface);
+  background: var(--notes-diagram-bg);
 }
 .notes-prose figure[dir='ltr'] > [data-fde-row] {
   min-height: 2.375rem;
@@ -93,8 +96,9 @@
 }
 /* Inside a callout the frame takes the callout's tint, as on the site. */
 .notes-prose .notes-callout figure[dir='ltr'] {
+  --notes-diagram-bg: color-mix(in oklab, var(--fde-background) 86%, var(--notes-callout-color) 14%);
   border-color: color-mix(in oklab, var(--notes-callout-color) 54%, var(--fde-border));
-  background: color-mix(in oklab, var(--fde-background) 86%, var(--notes-callout-color) 14%);
+  background: var(--notes-diagram-bg);
 }
 .notes-prose .notes-callout figure[dir='ltr'] > [data-fde-row] {
   border-color: color-mix(in oklab, var(--notes-callout-color) 54%, var(--fde-border));

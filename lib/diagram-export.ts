@@ -47,6 +47,9 @@ const PELE_VARIABLES = [
   ...Array.from({ length: 8 }, (_, index) => `series-${index + 1}`),
 ].map((name) => `--pele-${name}`);
 const PELE_LABELS = '.pele-label, .pele-cluster-label';
+// The halo behind a lifted subgraph title, recoloured for an author's fill
+// (styles/notes-theme.css).
+const PELE_TITLE_HALOS = '.pele-cluster-title[data-author-fill] > text:not(.pele-cluster-label)';
 
 export async function exportSvgElement(
   svg: SVGSVGElement,
@@ -103,6 +106,11 @@ function serializeSvg(svg: SVGSVGElement): string {
   labels.forEach((label, index) => {
     if (label.style.fill) return;
     cloneLabels[index]?.style.setProperty('fill', getComputedStyle(label).fill);
+  });
+  const halos = svg.querySelectorAll<SVGElement>(PELE_TITLE_HALOS);
+  const cloneHalos = clone.querySelectorAll<SVGElement>(PELE_TITLE_HALOS);
+  halos.forEach((halo, index) => {
+    cloneHalos[index]?.style.setProperty('stroke', getComputedStyle(halo).stroke);
   });
 
   return new XMLSerializer().serializeToString(clone);
