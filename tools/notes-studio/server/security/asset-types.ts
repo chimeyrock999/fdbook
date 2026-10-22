@@ -42,6 +42,13 @@ export function publicAsset(src: string) {
   return segments.length > 0 ? segments.join('/') : null;
 }
 
+// Whether a file the Studio may touch is text: notes, meta.yaml, and SVG and
+// HTML assets. The diff (server/git/diff.ts) sends only the size of others.
+export function isTextPath(path: string) {
+  const kind = classifyPath(path);
+  return kind !== null && (kind !== 'asset' || ['svg', 'html'].includes(extensionOf(path)));
+}
+
 // The only files the Studio may touch, as worktree-relative posix paths.
 // Every surface (file API, file events, notes sync) asks this one module.
 export const NOTES_DIR = 'content/notes';

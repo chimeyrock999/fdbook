@@ -2,6 +2,7 @@ import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { classifyPath, resolveWorktreePath } from '../../../server/security/paths';
+import { isTextPath } from '../../../server/security/asset-types';
 import { makeWorktree, type Worktree } from '../../support/studio';
 
 describe('classifyPath', () => {
@@ -53,6 +54,13 @@ describe('classifyPath', () => {
     'public/notes/a.tostring',
   ])('rejects %j', (path) => {
     expect(classifyPath(path)).toBeNull();
+  });
+});
+
+describe('isTextPath', () => {
+  it('reads notes, meta.yaml, SVG and HTML as text, other assets and other paths not', () => {
+    for (const path of ['content/notes/a.mdx', 'content/notes/a/meta.yaml', 'public/notes/a/b.svg', 'public/notes/a/b.html']) expect(isTextPath(path)).toBe(true);
+    for (const path of ['public/notes/a/b.png', 'public/notes/a/b.pdf', 'package.json', 'content/notes/../x.mdx']) expect(isTextPath(path)).toBe(false);
   });
 });
 

@@ -26,6 +26,7 @@ import { DiscardDialog, NewCrDialog } from './cr/CrDialogs';
 import { CrListPage } from './cr/CrListPage';
 import { CrPicker, EditMenu } from './cr/CrMenus';
 import { useCrs } from './cr/useCrs';
+import { DiffPage } from './diff/DiffPage';
 import { NoteEditor, type SourcePlace } from './editor/NoteEditor';
 import { ASSETS_PREFIX } from './media/asset-names';
 import { useAssets } from './media/useAssets';
@@ -42,8 +43,8 @@ import { useTree } from './tree/useTree';
 // Below this width the sidebar is a drawer (see .studio-sidebar).
 const DRAWER_QUERY = '(max-width: 767px)';
 
-const samePage = (a: Page | null, b: Page) =>
-  a?.kind === b.kind && (a.kind === 'crs' || (b.kind !== 'crs' && a.path === b.path));
+// Whether two pages are one: the same query, a diff's old name included.
+const samePage = (a: Page | null, b: Page) => a !== null && pageQuery(a) === pageQuery(b);
 
 export function App() {
   const files = useMemo(() => createFilesClient(), []);
@@ -60,10 +61,12 @@ export function App() {
   // A usage picked in the Assets view, to show in its note's Source; any
   // other way of opening a note drops it.
   const [place, setPlace] = useState<(SourcePlace & { note: string }) | null>(null);
-  // What the main pane shows: a note (`active`) or an asset page (`asset`).
+  // What the main pane shows: a note (`active`), an asset page (`asset`) or
+  // a file's diff against main (`diff`).
   const [page, setPage] = useState(() => pageFromUrl(window.location.search));
   const active = page?.kind === 'note' ? page.path : null;
   const asset = page?.kind === 'asset' ? page.path : null;
+  const diff = page?.kind === 'diff' ? page : null;
   // The open note's autosave state, by path: a rename waits until it is saved.
   const [saved, setSaved] = useState<{ path: string; status: DocumentStatus } | null>(null);
   const unsaved = unsavedNote(active, saved);
@@ -137,10 +140,10 @@ export function App() {
     setPlace(null);
     go({ kind: 'asset', path });
   };
-  // A changed file picked in the Changes view.
+  // A changed file picked in the Changes view: its diff against main.
   const openChanged = (file: ChangedFile) => {
-    if (file.path.startsWith(NOTES_PREFIX)) open(file.path);
-    else openAsset(file.path);
+    setPlace(null);
+    go(file.from === undefined ? { kind: 'diff', path: file.path } : { kind: 'diff', path: file.path, from: file.from });
   };
   // The open asset moved with a rename or a replace: follow it without a new history entry.
   const assetChangedBy = (answer: AssetAnswer) => {
@@ -189,7 +192,9 @@ export function App() {
   };
 
   const pagePath = page === null || page.kind === 'crs' ? null : page.path;
-  const route = siteRoute(pagePath);
+  // A diff of a meta.yaml has no page of its own: the preview opens at the
+  // site's notes home, as with no page open.
+  const route = siteRoute(page?.kind === 'diff' && page.path.endsWith('/meta.yaml') ? null : pagePath);
   const committed = async () => {
     await git.reload();
     await preview.reload();
@@ -206,7 +211,7 @@ export function App() {
         <span className={`min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)] ${crMode ? 'max-md:hidden' : ''}`}>{pagePath ?? ''}</span>
         {crMode && CURRENT_CR === null && <EditMenu list={crs.list} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} />}
         {!readOnly && <OpenPreview preview={preview.preview} route={route} />}
-        {pagePath !== null && <OpenOnSite path={pagePath} />}
+        {pagePath !== null && page?.kind !== 'diff' && <OpenOnSite path={pagePath} />}
       </header>
       <div className="relative flex min-h-0 flex-1">
         <Sidebar
@@ -225,6 +230,7 @@ export function App() {
               error={git.error}
               titles={titles}
               unsaved={unsaved}
+              current={diff?.path ?? null}
               onOpen={openChanged}
               readOnly={readOnly}
               onCommitted={committed}
@@ -297,6 +303,15 @@ export function App() {
           </NoteGate>
         ) : asset ? (
           <AssetPage client={assetsClient} list={assetList} path={asset} unsaved={unsaved !== null} readOnly={readOnly} onOpenUsage={openUsage} onChanged={assetChangedBy} />
+        ) : diff ? (
+          <DiffPage
+            client={changesClient}
+            target={diff}
+            revision={git.changes}
+            titles={titles}
+            onOpen={(path) => { if (path.startsWith(NOTES_PREFIX)) open(path); else openAsset(path); }}
+            onBack={() => { openView('changes'); }}
+          />
         ) : page?.kind === 'crs' && crMode ? (
           <CrListPage
             list={crs.list}

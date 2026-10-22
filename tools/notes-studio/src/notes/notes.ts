@@ -22,20 +22,26 @@ export function noteFromUrl(search: string): string | null {
   return path !== null && isNote(path) ? path : null;
 }
 
-// What the main pane shows: a note or an asset, by worktree path, or the
-// list of change requests.
-export type Page = { kind: 'note' | 'asset'; path: string } | { kind: 'crs' };
+// What the main pane shows: a note or an asset, by worktree path, a file's
+// diff against main (renamed `from` an old path), or the list of change
+// requests.
+export type Page = { kind: 'note' | 'asset'; path: string } | { kind: 'diff'; path: string; from?: string } | { kind: 'crs' };
 
 // The page to open from the URL: `?path=` names a note, `?asset=` a file
-// under public/notes, `?view=crs` the change requests.
+// under public/notes, `?diff=` (with `&from=` for a rename) any file the
+// Studio may touch, `?view=crs` the change requests. Paths take the
+// server's own lexical check, so the page opens only what it serves.
 export function pageFromUrl(search: string): Page | null {
   const note = noteFromUrl(search);
   if (note !== null) return { kind: 'note', path: note };
   const params = new URLSearchParams(search);
   if (params.get('view') === 'crs') return { kind: 'crs' };
   const asset = params.get('asset');
-  // The server's own lexical check, so the page opens only what it serves.
-  return asset !== null && classifyPath(asset) === 'asset' ? { kind: 'asset', path: asset } : null;
+  if (asset !== null && classifyPath(asset) === 'asset') return { kind: 'asset', path: asset };
+  const diff = params.get('diff');
+  if (diff === null || classifyPath(diff) === null) return null;
+  const from = params.get('from');
+  return from !== null && classifyPath(from) !== null ? { kind: 'diff', path: diff, from } : { kind: 'diff', path: diff };
 }
 
 // The query that opens `page` in change request `cr` (null: main), the
@@ -43,7 +49,10 @@ export function pageFromUrl(search: string): Page | null {
 export function pageQuery(page: Page | null, cr: string | null = CURRENT_CR) {
   const parts = cr === null ? [] : [`cr=${cr}`];
   if (page?.kind === 'crs') parts.push('view=crs');
-  else if (page) parts.push(`${page.kind === 'note' ? 'path' : 'asset'}=${encodeURIComponent(page.path)}`);
+  else if (page?.kind === 'diff') {
+    parts.push(`diff=${encodeURIComponent(page.path)}`);
+    if (page.from !== undefined) parts.push(`from=${encodeURIComponent(page.from)}`);
+  } else if (page) parts.push(`${page.kind === 'note' ? 'path' : 'asset'}=${encodeURIComponent(page.path)}`);
   return `?${parts.join('&')}`;
 }
 
