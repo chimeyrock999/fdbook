@@ -42,9 +42,11 @@ const MIME: Record<DiagramExportFormat, string> = {
   webp: 'image/webp',
   svg: 'image/svg+xml',
 };
-const PELE_VARIABLES = ['bg', 'fg', 'muted', 'line', 'surface', 'surface-alt', 'border', 'accent', 'font', 'font-mono'].map(
-  (name) => `--pele-${name}`,
-);
+const PELE_VARIABLES = [
+  ...['bg', 'fg', 'muted', 'line', 'surface', 'surface-alt', 'border', 'accent', 'font', 'font-mono'],
+  ...Array.from({ length: 8 }, (_, index) => `series-${index + 1}`),
+].map((name) => `--pele-${name}`);
+const PELE_LABELS = '.pele-label, .pele-cluster-label';
 
 export async function exportSvgElement(
   svg: SVGSVGElement,
@@ -92,6 +94,16 @@ function serializeSvg(svg: SVGSVGElement): string {
     const value = style.getPropertyValue(name).trim();
     if (value) clone.style.setProperty(name, value);
   }
+
+  // Page rules can recolour a label (dark text on an author's fill in the
+  // dark theme); the file has no stylesheet, so carry the computed fill over
+  // unless the label sets its own.
+  const labels = svg.querySelectorAll<SVGElement>(PELE_LABELS);
+  const cloneLabels = clone.querySelectorAll<SVGElement>(PELE_LABELS);
+  labels.forEach((label, index) => {
+    if (label.style.fill) return;
+    cloneLabels[index]?.style.setProperty('fill', getComputedStyle(label).fill);
+  });
 
   return new XMLSerializer().serializeToString(clone);
 }
