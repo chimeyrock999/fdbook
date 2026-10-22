@@ -208,7 +208,7 @@ still exists and its role allows it. Its socket is closed when the session
 signs out, and within 15 seconds once the session expired or the role read
 from GitHub fell below reader (that is, once the five-minute role cache read
 it again; while gh cannot answer, the last role read stands). The page
-then asks who is signed in and shows the sign-in page again. The file
+then asks who is signed in and shows the sign-in over the Studio. The file
 events stream ends at its next event once the session is gone. So signing
 out or losing access stops open connections too.
 
@@ -257,8 +257,21 @@ Studio by @login.`
 
 The page asks `GET /api/session` before it loads the Studio
 (`src/session/SessionGate.tsx`): with nobody signed in it shows the
-sign-in page, and a request answering `401` later (the session expired)
-brings it back. The header ends with the signed-in person (their picture
+sign-in page. When the session ends once the Studio is open (a request
+answers `401`, the sync socket closes, access is taken away), the sign-in
+comes up as a dialog over the Studio instead, which stays mounted behind
+it: a note's edits not saved yet stay in the editor, and once signed in
+again its socket reconnects with the new session and the autosave writes
+them. Someone else signing in, or the same person back without write
+access, gets the Studio afresh instead, so nothing saves under another
+account. **Sign out** leaves the Studio for the sign-in page. Until a
+note's edits are saved, the page also keeps them in the tab's
+sessionStorage, per person, change request and note
+(`src/editor/unsaved.ts`), so a page that goes away first (the web
+sign-in leaves for GitHub, a reload) offers them back when that person
+opens the note again: **Restore edits** puts them in the editor, with a
+warning when the note changed on disk since, and someone who may no longer
+write can copy them. The header ends with the signed-in person (their picture
 alone on a phone) and a menu with their role and **Sign out**. A reader's
 Studio is read only, as main is, without New change request, Commit,
 Preview, Publish or Discard, but with a change request's **Open preview**; a writer sees Discard and Clean up off, with
@@ -1048,3 +1061,10 @@ Tests that render the editor run in jsdom (`// @vitest-environment jsdom`).
 first paint (`tests/jsdom-setup.test.ts` checks it); `stubLayout` in
 `tests/support/visual-editor.tsx` adds the layout stubs the editor's menus
 need.
+
+A test over every real note grows with `content/notes` while the default
+timeout stays at 5 seconds, so a busy machine times it out. Where the check
+is per note, write it as one `it.each` test per note
+(`tests/support/notes.ts` lists them), with a last test for totals; a test
+that renames, replaces or lints across a copy of the whole corpus takes
+`CORPUS_TIMEOUT_MS` from `tests/support/timeouts.ts`.

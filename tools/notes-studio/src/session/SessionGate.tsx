@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createSessionClient, onSignedOut, setCsrf, type SessionState } from '../api/session';
 import { NoAccessPage, SignInPage } from './SignInPage';
-import { SessionContext } from './session';
+import { rightsOf, SessionContext, type SessionValue } from './session';
 
 // Why a web sign-in failed, as the server sends the browser back; taken off
 // the address so a reload does not show it again.
@@ -17,14 +17,31 @@ function takeSignInError() {
 // Read once when the page loads (StrictMode runs state initializers twice).
 const SIGNIN_ERROR = typeof window === 'undefined' ? null : takeSignInError();
 
+// Whether the Studio can carry on for `next` as it ran for `before`: the
+// same person, still allowed to write if they were.
+function sameSeat(before: SessionValue, next: SessionValue) {
+  return before.state.user?.login === next.state.user?.login && (rightsOf(next.state.role).write || !rightsOf(before.state.role).write);
+}
+
 // Reads who is signed in before the Studio loads. With sign-in on and
 // nobody in, the sign-in page stands in for the Studio; someone without
-// access sees why. A request that answers 401 later (the session expired)
-// brings the sign-in page back.
+// access sees why. When the session ends once the Studio is open (a request
+// answers 401, the sync socket closes), the sign-in comes up over it
+// instead: the Studio stays mounted behind, inert, with the session it had,
+// so an editor keeps its unsaved edits and saves them once its socket
+// reconnects with the new session (#121). Someone else signing in, or the
+// same person no longer allowed to write, gets the Studio afresh: open
+// notes keep their unsaved edits for that person (src/editor/unsaved.ts)
+// and do not save them under another account.
 export function SessionGate({ children }: { children: ReactNode }) {
   const client = useMemo(() => createSessionClient(), []);
   const [state, setState] = useState<SessionState | null>(null);
   const [error, setError] = useState<string | null>(SIGNIN_ERROR);
+  // The session the Studio last ran with, kept for it while the sign-in is
+  // over it; null until the Studio first showed, and again after signing out.
+  const [shown, setShown] = useState<SessionValue | null>(null);
+  // Changes when the Studio must be mounted afresh.
+  const [mount, setMount] = useState(0);
 
   const apply = useCallback((next: SessionState) => {
     setCsrf(next.csrf);
@@ -39,12 +56,21 @@ export function SessionGate({ children }: { children: ReactNode }) {
     return onSignedOut(load);
   }, [load]);
 
+  // Signing out leaves the Studio: the sign-in page stands in for it.
   const signOut = useCallback(() => {
-    client.logout().then(apply, (reason: unknown) => { setError((reason as Error).message); });
+    client.logout().then((next) => {
+      setShown(null);
+      apply(next);
+    }, (reason: unknown) => { setError((reason as Error).message); });
   }, [client, apply]);
   const value = useMemo(() => (state === null ? null : { state, signOut }), [state, signOut]);
+  const allowed = value !== null && !(value.state.auth === 'github' && value.state.user === null) && value.state.role !== 'none';
+  if (allowed && shown !== value) {
+    if (shown !== null && !sameSeat(shown, value)) setMount(mount + 1);
+    setShown(value);
+  }
 
-  if (value === null) {
+  if (shown === null && value === null) {
     if (error === null) return null;
     return (
       <main className="studio-signin">
@@ -55,9 +81,18 @@ export function SessionGate({ children }: { children: ReactNode }) {
       </main>
     );
   }
-  if (value.state.auth === 'github' && value.state.user === null) {
-    return <SignInPage state={value.state} client={client} error={error} onSignedIn={apply} />;
-  }
-  if (value.state.role === 'none') return <NoAccessPage state={value.state} onSignOut={signOut} />;
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+  const ended = shown !== null && !allowed;
+  const gate = value === null || allowed ? null : value.state.user === null
+    ? <SignInPage state={value.state} client={client} error={error} onSignedIn={apply} ended={ended} />
+    : <NoAccessPage state={value.state} onSignOut={signOut} ended={ended} />;
+  if (shown === null) return gate;
+  // One shape from the first show on, so the Studio is never mounted again.
+  return (
+    <>
+      <div key={mount} inert={ended} className="contents">
+        <SessionContext.Provider value={shown}>{children}</SessionContext.Provider>
+      </div>
+      {gate}
+    </>
+  );
 }
