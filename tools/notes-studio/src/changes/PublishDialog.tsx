@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Preview, PreviewClient } from '../api/preview';
 import { plural } from '../assets/asset-changes';
 import { Dialog } from '../tree/TreeDialogs';
@@ -21,6 +21,13 @@ export function PublishDialog({ client, preview, onPublished, onClose }: {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const count = preview.unpushed.length;
+  const titleInput = useRef<HTMLInputElement>(null);
+  // The title is off until the draft is read and while publishing: focus it
+  // each time it comes on, so focus (and Escape) stays in the dialog.
+  const ready = title !== null && !busy;
+  useEffect(() => {
+    if (ready) titleInput.current?.focus();
+  }, [ready]);
 
   useEffect(() => {
     let closed = false;
@@ -58,7 +65,7 @@ export function PublishDialog({ client, preview, onPublished, onClose }: {
       </p>
       <label className="grid gap-1">
         <span className="studio-field-label">Title</span>
-        <input className="studio-input" autoFocus value={title ?? ''} disabled={title === null || busy} aria-invalid={title !== null && empty} onChange={(event) => { setTitle(event.target.value); setFailed(null); }} />
+        <input ref={titleInput} className="studio-input" value={title ?? ''} disabled={title === null || busy} aria-invalid={title !== null && empty} onChange={(event) => { setTitle(event.target.value); setFailed(null); }} />
       </label>
       <label className="grid gap-1">
         <span className="studio-field-label">Description</span>

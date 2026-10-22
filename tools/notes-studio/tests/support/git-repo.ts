@@ -69,7 +69,7 @@ export type GitRepo = Awaited<ReturnType<typeof makeGitRepo>>;
 
 // A Studio with change requests over a throwaway repo. `prs` and `checks`
 // stand in for gh: set them to the pull requests or check runs (by commit) to
-// report, or to an Error to fail. `branchPrs` is what `gh pr view` reads by
+// report, or to an Error to fail. `branchPrs` is what `gh pr list --head` reads by
 // branch (or an Error); `create` opens one there and lists it in `created`,
 // unless `createError` is set. `forget` moves the readers' clock a minute
 // on, past their caches.

@@ -130,6 +130,17 @@ describe('PublishDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('focuses the title once the draft is read, and again after a failure, so Escape closes it', async () => {
+    const publish = vi.fn(() => Promise.reject(new Error('Could not open the pull request: forbidden')));
+    const { onClose } = setup(pushed, { draft: () => Promise.resolve({ title: 'Driver notes', body: '' }), publish });
+    await waitFor(() => { expect(document.activeElement).toBe(title()); });
+    await userEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    await screen.findByRole('alert');
+    await waitFor(() => { expect(document.activeElement).toBe(title()); });
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('wants a title', async () => {
     const publish = vi.fn();
     setup(pushed, { draft: () => Promise.resolve({ title: 'Driver notes', body: '' }), publish });
