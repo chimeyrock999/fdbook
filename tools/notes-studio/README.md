@@ -442,7 +442,10 @@ Visual:
 - The `/` menu inserts a Keyword or Tag (`<Keyword id="" displayName="">`),
   a Graph heading (`### Title :graph-meta{…}`) and the site's directive
   blocks: accordions, tabs, steps and `::youtube`, next to the JSX
-  components (`<YouTube>` among them).
+  components (`<YouTube>` among them). **Mermaid diagram** (`/mermaid`;
+  `/diagram` lists it next to SVG diagram) inserts a ` ```mermaid ` code
+  block with a starter flowchart, drawn under the code as you type, with
+  the caret in the code.
 - Select text and the graph bar under it wraps it as a **Keyword**
   (`Mod-Alt-K`) or **Tag** (`Mod-Alt-T`). With the caret in a heading,
   **Graph node** (`Mod-Alt-G`) adds `:graph-meta{…}` from its title. Some
@@ -944,8 +947,9 @@ export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] })
   covers.
 - Two plugins may not share an `id` or define the same component.
 - `tests/src/plugins/round-trip.test.ts` parses and writes back every note
-  with all plugins loaded and fails if a byte changes. Put sample MDX for a
-  new component in `src/plugins/<name>/fixtures/*.mdx` to add it to that test.
+  with all plugins loaded, one test per note, and fails if a byte changes.
+  Put sample MDX for a new component in `src/plugins/<name>/fixtures/*.mdx`
+  to add it to that test.
 
 Plugins today:
 
@@ -972,11 +976,13 @@ Plugins today:
   site shows (character references and label escapes decoded) and are
   written so they read back the same. The MDX button shows the block's
   source.
-- `site-inserts`: the `/` menu items for graph markers and directive
-  blocks. The menu lists components, so each is a spec named
-  `studio-insert-…` whose `insert` returns the site's syntax instead of a
-  node of its own; no note has such a tag, and
-  `tests/src/plugins/site-inserts.test.ts` checks that none parses.
+- `site-inserts`: the `/` menu items for graph markers, directive blocks
+  and a Mermaid diagram. The menu lists components, so each is a spec named
+  `studio-insert-…` whose `insert` returns the site's syntax (or, for
+  Mermaid, the editor's code block) instead of a node of its own; no note
+  has such a tag, and `tests/src/plugins/site-inserts.test.ts` checks that
+  none parses. The menu matches the query against labels only, hence the
+  label "Mermaid diagram".
 - `youtube`: `<YouTube>` as the same card as `::youtube`, its title edited in
   place and its url in the props panel.
 - `fumadocs-ui`: Cards, Steps, Tabs and Accordions.
@@ -995,3 +1001,10 @@ npm --prefix tools/notes-studio test
 npm --prefix tools/notes-studio run lint   # strict typescript-eslint + React hooks
 npm --prefix tools/notes-studio run types:check
 ```
+
+Tests that render the editor run in jsdom (`// @vitest-environment jsdom`).
+`tests/setup/jsdom.ts` runs before every test file and gives the window the
+`matchMedia` jsdom lacks, which the live editor asks once it replaces the
+first paint (`tests/jsdom-setup.test.ts` checks it); `stubLayout` in
+`tests/support/visual-editor.tsx` adds the layout stubs the editor's menus
+need.

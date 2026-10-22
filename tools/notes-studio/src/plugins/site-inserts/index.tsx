@@ -1,15 +1,16 @@
 import type { UiComponentSpec } from '@fumadocs-editor/ui';
 import type { JSONContent } from '@tiptap/core';
-import { CirclePlay, Heading3, Highlighter, ListCollapse, ListOrdered, PanelTop, Tag } from 'lucide-react';
+import { CirclePlay, Heading3, Highlighter, ListCollapse, ListOrdered, PanelTop, Tag, Workflow } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { definePlugin } from '../plugin';
-import { accordions, graphHeading, keyword, steps, tabs, youtube } from './inserts';
+import { accordions, graphHeading, keyword, mermaid, steps, tabs, youtube } from './inserts';
 
 // The slash menu offers a component for each spec with an `insert`, and puts
 // in whatever that returns. These specs are only for that: they insert the
-// site's graph markup and directives (see inserts.ts), never a node of their
-// own. No note has a `<studio-insert-…>` tag, so they never parse anything;
-// tests/src/plugins/site-inserts.test.ts checks both.
+// site's graph markup and directives, or a Mermaid code block (see
+// inserts.ts), never a node of their own. No note has a `<studio-insert-…>`
+// tag, so they never parse anything; tests/src/plugins/site-inserts.test.ts
+// checks both.
 export const INSERT_PREFIX = 'studio-insert-';
 
 // The editor inserts a fragment (an array) as well as a single node.
@@ -33,5 +34,7 @@ export default definePlugin({
     insertSpec('tabs', 'Tabs (directive)', <PanelTop size={15} aria-hidden />, tabs),
     insertSpec('steps', 'Steps (directive)', <ListOrdered size={15} aria-hidden />, steps),
     insertSpec('youtube', 'YouTube (directive)', <CirclePlay size={15} aria-hidden />, youtube),
+    // "Diagram" in the label: the menu matches the query against labels only.
+    insertSpec('mermaid', 'Mermaid diagram', <Workflow size={15} aria-hidden />, mermaid),
   ],
 });

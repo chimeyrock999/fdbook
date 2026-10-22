@@ -16,14 +16,13 @@ const NOTE = 'content/notes/data-modeling/index.mdx';
 // asset exists. The save itself goes to a recording file client here (jsdom
 // cannot host the Studio server); asset-media.test.ts saves through it.
 describe('pasting an image into the editor', () => {
-  // jsdom has neither; the editor asks about touch input and sizes menus.
+  // jsdom has none; the editor sizes menus.
   beforeAll(() => {
     vi.stubGlobal('ResizeObserver', class {
       observe = () => undefined;
       unobserve = () => undefined;
       disconnect = () => undefined;
     });
-    vi.stubGlobal('matchMedia', (media: string) => ({ matches: false, media, addEventListener: () => undefined, removeEventListener: () => undefined }));
   });
 
   afterAll(() => {
