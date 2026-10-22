@@ -2,7 +2,7 @@ import { rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { collectEvents } from '../../support/events';
-import { startTestStudio, type TestStudio } from '../../support/studio';
+import { DEMO_DIAGRAM, startTestStudio, type TestStudio } from '../../support/studio';
 
 describe('file events (SSE)', () => {
   let studio: TestStudio;
@@ -33,6 +33,18 @@ describe('file events (SSE)', () => {
     const event = seen.find((candidate) => candidate.path === path);
     expect(event).toMatchObject({ type: 'change', path });
     expect(typeof event?.mtimeMs).toBe('number');
+  });
+
+  it('reports a diagram changed outside the Studio, and not the schema beside it', async () => {
+    const seen = await collectEvents(
+      events(),
+      async () => {
+        await writeFile(join(studio.root, 'diagrams/diagram.schema.json'), '{}');
+        await writeFile(join(studio.root, DEMO_DIAGRAM), '{ "changed": "by an agent" }\n');
+      },
+      (list) => list.some((event) => event.path === DEMO_DIAGRAM),
+    );
+    expect(seen).toMatchObject([{ type: 'change', path: DEMO_DIAGRAM }]);
   });
 
   it('reports added assets and skips hidden or unknown files', async () => {

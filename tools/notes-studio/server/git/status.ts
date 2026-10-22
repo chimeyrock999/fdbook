@@ -1,4 +1,4 @@
-import { classifyPath } from '../security/paths.ts';
+import { classifyPath, EDITABLE_AREAS } from '../security/paths.ts';
 import { assertWorktreeTop, runGit } from './git.ts';
 
 // A changed file against HEAD: modified, added (new or untracked), deleted,
@@ -8,8 +8,6 @@ export type ChangeStatus = 'M' | 'A' | 'D' | 'R';
 export type ChangedFile = { path: string; status: ChangeStatus; from?: string };
 // `branch` is null on a detached HEAD.
 export type Changes = { branch: string | null; files: ChangedFile[] };
-
-const AREAS = ['content/notes', 'public/notes'];
 
 // One status from git's index (X) and worktree (Y) columns.
 function statusOf(xy: string): ChangeStatus | null {
@@ -80,10 +78,11 @@ async function matchesHead(root: string, path: string) {
   return head.trim() !== '' && head.trim() === disk.trim();
 }
 
-// What `git status` says changed under content/notes and public/notes, by path.
+// What `git status` says changed in the editable areas (content/notes,
+// public/notes, diagrams), by path.
 export async function loadChanges(root: string): Promise<Changes> {
   await assertWorktreeTop(root);
-  const output = await runGit(root, ['status', '--porcelain=v2', '-z', '--branch', '--untracked-files=all', '--', ...AREAS]);
+  const output = await runGit(root, ['status', '--porcelain=v2', '-z', '--branch', '--untracked-files=all', '--', ...EDITABLE_AREAS]);
   const { branch, files, recheck } = parseStatus(output);
   const unchanged = new Set<string>();
   for (const path of recheck) if (await matchesHead(root, path)) unchanged.add(path);

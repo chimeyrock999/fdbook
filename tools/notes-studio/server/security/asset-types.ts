@@ -42,8 +42,8 @@ export function publicAsset(src: string) {
   return segments.length > 0 ? segments.join('/') : null;
 }
 
-// Whether a file the Studio may touch is text: notes, meta.yaml, and SVG and
-// HTML assets. The diff (server/git/diff.ts) sends only the size of others.
+// Whether a file the Studio may touch is text: notes, meta.yaml, diagrams,
+// and SVG and HTML assets. The diff (server/git/diff.ts) sends only the size of others.
 export function isTextPath(path: string) {
   const kind = classifyPath(path);
   return kind !== null && (kind !== 'asset' || ['svg', 'html'].includes(extensionOf(path)));
@@ -52,8 +52,13 @@ export function isTextPath(path: string) {
 // The only files the Studio may touch, as worktree-relative posix paths.
 // Every surface (file API, file events, notes sync) asks this one module.
 export const NOTES_DIR = 'content/notes';
+// The diagrams <Diagram src> draws (lib/read-diagram.ts).
+export const DIAGRAMS_DIR = 'diagrams';
+export const DIAGRAM_SUFFIX = '.diagram.json';
+// Every area the Studio lists, watches and diffs.
+export const EDITABLE_AREAS = [NOTES_DIR, ASSETS_DIR, DIAGRAMS_DIR];
 
-export type PathKind = 'note' | 'meta' | 'asset';
+export type PathKind = 'note' | 'meta' | 'asset' | 'diagram';
 
 // Lexical check only: no `..`, `.`, empty or hidden segments (`.obsidian`,
 // temp files), no backslashes or NUL, and a known name under a known area.
@@ -68,5 +73,7 @@ export function classifyPath(path: string): PathKind | null {
     return name.endsWith('.mdx') ? 'note' : null;
   }
   if (under(ASSETS_DIR)) return isAssetExtension(extensionOf(name)) ? 'asset' : null;
+  // Not diagrams/diagram.schema.json or any other file there.
+  if (under(DIAGRAMS_DIR)) return name.endsWith(DIAGRAM_SUFFIX) ? 'diagram' : null;
   return null;
 }

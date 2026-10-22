@@ -5,7 +5,7 @@ import { errorOf, readJson } from './json';
 import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
-export type FileKind = 'note' | 'meta' | 'asset';
+export type FileKind = 'note' | 'meta' | 'asset' | 'diagram';
 export type TextFile = { path: string; content: string; mtimeMs: number };
 export type FileEntry = { path: string; kind: FileKind; mtimeMs: number; size: number };
 export type FileEvent = { type: 'add' | 'change' | 'unlink'; path: string; mtimeMs: number | null };
