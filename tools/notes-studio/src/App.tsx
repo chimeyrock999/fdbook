@@ -6,7 +6,7 @@ import { AgentWrote } from './agents/AgentWrote';
 import { PermissionDialog } from './agents/PermissionDialog';
 import { firstAsk } from './agents/transcript';
 import { useAgents } from './agents/useAgents';
-import { createAgentsClient, type RunTotals } from './api/agents';
+import { createAgentsClient, type ConversationTotals } from './api/agents';
 import type { AssetAnswer, AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
 import { createChangesClient, type ChangedFile } from './api/changes';
@@ -108,9 +108,9 @@ export function App() {
   // Agents run in the change request this page edits (#84).
   const agentsClient = useMemo(() => createAgentsClient(), []);
   const agents = useAgents(agentsClient, crMode && CURRENT_CR !== null);
-  const liveRuns = agents.runs.filter((run) => run.status === 'running');
-  const asking = rights.agents ? firstAsk(liveRuns, agents.events) : null;
-  const [agentTotals, setAgentTotals] = useState<Record<string, RunTotals>>({});
+  const answering = agents.conversations.filter((conversation) => conversation.status === 'running');
+  const asking = rights.agents ? firstAsk(answering, agents.events) : null;
+  const [agentTotals, setAgentTotals] = useState<Record<string, ConversationTotals>>({});
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);
   // A reader follows a change request's preview too, without pushing or publishing.
@@ -151,15 +151,15 @@ export function App() {
   }, [select, show]);
   const showIssues = useCallback(() => { openView('issues'); }, [openView]);
 
-  // The list of change requests shows each one's agent runs, read again
-  // with the list and as this page's runs start and end.
-  const runCount = agents.runs.length;
+  // The list of change requests shows each one's agent chats, read again
+  // with the list and as this page's chats start, end their turns and go.
+  const chatCount = agents.conversations.length;
   useEffect(() => {
     if (page?.kind !== 'crs' || !crMode) return undefined;
     let current = true;
     agentsClient.totals().then((totals) => { if (current) setAgentTotals(totals); }, () => undefined);
     return () => { current = false; };
-  }, [agentsClient, crMode, page?.kind, crs.list, runCount, liveRuns.length]);
+  }, [agentsClient, crMode, page?.kind, crs.list, chatCount, answering.length]);
 
   // A drawer left open while the window grows would keep the sidebar shown.
   useEffect(() => {
@@ -298,7 +298,7 @@ export function App() {
         <span className={`min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)] ${crMode ? 'max-md:hidden' : ''}`}>{pagePath ?? ''}</span>
         {crMode && CURRENT_CR === null && rights.write && <EditMenu list={crs.list} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} />}
         {!onMain && <OpenPreview preview={preview.preview} route={route} />}
-        {crMode && <AgentControl agents={agents} live={liveRuns.length} />}
+        {crMode && <AgentControl agents={agents} live={answering.length} />}
         {action !== null && <PrimaryActionButton action={action} onAction={act} />}
         <UserMenu />
       </header>
@@ -447,7 +447,7 @@ export function App() {
         ) : (
           <p className="m-auto p-6 text-[13px] text-[var(--fde-muted-foreground)]">{readOnly ? 'Pick a note to read.' : 'Pick a note to edit.'}</p>
         )}
-        {active !== null && <AgentWrote runs={liveRuns} path={active} onOpenDiff={() => { openDiff(active); }} />}
+        {active !== null && <AgentWrote conversations={answering} path={active} onOpenDiff={() => { openDiff(active); }} />}
         {crMode && agents.open && <AgentPanel agents={agents} inCr={CURRENT_CR !== null} canRun={rights.agents} onOpenDiff={openDiff} />}
         {left && <LeaveNotice notice={left} onBack={() => { switchTo(left.cr); }} onClose={dismissLeft} />}
       </div>
@@ -463,7 +463,7 @@ export function App() {
         <PublishDialog client={previewClient} preview={preview.preview} onPublished={published} onClose={() => { setPublishing(false); }} />
       )}
       {asking !== null && (
-        <PermissionDialog key={asking.ask.id} run={asking.run} ask={asking.ask} at={asking.at} onAnswer={(optionId) => { void agents.answer(asking.run.id, asking.ask.id, optionId); }} />
+        <PermissionDialog key={asking.ask.id} conversation={asking.conversation} ask={asking.ask} at={asking.at} onAnswer={(optionId) => { void agents.answer(asking.conversation.id, asking.ask.id, optionId); }} />
       )}
       {crDialog?.kind === 'discard' && <DiscardDialog client={crClient} cr={crDialog.cr} current={crDialog.cr.slug === CURRENT_CR} onDone={discarded} onClose={() => { setCrDialog(null); }} />}
     </div>

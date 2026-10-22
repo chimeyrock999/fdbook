@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import { createAgentRunsApi } from './agents/api.ts';
-import { createAgentRuns, type AgentRunsOptions } from './agents/runs.ts';
+import { createAgentConversationsApi } from './agents/api.ts';
+import { createAgentConversations, type AgentConversationsOptions } from './agents/conversations.ts';
 import { createAssetsApi } from './assets/api.ts';
 import { createFilesApi } from './files/api.ts';
 import { createFileEvents } from './files/events.ts';
@@ -35,18 +35,18 @@ const refuseWrites: Handler = (request, response) => {
 // gh and has no Pages project to name its preview after.
 const defaultPreview = (): PreviewOptions => ({ builds: createBuildReader(ghCheckRun), pullRequests: createBranchPullRequestReader(ghPullRequest), pagesProject: null });
 
-// What agent runs need besides the worktree: its change request's slug, the
-// profiles and where transcripts go (agents/runs.ts).
-export type WorkspaceAgents = Omit<AgentRunsOptions, 'slug'>;
+// What agent conversations need besides the worktree: its change request's
+// slug, the profiles and where transcripts go (agents/conversations.ts).
+export type WorkspaceAgents = Omit<AgentConversationsOptions, 'slug'>;
 
 // The handlers of one worktree: file API and events, lint, page tree,
 // assets, changes (git status, commit, history), page history, preview (push, build, publish),
-// agent runs, and the notes sync socket. Agents run only with `agents`: in a
+// agent conversations, and the notes sync socket. Agents work only with `agents`: in a
 // change request, never on main.
 export function createWorkspace(
   root: string,
   hosts: string[],
-  { readOnly = false, preview = defaultPreview(), agents = null }: { readOnly?: boolean; preview?: PreviewOptions; agents?: AgentRunsOptions | null } = {},
+  { readOnly = false, preview = defaultPreview(), agents = null }: { readOnly?: boolean; preview?: PreviewOptions; agents?: AgentConversationsOptions | null } = {},
 ) {
   // Tree and asset changes both write notes: one at a time. A commit waits
   // for them too, so it never takes half of a rename. The lock is this
@@ -54,7 +54,7 @@ export function createWorkspace(
   const notesLock = createKeyedLock();
   const fileEvents = createFileEvents(root);
   const sync = createNotesSync(root, hosts, { readOnly });
-  const runs = agents === null || readOnly ? null : createAgentRuns(root, { ...agents, lock: notesLock });
+  const conversations = agents === null || readOnly ? null : createAgentConversations(root, { ...agents, lock: notesLock });
   const handlers: Handler[] = [
     ...(readOnly ? [refuseWrites] : []),
     fileEvents.handle,
@@ -65,7 +65,7 @@ export function createWorkspace(
     createChangesApi(root, notesLock),
     createPageHistoryApi(root, notesLock),
     createPreviewApi(root, preview, { readOnly, lock: notesLock }),
-    createAgentRunsApi(runs),
+    createAgentConversationsApi(conversations),
   ];
   return {
     root,
@@ -74,7 +74,7 @@ export function createWorkspace(
       sync.handleUpgrade(request, socket, head);
     },
     close: async () => {
-      await runs?.close();
+      await conversations?.close();
       fileEvents.close();
       await sync.close();
     },

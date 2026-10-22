@@ -11,32 +11,71 @@
 //   crash               prints to stderr and exits
 //   env                 says which of the Studio's variables it can see
 //   mode                says the session's mode (it starts in acceptEdits)
-// FAKE_AGENT=auth makes session/new ask for a sign-in.
-import { writeFileSync } from 'node:fs';
+//   recall              says the earlier prompts of the session, joined by |
+// FAKE_AGENT=auth makes session/new ask for a sign-in; FAKE_AGENT=load
+// offers session/load (it replays the history first), FAKE_AGENT=resume
+// session/resume. With FAKE_AGENT_STORE, a session's prompts are kept in
+// that folder, so a new process can take the session up again.
+// FAKE_AGENT_MODEL=default reports a "default" model choice.
+import { randomBytes } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import { AgentSideConnection, ndJsonStream, PROTOCOL_VERSION, RequestError } from '@agentclientprotocol/sdk';
 
 const sessions = new Map();
+const store = process.env.FAKE_AGENT_STORE;
+const way = process.env.FAKE_AGENT;
+// What the process has cost so far: it adds up over its turns.
+let spent = 0;
 let connection;
+
+const storeOf = (sessionId) => (store === undefined ? null : join(store, `${sessionId}.json`));
+const keep = (sessionId, session) => {
+  const file = storeOf(sessionId);
+  if (file !== null) writeFileSync(file, JSON.stringify(session.history));
+};
+
+const sessionState = () => ({
+  modes: { currentModeId: 'acceptEdits', availableModes: [{ id: 'default', name: 'Default' }, { id: 'acceptEdits', name: 'Accept edits' }] },
+  configOptions: [
+    process.env.FAKE_AGENT_MODEL === 'default'
+      ? { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'default', options: [{ value: 'default', name: 'Default (recommended)', description: 'Fake Two' }, { value: 'fake-1', name: 'Fake One' }] }
+      : { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'fake-1', options: [{ value: 'fake-1', name: 'Fake One' }] },
+  ],
+});
+
+// A session kept by an earlier process, back in this one.
+const takeUp = (sessionId, cwd) => {
+  const file = storeOf(sessionId);
+  if (file === null || !existsSync(file)) throw RequestError.resourceNotFound(sessionId);
+  const session = { cwd, cancelled: false, cancel: null, mode: 'acceptEdits', history: JSON.parse(readFileSync(file, 'utf8')) };
+  sessions.set(sessionId, session);
+  return session;
+};
 
 const say = (sessionId, text) =>
   connection.sessionUpdate({ sessionId, update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } } });
 
 const agent = {
   async initialize() {
-    return { protocolVersion: PROTOCOL_VERSION, agentCapabilities: {}, agentInfo: { name: 'fake-agent', version: '1.0.0' } };
+    const agentCapabilities = way === 'load' ? { loadSession: true } : way === 'resume' ? { sessionCapabilities: { resume: {} } } : {};
+    return { protocolVersion: PROTOCOL_VERSION, agentCapabilities, agentInfo: { name: 'fake-agent', version: '1.0.0' } };
   },
   async newSession({ cwd }) {
     if (process.env.FAKE_AGENT === 'auth') throw RequestError.authRequired();
-    const sessionId = `s${String(sessions.size + 1)}`;
-    sessions.set(sessionId, { cwd, cancelled: false, cancel: null, mode: 'acceptEdits' });
-    return {
-      sessionId,
-      modes: { currentModeId: 'acceptEdits', availableModes: [{ id: 'default', name: 'Default' }, { id: 'acceptEdits', name: 'Accept edits' }] },
-      configOptions: [
-        { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'fake-1', options: [{ value: 'fake-1', name: 'Fake One' }] },
-      ],
-    };
+    const sessionId = `s-${randomBytes(4).toString('hex')}`;
+    sessions.set(sessionId, { cwd, cancelled: false, cancel: null, mode: 'acceptEdits', history: [] });
+    return { sessionId, ...sessionState() };
+  },
+  async loadSession({ sessionId, cwd }) {
+    const session = takeUp(sessionId, cwd);
+    for (const prompt of session.history) await say(sessionId, `replay:${prompt}`);
+    return sessionState();
+  },
+  async resumeSession({ sessionId, cwd }) {
+    takeUp(sessionId, cwd);
+    return sessionState();
   },
   async authenticate() {
     return {};
@@ -54,6 +93,11 @@ const agent = {
   async prompt({ sessionId, prompt }) {
     const session = sessions.get(sessionId);
     const text = prompt.map((block) => (block.type === 'text' ? block.text : '')).join('');
+    const earlier = [...session.history];
+    session.history.push(text);
+    keep(sessionId, session);
+    session.cancelled = false;
+    session.cancel = null;
     for (const line of text.split('\n')) {
       const [command, path, ...rest] = line.trim().split(' ');
       if (command === 'read') {
@@ -98,6 +142,8 @@ const agent = {
       } else if (command === 'crash') {
         process.stderr.write('boom: the fake agent crashed\n');
         process.exit(3);
+      } else if (command === 'recall') {
+        await say(sessionId, `recall:${earlier.join('|')}`);
       } else if (command === 'mode') {
         await say(sessionId, `mode:${session.mode}`);
       } else if (command === 'env') {
@@ -105,7 +151,8 @@ const agent = {
         await say(sessionId, `env:${seen.join(',')} cwd:${process.cwd()}`);
       }
     }
-    await connection.sessionUpdate({ sessionId, update: { sessionUpdate: 'usage_update', used: 100, size: 1000, cost: { amount: 0.12, currency: 'USD' } } });
+    spent += 0.12;
+    await connection.sessionUpdate({ sessionId, update: { sessionUpdate: 'usage_update', used: 100, size: 1000, cost: { amount: spent, currency: 'USD' } } });
     return { stopReason: 'end_turn', usage: { totalTokens: 30, inputTokens: 20, outputTokens: 10 } };
   },
 };

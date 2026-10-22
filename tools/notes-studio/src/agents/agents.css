@@ -1,5 +1,5 @@
 /* Agents (src/agents): the header control, the panel at the right of the
-   editor, a run's transcript and the permission dialog. Same tokens and
+   editor, a chat and its history, and the permission dialog. Same tokens and
    pieces as the rest of the chrome (.studio-button, .studio-menu, .studio-dialog). */
 @layer components {
   .studio-agent-logo {
@@ -147,14 +147,9 @@
     text-transform: none;
     color: var(--fde-foreground);
   }
-  .studio-agent-panel-body {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 10px;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 0 12px 12px;
+  .studio-agent-panel-error,
+  .studio-agent-panel-note {
+    padding: 0 12px 8px;
   }
   .studio-agent-meta {
     font-size: 11.5px;
@@ -167,17 +162,23 @@
     text-underline-offset: 2px;
   }
 
+  /* The message box, at the bottom of the panel. */
   .studio-agent-composer {
     display: grid;
-    gap: 8px;
+    flex: none;
+    gap: 6px;
+    margin: 0 12px 12px;
     padding: 8px;
     border: 1px solid var(--fde-border);
     border-radius: 9px;
     background: var(--fde-card);
   }
   .studio-agent-composer textarea {
-    min-height: 64px;
-    resize: vertical;
+    /* Grows with its text (Composer.tsx) up to six lines, then scrolls. */
+    max-height: calc(1.45em * 6 + 4px);
+    padding: 2px;
+    resize: none;
+    overflow-y: auto;
     background: transparent;
     font-size: 13px;
     line-height: 1.45;
@@ -188,6 +189,20 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
+  }
+  .studio-agent-send {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    background: var(--fde-primary);
+    color: var(--fde-primary-foreground);
+  }
+  .studio-agent-send:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
   .studio-agent-roles {
     display: inline-flex;
@@ -207,34 +222,56 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
+    min-width: 0;
     font-size: 12px;
     color: var(--fde-muted-foreground);
   }
-
-  /* A run. */
-  .studio-agent-run {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--fde-border);
-    border-radius: 9px;
-    background: var(--fde-card);
+  .studio-agent-empty {
+    display: grid;
+    flex: 1;
+    align-content: center;
+    gap: 6px;
+    padding: 24px;
+    font-size: 12.5px;
+    text-align: center;
+    color: var(--fde-muted-foreground);
   }
-  .studio-agent-run-head,
-  .studio-agent-run-foot {
+  .studio-agent-empty strong {
+    font-size: 13.5px;
+    color: var(--fde-foreground);
+  }
+
+  /* A chat: its head on one line, then the thread, which scrolls. */
+  .studio-agent-conversation {
     display: flex;
-    flex-wrap: wrap;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .studio-agent-conversation-head {
+    display: flex;
     align-items: center;
-    gap: 4px 8px;
-    padding: 8px 10px;
+    gap: 8px;
+    min-width: 0;
+    padding: 8px 12px;
+    border-block: 1px solid var(--fde-border);
     font-size: 12.5px;
   }
-  .studio-agent-run-head {
-    border-bottom: 1px solid var(--fde-border);
+  .studio-agent-conversation-head > * {
+    flex: none;
   }
-  .studio-agent-run-foot {
-    border-top: 1px solid var(--fde-border);
+  .studio-agent-conversation-head .studio-agent-model {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
     font-size: 11.5px;
     color: var(--fde-muted-foreground);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-agent-conversation-head .studio-agent-grow {
+    flex: 1 1 0;
+    min-width: 0;
   }
   .studio-agent-role,
   .studio-agent-status {
@@ -242,6 +279,7 @@
     border: 1px solid var(--fde-border);
     border-radius: 999px;
     font-size: 11px;
+    white-space: nowrap;
   }
   .studio-agent-status[data-status='running'] {
     color: var(--fde-info);
@@ -255,33 +293,133 @@
   .studio-agent-status[data-status='cancelled'] {
     color: var(--fde-muted-foreground);
   }
-  .studio-agent-stream {
+  .studio-agent-thread {
     display: flex;
+    flex: 1;
     flex-direction: column;
     gap: 8px;
-    padding: 10px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px;
     font-size: 12.5px;
   }
   .studio-agent-prompt {
     align-self: flex-end;
-    max-width: 90%;
+    max-width: 88%;
     padding: 6px 9px;
     border-radius: 9px 9px 2px 9px;
     background: var(--fde-accent);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+  .studio-agent-prompt-meta {
+    align-self: flex-end;
+    margin-top: -5px;
+    font-size: 10.5px;
+    color: var(--fde-muted-foreground);
+  }
   .studio-agent-message {
     line-height: 1.55;
-    white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
   .studio-agent-thought {
     font-size: 12px;
     font-style: italic;
     color: var(--fde-muted-foreground);
-    white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  .studio-agent-marker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    text-align: center;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-marker::before,
+  .studio-agent-marker::after {
+    content: '';
+    flex: 1;
+    min-width: 12px;
+    border-top: 1px dashed var(--fde-border);
+  }
+  .studio-agent-marker[data-tone='warning'] {
+    color: var(--fde-warning);
+  }
+  .studio-agent-turn-foot {
+    font-size: 10.5px;
+    color: var(--fde-muted-foreground);
+  }
+
+  /* An agent's markdown (Markdown.tsx). */
+  .studio-md > :first-child {
+    margin-top: 0;
+  }
+  .studio-md > :last-child {
+    margin-bottom: 0;
+  }
+  .studio-md :is(p, ul, ol, blockquote, pre, .studio-md-table, h1, h2, h3, h4, h5, h6) {
+    margin: 0 0 6px;
+  }
+  .studio-md :is(h1, h2, h3, h4, h5, h6) {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .studio-md :is(ul, ol) {
+    padding-left: 18px;
+  }
+  .studio-md ul {
+    list-style: disc;
+  }
+  .studio-md ol {
+    list-style: decimal;
+  }
+  .studio-md li > input[type='checkbox'] {
+    margin-right: 5px;
+    vertical-align: -1px;
+  }
+  .studio-md blockquote {
+    padding-left: 9px;
+    border-left: 2px solid var(--fde-border);
+    color: var(--fde-muted-foreground);
+  }
+  .studio-md code {
+    padding: 0 4px;
+    border-radius: 4px;
+    background: var(--fde-muted);
+    font: 11.5px var(--font-mono);
+  }
+  .studio-md pre {
+    overflow-x: auto;
+    padding: 8px 10px;
+    border: 1px solid var(--fde-border);
+    border-radius: 7px;
+    background: var(--fde-card);
+    font-style: normal;
+  }
+  .studio-md pre code {
+    padding: 0;
+    background: none;
+  }
+  .studio-md a {
+    color: var(--fde-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .studio-md hr {
+    margin: 8px 0;
+    border-color: var(--fde-border);
+  }
+  .studio-md-table {
+    overflow-x: auto;
+  }
+  .studio-md table {
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .studio-md :is(th, td) {
+    padding: 2px 6px;
+    border: 1px solid var(--fde-border);
   }
   .studio-agent-plan {
     display: grid;
@@ -305,7 +443,7 @@
     padding: 5px 8px;
     border: 1px solid var(--fde-border);
     border-radius: 7px;
-    background: var(--fde-background);
+    background: var(--fde-card);
     font-size: 12px;
   }
   .studio-agent-tool-title {
@@ -335,28 +473,61 @@
     justify-self: start;
   }
 
-  /* Earlier runs. */
-  .studio-agent-history h3 {
-    margin: 4px 0 6px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--fde-muted-foreground);
+  /* The change request's chats (History). */
+  .studio-agent-history {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
   }
-  .studio-agent-history button {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0 8px;
-    width: 100%;
-    padding: 7px 4px;
+  .studio-agent-history-tools {
+    display: flex;
+    gap: 6px;
+    padding: 8px 12px;
     border-top: 1px solid var(--fde-border);
+  }
+  .studio-agent-history-tools input {
+    flex: 1;
+    min-width: 0;
+    padding: 3px 8px;
+    border: 1px solid var(--fde-border);
+    border-radius: 7px;
+    background: var(--fde-card);
+    font-size: 12.5px;
+  }
+  .studio-agent-history-empty {
+    padding: 4px 12px;
+  }
+  .studio-agent-history ul {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 12px 12px;
+  }
+  .studio-agent-history-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0 6px;
+    padding: 6px 4px;
+    border-top: 1px solid var(--fde-border);
+  }
+  .studio-agent-history-row[data-selecting] {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .studio-agent-history-row:hover,
+  .studio-agent-history-row[aria-current='true'] {
+    background: var(--fde-accent);
+  }
+  .studio-agent-history-row input[type='checkbox'] {
+    accent-color: var(--fde-primary);
+  }
+  .studio-agent-history-open {
+    display: grid;
+    min-width: 0;
+    gap: 1px;
     font-size: 12.5px;
     text-align: left;
-  }
-  .studio-agent-history button:hover,
-  .studio-agent-history button[aria-current='true'] {
-    background: var(--fde-accent);
   }
   .studio-agent-history-prompt {
     overflow: hidden;
@@ -365,7 +536,6 @@
   }
   .studio-agent-history-meta {
     display: flex;
-    grid-column: 1 / 3;
     flex-wrap: wrap;
     gap: 2px 10px;
     font-size: 11.5px;
@@ -375,6 +545,47 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
+  }
+  .studio-agent-history-row .studio-icon-button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .studio-agent-history-bulk {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px 12px;
+    border-top: 1px solid var(--fde-border);
+    font-size: 12px;
+  }
+  .studio-agent-history-bulk > span {
+    flex: 1;
+    color: var(--fde-muted-foreground);
+  }
+
+  /* A deletion to confirm, beside its button (ConfirmPopover.tsx). */
+  .studio-agent-confirm {
+    position: fixed;
+    z-index: 60;
+    display: grid;
+    gap: 8px;
+    width: 240px;
+    max-width: calc(100vw - 16px);
+    padding: 10px 11px;
+    border: 1px solid var(--fde-border);
+    border-radius: 9px;
+    background: var(--fde-popover);
+    box-shadow: 0 6px 24px rgb(0 0 0 / 0.14);
+    font-size: 12px;
+  }
+  .studio-agent-confirm p {
+    line-height: 1.45;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
   }
 
   /* The permission dialog. */

@@ -25,7 +25,7 @@ function AgentItem({ agent, checked, onPick }: { agent: AgentInfo; checked: bool
 }
 
 // The header's agent control: a button that shows or hides the agent panel,
-// with the number of runs going on, joined to the picker of the agent each
+// with the number of agents answering, joined to the picker of the agent each
 // role runs. Agents that cannot run here are listed, greyed, with why.
 export function AgentControl({ agents, live }: { agents: Agents; live: number }) {
   const menu = useMenu();

@@ -66,8 +66,9 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     picked files (see Changes below), reads a file as main holds it
     (see Diff), and reads, compares and restores a page's versions (see
     History).
-  - `agents/` runs Claude Code, Codex, omp and Hermes Agent over ACP in a
-    change request, and keeps their transcripts (see Agents below).
+  - `agents/` holds chats with Claude Code, Codex, omp and Hermes Agent
+    over ACP in a change request, and keeps their transcripts (see Agents
+    below).
 - `src/`: the React UI.
   - `api/` holds the clients for the server; `workspace.ts` says which
     worktree the page edits (`?cr=`).
@@ -96,8 +97,9 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     the deleted pages (see History).
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
-  - `agents/` is the header's agent control, the agent panel, a run's
-    transcript and the permission dialog (see Agents).
+  - `agents/` is the header's agent control, the agent panel (a chat, its
+    composer, the chat history), agent replies as markdown and the
+    permission dialog (see Agents).
   - `plugins/` holds the editor plugins (see below).
 - `tests/`: laid out like `server/` and `src/`. `tests/support/` holds the
   fixtures: a throwaway worktree, a Studio on a free port, and raw HTTP and
@@ -831,8 +833,10 @@ open note has edits not saved yet.
 ## Agents
 
 The Studio drives coding agents over the [Agent Client
-Protocol](https://agentclientprotocol.com) (#84): it is the ACP client, each
-agent a process it starts for one prompt (`server/agents/connection.ts`).
+Protocol](https://agentclientprotocol.com) (#84): it is the ACP client. A
+chat is one ACP session over many turns (#130): its agent is a process the
+Studio starts for the first message and keeps between turns
+(`server/agents/connection.ts`, `conversations.ts`).
 Each agent signs in on its own (its CLI's login, or its own API key
 variable): the Studio holds no key, reads no token, and starts the agent
 without its own `STUDIO_*`, `GH_*` and `GITHUB_*` variables.
@@ -849,24 +853,39 @@ runs without asking.
 
 > An agent runs commands as the person who started the Studio, with that
 > person's logins, keys and files. With sign-in on, only an **admin** of
-> the repository may start, answer and cancel runs; readers and writers
-> follow them. Give admin only to people you would hand a shell on this
-> machine.
+> the repository may start a chat, send it a message, answer, cancel or
+> delete; readers and writers follow and read the chats. Give admin only to
+> people you would hand a shell on this machine.
 
 **Agent** in the header shows or hides the agent
-panel and counts the runs going on; the picker beside it chooses the
+panel and counts the agents answering; the picker beside it chooses the
 agent for each role, kept in this browser. Agents that are not installed
 are listed greyed, with how to install them (`GET /api/agents`).
 
 - **Where.** Only in a change request: the agent's working folder is its
-  worktree, never main (`/api/agents/runs` on main answers 409). A Studio
-  over one worktree (no change requests) runs no agent.
+  worktree, never main (`/api/agents/conversations` on main answers 409).
+  A Studio over one worktree (no change requests) runs no agent.
+- **Chats.** **New chat** picks the role (the agent is the one picked for
+  it); agent and role stay for the whole chat. Enter sends, Shift+Enter
+  adds a line, and Enter that only confirms an IME's text (Telex) sends
+  nothing. One turn at a time: while the agent answers, the composer keeps
+  what you type but sends nothing, and **Cancel** stops that turn
+  (`session/cancel`), not the chat. Replies and thoughts show as markdown
+  (GFM): raw HTML shows as text, links go only to `http(s):` and `mailto:`,
+  and an image is a link (`src/agents/Markdown.tsx`). The header names the
+  model the agent reports; for Claude Code's "default" choice, the model it
+  stands for.
+- **History.** Every chat of the change request, last active first, with
+  its agent, role, turns, cost and last activity, filtered by its first
+  message. One opens to read and go on with; an admin deletes one, or
+  several with **Select**, after a confirmation (not while its agent
+  answers). Deleting drops the Studio's transcript; the agent's own record
+  of the session stays.
 - **Roles.** An *author* may write; a *reviewer* only reads: whatever it
   asks for beyond reading (`read`, `search`, `fetch`, `think` tool calls),
   the Studio says no without asking you, whichever the agent. omp and
   Hermes cannot be held to reading from outside, so their own tools may
-  still change a file they do not ask about; the run lists it. Starting,
-  answering and cancelling a run needs an admin (see above).
+  still change a file they do not ask about; the chat lists it.
 - **Files.** `fs/read_text_file` reads any file of the worktree except
   hidden ones (`.git`, `.env`) and none a symlink leads out to;
   `fs/write_text_file` writes only what the Studio itself edits (notes,
@@ -874,34 +893,47 @@ are listed greyed, with how to install them (`GET /api/agents`).
   notes lock (`server/agents/fs-policy.ts`). Claude Code and Codex write
   with their own tools instead, inside the fences above: the Studio sees
   those edits in their tool calls and, at the end of the run, in `git
-  status` against the start (`server/agents/worktree.ts`), so a file
-  edited by hand meanwhile is listed too. Every changed file is in the
-  run's list with **View diff**, and shows in Changes; until #85 turns
-  writes into suggestions, a note changed by a run going on carries a
-  notice over the editor.
+  status` against the start of each turn (`server/agents/worktree.ts`),
+  so a file edited by hand meanwhile is listed too. Every changed file is
+  in the chat with **View diff**, and shows in Changes; until #85 turns
+  writes into suggestions, a note changed while its agent answers carries
+  a notice over the editor.
 - **Permission.** `session/request_permission` opens one dialog for every
   agent with the agent's own options, less "always" ones, which would
-  outlive the run. Closing it rejects; so does the server when nobody
+  outlive the chat. Closing it rejects; so does the server when nobody
   answers within 5 minutes. Pushes, pull requests and GitHub replies are
   never the agent's: they stay a person's click.
-- **Runs.** At most three at once per change request. Cancel sends
-  `session/cancel` and stops the process 10 seconds later if it has not
-  ended; discarding the change request or stopping the Studio stops them
-  at once. Every event goes to `GET /api/agents/events` (server-sent
-  events; the page reads the runs again each time it connects, and opens
-  a refused stream again after 5 seconds) and to `<STUDIO_HOME>/agents/<slug>/<run>.jsonl`, with the
-  summary (agent, model, role, status, cost, files written, who started
-  it) in `<run>.json`: next to the worktrees, never in the branch. A
+- **Processes.** At most three agent processes at once per change request
+  (`server/agents/sessions.ts`). One stays up between turns and stops
+  after 10 minutes idle; when a fourth chat needs a place, the one idle
+  longest stops, never one answering (all three answering: 409). Cancel
+  stops the process 10 seconds later if the agent has not ended its turn;
+  discarding the change request or stopping the Studio stops them all at
+  once. A message to a chat whose process stopped starts it again on the
+  same session: `session/resume` when the agent offers it (Claude Code),
+  else `session/load` (its replay of the history is dropped: the
+  transcript has it), else a new session, marked in the thread, that does
+  not remember the earlier turns.
+- **Transcripts.** Every event goes to `GET /api/agents/events`
+  (server-sent events, numbered per chat; on connecting it sends a
+  snapshot of each chat whose agent is answering, the page reads the
+  chats it holds again, and a refused stream opens again after 5 seconds)
+  and to
+  `<STUDIO_HOME>/agents/<slug>/<chat>.jsonl`, turn by turn, with the
+  summary (agent, model, role, status, turns, session, cost, files
+  written, who started it) in `<chat>.json`: next to the worktrees, never
+  in the branch. A run kept before chats reads as a one-turn chat. A
   discarded change request's transcripts go with it. The cost is what the
-  agent reports (`usage_update`); "Cost not reported" otherwise. The list
-  of change requests shows each one's runs and cost (`GET
-  /api/agents/totals`).
+  agent reports (`usage_update`), added up over the turns; nothing shows
+  otherwise. The list of change requests shows each one's chats and cost
+  (`GET /api/agents/totals`).
 - **Logos.** Each agent's own mark, in `src/agents/logos/` with its source
   in the file.
 
-`STUDIO_AGENT_LIVE=1 npx vitest run tests/server/agents/live.test.ts` runs
-each installed agent once through the Studio as a reviewer (it signs in
-with your logins and costs a model call each); the other agent tests use a
+`STUDIO_AGENT_LIVE=1 npx vitest run tests/server/agents/live.test.ts` holds
+a two-turn chat with each installed agent through the Studio as a reviewer,
+restarting in between to take the session up again (it signs in with your
+logins and costs two model calls each); the other agent tests use a
 stand-in ACP agent (`tests/support/fake-agent.mjs`).
 
 ## Diff

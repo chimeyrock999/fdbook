@@ -15,7 +15,8 @@ export function requiredRole(method: string, pathname: string): Role {
   // Linting reads a draft and writes nothing.
   if (method === 'POST' && rest === '/api/lint') return 'reader';
   // An agent runs commands as the person who started the Studio, with their
-  // logins: starting one, answering it and stopping it is an admin's.
+  // logins: starting a chat, sending it a message, answering, stopping and
+  // deleting are an admin's.
   if (rest.startsWith('/api/agents/')) return 'admin';
   return 'writer';
 }

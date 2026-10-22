@@ -1,9 +1,10 @@
 import { TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { PERMISSION_TIMEOUT_MS, type PermissionAsk } from '../../server/agents/shared';
-import type { RunSummary } from '../api/agents';
+import type { Conversation } from '../api/agents';
 import { Dialog } from '../tree/TreeDialogs';
 import { AgentLogo } from './AgentLogo';
+import { roleLabel } from './transcript';
 
 // What the tool call would run or touch, as far as the agent says.
 function detailsOf(ask: PermissionAsk) {
@@ -28,15 +29,15 @@ function useCountdown(until: number) {
 // An agent's question before a tool call, with the options it gave (less
 // "always", which the server drops). Closing the dialog rejects; so does
 // the server once nobody answers in time.
-export function PermissionDialog({ run, ask, at, onAnswer }: { run: RunSummary; ask: PermissionAsk; at: number; onAnswer: (optionId: string | null) => void }) {
+export function PermissionDialog({ conversation, ask, at, onAnswer }: { conversation: Conversation; ask: PermissionAsk; at: number; onAnswer: (optionId: string | null) => void }) {
   const left = useCountdown(at + PERMISSION_TIMEOUT_MS);
   const { command, paths } = detailsOf(ask);
   const allow = ask.options.find((option) => option.kind === 'allow_once');
-  const title = `${run.agentName} asks: ${ask.toolCall.title ?? 'use a tool'}`;
+  const title = `${conversation.agentName} asks: ${ask.toolCall.title ?? 'use a tool'}`;
   return (
     <Dialog title={title} onClose={() => { onAnswer(null); }} onSubmit={() => { onAnswer(allow?.optionId ?? null); }}>
       <p className="studio-agent-ask-lead">
-        <AgentLogo id={run.agent} size={14} /> {run.role === 'author' ? 'Author' : 'Reviewer'} run. Nothing happens until you choose.
+        <AgentLogo id={conversation.agent} size={14} /> {roleLabel(conversation.role)} chat. Nothing happens until you choose.
       </p>
       {command !== null && <pre className="studio-agent-ask-command">{command}</pre>}
       {paths.length > 0 && (

@@ -1,6 +1,6 @@
 import { ArrowDown, Bot, Brush, Check, Clock, ExternalLink, Plus, RefreshCw, Trash2, TriangleAlert } from 'lucide-react';
 import { costLabel } from '../agents/transcript';
-import type { RunTotals } from '../api/agents';
+import type { ConversationTotals } from '../api/agents';
 import type { ChangeRequest, CrList } from '../api/crs';
 import { ADMIN_HINT } from '../session/session';
 import { CrBadge } from './CrMenus';
@@ -19,12 +19,12 @@ function DriftMeta({ cr }: { cr: ChangeRequest }) {
 // `discard`: whether this person may discard it, or only an admin may (it is on origin), or nobody here (a reader).
 type DiscardRight = 'yes' | 'admin' | 'no';
 
-// Its agent runs, and what the agents said they cost.
-function AgentMeta({ totals }: { totals: RunTotals }) {
+// Its agent chats, and what the agents said they cost.
+function AgentMeta({ totals }: { totals: ConversationTotals }) {
   const costs = Object.entries(totals.costs).flatMap(([currency, amount]) => costLabel({ cost: { amount, currency } }) ?? []);
   return (
     <span className="studio-cr-agents">
-      <Bot size={12} aria-hidden /> {plural(totals.runs, 'agent run')} · {costs.length > 0 ? costs.join(' + ') : 'cost not reported'}
+      <Bot size={12} aria-hidden /> {plural(totals.conversations, 'agent chat')} · {costs.length > 0 ? costs.join(' + ') : 'cost not reported'}
     </span>
   );
 }
@@ -34,7 +34,7 @@ function Card({ cr, current, waiting, discard, agents, onOpen, onDiscard }: {
   current: boolean;
   waiting: boolean;
   discard: DiscardRight;
-  agents: RunTotals | null;
+  agents: ConversationTotals | null;
   onOpen: () => void;
   onDiscard: () => void;
 }) {
@@ -114,7 +114,7 @@ const WAIT_HINT = 'The open note has unsaved changes. Switch once it shows Saved
 export function CrListPage({ list, error, current, waiting = false, agents = {}, onOpen, onNew, onDiscard, canDiscard = () => true, onRefresh }: {
   list: CrList | null;
   // Agent runs and cost by change request.
-  agents?: Record<string, RunTotals>;
+  agents?: Record<string, ConversationTotals>;
   error: string | null;
   current: string | null;
   waiting?: boolean;
