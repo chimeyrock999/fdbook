@@ -4,11 +4,14 @@ export class CommandError extends Error {
   readonly code: number | null;
   // Stopped by the timeout.
   readonly killed: boolean;
-  constructor(command: string, code: number | null, stderr: string, killed = false) {
+  // What it printed before failing: git merge-tree lists conflicts there.
+  readonly stdout: string;
+  constructor(command: string, code: number | null, stderr: string, killed = false, stdout = '') {
     super(stderr.trim() || `${command} failed`);
     this.name = 'CommandError';
     this.code = code;
     this.killed = killed;
+    this.stdout = stdout;
   }
 }
 
@@ -22,7 +25,7 @@ export function run(command: string, args: readonly string[], cwd: string, { tim
       args,
       { cwd, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1' } },
       (error, stdout, stderr) => {
-        if (error) reject(new CommandError(`${command} ${args[0] ?? ''}`, typeof error.code === 'number' ? error.code : null, stderr || error.message, error.killed === true));
+        if (error) reject(new CommandError(`${command} ${args[0] ?? ''}`, typeof error.code === 'number' ? error.code : null, stderr || error.message, error.killed === true, stdout));
         else resolve(stdout);
       },
     );

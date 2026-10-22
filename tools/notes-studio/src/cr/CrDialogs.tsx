@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { crSlug } from '../../server/cr/slug';
 import type { ChangeRequest, CrClient, Discard } from '../api/crs';
 import { Dialog } from '../tree/TreeDialogs';
-import { plural } from './cr-status';
+import { isDone, plural } from './cr-status';
 
 const messageOf = (reason: unknown) => (reason instanceof Error ? reason.message : String(reason));
 
@@ -47,10 +47,11 @@ export function NewCrDialog({ client, taken, onCreated, onClose }: {
   );
 }
 
-// Asks before a change request is discarded, listing what goes from this
-// machine (a dry run on the server). A pushed branch and its pull request
-// stay on the remote. The one being worked in can go too: the Studio then
-// goes back to main.
+// Asks before a change request is discarded, or cleaned up once merged or
+// closed, listing what goes (a dry run on the server): from origin, the open
+// pull request and the branch; from this machine, the worktree and the local
+// branch. The one being worked in can go too: the Studio then goes back to
+// main.
 export function DiscardDialog({ client, cr, current, onDone, onClose }: {
   client: CrClient;
   cr: ChangeRequest;
@@ -61,7 +62,6 @@ export function DiscardDialog({ client, cr, current, onDone, onClose }: {
   const [plan, setPlan] = useState<Discard | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
-
   useEffect(() => {
     let current = true;
     client.discard(cr.slug, true).then(
@@ -74,37 +74,55 @@ export function DiscardDialog({ client, cr, current, onDone, onClose }: {
   const submit = () => {
     if (plan === null || busy) return;
     setBusy(true);
-    client.discard(cr.slug).then(onDone, (reason: unknown) => {
+    client.discard(cr.slug, false, { pushed: plan.pushed, closesPr: plan.closesPr?.number ?? null }).then(onDone, (reason: unknown) => {
       setBusy(false);
       setFailed(messageOf(reason));
     });
   };
 
+  // The dry run read origin and the pull request just now; the list may be older.
+  const status = plan?.status ?? cr.status;
+  const cleanUp = isDone({ status });
+  const pr = cr.pr === null ? 'The pull request' : `Pull request #${String(cr.pr.number)}`;
+  const lead = status === 'merged' ? `${pr} was merged. Its changes are on main.` : status === 'closed' ? `${pr} was closed without merging.` : 'This cannot be undone.';
+  const verb = cleanUp ? 'Clean up' : 'Discard';
+
   return (
-    <Dialog title={`Discard “${cr.name}”?`} onClose={onClose} onSubmit={submit}>
+    <Dialog title={`${verb} “${cr.name}”?`} onClose={onClose} onSubmit={submit}>
       {current && (
         <p className="studio-cr-inside">
           <Info size={15} aria-hidden /> You are working in this change request. Studio goes back to main afterwards.
         </p>
       )}
-      <p className="text-[13px] text-[var(--fde-muted-foreground)]">This cannot be undone. It removes from this machine:</p>
+      <p className="text-[13px] text-[var(--fde-muted-foreground)]">{lead}</p>
       {plan === null && failed === null && <p role="status" className="studio-tree-status">Checking what it removes…</p>}
       {plan !== null && (
-        <ul className="studio-cr-lost" aria-label="Removed">
-          {plan.worktree !== null && <li>Worktree <code>{plan.worktree}</code></li>}
-          <li>Local branch <code>{plan.branch}</code>{plan.commits > 0 && ` (${plural(plan.commits, 'commit')})`}</li>
-          {plan.uncommitted > 0 && <li>{plural(plan.uncommitted, 'file')} with changes not committed</li>}
-        </ul>
-      )}
-      {plan?.pushed && (
-        <p className="studio-cr-warning">
-          The branch is on origin. The remote branch{plan.pr ? `, pull request #${String(plan.pr.number)}` : ''} and its preview stay there.
-        </p>
+        <>
+          <h3 className="studio-cr-from" id="studio-cr-from-here">From this machine</h3>
+          <ul className="studio-cr-lost" aria-labelledby="studio-cr-from-here">
+            {plan.worktree !== null && <li>Worktree <code>{plan.worktree}</code></li>}
+            <li>Local branch <code>{plan.branch}</code>{plan.commits > 0 && ` (${plural(plan.commits, 'commit')})`}</li>
+            {plan.uncommitted > 0 && <li>{plural(plan.uncommitted, 'file')} with changes not committed</li>}
+          </ul>
+          <h3 className="studio-cr-from" id="studio-cr-from-origin">From origin</h3>
+          {plan.pushed || plan.closesPr !== null ? (
+            <ul className="studio-cr-lost" aria-labelledby="studio-cr-from-origin">
+              {plan.closesPr !== null && <li>Pull request #{plan.closesPr.number} is closed, not merged</li>}
+              {plan.pushed && <li>Branch <code>{plan.branch}</code></li>}
+              {plan.pushed && cr.previewUrl !== null && !cleanUp && <li>Its preview stops updating; Cloudflare keeps the last build</li>}
+            </ul>
+          ) : (
+            <p className="text-[12.5px] text-[var(--fde-muted-foreground)]">{status === 'draft' ? 'Never pushed: nothing to remove there.' : 'The branch is already gone from origin.'}</p>
+          )}
+          {plan.unpushed > 0 && <p className="studio-cr-warning">{plural(plan.unpushed, 'commit')} never pushed: lost with the local branch.</p>}
+        </>
       )}
       {failed !== null && <p role="alert" className="studio-tree-error">{failed}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
-        <button type="submit" className="studio-button studio-button-danger" disabled={plan === null || busy}>{busy ? 'Discarding…' : 'Discard'}</button>
+        <button type="submit" className={`studio-button ${cleanUp ? 'studio-button-primary' : 'studio-button-danger'}`} disabled={plan === null || busy}>
+          {busy ? (cleanUp ? 'Cleaning up…' : 'Discarding…') : verb}
+        </button>
       </div>
     </Dialog>
   );

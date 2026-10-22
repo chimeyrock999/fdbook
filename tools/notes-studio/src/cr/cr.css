@@ -238,4 +238,133 @@
       grid-row: auto;
     }
   }
+
+  /* How far a change request is from main, and the stale chip (#21). */
+  .studio-cr-drift {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .studio-cr-stale {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border: 1px dashed var(--fde-muted-foreground);
+    border-radius: 999px;
+    color: var(--fde-muted-foreground);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+  }
+  .studio-cr-alert {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: var(--fde-muted);
+    color: var(--fde-muted-foreground);
+    font-size: 12.5px;
+  }
+  .studio-cr-alert[data-tone='warning'] {
+    background: color-mix(in srgb, var(--fde-warning) 10%, transparent);
+    color: var(--fde-warning);
+  }
+  .studio-cr-alert svg {
+    flex: none;
+    margin-top: 2px;
+  }
+  .studio-cr-alert span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .studio-cr-from {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+
+  /* On top of the Changes view: merged, closed, or behind main. Paths and
+     the command wrap inside the sidebar instead of widening it. */
+  .studio-cr-notice {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+    margin: 10px 12px 0;
+    padding: 9px 10px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    font-size: 12.5px;
+  }
+  .studio-cr-notice[data-tone='warning'] {
+    border-color: color-mix(in oklab, var(--fde-warning) 50%, var(--fde-border));
+  }
+  .studio-cr-notice[data-tone='done'] {
+    border-color: color-mix(in oklab, var(--fde-success) 55%, var(--fde-border));
+  }
+  .studio-cr-notice > p {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+  }
+  .studio-cr-notice > p svg {
+    flex: none;
+    margin-top: 2px;
+    color: var(--fde-info);
+  }
+  .studio-cr-notice[data-tone='warning'] > p svg {
+    color: var(--fde-warning);
+  }
+  .studio-cr-notice[data-tone='done'] > p svg {
+    color: var(--fde-success);
+  }
+  .studio-cr-notice > p span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .studio-cr-notice b {
+    font-weight: 600;
+  }
+  .studio-cr-notice ul {
+    padding-left: 16px;
+    list-style: disc;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+  }
+  .studio-cr-notice-hint {
+    color: var(--fde-muted-foreground);
+  }
+  .studio-cr-command {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+    padding: 5px 6px 5px 8px;
+    border-radius: 6px;
+    background: var(--fde-muted);
+  }
+  .studio-cr-command code {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .studio-cr-command button {
+    display: grid;
+    flex: none;
+    padding: 2px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-cr-command button:hover {
+    color: var(--fde-foreground);
+  }
 }

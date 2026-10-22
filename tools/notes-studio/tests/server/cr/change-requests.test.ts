@@ -8,7 +8,7 @@ import type { ChangeRequest, Discard } from '../../../server/cr/manager';
 import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '../../support/git-repo';
 import { json, rawRequest, tryUpgrade } from '../../support/http';
 
-type List = { enabled: boolean; crs: ChangeRequest[]; taken: string[]; prError: string | null };
+type List = { enabled: boolean; crs: ChangeRequest[]; taken: string[]; prError: string | null; fetchError: string | null };
 
 class TextEditor implements DocumentEditor {
   text = '';
@@ -65,7 +65,7 @@ describe('change requests', () => {
       const main = join(await worktrees(), '_main');
       expect((await git(main, 'rev-parse', 'HEAD')).trim()).toBe((await git(repo.repo, 'rev-parse', 'origin/main')).trim());
       expect((await readNote('', 'content/notes/index.mdx')).content).toBe(await readFile(join(main, 'content/notes/index.mdx'), 'utf8'));
-      expect(await list()).toEqual({ enabled: true, crs: [], taken: [], prError: null });
+      expect(await list()).toEqual({ enabled: true, crs: [], taken: [], prError: null, fetchError: null });
     });
 
     it('refuses every write to main', async () => {
@@ -267,7 +267,7 @@ describe('change requests', () => {
       const response = await send(`/api/crs/${cr.slug}/discard`, 'POST', { dryRun: true });
       expect(response.status).toBe(200);
       const { discard } = json(response) as { discard: Discard };
-      expect(discard).toEqual({ slug: cr.slug, branch: cr.branch, worktree: cr.worktree, commits: 0, uncommitted: 1, pushed: false, pr: null });
+      expect(discard).toEqual({ slug: cr.slug, branch: cr.branch, worktree: cr.worktree, commits: 0, uncommitted: 1, pushed: false, pr: null, closesPr: null, unpushed: 0, status: 'draft' });
       expect(existsSync(cr.worktree ?? '')).toBe(true);
     });
 

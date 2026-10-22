@@ -21,6 +21,17 @@ export function pagesProject(value = process.env.STUDIO_PAGES_PROJECT) {
   return value === undefined || value.trim() === '' ? null : value.trim();
 }
 
+// After how many days without a commit or an edit an open change request
+// reads as stale (STUDIO_STALE_DAYS): a whole number, 30 when unset.
+export const DEFAULT_STALE_DAYS = 30;
+
+export function parseStaleDays(value = process.env.STUDIO_STALE_DAYS): number {
+  if (value === undefined || value.trim() === '') return DEFAULT_STALE_DAYS;
+  const days = /^\d+$/.test(value.trim()) ? Number(value) : NaN;
+  if (!Number.isInteger(days) || days < 1) throw new Error(`STUDIO_STALE_DAYS must be a whole number of days, 1 or more, got "${value}".`);
+  return days;
+}
+
 // Empty or unset means the default port; anything else must be a valid port.
 export function parseStudioPort(value: string | undefined): number {
   if (value === undefined || value.trim() === '') return DEFAULT_STUDIO_PORT;

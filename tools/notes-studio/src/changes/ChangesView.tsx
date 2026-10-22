@@ -110,7 +110,7 @@ function CommitItem({ commit, open, unpushed, onToggle, onOpen }: { commit: Comm
 // (PreviewSection) goes above the history, whose commits in `unpushed` are
 // marked as not pushed. A file, listed or in a commit, opens its diff
 // against main (#18); `current` is the one open.
-export function ChangesView({ client, changes, history, error, titles, unsaved, readOnly = false, preview = null, unpushed = null, current = null, onOpen, onCommitted }: {
+export function ChangesView({ client, changes, history, error, titles, unsaved, readOnly = false, notice = null, preview = null, unpushed = null, current = null, onOpen, onCommitted }: {
   client: ChangesClient;
   changes: Changes | null;
   history: History | null;
@@ -119,6 +119,8 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
   titles: Map<string, string>;
   unsaved: string | null;
   readOnly?: boolean;
+  // Above the files: the change request's own state (CrNotice).
+  notice?: ReactNode;
   preview?: ReactNode;
   unpushed?: ReadonlySet<string> | null;
   current?: string | null;
@@ -202,6 +204,7 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
         <span className="studio-changes-branch" title="The branch this worktree is on">{changes.branch ?? 'detached HEAD'}</span>
       </h2>
       {error !== null && <p role="alert" className="studio-changes-note studio-changes-error">Could not read the changes: {error}</p>}
+      {notice}
       {readOnly ? (
         <p className="studio-changes-banner">Main is read only. Commit in a change request: pick one, or start one with Edit.</p>
       ) : changes.branch === MAIN_BRANCH && (

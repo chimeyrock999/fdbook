@@ -4,8 +4,11 @@ import { join } from 'node:path';
 import { createKeyedLock } from '../files/store.ts';
 import { HttpError } from '../http.ts';
 import type { BuildReader } from '../preview/check-runs.ts';
+import { DEFAULT_STALE_DAYS } from '../config.ts';
+import { driftOf, type Drift } from './drift.ts';
 import { CommandError, git, lines } from './git.ts';
 import { createPullRequestReader, ghPullRequests, type ListPullRequests } from './pull-requests.ts';
+import { deleteRemoteBranch, ghClosePullRequest, REMOTE, type ClosePullRequest } from './remote.ts';
 import { CR_BRANCH_PREFIX, crSlug, isCrSlug } from './slug.ts';
 
 export type CrStatus = 'draft' | 'previewing' | 'review' | 'merged' | 'closed';
@@ -26,10 +29,30 @@ export type ChangeRequest = {
   updatedMs: number;
   previewUrl: string | null;
   pr: { number: number; url: string } | null;
+  // Open (Draft, Previewing, In review) and not updated for `staleDays`.
+  stale: boolean;
+  // Against origin/main as last fetched; null once merged or closed.
+  drift: Drift | null;
 };
 
-// What a discard removes, from the dry run that the dialog shows.
-export type Discard = { slug: string; branch: string; worktree: string | null; commits: number; uncommitted: number; pushed: boolean; pr: { number: number; url: string } | null };
+// What the dry run said about origin, sent back with the discard it confirms.
+export type DiscardSeen = { pushed: boolean; closesPr: number | null };
+
+// What a discard removes, from the dry run that the dialog shows. `pushed`:
+// the branch on origin goes too; `closesPr`: the open pull request is closed
+// first; `unpushed`: commits of a pushed branch that origin does not have.
+export type Discard = {
+  slug: string;
+  branch: string;
+  status: CrStatus;
+  worktree: string | null;
+  commits: number;
+  uncommitted: number;
+  pushed: boolean;
+  unpushed: number;
+  pr: { number: number; url: string } | null;
+  closesPr: { number: number; url: string } | null;
+};
 
 export type ChangeRequestOptions = {
   // The git repository the branches are made in.
@@ -41,14 +64,17 @@ export type ChangeRequestOptions = {
   pagesProject?: string | null;
   // Reads the preview builds (server/preview); gh unless a test stands in.
   builds?: BuildReader;
+  closePullRequest?: ClosePullRequest;
+  // STUDIO_STALE_DAYS.
+  staleDays?: number;
 };
 
-const REMOTE = 'origin';
 const BASE = `${REMOTE}/main`;
 // Not a slug (slugs start with a letter or digit), so no change request takes it.
 const MAIN_DIR = '_main';
 const NAME_MAX = 80;
 const NOTES = 'content/notes/';
+const DAY_MS = 24 * 3600_000;
 
 const branchOf = (slug: string) => `${CR_BRANCH_PREFIX}${slug}`;
 
@@ -91,7 +117,14 @@ function parseWorktrees(output: string): Worktree[] {
 // time a `studiocreated` key in the branch's config, the status the remote
 // branch and the pull request (gh). Opens `_main` (fetching origin) and
 // prunes worktrees that were removed by hand.
-export async function openChangeRequests({ repo, home, pullRequests = ghPullRequests(repo), pagesProject = null }: ChangeRequestOptions) {
+export async function openChangeRequests({
+  repo,
+  home,
+  pullRequests = ghPullRequests(repo),
+  pagesProject = null,
+  closePullRequest = ghClosePullRequest(repo),
+  staleDays = DEFAULT_STALE_DAYS,
+}: ChangeRequestOptions) {
   const worktrees = join(home, 'worktrees');
   await mkdir(worktrees, { recursive: true });
   // As git prints it, so the paths it lists compare equal (macOS's /var is /private/var).
@@ -135,7 +168,8 @@ export async function openChangeRequests({ repo, home, pullRequests = ghPullRequ
 
   async function changesIn(worktree: string) {
     const [committed, status, last] = await Promise.all([
-      git(worktree, 'diff', '--name-only', '-z', `${BASE}...HEAD`),
+      // No merge base (a history unrelated to main): count what is uncommitted only.
+      git(worktree, 'diff', '--name-only', '-z', `${BASE}...HEAD`).catch(() => ''),
       git(worktree, 'status', '--porcelain=v1', '-z', '--untracked-files=all'),
       git(worktree, 'log', '-1', '--format=%ct', `${BASE}..HEAD`),
     ]);
@@ -161,10 +195,32 @@ export async function openChangeRequests({ repo, home, pullRequests = ghPullRequ
     return [...new Set([...local, ...remote, ...heads, ...folders])].filter(isCrSlug).sort();
   }
 
+  // The last commit on a branch past main, for one without a worktree.
+  async function lastCommitMs(branch: string) {
+    const last = (await inRepo('log', '-1', '--format=%ct', `${BASE}..${branch}`)).trim();
+    return last === '' ? 0 : Number(last) * 1000;
+  }
+
+  // Fetches origin and checks main out again, one at a time with creating
+  // and discarding. Answers why the fetch failed, or null.
+  function refresh(): Promise<string | null> {
+    return lock('cr', async () => {
+      try {
+        await fetchOrigin();
+      } catch (error) {
+        return (error as Error).message;
+      }
+      await refreshMain().catch(() => undefined);
+      return null;
+    });
+  }
+
   // Every change request, the last updated first, and the slugs taken.
   // `prError` says why the pull requests could not be read; the statuses
-  // then come from git alone.
-  async function list(fresh = false): Promise<{ crs: ChangeRequest[]; taken: string[]; prError: string | null }> {
+  // then come from git alone. `fresh` fetches origin first and reads the
+  // pull requests again; `fetchError` says why that fetch failed.
+  async function list(fresh = false): Promise<{ crs: ChangeRequest[]; taken: string[]; prError: string | null; fetchError: string | null }> {
+    const fetchError = fresh ? await refresh() : null;
     const [slugs, remote, config, trees, prs] = await Promise.all([
       branchSlugs(),
       remoteRefs(),
@@ -178,11 +234,13 @@ export async function openChangeRequests({ repo, home, pullRequests = ghPullRequ
         const branch = branchOf(slug);
         const worktree = trees.find((tree) => tree.branch === branch)?.path ?? null;
         const created = Number(config.get(slug)?.get('studiocreated') ?? 0) || 0;
-        const changes = worktree === null ? { changedPages: 0, uncommitted: 0, updatedMs: 0 } : await changesIn(worktree);
+        const changes = worktree === null ? { changedPages: 0, uncommitted: 0, updatedMs: await lastCommitMs(branch) } : await changesIn(worktree);
         const pr = prs.byBranch.get(branch) ?? null;
         const isPushed = pushed.has(branch);
         const status: CrStatus =
           pr?.state === 'MERGED' ? 'merged' : pr?.state === 'CLOSED' ? 'closed' : pr?.state === 'OPEN' ? 'review' : isPushed ? 'previewing' : 'draft';
+        const open = status !== 'merged' && status !== 'closed';
+        const updatedMs = Math.max(created, changes.updatedMs);
         return {
           slug,
           name: config.get(slug)?.get('description') ?? slug,
@@ -191,13 +249,16 @@ export async function openChangeRequests({ repo, home, pullRequests = ghPullRequ
           pushed: isPushed,
           worktree,
           ...changes,
-          updatedMs: Math.max(created, changes.updatedMs),
+          updatedMs,
           previewUrl: isPushed && pagesProject ? previewUrlOf(branch, pagesProject) : null,
           pr: pr === null ? null : { number: pr.number, url: pr.url },
+          stale: open && Date.now() - updatedMs > staleDays * DAY_MS,
+          // One that cannot be read (unrelated history, say) does not stop the list.
+          drift: open ? await driftOf(repo, branch, BASE).catch(() => null) : null,
         };
       }),
     );
-    return { crs: crs.sort((a, b) => b.updatedMs - a.updatedMs), taken: await takenSlugs(), prError: prs.error };
+    return { crs: crs.sort((a, b) => b.updatedMs - a.updatedMs), taken: await takenSlugs(), prError: prs.error, fetchError };
   }
 
   // `_main` at origin/main as it is now. Nothing writes there, so a forced
@@ -238,16 +299,52 @@ export async function openChangeRequests({ repo, home, pullRequests = ghPullRequ
     });
   }
 
-  // Removes the change request from this machine: its worktree (with what
-  // was not committed) and its local branch. A branch already pushed, and its
-  // pull request, stay on the remote (#21). With `dryRun`, only says what goes.
-  async function discard(slug: string, dryRun: boolean): Promise<Discard> {
+  // Removes the change request: on origin first, closing its open pull
+  // request and deleting its branch there, then from this machine, its
+  // worktree (with what was not committed) and its local branch. When origin
+  // or gh refuses, nothing is removed. A merged or closed one is cleaned up
+  // the same way. Fetches first, so what origin has is current. With
+  // `dryRun`, only says what goes. `seen` is what the dry run the user
+  // confirmed said about origin: when origin has changed since, nothing is
+  // removed, so the discard never touches what the dialog did not list.
+  async function discard(slug: string, dryRun: boolean, seen: DiscardSeen | null = null): Promise<Discard> {
     return lock('cr', async () => {
-      const cr = isCrSlug(slug) ? (await list()).crs.find((each) => each.slug === slug) : undefined;
+      if (!isCrSlug(slug)) throw new HttpError(404, `no such change request: ${slug}`);
+      // Offline: go by the last fetch; deleting the remote branch then fails.
+      await fetchOrigin().catch(() => undefined);
+      // The pull request's state decides whether to close it: read it now.
+      await readPullRequests(true);
+      const cr = (await list()).crs.find((each) => each.slug === slug);
       if (!cr) throw new HttpError(404, `no such change request: ${slug}`);
-      const commits = Number((await inRepo('rev-list', '--count', `${BASE}..${cr.branch}`)).trim());
-      const answer: Discard = { slug, branch: cr.branch, worktree: cr.worktree, commits, uncommitted: cr.uncommitted, pushed: cr.pushed, pr: cr.pr };
+      const count = async (...revs: string[]) => Number((await inRepo('rev-list', '--count', ...revs)).trim());
+      const answer: Discard = {
+        slug,
+        branch: cr.branch,
+        status: cr.status,
+        worktree: cr.worktree,
+        commits: await count(`${BASE}..${cr.branch}`),
+        uncommitted: cr.uncommitted,
+        pushed: cr.pushed,
+        unpushed: cr.pushed ? await count(cr.branch, '--not', `refs/remotes/${REMOTE}/${cr.branch}`) : 0,
+        pr: cr.pr,
+        closesPr: cr.status === 'review' ? cr.pr : null,
+      };
       if (dryRun) return answer;
+      if (seen !== null && (seen.pushed !== answer.pushed || seen.closesPr !== (answer.closesPr?.number ?? null))) {
+        throw new HttpError(409, `${cr.branch} changed on ${REMOTE} since this was checked. Nothing was removed: look again before discarding.`);
+      }
+      const reason = (error: unknown) => (error as Error).message.replace(/\.?$/, '.');
+      try {
+        if (answer.closesPr !== null) await closePullRequest(answer.closesPr.number);
+      } catch (error) {
+        throw new HttpError(502, `Could not close pull request #${String(answer.closesPr?.number)}: ${reason(error)} Nothing was removed.`);
+      }
+      try {
+        if (answer.pushed) await deleteRemoteBranch(repo, cr.branch);
+      } catch (error) {
+        const closed = answer.closesPr === null ? '' : `Pull request #${String(answer.closesPr.number)} was closed, but `;
+        throw new HttpError(502, `${closed}${closed ? 'the' : 'The'} branch on ${REMOTE} could not be deleted: ${reason(error)} Nothing was removed from this machine.`);
+      }
       await beforeDiscard(slug);
       if (cr.worktree !== null) await inRepo('worktree', 'remove', '--force', cr.worktree);
       await rm(dirOf(slug), { recursive: true, force: true });
