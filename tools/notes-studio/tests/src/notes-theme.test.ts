@@ -116,6 +116,26 @@ describe('notes prose', () => {
     for (const selector of studio) expect(selector).toMatch(/\.studio-(?!prose\b)|\.studio-prose\.notes-prose|figure\[dir='ltr'\]/);
   });
 
+  // Pele paints the plate behind an edge label in --pele-bg: transparent
+  // lets the line run through the text. Each surface a diagram sits on
+  // names its colour, and the dark label ink follows the marks
+  // lib/pele-author-fill.ts sets (a lifted subgraph title included).
+  it('gives diagram label plates the surface and dark ink the author-fill mark', async () => {
+    const site = await read('styles/notes-theme.css');
+    expect(values(block(site, ':root:has(.notes-theme) svg.pele, .notes-theme svg.pele'))['--pele-bg']).toBe(
+      'var(--notes-diagram-bg, var(--color-fd-background))',
+    );
+    expect(site).not.toMatch(/fill:#"\]/);
+    expect(site).toContain('.dark .notes-theme svg.pele [data-author-fill] > :is(.pele-label, .pele-cluster-label)');
+    expect(await read('components/graph-view.module.css')).toMatch(/--notes-diagram-bg:[^;]+;\s*background: var\(--notes-diagram-bg\);/);
+    const prose = await read('styles/notes-prose.css');
+    expect(prose).toContain('--notes-diagram-bg: var(--color-callout-body-bg);');
+    expect(prose).toContain('--notes-diagram-bg: var(--notes-tab-content-surface);');
+    const studio = await read('tools/notes-studio/src/notes-prose.css');
+    expect(studio.match(/--notes-diagram-bg:[^;]+;/g)).toHaveLength(2);
+    expect(studio.match(/background: var\(--notes-diagram-bg\);/g)).toHaveLength(2);
+  });
+
   it('leaves no prose rule in the page module', async () => {
     const module = await read('app/notes/notes.module.css');
     expect(module).not.toContain('.body');

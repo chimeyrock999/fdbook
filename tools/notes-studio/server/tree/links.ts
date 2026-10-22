@@ -1,7 +1,7 @@
-import type { Definition, Link } from 'mdast';
 import { visit } from 'unist-util-visit';
 import { parseNote } from '../lint/lint.ts';
 import { joinPath, pageUrl } from '../lint/rules/links.ts';
+import { markdownRange } from '../markdown/destination.ts';
 
 // A page or folder that gets a new name in the same folder. Paths are
 // relative to content/notes: `guide/intro.mdx` for a page, `guide` for a
@@ -91,32 +91,6 @@ export function rewriteHref(href: string, notePath: string, rename: Rename, know
   return withSuffix(replaceSegment(path.startsWith('/') ? [] : urlDir, path, fromUrl, toName, !rename.folder));
 }
 
-// Where the destination of a link or definition sits in the source.
-function destinationOf(node: Link | Definition, source: string): { start: number; end: number } | null {
-  const start = node.position?.start.offset;
-  const end = node.position?.end.offset;
-  if (start === undefined || end === undefined) return null;
-  let at: number;
-  if (node.type === 'link') {
-    const last = node.children.at(-1)?.position?.end.offset ?? start + 1;
-    at = source.indexOf('](', last);
-    if (at === -1 || at >= end) return null; // an autolink: no destination of its own
-    at += 2;
-  } else {
-    at = source.indexOf(']:', start);
-    if (at === -1 || at >= end) return null;
-    at += 2;
-  }
-  while (at < end && /\s/.test(source.charAt(at))) at += 1;
-  if (source.charAt(at) === '<') {
-    const close = source.indexOf('>', at);
-    return close === -1 || close > end ? null : { start: at + 1, end: close };
-  }
-  let stop = at;
-  while (stop < end && !/[\s)]/.test(source.charAt(stop))) stop += 1;
-  return { start: at, end: stop };
-}
-
 // The note with every Markdown link and link definition to the renamed page
 // or folder pointed at its new name, and how many changed. Only the changed
 // segment of each destination is rewritten; a note that does not parse is
@@ -131,7 +105,7 @@ export function rewriteLinks(source: string, notePath: string, rename: Rename, k
   const edits: { start: number; end: number; text: string }[] = [];
   visit(tree, (node) => {
     if (node.type !== 'link' && node.type !== 'definition') return;
-    const range = destinationOf(node, source);
+    const range = markdownRange(node, source);
     if (!range) return;
     const next = rewriteHref(source.slice(range.start, range.end), notePath, rename, known);
     if (next !== null) edits.push({ ...range, text: next });

@@ -3,18 +3,19 @@
    are generated, so it is found by its label; tests/src/editor/
    drag-handle.test.ts fails if the editor changes it. Only the drawing
    changes: lucide's GripVertical as a mask, so drag-to-move and
-   click-to-select stay the editor's. The editor's StyleX rules carry
-   :not(#\#) three times, which only !important outranks. */
+   click-to-select stay the editor's. The editor's stylesheet sits in a
+   cascade layer (src/index.css), so these unlayered rules win over its
+   high-specificity StyleX rules without !important. */
 button[aria-label='Drag to move, click to select'] {
-  border-radius: 5px !important;
-  color: var(--fde-muted-foreground) !important;
+  border-radius: 5px;
+  color: var(--fde-muted-foreground);
 }
 button[aria-label='Drag to move, click to select']:is(:hover, [data-dragging]) {
-  background: var(--fde-muted) !important;
-  color: var(--fde-foreground) !important;
+  background: var(--fde-muted);
+  color: var(--fde-foreground);
 }
 button[aria-label='Drag to move, click to select'] > span {
-  display: none !important;
+  display: none;
 }
 button[aria-label='Drag to move, click to select']::before {
   content: '';

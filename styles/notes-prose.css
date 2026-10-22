@@ -250,8 +250,10 @@ svg.pele {
   color: color-mix(in oklab, var(--color-graph-primary) 72%, var(--color-fd-foreground));
 }
 
+/* A diagram here plates its edge labels in this surface (styles/notes-theme.css). */
 .notes-prose .notes-tabs-content {
-  background: var(--notes-tab-content-surface);
+  --notes-diagram-bg: var(--notes-tab-content-surface);
+  background: var(--notes-diagram-bg);
 }
 
 .notes-prose figure.shiki,
@@ -639,8 +641,9 @@ svg.pele {
 }
 
 .notes-prose .notes-callout-body {
+  --notes-diagram-bg: var(--color-callout-body-bg);
   padding: 0.75rem 0.9375rem;
-  background: var(--color-callout-body-bg);
+  background: var(--notes-diagram-bg);
   font-size: 0.84375rem;
   line-height: 1.7;
   color: var(--garden-ink-2, var(--color-fd-foreground));
