@@ -68,10 +68,10 @@ export async function exportSvgElement(
   }
 
   const { height, width } = intrinsicSize(svg);
-  // A Pele diagram keeps the theme's ink, so a transparent image of it is
-  // unreadable on a viewer of the other theme; an .svg file has its own
+  // A Pele or notes diagram keeps the theme's ink, so a transparent image of
+  // it is unreadable on a viewer of the other theme; an .svg file has its own
   // colours and stays transparent where the format allows it.
-  const painted = svg.matches('svg.pele') || format === 'jpeg';
+  const painted = svg.matches('svg.pele, svg.dg-svg') || format === 'jpeg';
   const blob = await rasterize(markup, width, height, format, painted ? backgrounds(svg) : []);
 
   if (blob) download(blob, name);
@@ -121,7 +121,52 @@ function serializeSvg(svg: SVGSVGElement): string {
     });
   }
 
+  if (svg.matches('svg.dg-svg')) inlineDiagramPaint(clone);
+
   return new XMLSerializer().serializeToString(clone);
+}
+
+// What styles/diagram.css sets on a notes diagram (lib/diagram/render.ts).
+const DIAGRAM_PAINT = [
+  'fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-dasharray',
+  'stroke-linecap', 'stroke-linejoin', 'opacity', 'filter', 'display',
+];
+
+/**
+ * A notes diagram is painted by classes and theme variables, which a file
+ * on its own does not have. Lay the clone out in a hidden expanded viewer,
+ * in the current theme and without hover or focus, and write each element's
+ * computed paint into its own style; the corner radius of a CSS-rounded
+ * rect becomes its `rx`.
+ */
+function inlineDiagramPaint(clone: SVGSVGElement) {
+  for (const attribute of ['data-hover', 'data-focus']) clone.removeAttribute(attribute);
+  for (const element of clone.querySelectorAll('[data-near], [data-related]')) {
+    element.removeAttribute('data-near');
+    element.removeAttribute('data-related');
+  }
+  for (const node of clone.querySelectorAll('[aria-pressed]')) node.setAttribute('aria-pressed', 'false');
+
+  const probe = document.createElement('div');
+  probe.className = 'dg dg-expanded';
+  probe.style.cssText = 'position:fixed;left:-100000px;top:0;visibility:hidden;pointer-events:none';
+  probe.appendChild(clone);
+  document.body.appendChild(probe);
+  try {
+    for (const element of clone.querySelectorAll<SVGElement>('*')) {
+      const style = getComputedStyle(element);
+      for (const property of DIAGRAM_PAINT) {
+        const value = style.getPropertyValue(property);
+        if (value) element.style.setProperty(property, value);
+      }
+      if (element instanceof SVGRectElement) {
+        const rx = parseFloat(style.getPropertyValue('rx'));
+        if (rx > 0) element.setAttribute('rx', String(rx));
+      }
+    }
+  } finally {
+    probe.remove();
+  }
 }
 
 function intrinsicSize(svg: SVGSVGElement) {
@@ -173,12 +218,14 @@ function rasterize(markup: string, width: number, height: number, format: Diagra
 
 /**
  * The page, then the surface the diagram sits on (`--pele-bg`: a callout
- * body, a tab panel), which may be translucent. Both are resolved to a
- * colour the canvas reads, as a surface can be a `color-mix()`.
+ * body, a tab panel; `--dg-bg` under a notes diagram), which may be
+ * translucent. Both are resolved to a colour the canvas reads, as a surface
+ * can be a `color-mix()`.
  */
 function backgrounds(svg: SVGSVGElement) {
   const page = getComputedStyle(document.documentElement).getPropertyValue('--color-fd-background').trim();
-  const surface = getComputedStyle(svg).getPropertyValue('--pele-bg').trim();
+  const style = getComputedStyle(svg);
+  const surface = (style.getPropertyValue('--pele-bg') || style.getPropertyValue('--dg-bg')).trim();
 
   return [resolveColor(page) || '#ffffff', resolveColor(surface)].filter(Boolean);
 }

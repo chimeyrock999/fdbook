@@ -6,6 +6,7 @@ import { applyAssetPlan, planAssetRename } from '../../../server/assets/ops';
 import { repoRoot } from '../../../server/config';
 import { lintWorktree } from '../../../server/lint/context';
 import { json, rawRequest } from '../../support/http';
+import { generatedAsset, plantGeneratedAsset } from '../../support/generated-asset';
 import { startTestStudio, type TestStudio } from '../../support/studio';
 import { CORPUS_TIMEOUT_MS } from '../../support/timeouts';
 
@@ -35,8 +36,10 @@ class TextEditor implements DocumentEditor {
 
 const SUPERSET = 'public/notes/data-platform/stacks-integration/superset-trino-impersonate.jpg';
 const WAREHOUSE = 'public/notes/data-modeling/data_warehouse_architecture.webp';
-const LIFECYCLE = 'public/notes/data-platform/stacks-integration/databricks/databricks-interactive-runtime/runtime-lifecycle-layers.html';
-const LIFECYCLE_NOTE = 'content/notes/data-platform/stacks-integration/databricks/databricks-interactive-runtime/runtime-lifecycle-and-session-boundaries.mdx';
+// Generated assets the tests plant (support/generated-asset.ts): one to
+// list and rename, one to refuse a delete of.
+const MADE = generatedAsset('made');
+const KEPT = generatedAsset('kept');
 
 // The assets API on a copy of the real content/notes and public/notes. The
 // tests run in order and build on each other's changes.
@@ -62,6 +65,8 @@ describe('assets API', () => {
     studio = await startTestStudio();
     await cp(join(repoRoot, 'public/notes'), file('public/notes'), { recursive: true });
     await cp(join(repoRoot, 'diagrams'), file('diagrams'), { recursive: true });
+    await plantGeneratedAsset(studio.root, 'made');
+    await plantGeneratedAsset(studio.root, 'kept', { embed: false });
   });
 
   afterAll(async () => {
@@ -78,24 +83,16 @@ describe('assets API', () => {
     });
     expect(byPath(SUPERSET)?.usages[0].text).toMatch(/^!\[Superset .*superset-trino-impersonate\.jpg\)$/);
     expect(byPath('public/notes/demo/pixel.png')?.usages).toEqual([]);
-    expect(assets.flatMap((asset) => asset.usages).length).toBeGreaterThanOrEqual(15);
+    expect(assets.flatMap((asset) => asset.usages).length).toBeGreaterThanOrEqual(9);
     expect(await missingAssets()).toEqual([]);
   }, 20_000);
 
   it('names the diagram sources that generate an asset', async () => {
-    const generated = await find('public/notes/data-platform/processing/apache-spark/spark-logic-to-execution.html');
-    expect(generated?.usages).toEqual([]);
+    const generated = await find(MADE.asset);
+    expect(generated?.usages.map((usage) => usage.note)).toEqual([MADE.note]);
     expect(generated?.sources).toEqual([
-      {
-        path: 'diagrams/data-platform/processing/apache-spark/spark-logic-to-execution.architecture.json',
-        line: 7,
-        text: '"output": "public/notes/data-platform/processing/apache-spark/spark-logic-to-execution.html",',
-      },
-    ]);
-    const scripted = await find(LIFECYCLE);
-    expect(scripted?.sources.map((source) => source.path)).toEqual([
-      'diagrams/data-platform/stacks-integration/databricks/databricks-interactive-runtime/runtime-lifecycle-layers.architecture.json',
-      'diagrams/data-platform/stacks-integration/databricks/databricks-interactive-runtime/runtime-lifecycle-layers.regen.sh',
+      { path: MADE.spec, line: 3, text: MADE.specLine },
+      { path: MADE.script, line: 2, text: MADE.scriptLine },
     ]);
     expect((await find(SUPERSET))?.sources).toEqual([]);
   });
@@ -123,14 +120,11 @@ describe('assets API', () => {
     }, 20_000);
 
     it('keeps the query of an embed, and says which diagram sources still name the old path', async () => {
-      const before = await text(LIFECYCLE_NOTE);
-      const response = await post({ op: 'rename', path: LIFECYCLE, name: 'lifecycle-layers', baseMtime: await mtime(LIFECYCLE) });
+      const before = await text(MADE.note);
+      const response = await post({ op: 'rename', path: MADE.asset, name: 'made-layers', baseMtime: await mtime(MADE.asset) });
       expect(response.status).toBe(200);
-      expect((json(response) as Answer).changes.filter((change) => change.type === 'keep').map((change) => change.path)).toEqual([
-        'diagrams/data-platform/stacks-integration/databricks/databricks-interactive-runtime/runtime-lifecycle-layers.architecture.json',
-        'diagrams/data-platform/stacks-integration/databricks/databricks-interactive-runtime/runtime-lifecycle-layers.regen.sh',
-      ]);
-      expect(await text(LIFECYCLE_NOTE)).toBe(before.replace('/runtime-lifecycle-layers.html?embed=1', '/lifecycle-layers.html?embed=1'));
+      expect((json(response) as Answer).changes.filter((change) => change.type === 'keep').map((change) => change.path)).toEqual([MADE.spec, MADE.script]);
+      expect(await text(MADE.note)).toBe(before.replace('/made.html?embed=1', '/made-layers.html?embed=1'));
       expect(await missingAssets()).toEqual([]);
     }, 20_000);
 
@@ -264,11 +258,10 @@ describe('assets API', () => {
     });
 
     it('refuses to delete an asset a diagram source generates', async () => {
-      const generated = 'public/notes/data-platform/processing/apache-spark/spark-logic-to-execution.html';
-      const response = await post({ op: 'delete', path: generated, baseMtime: await mtime(generated) });
+      const response = await post({ op: 'delete', path: KEPT.asset, baseMtime: await mtime(KEPT.asset) });
       expect(response.status).toBe(409);
-      expect((json(response) as { error: string }).error).toContain('spark-logic-to-execution.architecture.json generates');
-      expect(await exists(generated)).toBe(true);
+      expect((json(response) as { error: string }).error).toMatch(/kept\.architecture\.json, .*kept\.regen\.sh generates kept\.html/);
+      expect(await exists(KEPT.asset)).toBe(true);
     });
 
     it('refuses a stale delete', async () => {
