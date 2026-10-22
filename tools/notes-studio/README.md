@@ -207,8 +207,9 @@ still exists and its role allows it. Its socket is closed when the session
 signs out, and within 15 seconds once the session expired or the role read
 from GitHub fell below reader (that is, once the five-minute role cache read
 it again; while gh cannot answer, the last role read stands). The page
-then asks who is signed in and shows the sign-in page again. The file events stream ends at its next event once the session
-is gone. So signing out or losing access stops open connections too.
+then asks who is signed in and shows the sign-in page again. The file
+events stream ends at its next event once the session is gone. So signing
+out or losing access stops open connections too.
 
 Set up a GitHub OAuth App (Settings → Developer settings → OAuth Apps)
 and tick **Enable Device Flow**. Then:
