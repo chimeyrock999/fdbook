@@ -867,7 +867,8 @@ made on disk.
 it, on main as well. Preview shows the two versions side by side, an image
 with its size and pixel box (the diff page's preview), any other file by
 its size; an SVG has Source too. Restore goes the way Replace writes an
-asset (see Assets): refused for an asset a diagram generates, and a
+asset (see Assets): off for an asset a diagram generates (the history
+says so, and the server refuses it too), and a
 version under another extension (a `.png` before a `.webp`) gives the
 asset that extension, every note's link following; the history then follows
 the asset to its new name. Git follows an asset's rename only while its
@@ -883,19 +884,21 @@ with the delete on top of the versions (**Deleted**). **Restore page…**
 first lists every file it writes (a dry run), then brings the picked
 version back, uncommitted, and opens it: the page; each folder deleted
 with it, as the commit before the delete held it (its `index.mdx`, and its
-`meta.yaml` listing only what comes back); and the topmost of these listed
-again in the `meta.yaml` above, after the entry it followed when it was
-deleted (first when none of those is left), unless that list shows every
-page by itself (`...`). A path the worktree has is refused (`409`): its own
+`meta.yaml` listing only what comes back, `index` included when it was
+listed: a listed index is a child of its folder, not the folder's page);
+and the topmost of these listed again in the `meta.yaml` above, after the
+entry it followed when it was deleted (first when none of those is left),
+unless that list shows every page by itself (`...`) or did not list it
+before the delete (it stays out of the sidebar, as it was). A path the worktree has is refused (`409`): its own
 history restores it.
 
 `meta.yaml` has no history: a folder's order, title and visibility are
 redone from the page tree, and restoring a whole older file would drop the
 pages made since and bring back entries for pages gone.
 
-The API: `GET /api/history?path=` (`{ path, mtimeMs, deleted, versions }`,
-`deleted` naming the commit that deleted a file the worktree no longer
-has), `GET /api/history/compare?path=&to=[&from=]` (each a full sha or `now`;
+The API: `GET /api/history?path=` (`{ path, mtimeMs, deleted, generated,
+versions }`, `deleted` naming the commit that deleted a file the worktree
+no longer has, `generated` whether a diagram generates the asset), `GET /api/history/compare?path=&to=[&from=]` (each a full sha or `now`;
 without `from`, nothing is before), `POST /api/history/restore` with JSON
 `{ path, sha, mtimeMs }` (answers `{ path, mtimeMs }`, `path` being where
 the file is now), `GET /api/history/deleted` (`{ pages: [{ path, title, sha,

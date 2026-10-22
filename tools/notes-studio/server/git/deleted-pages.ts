@@ -112,12 +112,22 @@ function metaError<T>(task: () => T): T {
   }
 }
 
+// Whether the meta.yaml above showed `slug` before the delete: it listed
+// it, showed every page by itself (`...`), had no `pages` list, or there
+// was none. One that listed others but not this one kept it out of the
+// sidebar, and the restore keeps it out too.
+export function wasShown(before: unknown[] | null, slug: string) {
+  return before === null || before.some((item) => item === '...' || item === 'z...a' || slugOfEntry(item) === slug);
+}
+
 // Plans bringing back page `path` as version `sha` held it. Folders deleted
 // with it come back too, as the commit before the delete held them: each
-// one's index.mdx, and its meta.yaml listing only what comes back. The
-// topmost thing restored (the page, or its topmost folder) goes back into
-// the meta.yaml of the folder above, where it was, unless that list shows
-// everything by itself (`...`).
+// one's index.mdx, and its meta.yaml listing only what comes back (`index`
+// too, when it listed its folder page: a listed index is a child of the
+// folder, not the folder's own page). The topmost thing restored (the page,
+// or its topmost folder) goes back into the meta.yaml of the folder above,
+// where it was, unless that list shows everything by itself (`...`) or did
+// not list it before the delete.
 async function planRestore(root: string, path: string, sha: string): Promise<Plan & { open: string }> {
   const logged = await logPage(root, path);
   const found = versionIn(logged, path, sha);
@@ -138,11 +148,18 @@ async function planRestore(root: string, path: string, sha: string): Promise<Pla
 
   const writes: Plan['writes'] = [{ path: notePath, content: (await readBlob(root, found.sha, found.path)).toString('utf8'), baseMtime: null }];
   for (const [index, folder] of folders.slice(missing).entries()) {
-    const child = folders[missing + index + 1]?.slice(folder.length + 1) ?? (slug === 'index' ? null : slug);
-    const meta = await textAt(root, before, `${PREFIX}${folder}/meta.yaml`);
-    if (meta !== null) writes.push({ path: `${folder}/meta.yaml`, content: metaError(() => keepEntries(meta, (value) => slugOfEntry(value) === null || slugOfEntry(value) === child)), baseMtime: null });
+    const child = folders[missing + index + 1]?.slice(folder.length + 1) ?? slug;
     const folderPage = `${folder}/index.mdx`;
     const page = folderPage === notePath ? null : await textAt(root, before, `${PREFIX}${folderPage}`);
+    const kept = new Set([child, ...(page !== null || folderPage === notePath ? ['index'] : [])]);
+    const meta = await textAt(root, before, `${PREFIX}${folder}/meta.yaml`);
+    if (meta !== null) {
+      const content = metaError(() => keepEntries(meta, (value) => {
+        const entry = slugOfEntry(value);
+        return entry === null || kept.has(entry);
+      }));
+      writes.push({ path: `${folder}/meta.yaml`, content, baseMtime: null });
+    }
     if (page !== null) writes.push({ path: folderPage, content: page, baseMtime: null });
   }
 
@@ -156,9 +173,9 @@ async function planRestore(root: string, path: string, sha: string): Promise<Pla
   if (top !== null && current?.isFile()) {
     const text = await readFile(absolute, 'utf8');
     const pages = metaError(() => readPages(text));
-    if (pages && !pages.some((item) => item === '...' || item === 'z...a') && !pages.some((item) => slugOfEntry(item) === top)) {
-      const then = await textAt(root, before, `${PREFIX}${metaPath}`);
-      const old = then === null ? null : metaError(() => readPages(then));
+    const then = await textAt(root, before, `${PREFIX}${metaPath}`);
+    const old = then === null ? null : metaError(() => readPages(then));
+    if (pages && wasShown(old, top) && !pages.some((item) => item === '...' || item === 'z...a') && !pages.some((item) => slugOfEntry(item) === top)) {
       const content = metaError(() => insertEntry(text, top, placeOf(pages, old, top)));
       if (content !== null) {
         writes.push({ path: metaPath, content, baseMtime: current.mtimeMs });

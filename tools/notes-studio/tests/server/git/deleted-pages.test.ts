@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { parseDeletions, placeOf, titleOf } from '../../../server/git/deleted-pages';
+import { parseDeletions, placeOf, titleOf, wasShown } from '../../../server/git/deleted-pages';
 import { git } from '../../support/git';
 import { json, rawRequest } from '../../support/http';
 import { startTestStudio, type TestStudio } from '../../support/studio';
@@ -11,6 +11,8 @@ type Restore = { path: string; open: string; changes: { type: string; path: stri
 
 const LAB = 'content/notes/restore-lab';
 const SHELF = 'content/notes/lost-shelf';
+// A folder that lists its index as a child, and that no meta.yaml above lists.
+const IDX = 'content/notes/idx-shelf';
 const ROOT_META = 'content/notes/meta.yaml';
 const page = (title: string, body: string) => `---\ntitle: ${title}\n---\n\n${body}\n`;
 
@@ -35,6 +37,14 @@ describe('deleted pages helpers', () => {
     expect(placeOf(['c'], ['x', 'b', 'c'], 'b')).toBe(0);
     expect(placeOf(['c'], ['c'], 'b')).toBe(1);
     expect(placeOf(['c'], null, 'b')).toBe(1);
+  });
+
+  it('lists an entry again only where the list showed it before the delete', () => {
+    expect(wasShown(['a', 'b'], 'b')).toBe(true);
+    expect(wasShown(['a', '!b'], 'b')).toBe(true);
+    expect(wasShown(['a', '...'], 'b')).toBe(true);
+    expect(wasShown(null, 'b')).toBe(true);
+    expect(wasShown(['a'], 'b')).toBe(false);
   });
 });
 
@@ -82,6 +92,9 @@ describe('page history API: deleted pages', () => {
     await writeFile(at(`${SHELF}/one.mdx`), page('Shelf one', 'One.'));
     await writeFile(at(`${SHELF}/two.mdx`), page('Shelf two', 'Two.'));
     await writeFile(at(ROOT_META), rootMeta.replace('  - "distributed-systems"\n', '  - "distributed-systems"\n  - "lost-shelf"\n'));
+    await mkdir(at(IDX), { recursive: true });
+    await writeFile(at(`${IDX}/meta.yaml`), 'title: "Idx"\npages:\n  - "index"\n  - "one"\n  - "two"\n');
+    for (const name of ['index', 'one', 'two']) await writeFile(at(`${IDX}/${name}.mdx`), page(`Idx ${name}`, name));
     betaFirst = commit('docs: add the lab and the shelf');
     await writeFile(at(`${LAB}/beta.mdx`), page('Beta', 'Second beta.'));
     betaSecond = commit('docs: second beta');
@@ -89,6 +102,7 @@ describe('page history API: deleted pages', () => {
     await writeFile(at(`${LAB}/meta.yaml`), 'title: "Restore lab"\npages:\n  - "alpha"\n  - "gamma"\n');
     dropBeta = commit('docs: drop beta');
     await rm(at(SHELF), { recursive: true });
+    await rm(at(IDX), { recursive: true });
     await writeFile(at(ROOT_META), rootMeta);
     retire = commit('docs: retire the shelf');
     git(studio.root, 'mv', `${LAB}/gamma.mdx`, `${LAB}/gamma-two.mdx`);
@@ -103,7 +117,7 @@ describe('page history API: deleted pages', () => {
   });
 
   it('lists the pages deleted on HEAD, newest delete first, without renames and pages made again', async () => {
-    const pages = (await deleted()).filter((each) => each.path.startsWith(LAB) || each.path.startsWith(SHELF));
+    const pages = (await deleted()).filter((each) => each.path.startsWith(`${LAB}/`) || each.path.startsWith(`${SHELF}/`));
     expect(pages.map(({ path, title, sha, message, folderGone }) => ({ path, title, sha, message, folderGone }))).toEqual([
       { path: `${SHELF}/index.mdx`, title: 'Lost shelf', sha: retire, message: 'docs: retire the shelf', folderGone: true },
       { path: `${SHELF}/one.mdx`, title: 'Shelf one', sha: retire, message: 'docs: retire the shelf', folderGone: true },
@@ -160,6 +174,27 @@ describe('page history API: deleted pages', () => {
     expect(await read(`${SHELF}/index.mdx`)).toBe(page('Lost shelf', 'The shelf.'));
     expect(await read(`${SHELF}/meta.yaml`)).toBe('title: "Lost shelf"\nicon: "Book"\npages:\n  - "one"\n  - "---Later---"\n');
     expect(await read(ROOT_META)).toBe(rootMeta.replace('  - "distributed-systems"\n', '  - "distributed-systems"\n  - "lost-shelf"\n'));
+  });
+
+  it('keeps a listed index in a folder it brings back, and leaves an unlisted folder unlisted above', async () => {
+    const index = `${IDX}/index.mdx`;
+    const before = await read(ROOT_META);
+    const response = await restore({ path: index, sha: betaFirst });
+    expect(response.status).toBe(200);
+    expect((json(response) as Restore).changes).toEqual([{ type: 'add', path: index }, { type: 'add', path: `${IDX}/meta.yaml` }]);
+    expect(await read(`${IDX}/meta.yaml`)).toBe('title: "Idx"\npages:\n  - "index"\n');
+    // No meta.yaml above listed idx-shelf: it stays out of the sidebar.
+    expect(await read(ROOT_META)).toBe(before);
+    // The folder is back: the next page goes into its meta.yaml, where it was.
+    expect((await restore({ path: `${IDX}/two.mdx`, sha: betaFirst })).status).toBe(200);
+    expect(await read(`${IDX}/meta.yaml`)).toBe('title: "Idx"\npages:\n  - "index"\n  - "two"\n');
+  });
+
+  it('keeps the index entry when a page of the folder comes back with its index', async () => {
+    await rm(at(IDX), { recursive: true });
+    const response = await restore({ path: `${IDX}/one.mdx`, sha: betaFirst });
+    expect((json(response) as Restore).changes.map((change) => change.path)).toEqual([`${IDX}/one.mdx`, `${IDX}/meta.yaml`, `${IDX}/index.mdx`]);
+    expect(await read(`${IDX}/meta.yaml`)).toBe('title: "Idx"\npages:\n  - "index"\n  - "one"\n');
   });
 
   it('refuses a page that is in the worktree, a version not of the page, a path that is no page and a cross-site post', async () => {

@@ -118,7 +118,7 @@ export function HistoryPage({ client, path, title, readOnly, reader = false, rev
   };
   const asset = isAsset(path);
   const gone = data !== null && data.mtimeMs === null;
-  const blocked = shown === null || data === null ? 'Loading.' : restoreBlocked({ selected: shown, readOnly, reader, mtimeMs: data.mtimeMs, asset });
+  const blocked = shown === null || data === null ? 'Loading.' : restoreBlocked({ selected: shown, readOnly, reader, mtimeMs: data.mtimeMs, asset, generated: data.generated });
 
   const restore = async () => {
     if (shown === null || data?.mtimeMs == null) return;

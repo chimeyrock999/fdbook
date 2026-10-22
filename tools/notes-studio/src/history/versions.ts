@@ -22,11 +22,13 @@ export const fileNameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1
 // Why Restore is off for `selected`, or null when it is on. `reader`: the
 // signed-in person may read but not write (#99). A page gone from the
 // worktree comes back whole (src/history/RestoreDeleted.tsx); an asset
-// gone has no way back here.
-export function restoreBlocked({ selected, readOnly, reader = false, mtimeMs, asset = false }: { selected: string; readOnly: boolean; reader?: boolean; mtimeMs: number | null; asset?: boolean }) {
+// gone has no way back here, nor one a diagram generates (as on the asset
+// page, its Replace is off).
+export function restoreBlocked({ selected, readOnly, reader = false, mtimeMs, asset = false, generated = false }: { selected: string; readOnly: boolean; reader?: boolean; mtimeMs: number | null; asset?: boolean; generated?: boolean }) {
   if (reader) return 'Restoring needs write access to the repository; you are signed in as a reader.';
   if (readOnly) return 'Main is read only: use Edit to restore in a change request.';
   if (mtimeMs === null && asset) return 'The asset is not in this change request any more.';
+  if (generated) return 'A diagram generates it: change the diagram instead';
   if (selected === NOW) return 'Pick an older version to restore it.';
   return null;
 }

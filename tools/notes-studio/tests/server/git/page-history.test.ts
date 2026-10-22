@@ -136,7 +136,7 @@ describe('page history API', () => {
   it('answers a page not committed yet with no versions, and compares it as it is now', async () => {
     const fresh = 'content/notes/streaming/history-fresh.mdx';
     await writeFile(at(fresh), first);
-    expect(await historyOf(fresh)).toEqual({ path: fresh, mtimeMs: await mtimeOf(fresh), deleted: null, versions: [] });
+    expect(await historyOf(fresh)).toEqual({ path: fresh, mtimeMs: await mtimeOf(fresh), deleted: null, generated: false, versions: [] });
     expect(await comparisonOf({ path: fresh, to: 'now' })).toMatchObject({ from: null, before: null, after: { kind: 'text', text: first } });
     await rm(at(fresh));
   });
