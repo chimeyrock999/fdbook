@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { git } from '../../server/cr/git';
 import type { PullRequest } from '../../server/cr/pull-requests';
+import { createBuildReader, type CheckRun } from '../../server/preview/check-runs';
 import { startStudioServer } from '../../server/studio-server';
 
 const NOTES: Record<string, string> = {
@@ -65,16 +66,28 @@ export async function makeGitRepo() {
 
 export type GitRepo = Awaited<ReturnType<typeof makeGitRepo>>;
 
-// A Studio with change requests over a throwaway repo. `prs` stands in for
-// gh: set it to the pull requests to report, or to an Error to fail.
+// A Studio with change requests over a throwaway repo. `prs` and `checks`
+// stand in for gh: set them to the pull requests or check runs (by commit) to
+// report, or to an Error to fail. `forget` moves the build reader's clock a
+// minute on, past its cache.
 export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey' }: { pagesProject?: string | null } = {}) {
-  const fake: { prs: PullRequest[] | Error } = { prs: [] };
+  let clock = Date.now();
+  const fake: { prs: PullRequest[] | Error; checks: Map<string, CheckRun> | Error; forget: () => void } = {
+    prs: [],
+    checks: new Map(),
+    forget: () => { clock += 60_000; },
+  };
+  const builds = createBuildReader(
+    (_root, sha) => (fake.checks instanceof Error ? Promise.reject(fake.checks) : Promise.resolve(fake.checks.get(sha) ?? null)),
+    () => clock,
+  );
   const studio = await startStudioServer({
     port: 0,
     changeRequests: {
       repo: repo.repo,
       home: repo.home,
       pagesProject,
+      builds,
       pullRequests: () => (fake.prs instanceof Error ? Promise.reject(fake.prs) : Promise.resolve(fake.prs)),
     },
   });

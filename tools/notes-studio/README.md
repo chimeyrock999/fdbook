@@ -83,8 +83,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     rename, replace and delete dialogs.
   - `tree/` is the page tree in the Notes view and its dialogs.
   - `changes/` is the Changes view, the suggested commit message, the
-    change marks on the page tree and the reminder on leaving a change
-    request.
+    Preview section, the change marks on the page tree and the reminder on
+    leaving a change request.
   - `diff/` is a file's diff against main in the main pane (see Diff).
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
@@ -132,6 +132,8 @@ without `changeRequests`, as the tests start it, edits the one worktree at
 | `GET /api/changes` | What `git status` says changed under `content/notes` and `public/notes`, only files the path policy allows: `{ branch, files: [{ path, status: "M" \| "A" \| "D" \| "R", from? }] }` (see Changes) |
 | `POST /api/changes` | Takes JSON `{ message, paths }` and commits those files, and only them, on the worktree's branch; answers the commit `{ sha, date, message, files: [{ status, path }] }`. Refuses an empty message, a path with no change, and a branch named `main` or a detached HEAD; read-only main answers `403` first. |
 | `GET /api/changes/history` | The change request's commits, newest first: `{ base, commits }`, where `base` is `origin/main` (else `main`) |
+| `GET /api/preview` | The worktree's preview: `{ branch, blocked, pushed, unpushed, uncommitted, url, build }`, `build` being `{ state, logUrl, deploymentUrl, aliasUrl, at, error }` once pushed (see Preview); main answers that it is read only |
+| `POST /api/preview` | Takes JSON `{}`, pushes the change request's branch to origin and answers the preview. Refuses when there is nothing to push (`409`), or when the remote branch has commits the change request has not (`409`, with git's reason); read-only main answers `403` first. |
 | `GET /api/changes/diff?path=…[&from=…]` | The file against main (see Diff): `{ path, from?, base, status: "same" \| "M" \| "A" \| "D" \| "R", before, after }`, each side `{ kind: "text", text, size }`, `{ kind: "binary", size }` (an asset that is not SVG or HTML, or text over 2 MB) or `null` where the file is missing. `base` is the merge base of `origin/main` (else `main`) and `HEAD`, or `null` without one; `from` reads main under a renamed file's old name. |
 | `GET /api/changes/blob?path=…[&base=<sha>]` | The file's bytes as commit `base` (the diff's own base, else the merge base now) holds it, for an image's before side; 404 when it has none. Served like an asset, with `Content-Security-Policy: sandbox`. |
 | `GET /api/crs` | The change requests: `{ enabled, crs: [{ slug, name, branch, status, pushed, worktree, changedPages, uncommitted, updatedMs, previewUrl, pr }], taken, prError }`, `taken` being the slugs a new one cannot take; `?fresh=1` reads the pull requests again (see Change requests) |
@@ -581,6 +583,52 @@ Switching away from a change request with uncommitted files (the picker,
 the list, Edit) shows a reminder on the page the switch opens, with **Back
 to** that change request; it blocks nothing and goes after 8 seconds. A
 discard needs none: its dialog lists the uncommitted files it removes.
+
+## Preview
+
+The Changes view's **Preview** section, above History, pushes the change
+request so Cloudflare Pages builds its preview (#19); no pull request is
+opened (that is Publish, #20). **Preview** runs `git push origin
+<HEAD>:refs/heads/cr/<slug>` (`server/preview/preview.ts`): never to main,
+never forced. A push the remote refuses, because the branch there has
+commits this one has not, shows git's reason. The push waits while the open
+note has edits not saved yet, and commits after it wait for the push. Files
+not committed are not pushed; the section says how many.
+
+The build is the `Cloudflare Pages` check run Cloudflare posts on the pushed
+commit, read with `gh api` (`server/preview/check-runs.ts`), so no
+Cloudflare token is needed (#7):
+
+| State | When |
+| --- | --- |
+| Not pushed | the branch is not on origin |
+| Waiting for Cloudflare | pushed, no check run yet, for 3 minutes after the push |
+| Building | the check run is queued or in progress |
+| Ready | it succeeded |
+| Failed | it failed, was cancelled or timed out; the branch's preview still shows its last successful build |
+| Skipped | it finished neither succeeding nor failing (`neutral`, `skipped`): nothing new was built, and the preview still shows its last successful build |
+| No build | no check run 3 minutes after the push: Cloudflare skips a push outside its watch paths (`tools/…`) or branches (`cr/*`) without a trace |
+| Status unknown | gh could not read it (not installed, not logged in, offline) |
+
+The server reads a check run at most every 10 seconds per commit, and a
+finished one every minute (Cloudflare can retry a build on the same
+commit); the page asks every 5 seconds while the build runs, and again when
+the window comes back and after each commit. The 3 minutes count from when
+`origin/cr/<slug>` last moved in this clone (its reflog: the push, or the
+fetch that saw a push made elsewhere). gh reads the check runs of origin's
+GitHub repository.
+
+**Open preview**, in the section and in the header beside Open on site
+once the branch is pushed, opens the branch's preview (the alias from the
+check run, else `https://cr-<slug>.<STUDIO_PAGES_PROJECT>.pages.dev`) at
+the page that is open, as Open on site does; its dot is the build's state.
+On a diff it opens the file at its path now; a `meta.yaml`, or a file the
+change request deleted, opens the notes home (`previewRoute`).
+Previews sit behind Cloudflare Access: the first one asks for the one-time
+PIN in the browser. **View log** opens the build in the Cloudflare
+dashboard. Commits made after the push show "↑ not pushed" in History, the
+section says the preview is behind by that many, and the button pushes
+them.
 
 ## Diff
 

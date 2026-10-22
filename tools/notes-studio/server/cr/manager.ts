@@ -3,6 +3,7 @@ import { mkdir, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createKeyedLock } from '../files/store.ts';
 import { HttpError } from '../http.ts';
+import type { BuildReader } from '../preview/check-runs.ts';
 import { CommandError, git, lines } from './git.ts';
 import { createPullRequestReader, ghPullRequests, type ListPullRequests } from './pull-requests.ts';
 import { CR_BRANCH_PREFIX, crSlug, isCrSlug } from './slug.ts';
@@ -38,6 +39,8 @@ export type ChangeRequestOptions = {
   pullRequests?: ListPullRequests;
   // The Cloudflare Pages project, for the preview links.
   pagesProject?: string | null;
+  // Reads the preview builds (server/preview); gh unless a test stands in.
+  builds?: BuildReader;
 };
 
 const REMOTE = 'origin';

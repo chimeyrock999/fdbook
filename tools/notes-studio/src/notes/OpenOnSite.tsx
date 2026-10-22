@@ -1,6 +1,5 @@
 import { ExternalLink } from 'lucide-react';
-import { sitePath } from '../media/asset-names';
-import { noteRoute, siteUrlFrom } from './notes';
+import { siteRoute, siteUrlFrom } from './notes';
 
 // STUDIO_SITE_URL comes in through vite.config.ts.
 const SITE_URL = siteUrlFrom(import.meta.env.STUDIO_SITE_URL as string | undefined);
@@ -9,8 +8,7 @@ const SITE_URL = siteUrlFrom(import.meta.env.STUDIO_SITE_URL as string | undefin
 // public/notes the file as the site serves it. The Studio does not check
 // that the site is running.
 export function OpenOnSite({ path, siteUrl = SITE_URL }: { path: string; siteUrl?: string }) {
-  const route = path.startsWith('public/') ? sitePath(path).split('/').map(encodeURIComponent).join('/') : noteRoute(path);
-  const href = `${siteUrl.replace(/\/+$/, '')}${route}`;
+  const href = `${siteUrl.replace(/\/+$/, '')}${siteRoute(path)}`;
   return (
     <a href={href} target="_blank" rel="noreferrer" title={href} aria-label="Open on site" className="studio-button gap-1.5 max-md:px-[7px]">
       <ExternalLink aria-hidden className="size-3.5 flex-none" />

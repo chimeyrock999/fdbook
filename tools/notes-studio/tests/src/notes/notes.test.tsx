@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { NoteGate } from '../../../src/notes/NoteGate';
 import { OpenOnSite } from '../../../src/notes/OpenOnSite';
 import type { createFilesClient } from '../../../src/api/files';
-import { noteFromUrl, noteRoute, pageFromUrl, pageQuery, siteUrlFrom, syncPath, unsavedNote } from '../../../src/notes/notes';
+import { noteFromUrl, noteRoute, pageFromUrl, pageQuery, previewRoute, siteUrlFrom, syncPath, unsavedNote } from '../../../src/notes/notes';
 
 afterEach(cleanup);
 
@@ -58,6 +58,22 @@ describe('note helpers', () => {
     }
     // In a change request, the diff is of that worktree's file.
     expect(pageQuery({ kind: 'diff', path: 'content/notes/a.mdx', from: 'content/notes/b.mdx' }, 'sinks')).toBe('?cr=sinks&diff=content%2Fnotes%2Fa.mdx&from=content%2Fnotes%2Fb.mdx');
+  });
+
+  it('opens the preview at the page shown, and at the notes home where the page has none', () => {
+    const there = (path: string) => !path.includes('gone');
+    expect(previewRoute(null, there)).toBe('/notes');
+    expect(previewRoute({ kind: 'crs' }, there)).toBe('/notes');
+    expect(previewRoute({ kind: 'note', path: 'content/notes/database/index.mdx' }, there)).toBe('/notes/database');
+    expect(previewRoute({ kind: 'asset', path: 'public/notes/a b/c.png' }, there)).toBe('/notes/a%20b/c.png');
+    expect(previewRoute({ kind: 'diff', path: 'content/notes/streaming/sinks.mdx' }, there)).toBe('/notes/streaming/sinks');
+    // A rename opens the page at its new path, not the old one.
+    expect(previewRoute({ kind: 'diff', path: 'content/notes/new.mdx', from: 'content/notes/old.mdx' }, there)).toBe('/notes/new');
+    expect(previewRoute({ kind: 'diff', path: 'public/notes/a/flow.svg' }, there)).toBe('/notes/a/flow.svg');
+    // A meta.yaml has no page, and a deleted file is no longer served.
+    expect(previewRoute({ kind: 'diff', path: 'content/notes/streaming/meta.yaml' }, there)).toBe('/notes');
+    expect(previewRoute({ kind: 'diff', path: 'content/notes/gone.mdx' }, there)).toBe('/notes');
+    expect(previewRoute({ kind: 'diff', path: 'public/notes/gone.png' }, there)).toBe('/notes');
   });
 
   it('maps a note to its page on the site', () => {

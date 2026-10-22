@@ -180,6 +180,17 @@ describe('ChangesView', () => {
     await userEvent.click(screen.getByRole('button', { name: /History/ }));
     expect(screen.queryByRole('button', { name: /docs\(notes\): add watermarks/ })).toBeNull();
   });
+
+  it('marks the commits not pushed, and shows the preview above the history', () => {
+    const client = { commit: vi.fn() } as unknown as ChangesClient;
+    const props = { client, changes: { branch: 'cr/sinks', files: [] }, history, error: null, titles, unsaved: null, onOpen: vi.fn(), onCommitted: vi.fn(() => Promise.resolve()) };
+    const { rerender } = render(<ChangesView {...props} preview={<p>preview here</p>} unpushed={new Set([history.commits[0].sha])} />);
+    expect(screen.getByRole('button', { name: /docs\(notes\): add watermarks/ }).textContent).toContain('↑ not pushed');
+    const order = [screen.getByText('preview here'), screen.getByRole('region', { name: 'History' })];
+    expect(order[0].compareDocumentPosition(order[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    rerender(<ChangesView {...props} unpushed={new Set()} />);
+    expect(screen.getByRole('button', { name: /docs\(notes\): add watermarks/ }).textContent).not.toContain('not pushed');
+  });
 });
 
 describe('useChanges', () => {
