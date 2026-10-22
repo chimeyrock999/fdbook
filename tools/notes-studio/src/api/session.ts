@@ -54,6 +54,24 @@ export function confirmSignedIn() {
   return confirming;
 }
 
+let seatCheck: (() => Promise<boolean>) | null = null;
+
+// Set by the session gate: whether the session the browser holds now is the
+// one the Studio runs with (src/session/SessionGate.tsx). Null when nothing
+// is set.
+export function onSeatCheck(check: (() => Promise<boolean>) | null) {
+  seatCheck = check;
+}
+
+// The notes sync's `auth` hook, asked on every connection, reconnects
+// included: a reconnect carries the cookie the browser holds now, which
+// another tab may have changed to another person's (#121). Refusing closes
+// that connection, so an open note's unsaved edits never save under another
+// account; the gate then mounts the Studio afresh for them.
+export async function checkSeat() {
+  if (seatCheck !== null && !(await seatCheck())) throw new Error('The Studio is signed in as someone else now.');
+}
+
 const postJson = (path: string, body: unknown) =>
   studioFetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 

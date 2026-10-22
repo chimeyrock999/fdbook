@@ -1,0 +1,48 @@
+/* The offer of edits an earlier editor could not save (UnsavedNotice): a
+   popup at the editor's bottom right, like the LeaveNotice, that stays
+   until a choice is made. */
+@layer components {
+  .studio-unsaved-notice {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    z-index: 50;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    max-width: 360px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+  }
+  .studio-unsaved-notice > svg {
+    flex: none;
+    margin-top: 1px;
+    color: var(--fde-warning);
+  }
+  .studio-unsaved-notice > div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+  .studio-unsaved-changed {
+    color: var(--fde-warning);
+  }
+  .studio-unsaved-text {
+    max-height: 8em;
+    overflow: auto;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--fde-muted);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    white-space: pre-wrap;
+    user-select: text;
+  }
+  @media (max-width: 767px) {
+    .studio-unsaved-notice {
+      left: 10px;
+      right: 10px;
+      max-width: none;
+    }
+  }
+}
