@@ -1,6 +1,9 @@
 // Draws a scene as SVG markup in Archify's visual grammar: rounded nodes with
 // a kind sigil, nested frames with a title pill, rounded orthogonal routes
-// with masked labels and a halo where they cross, and the kind legend.
+// with masked labels and a halo where they cross, and the kind legend. The
+// grammar is Archify's (MIT, renderers/architecture/render-architecture.mjs),
+// and the icon paths and arrow markers are its renderers/shared/utils.mjs;
+// its licence is in LICENSE.archify next to this file.
 // Colours come from CSS classes (styles/diagram.css), so the page theme
 // restyles the drawing; the markup itself holds no colour. Text too small
 // to read at the note's width (node tags, a label's second line) is marked

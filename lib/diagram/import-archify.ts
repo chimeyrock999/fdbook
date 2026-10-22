@@ -85,6 +85,17 @@ const TYPES: Record<string, { label: string; tone: Tone; icon: (typeof ICONS)[nu
   messagebus: { label: 'Message bus', tone: 'teal', icon: 'queue' },
   external: { label: 'External', tone: 'slate', icon: 'external' },
 };
+// A dataflow page named its nodes for the data they hold or move, not as
+// architecture parts (Archify's dataflow legend called a database a data store).
+const DATAFLOW_NAMES: Record<string, string> = {
+  frontend: 'Source',
+  backend: 'Task',
+  database: 'Data store',
+  cloud: 'Service',
+  security: 'Policy',
+  messagebus: 'Exchange',
+  external: 'External system',
+};
 const EVIDENCE: Record<ArchifyNote['evidence'], { label: string; tone: Tone }> = {
   observed: { label: 'Observed', tone: 'green' },
   inferred: { label: 'Inferred', tone: 'gold' },
@@ -158,7 +169,7 @@ export function importArchify(spec: ArchifySpec, options: ImportOptions = {}): D
   const used = new Set(sourceNodes.map((node) => node.type));
   const kindIds = new Map<string, string>();
   const kinds = Object.entries(TYPES).filter(([type]) => used.has(type)).map(([type, { label: name, tone, icon }]) => {
-    const label = legend?.entries?.[type]?.label ?? name;
+    const label = legend?.entries?.[type]?.label ?? (dataflow ? DATAFLOW_NAMES[type] : name);
     const id = uniqueId(label, 'kind', taken);
     kindIds.set(type, id);
     return { id, label, tone, icon };
