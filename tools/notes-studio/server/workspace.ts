@@ -1,5 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
+import { createAgentRunsApi } from './agents/api.ts';
+import { createAgentRuns, type AgentRunsOptions } from './agents/runs.ts';
 import { createAssetsApi } from './assets/api.ts';
 import { createFilesApi } from './files/api.ts';
 import { createFileEvents } from './files/events.ts';
@@ -33,16 +35,26 @@ const refuseWrites: Handler = (request, response) => {
 // gh and has no Pages project to name its preview after.
 const defaultPreview = (): PreviewOptions => ({ builds: createBuildReader(ghCheckRun), pullRequests: createBranchPullRequestReader(ghPullRequest), pagesProject: null });
 
+// What agent runs need besides the worktree: its change request's slug, the
+// profiles and where transcripts go (agents/runs.ts).
+export type WorkspaceAgents = Omit<AgentRunsOptions, 'slug'>;
+
 // The handlers of one worktree: file API and events, lint, page tree,
 // assets, changes (git status, commit, history), page history, preview (push, build, publish),
-// and the notes sync socket.
-export function createWorkspace(root: string, hosts: string[], { readOnly = false, preview = defaultPreview() }: { readOnly?: boolean; preview?: PreviewOptions } = {}) {
+// agent runs, and the notes sync socket. Agents run only with `agents`: in a
+// change request, never on main.
+export function createWorkspace(
+  root: string,
+  hosts: string[],
+  { readOnly = false, preview = defaultPreview(), agents = null }: { readOnly?: boolean; preview?: PreviewOptions; agents?: AgentRunsOptions | null } = {},
+) {
   // Tree and asset changes both write notes: one at a time. A commit waits
   // for them too, so it never takes half of a rename. The lock is this
   // worktree's own: change requests never wait on each other.
   const notesLock = createKeyedLock();
   const fileEvents = createFileEvents(root);
   const sync = createNotesSync(root, hosts, { readOnly });
+  const runs = agents === null || readOnly ? null : createAgentRuns(root, { ...agents, lock: notesLock });
   const handlers: Handler[] = [
     ...(readOnly ? [refuseWrites] : []),
     fileEvents.handle,
@@ -53,6 +65,7 @@ export function createWorkspace(root: string, hosts: string[], { readOnly = fals
     createChangesApi(root, notesLock),
     createPageHistoryApi(root, notesLock),
     createPreviewApi(root, preview, { readOnly, lock: notesLock }),
+    createAgentRunsApi(runs),
   ];
   return {
     root,
@@ -61,6 +74,7 @@ export function createWorkspace(root: string, hosts: string[], { readOnly = fals
       sync.handleUpgrade(request, socket, head);
     },
     close: async () => {
+      await runs?.close();
       fileEvents.close();
       await sync.close();
     },
@@ -78,7 +92,7 @@ const CR_PATH = /^\/cr\/([^/]+)(\/.*)$/;
 // `close`. The request goes on with the prefix taken off, to the
 // workspace's handlers, then to `shared` (what every workspace answers
 // alike: icons, and the JSON 404 for any other /api/ path).
-export function createWorkspaceRouter(hosts: string[], resolve: (slug: string) => Promise<string | null>, shared: Handler[], preview?: PreviewOptions) {
+export function createWorkspaceRouter(hosts: string[], resolve: (slug: string) => Promise<string | null>, shared: Handler[], preview?: PreviewOptions, agents: WorkspaceAgents | null = null) {
   // `workspace` stays undefined while the entry opens.
   type Entry = { ready: Promise<Workspace | null>; workspace?: Workspace | null };
   const open = new Map<string, Entry>();
@@ -92,7 +106,7 @@ export function createWorkspaceRouter(hosts: string[], resolve: (slug: string) =
     const drop = () => { if (open.get(slug) === entry) open.delete(slug); };
     entry.ready = resolve(slug).then(
       (root) => {
-        entry.workspace = root === null ? null : createWorkspace(root, hosts, { preview });
+        entry.workspace = root === null ? null : createWorkspace(root, hosts, { preview, agents: agents === null ? null : { ...agents, slug } });
         if (entry.workspace === null) drop();
         return entry.workspace;
       },

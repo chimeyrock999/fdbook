@@ -18,6 +18,8 @@ export function rightsOf(role: Role | null) {
   const has = (needed: Role) => atLeast(role ?? 'none', needed);
   return {
     write: has('writer'),
+    // Agents run as the host's user (server/agents): an admin's.
+    agents: has('admin'),
     // What is on origin (a pushed branch, an open pull request) needs an admin.
     discard: (cr: ChangeRequest) => has('admin') || (has('writer') && !touchesOrigin(cr)),
   };

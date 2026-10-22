@@ -26,6 +26,13 @@ describe('requiredRole', () => {
     ['POST', '/cr/x/api/publish', 'writer'],
     ['POST', '/cr/x/api/something-new', 'writer'],
     ['PATCH', '/api/tree', 'writer'],
+    // An agent runs commands as the host's user.
+    ['GET', '/api/agents', 'reader'],
+    ['GET', '/cr/x/api/agents/runs', 'reader'],
+    ['GET', '/cr/x/api/agents/events', 'reader'],
+    ['POST', '/cr/x/api/agents/runs', 'admin'],
+    ['POST', '/cr/x/api/agents/runs/r1/cancel', 'admin'],
+    ['POST', '/cr/x/api/agents/runs/r1/permissions/a1', 'admin'],
     // A change request's own /api/session is no sign-in endpoint.
     ['POST', '/cr/x/api/session/logout', 'writer'],
   ])('%s %s needs %s', (method, path, role) => {

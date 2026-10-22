@@ -1,5 +1,12 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AgentControl } from './agents/AgentControl';
+import { AgentPanel } from './agents/AgentPanel';
+import { AgentWrote } from './agents/AgentWrote';
+import { PermissionDialog } from './agents/PermissionDialog';
+import { firstAsk } from './agents/transcript';
+import { useAgents } from './agents/useAgents';
+import { createAgentsClient, type RunTotals } from './api/agents';
 import type { AssetAnswer, AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
 import { createChangesClient, type ChangedFile } from './api/changes';
@@ -98,6 +105,12 @@ export function App() {
   const newCr = rights.write ? () => { setCrDialog({ kind: 'new' }); } : null;
   const discardRight = (cr: ChangeRequest) => (!rights.write ? 'no' : rights.discard(cr) ? 'yes' : 'admin');
   const currentCr = crs.list?.crs.find((cr) => cr.slug === CURRENT_CR) ?? null;
+  // Agents run in the change request this page edits (#84).
+  const agentsClient = useMemo(() => createAgentsClient(), []);
+  const agents = useAgents(agentsClient, crMode && CURRENT_CR !== null);
+  const liveRuns = agents.runs.filter((run) => run.status === 'running');
+  const asking = rights.agents ? firstAsk(liveRuns, agents.events) : null;
+  const [agentTotals, setAgentTotals] = useState<Record<string, RunTotals>>({});
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);
   // A reader follows a change request's preview too, without pushing or publishing.
@@ -137,6 +150,16 @@ export function App() {
     } else show(view);
   }, [select, show]);
   const showIssues = useCallback(() => { openView('issues'); }, [openView]);
+
+  // The list of change requests shows each one's agent runs, read again
+  // with the list and as this page's runs start and end.
+  const runCount = agents.runs.length;
+  useEffect(() => {
+    if (page?.kind !== 'crs' || !crMode) return undefined;
+    let current = true;
+    agentsClient.totals().then((totals) => { if (current) setAgentTotals(totals); }, () => undefined);
+    return () => { current = false; };
+  }, [agentsClient, crMode, page?.kind, crs.list, runCount, liveRuns.length]);
 
   // A drawer left open while the window grows would keep the sidebar shown.
   useEffect(() => {
@@ -179,6 +202,11 @@ export function App() {
   const openChanged = (file: ChangedFile) => {
     setPlace(null);
     go(file.from === undefined ? { kind: 'diff', path: file.path } : { kind: 'diff', path: file.path, from: file.from });
+  };
+  // A file an agent wrote: its diff against main.
+  const openDiff = (path: string) => {
+    setPlace(null);
+    go({ kind: 'diff', path });
   };
   // The open asset moved with a rename or a replace: follow it without a new history entry.
   const assetChangedBy = (answer: AssetAnswer) => {
@@ -270,6 +298,7 @@ export function App() {
         <span className={`min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)] ${crMode ? 'max-md:hidden' : ''}`}>{pagePath ?? ''}</span>
         {crMode && CURRENT_CR === null && rights.write && <EditMenu list={crs.list} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} />}
         {!onMain && <OpenPreview preview={preview.preview} route={route} />}
+        {crMode && <AgentControl agents={agents} live={liveRuns.length} />}
         {action !== null && <PrimaryActionButton action={action} onAction={act} />}
         <UserMenu />
       </header>
@@ -413,10 +442,13 @@ export function App() {
             onDiscard={rights.write ? (cr) => { setCrDialog({ kind: 'discard', cr }); } : null}
             canDiscard={rights.discard}
             onRefresh={() => { void crs.reload(true); }}
+            agents={agentTotals}
           />
         ) : (
           <p className="m-auto p-6 text-[13px] text-[var(--fde-muted-foreground)]">{readOnly ? 'Pick a note to read.' : 'Pick a note to edit.'}</p>
         )}
+        {active !== null && <AgentWrote runs={liveRuns} path={active} onOpenDiff={() => { openDiff(active); }} />}
+        {crMode && agents.open && <AgentPanel agents={agents} inCr={CURRENT_CR !== null} canRun={rights.agents} onOpenDiff={openDiff} />}
         {left && <LeaveNotice notice={left} onBack={() => { switchTo(left.cr); }} onClose={dismissLeft} />}
       </div>
       {crDialog?.kind === 'new' && (
@@ -429,6 +461,9 @@ export function App() {
       )}
       {publishing && preview.preview !== null && (
         <PublishDialog client={previewClient} preview={preview.preview} onPublished={published} onClose={() => { setPublishing(false); }} />
+      )}
+      {asking !== null && (
+        <PermissionDialog key={asking.ask.id} run={asking.run} ask={asking.ask} at={asking.at} onAnswer={(optionId) => { void agents.answer(asking.run.id, asking.ask.id, optionId); }} />
       )}
       {crDialog?.kind === 'discard' && <DiscardDialog client={crClient} cr={crDialog.cr} current={crDialog.cr.slug === CURRENT_CR} onDone={discarded} onClose={() => { setCrDialog(null); }} />}
     </div>

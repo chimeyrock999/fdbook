@@ -2,6 +2,9 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { SYNC_ENDPOINT } from '@fumadocs-editor/core/sync';
 import { createServer as createViteServer } from 'vite';
+import { createAgentsInfoApi } from './agents/api.ts';
+import { createAgentInfo, PROFILES, type AgentProfile } from './agents/profiles.ts';
+import { createTranscripts } from './agents/transcripts.ts';
 import { createAuth, type AuthOptions } from './auth/auth.ts';
 import { DEFAULT_STUDIO_HOST, DEFAULT_STUDIO_PORT, repoRoot, studioRoot } from './config.ts';
 import { createChangeRequestsApi } from './cr/api.ts';
@@ -34,13 +37,16 @@ function closeServer(server: Server) {
 // and /__fde_sync) and each change request's worktree under /cr/<slug>/
 // (see workspace.ts). Without it, it edits the one worktree at `root`.
 // With `auth`, everyone signs in with GitHub first and may do what their
-// access to the repository allows (auth/auth.ts).
-export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEFAULT_STUDIO_PORT, root = repoRoot, changeRequests, auth: authOptions = null }: {
+// access to the repository allows (auth/auth.ts). Agents (`agents`, the
+// Studio's profiles by default) run only in change requests, their
+// transcripts in the Studio home (agents/).
+export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEFAULT_STUDIO_PORT, root = repoRoot, changeRequests, auth: authOptions = null, agents = PROFILES }: {
   host?: string;
   port?: number;
   root?: string;
   changeRequests?: ChangeRequestOptions;
   auth?: AuthOptions | null;
+  agents?: AgentProfile[];
 } = {}): Promise<StudioServer> {
   const server = createServer();
   // Bind first so a busy port fails before Vite starts its watcher.
@@ -82,10 +88,15 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
     pagesProject: changeRequests?.pagesProject ?? null,
   };
   const main = createWorkspace(crs?.mainRoot ?? root, hosts, { readOnly: crs !== null, preview });
-  const shared = [createIconsApi(), apiNotFound];
-  const workspaces = createWorkspaceRouter(hosts, (slug) => crs?.worktreeOf(slug) ?? Promise.resolve(null), shared, preview);
-  // A discarded change request's watchers and sync close before its worktree goes.
-  crs?.onDiscard((slug) => workspaces.close(slug));
+  const transcripts = changeRequests ? createTranscripts(changeRequests.home) : null;
+  const shared = [createIconsApi(), createAgentsInfoApi(createAgentInfo(agents), transcripts), apiNotFound];
+  const workspaces = createWorkspaceRouter(hosts, (slug) => crs?.worktreeOf(slug) ?? Promise.resolve(null), shared, preview, transcripts && { profiles: agents, transcripts });
+  // A discarded change request's agents, watchers and sync close before its
+  // worktree goes; its transcripts go with it, so a new one with the slug starts empty.
+  crs?.onDiscard(async (slug) => {
+    await workspaces.close(slug);
+    await transcripts?.remove(slug);
+  });
 
   server.on('request', createRequestListener(hosts, [workspaces.handle, createChangeRequestsApi(crs), ...main.handlers, ...shared], vite.middlewares, auth));
   routeUpgrades(server, hosts, (viteHmr) => [
