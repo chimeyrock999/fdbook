@@ -1,6 +1,7 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { MdxEditor, useEditorMode, useSourceText, useSyncStatus } from '@fumadocs-editor/ui';
 import { observeAuthorFills } from '@site/lib/pele-author-fill';
+import { History } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { createFilesClient } from '../api/files';
@@ -28,11 +29,13 @@ import './drag-handle.css';
 // The sidebar's Issues view: the editor fills `issuesSlot` and reports the
 // count for the activity bar. `onShowIssues` opens the view (the issues
 // chip); `onIssueShown` follows a picked issue, so a phone's drawer closes.
+// `onShowHistory` opens the note's history in the main pane.
 type Panels = {
   issuesSlot: HTMLElement | null;
   onIssueCount: (count: IssueCount) => void;
   onShowIssues: () => void;
   onIssueShown: () => void;
+  onShowHistory: () => void;
 };
 type Clients = { files: ReturnType<typeof createFilesClient>; lint: LintClient };
 
@@ -98,7 +101,7 @@ export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
 // The plugins' decorations, one ProseMirror plugin for every editor.
 const decorations = decorationsPlugin(editorConfig.decorators);
 
-function EditorLayout({ notePath, assets, uploads, opened, status, locked, readOnly, place, issuesSlot, onIssueCount, onShowIssues, onIssueShown, files, lint }: {
+function EditorLayout({ notePath, assets, uploads, opened, status, locked, readOnly, place, issuesSlot, onIssueCount, onShowIssues, onIssueShown, onShowHistory, files, lint }: {
   notePath: string;
   place: SourcePlace | null;
   assets: readonly string[];
@@ -170,6 +173,9 @@ function EditorLayout({ notePath, assets, uploads, opened, status, locked, readO
           <UploadNotice notice={uploads.notice} onDismiss={uploads.dismissNotice} />
           <IssuesChip state={lintState} onOpen={onShowIssues} />
           <span className="flex-1" />
+          <button type="button" className="studio-button gap-1.5" onClick={onShowHistory}>
+            <History size={13} aria-hidden /> History
+          </button>
           <div role="tablist" aria-label="Mode" className="inline-flex rounded-lg border border-[var(--fde-border)] bg-[var(--fde-card)] p-0.5">
             <Tab selected={mode === 'visual'} disabled={!canShowVisual} onSelect={() => { setMode('visual'); }}>
               Visual

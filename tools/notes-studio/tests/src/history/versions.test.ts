@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest';
+import { NOW, type PageHistory } from '../../../src/api/history';
+import { comparedWith, restoreBlocked, shortVersion, versionIds } from '../../../src/history/versions';
+
+const sha = (digit: string) => digit.repeat(40);
+const history = (mtimeMs: number | null): PageHistory => ({
+  path: 'content/notes/a.mdx',
+  mtimeMs,
+  versions: [sha('c'), sha('b'), sha('a')].map((each) => ({ sha: each, date: '2026-10-01T10:00:00Z', author: 'A', message: 'm', path: 'content/notes/a.mdx', status: 'M' as const, inChangeRequest: false })),
+});
+
+describe('page versions', () => {
+  it('lists Now first only where the page can be edited and is still there', () => {
+    expect(versionIds(history(1), true)).toEqual([NOW, sha('c'), sha('b'), sha('a')]);
+    expect(versionIds(history(1), false)).toEqual([sha('c'), sha('b'), sha('a')]);
+    expect(versionIds(history(null), true)).toEqual([sha('c'), sha('b'), sha('a')]);
+  });
+
+  it('compares with the version before by default, or the one picked', () => {
+    const ids = [NOW, sha('c'), sha('b'), sha('a')];
+    expect(comparedWith(ids, NOW, null)).toBe(sha('c'));
+    expect(comparedWith(ids, sha('b'), null)).toBe(sha('a'));
+    expect(comparedWith(ids, sha('a'), null)).toBeNull();
+    expect(comparedWith(ids, sha('a'), NOW)).toBe(NOW);
+    // Itself, or a version no longer listed, falls back to the one before.
+    expect(comparedWith(ids, sha('c'), sha('c'))).toBe(sha('b'));
+    expect(comparedWith(ids, sha('c'), sha('f'))).toBe(sha('b'));
+  });
+
+  it('says why Restore is off', () => {
+    expect(restoreBlocked({ selected: sha('a'), readOnly: false, mtimeMs: 1 })).toBeNull();
+    expect(restoreBlocked({ selected: sha('a'), readOnly: true, mtimeMs: 1 })).toMatch(/read only/);
+    expect(restoreBlocked({ selected: NOW, readOnly: false, mtimeMs: 1 })).toMatch(/older version/);
+    expect(restoreBlocked({ selected: sha('a'), readOnly: false, mtimeMs: null })).toMatch(/not in this change request/);
+    expect(shortVersion(NOW)).toBe('Now');
+    expect(shortVersion(sha('a'))).toBe('aaaaaaa');
+  });
+});
