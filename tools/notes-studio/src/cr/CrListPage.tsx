@@ -1,4 +1,6 @@
-import { ArrowDown, Brush, Check, Clock, ExternalLink, Plus, RefreshCw, Trash2, TriangleAlert } from 'lucide-react';
+import { ArrowDown, Bot, Brush, Check, Clock, ExternalLink, Plus, RefreshCw, Trash2, TriangleAlert } from 'lucide-react';
+import { costLabel } from '../agents/transcript';
+import type { RunTotals } from '../api/agents';
 import type { ChangeRequest, CrList } from '../api/crs';
 import { ADMIN_HINT } from '../session/session';
 import { CrBadge } from './CrMenus';
@@ -17,7 +19,25 @@ function DriftMeta({ cr }: { cr: ChangeRequest }) {
 // `discard`: whether this person may discard it, or only an admin may (it is on origin), or nobody here (a reader).
 type DiscardRight = 'yes' | 'admin' | 'no';
 
-function Card({ cr, current, waiting, discard, onOpen, onDiscard }: { cr: ChangeRequest; current: boolean; waiting: boolean; discard: DiscardRight; onOpen: () => void; onDiscard: () => void }) {
+// Its agent runs, and what the agents said they cost.
+function AgentMeta({ totals }: { totals: RunTotals }) {
+  const costs = Object.entries(totals.costs).flatMap(([currency, amount]) => costLabel({ cost: { amount, currency } }) ?? []);
+  return (
+    <span className="studio-cr-agents">
+      <Bot size={12} aria-hidden /> {plural(totals.runs, 'agent run')} · {costs.length > 0 ? costs.join(' + ') : 'cost not reported'}
+    </span>
+  );
+}
+
+function Card({ cr, current, waiting, discard, agents, onOpen, onDiscard }: {
+  cr: ChangeRequest;
+  current: boolean;
+  waiting: boolean;
+  discard: DiscardRight;
+  agents: RunTotals | null;
+  onOpen: () => void;
+  onDiscard: () => void;
+}) {
   const blocked = discard === 'admin';
   return (
     <li className="studio-cr-card" aria-current={current || undefined} aria-label={cr.name}>
@@ -44,6 +64,7 @@ function Card({ cr, current, waiting, discard, onOpen, onDiscard }: { cr: Change
           </a>
         )}
         <DriftMeta cr={cr} />
+        {agents !== null && <AgentMeta totals={agents} />}
       </div>
       <div className="studio-cr-card-ops">
         {current ? (
@@ -90,8 +111,10 @@ const WAIT_HINT = 'The open note has unsaved changes. Switch once it shows Saved
 // waits while the open note has unsaved edits. Without `onNew` and
 // `onDiscard` (a reader) it only lists; `canDiscard` says which ones this
 // person may remove (the others need an admin).
-export function CrListPage({ list, error, current, waiting = false, onOpen, onNew, onDiscard, canDiscard = () => true, onRefresh }: {
+export function CrListPage({ list, error, current, waiting = false, agents = {}, onOpen, onNew, onDiscard, canDiscard = () => true, onRefresh }: {
   list: CrList | null;
+  // Agent runs and cost by change request.
+  agents?: Record<string, RunTotals>;
   error: string | null;
   current: string | null;
   waiting?: boolean;
@@ -140,6 +163,7 @@ export function CrListPage({ list, error, current, waiting = false, onOpen, onNe
                       cr={cr}
                       current={cr.slug === current}
                       waiting={waiting}
+                      agents={agents[cr.slug] ?? null}
                       discard={onDiscard === null ? 'no' : canDiscard(cr) ? 'yes' : 'admin'}
                       onOpen={() => { onOpen(cr.slug); }}
                       onDiscard={() => { onDiscard?.(cr); }}

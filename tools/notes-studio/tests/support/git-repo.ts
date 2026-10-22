@@ -6,6 +6,7 @@ import { git } from '../../server/cr/git';
 import type { PullRequest } from '../../server/cr/pull-requests';
 import { createBuildReader, type CheckRun } from '../../server/preview/check-runs';
 import { createBranchPullRequestReader, type BranchPullRequest, type NewPullRequest, type PullRequestGh } from '../../server/preview/pull-request';
+import type { AgentProfile } from '../../server/agents/profiles';
 import type { AuthOptions } from '../../server/auth/auth';
 import { startStudioServer } from '../../server/studio-server';
 
@@ -75,7 +76,11 @@ export type GitRepo = Awaited<ReturnType<typeof makeGitRepo>>;
 // `created`, unless `createError` is set. `closed` lists the pull requests
 // closed, `closeError` fails closing one. `forget` moves the readers' clock
 // a minute on, past their caches. `auth` turns sign-in on (support/auth.ts).
-export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey', staleDays, auth = null }: { pagesProject?: string | null; staleDays?: number; auth?: AuthOptions | null } = {}) {
+// `agents` stands in for the Studio's agent profiles (support/agents.ts).
+export async function startCrStudio(
+  repo: GitRepo,
+  { pagesProject = 'chimey', staleDays, auth = null, agents = [] }: { pagesProject?: string | null; staleDays?: number; auth?: AuthOptions | null; agents?: AgentProfile[] } = {},
+) {
   let clock = Date.now();
   const fake: {
     prs: PullRequest[] | Error;
@@ -114,6 +119,7 @@ export async function startCrStudio(repo: GitRepo, { pagesProject = 'chimey', st
   const studio = await startStudioServer({
     port: 0,
     auth,
+    agents,
     changeRequests: {
       repo: repo.repo,
       home: repo.home,

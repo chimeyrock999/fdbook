@@ -66,6 +66,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     picked files (see Changes below), reads a file as main holds it
     (see Diff), and reads, compares and restores a page's versions (see
     History).
+  - `agents/` runs Claude Code, Codex, omp and Hermes Agent over ACP in a
+    change request, and keeps their transcripts (see Agents below).
 - `src/`: the React UI.
   - `api/` holds the clients for the server; `workspace.ts` says which
     worktree the page edits (`?cr=`).
@@ -93,6 +95,8 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `history/` is a note's history in the main pane (see History).
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
+  - `agents/` is the header's agent control, the agent panel, a run's
+    transcript and the permission dialog (see Agents).
   - `plugins/` holds the editor plugins (see below).
 - `tests/`: laid out like `server/` and `src/`. `tests/support/` holds the
   fixtures: a throwaway worktree, a Studio on a free port, and raw HTTP and
@@ -799,6 +803,70 @@ PR** (the pull request on GitHub, whatever its state), and **Update PR**
 for commits made after publishing (`src/changes/primary-action.ts`). With
 nothing to commit yet, Commit is off. Pushes and Publish wait while the
 open note has edits not saved yet.
+
+## Agents
+
+The Studio drives coding agents over the [Agent Client
+Protocol](https://agentclientprotocol.com) (#84): it is the ACP client, each
+agent a process it starts for one prompt (`server/agents/connection.ts`).
+Each agent signs in on its own (its CLI's login, or its own API key
+variable): the Studio holds no key, reads no token, and starts the agent
+without its own `STUDIO_*`, `GH_*` and `GITHUB_*` variables.
+
+| Agent | Started with | Fenced in by |
+| --- | --- | --- |
+| Claude Code | `@agentclientprotocol/claude-agent-acp`, pinned in `package.json` | `git push` and `gh` denied to an author; edits and the shell denied to a reviewer; bypass mode off |
+| Codex | `@agentclientprotocol/codex-acp`, pinned | `workspace-write` sandbox (worktree only, no network) for an author, `read-only` for a reviewer |
+| omp | `omp acp` (installed by you) | its own permission prompts; as a reviewer, the Studio says no to the edits and commands it asks about |
+| Hermes Agent | `hermes acp` (installed with its `[acp]` extra) | the toolsets in your `~/.hermes/config.yaml` (the Studio warns while `terminal` or `code_execution` is on); as a reviewer, as omp |
+
+Your own settings still apply: a command your Claude Code settings allow
+runs without asking. **Agent** in the header shows or hides the agent
+panel and counts the runs going on; the picker beside it chooses the
+agent for each role, kept in this browser. Agents that are not installed
+are listed greyed, with how to install them (`GET /api/agents`).
+
+- **Where.** Only in a change request: the agent's working folder is its
+  worktree, never main (`/api/agents/runs` on main answers 409). A Studio
+  over one worktree (no change requests) runs no agent.
+- **Roles.** An *author* may write; a *reviewer* only reads. Starting a run
+  needs write access, like any other change.
+- **Files.** `fs/read_text_file` reads any file of the worktree except
+  hidden ones (`.git`, `.env`) and none a symlink leads out to;
+  `fs/write_text_file` writes only what the Studio itself edits (notes,
+  `meta.yaml`, SVG and HTML assets), for an author, under the worktree's
+  notes lock (`server/agents/fs-policy.ts`). Claude Code and Codex write
+  with their own tools instead, inside the fences above: the Studio sees
+  those edits in their tool calls and, at the end of the run, in `git
+  status` against the start (`server/agents/worktree.ts`), so a file
+  edited by hand meanwhile is listed too. Every changed file is in the
+  run's list with **View diff**, and shows in Changes; until #85 turns
+  writes into suggestions, a note changed by a run going on carries a
+  notice over the editor.
+- **Permission.** `session/request_permission` opens one dialog for every
+  agent with the agent's own options, less "always" ones, which would
+  outlive the run. Closing it rejects; so does the server when nobody
+  answers within 5 minutes. Pushes, pull requests and GitHub replies are
+  never the agent's: they stay a person's click.
+- **Runs.** At most three at once per change request. Cancel sends
+  `session/cancel` and stops the process 10 seconds later if it has not
+  ended; discarding the change request or stopping the Studio stops them
+  at once. Every event goes to `GET /api/agents/events` (server-sent
+  events; the page reads the runs again each time it connects, and opens
+  a refused stream again after 5 seconds) and to `<STUDIO_HOME>/agents/<slug>/<run>.jsonl`, with the
+  summary (agent, model, role, status, cost, files written, who started
+  it) in `<run>.json`: next to the worktrees, never in the branch. A
+  discarded change request's transcripts go with it. The cost is what the
+  agent reports (`usage_update`); "Cost not reported" otherwise. The list
+  of change requests shows each one's runs and cost (`GET
+  /api/agents/totals`).
+- **Logos.** Each agent's own mark, in `src/agents/logos/` with its source
+  in the file.
+
+`STUDIO_AGENT_LIVE=1 npx vitest run tests/server/agents/live.test.ts` runs
+each installed agent once through the Studio as a reviewer (it signs in
+with your logins and costs a model call each); the other agent tests use a
+stand-in ACP agent (`tests/support/fake-agent.mjs`).
 
 ## Diff
 
