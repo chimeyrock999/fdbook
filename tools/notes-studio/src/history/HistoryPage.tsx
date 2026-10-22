@@ -59,7 +59,7 @@ export function HistoryPage({ client, path, title, readOnly, revision, onOpen, o
   const [history, setHistory] = useState<{ path: string; data: PageHistory } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  // null: the version before the selected one.
+  // What "Compare with" picked; null: the version before the selected one.
   const [against, setAgainst] = useState<string | null>(null);
   const [comparison, setComparison] = useState<{ key: string; data: Comparison } | null>(null);
   const [mode, setMode] = useState<Mode>('rendered');
@@ -206,7 +206,7 @@ export function HistoryPage({ client, path, title, readOnly, revision, onOpen, o
               <p className="studio-diff-summary studio-history-compare">
                 <span>Showing</span>
                 <b className="font-mono">{shortVersion(shown)}</b>
-                <label htmlFor="studio-history-against">against</label>
+                <label htmlFor="studio-history-against">Compare with</label>
                 <select id="studio-history-against" value={against ?? ''} onChange={(event) => { setAgainst(event.target.value === '' ? null : event.target.value); }}>
                   <Options ids={ids} selected={shown} previous={comparedWith(ids, shown, null)} history={data} />
                 </select>

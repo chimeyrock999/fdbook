@@ -25,6 +25,9 @@ describe('parsePageLog', () => {
       record('b'.repeat(40), '\nR100\0d/x.mdx\0d/y.mdx\0'),
       record('a'.repeat(40), '\nA\0d/x.mdx\0'),
     ].join('');
+    // A merge whose page is its own (--cc), and one that kept a parent's (no file).
+    const merges = record('f'.repeat(40), '\0MM\0d/y.mdx\0') + record('0'.repeat(40), '\0');
+    expect(parsePageLog(merges).map(({ sha, path, status }) => ({ sha, path, status }))).toEqual([{ sha: 'f'.repeat(40), path: 'd/y.mdx', status: 'M' }]);
     const changedType = record('d'.repeat(40), '\nT\0d/y.mdx\0');
     const copied = record('e'.repeat(40), '\nC075\0d/w.mdx\0d/y.mdx\0');
     expect(parsePageLog(changedType + copied).map(({ path, status, from }) => ({ path, status, from }))).toEqual([
@@ -182,5 +185,29 @@ describe('page history API', () => {
     expect((await rawRequest(`${studio.url}api/history/restore`, { method: 'POST', headers: { Origin: studio.origin }, body: '{}' })).status).toBe(415);
     expect((await rawRequest(`${studio.url}api/history`, { method: 'POST', headers: { Origin: studio.origin } })).status).toBe(405);
     expect(await readFile(at(PAGE), 'utf8')).toBe('Edited elsewhere.\n');
+  });
+  it('lists a merge whose page is none of its parents, and restores the merged text', async () => {
+    git(studio.root, 'checkout', '--', PAGE);
+    const lines = (second: string, sixth: string) => `---\ntitle: History\n---\n\na\n${second}\nc\nd\ne\n${sixth}\ng\n`;
+    await writeFile(at(PAGE), lines('b', 'f'));
+    const start = commit('docs: seven lines');
+    git(studio.root, 'switch', '--quiet', '-c', 'side-one');
+    await writeFile(at(PAGE), lines('B1', 'f'));
+    commit('docs: side one');
+    git(studio.root, 'switch', '--quiet', '-c', 'side-two', start);
+    await writeFile(at(PAGE), lines('b', 'F2'));
+    commit('docs: side two');
+    git(studio.root, 'switch', '--quiet', 'cr/test');
+    git(studio.root, 'merge', '--quiet', '--no-ff', '-m', 'Merge side-one', 'side-one');
+    git(studio.root, 'merge', '--quiet', '--no-ff', '-m', 'Merge side-two', 'side-two');
+    const merged = git(studio.root, 'rev-parse', 'HEAD').trim();
+    const { versions, mtimeMs } = await historyOf(PAGE);
+    // The first merge kept side one's page: no version of its own.
+    expect(versions.map((version) => version.message).slice(0, 4)).toEqual(['Merge side-two', 'docs: side two', 'docs: side one', 'docs: seven lines']);
+    expect(versions[0]).toMatchObject({ sha: merged, path: PAGE, status: 'M', inChangeRequest: true });
+    expect((await restore({ path: PAGE, sha: start, mtimeMs })).status).toBe(200);
+    const restored = await restore({ path: PAGE, sha: merged, mtimeMs: await mtimeOf(PAGE) });
+    expect(restored.status).toBe(200);
+    expect(await readFile(at(PAGE), 'utf8')).toBe(lines('B1', 'F2'));
   });
 });

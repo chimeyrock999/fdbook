@@ -740,7 +740,10 @@ The diff loads again whenever the changes do. The URL is `?diff=<path>`
 (#22, `src/history`, `server/git/page-history.ts`). On the left are its
 versions, newest first: **Now** (the page on disk, committed or not; not on
 main, where the disk is main), then each commit that changed it, read with
-`git log --follow` on HEAD, so a rename does not cut the history short. A
+`git log --follow --cc --topo-order` on HEAD, so a rename does not cut
+the history short, a merge whose page is none of its parents' (two change
+requests' edits, or a resolved conflict) is a version, and a commit comes
+after the ones built on it. A
 version names the path the page had in that commit; a commit of the change
 request's own, not on main, has an **In this CR** tag, a rename **Renamed
 from**, the first commit **Created**. The list stops at the latest 200.

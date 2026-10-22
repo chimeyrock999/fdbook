@@ -40,11 +40,10 @@ import { ASSETS_PREFIX } from './media/asset-names';
 import { useAssets } from './media/useAssets';
 import { NoteGate } from './notes/NoteGate';
 import { OpenPreview } from './notes/OpenPreview';
-import { NOTES_PREFIX, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote, type Page } from './notes/notes';
+import { movedPage, NOTES_PREFIX, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote, type Page } from './notes/notes';
 import { Sidebar, type IssueCount } from './sidebar/Sidebar';
 import { useSidebar, type SidebarView } from './sidebar/useSidebar';
 import { PageTree } from './tree/PageTree';
-import { renamedPath } from './tree/tree';
 import { useTree } from './tree/useTree';
 
 // Below this width the sidebar is a drawer (see .studio-sidebar).
@@ -204,12 +203,11 @@ export function App() {
     go({ kind: 'note', path: usage.note });
   };
 
-  // The open note moved with a rename: follow it without a new history entry.
+  // The open note, or the one whose history is shown, moved with a rename:
+  // follow it without a new history entry.
   const renamed = (from: string, to: string) => {
-    if (active === null) return;
-    const moved = renamedPath(syncPath(active), from, to);
-    if (moved === null) return;
-    const next: Page = { kind: 'note', path: NOTES_PREFIX + moved };
+    const next = movedPage(page, from, to);
+    if (next === null) return;
     window.history.replaceState(null, '', pageQuery(next));
     setPage(next);
   };

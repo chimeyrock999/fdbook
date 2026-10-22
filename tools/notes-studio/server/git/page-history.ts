@@ -26,13 +26,20 @@ const FIELD = '\x1f';
 
 type LoggedVersion = Omit<PageVersion, 'inChangeRequest'>;
 
-// Reads `git log --follow -z --format=<RECORD>%H<FIELD>%cI<FIELD>%an<FIELD>%s
+// Reads `git log --follow --cc -z --format=<RECORD>%H<FIELD>%cI<FIELD>%an<FIELD>%s
 // --name-status -- <path>`: one record per commit, its header, then the one
 // file's status and path, or a rename's (or copy's) status, old and new
-// path. A type change (T) is a change of content as far as the page goes.
+// path. A merge that changed the page against every parent (its own
+// resolution, or two branches' edits) comes after an empty field, with one
+// status letter per parent (`MM`); a merge that kept one parent's page has
+// no file and is no version. A type change (T) is a change of content as
+// far as the page goes.
 export function parsePageLog(output: string): LoggedVersion[] {
   return output.split(RECORD).slice(1).flatMap((record): LoggedVersion[] => {
-    const [header, code = '', ...paths] = record.split('\0');
+    const [header, ...fields] = record.split('\0');
+    const start = fields.findIndex((field) => field.trim() !== '');
+    if (start === -1) return [];
+    const [code, ...paths] = fields.slice(start);
     const [sha, date, author, message] = header.split(FIELD);
     const status = code.trim().charAt(0);
     if (status === 'R' || status === 'C') return [{ sha, date, author, message, path: paths[1], status: 'R', from: paths[0] }];
@@ -48,11 +55,14 @@ function notePath(root: string, path: string) {
   return checked(root, path);
 }
 
-// The commits that changed the page on HEAD, newest first, following renames.
+// The commits that changed the page on HEAD, newest first, following
+// renames, with the merges whose page is none of their parents' (--cc).
+// Topological order keeps a commit after those built on it, which commit
+// dates alone do not when they tie.
 async function logPage(root: string, path: string) {
   await assertWorktreeTop(root);
   const format = `--format=${RECORD}%H${FIELD}%cI${FIELD}%an${FIELD}%s`;
-  return parsePageLog(await runGit(root, ['log', '--follow', '-z', format, '--name-status', `-n${String(LIMIT)}`, 'HEAD', '--', path]));
+  return parsePageLog(await runGit(root, ['log', '--follow', '--cc', '--topo-order', '-z', format, '--name-status', `-n${String(LIMIT)}`, 'HEAD', '--', path]));
 }
 
 // The page's versions. A commit not on the base (origin/main) is the change

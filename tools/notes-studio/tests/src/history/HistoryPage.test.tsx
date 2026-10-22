@@ -77,7 +77,7 @@ describe('HistoryPage', () => {
     await user.click(await (await versions()).findByText('docs: first'));
     await waitFor(() => { expect(client.compare).toHaveBeenLastCalledWith(PAGE, null, sha('a')); });
     expect(screen.getByText(OLD)).toBeTruthy();
-    await user.selectOptions(screen.getByLabelText('against'), NOW);
+    await user.selectOptions(screen.getByLabelText('Compare with'), NOW);
     await waitFor(() => { expect(client.compare).toHaveBeenLastCalledWith(PAGE, NOW, sha('a')); });
     await user.click(screen.getByRole('tab', { name: 'Source' }));
     expect(document.querySelector('.studio-source-diff')).toBeTruthy();

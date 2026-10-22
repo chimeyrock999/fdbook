@@ -1,5 +1,6 @@
 import { classifyPath } from '../../server/security/asset-types';
 import { CURRENT_CR } from '../api/workspace';
+import { renamedPath } from '../tree/tree';
 
 export const NOTES_PREFIX = 'content/notes/';
 
@@ -45,6 +46,15 @@ export function pageFromUrl(search: string): Page | null {
   if (diff === null || classifyPath(diff) === null) return null;
   const from = params.get('from');
   return from !== null && classifyPath(from) !== null ? { kind: 'diff', path: diff, from } : { kind: 'diff', path: diff };
+}
+
+// `page` after the page tree renamed `from` to `to` (paths inside
+// content/notes): the open note, or the note whose history is shown, under
+// its new path; null when the rename does not move it.
+export function movedPage(page: Page | null, from: string, to: string): Page | null {
+  if (page?.kind !== 'note' && page?.kind !== 'history') return null;
+  const moved = renamedPath(syncPath(page.path), from, to);
+  return moved === null ? null : { kind: page.kind, path: NOTES_PREFIX + moved };
 }
 
 // The query that opens `page` in change request `cr` (null: main), the

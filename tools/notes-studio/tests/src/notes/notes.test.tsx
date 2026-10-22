@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { NoteGate } from '../../../src/notes/NoteGate';
 import type { createFilesClient } from '../../../src/api/files';
-import { noteFromUrl, noteRoute, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote } from '../../../src/notes/notes';
+import { movedPage, noteFromUrl, noteRoute, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote } from '../../../src/notes/notes';
 
 afterEach(cleanup);
 
@@ -68,6 +68,14 @@ describe('note helpers', () => {
     expect(pageFromUrl(pageQuery(page))).toEqual(page);
     expect(pageQuery(page, 'sinks')).toBe('?cr=sinks&history=content%2Fnotes%2Fa%20b%2Fc%23d.mdx');
     expect(previewRoute(page, () => true)).toBe('/notes/a%20b/c%23d');
+  });
+
+  it('follows a rename to the open note or the note whose history is shown', () => {
+    expect(movedPage({ kind: 'note', path: 'content/notes/a/b.mdx' }, 'a/b.mdx', 'a/c.mdx')).toEqual({ kind: 'note', path: 'content/notes/a/c.mdx' });
+    expect(movedPage({ kind: 'history', path: 'content/notes/a/b.mdx' }, 'a', 'z')).toEqual({ kind: 'history', path: 'content/notes/z/b.mdx' });
+    expect(movedPage({ kind: 'history', path: 'content/notes/a/b.mdx' }, 'a/x.mdx', 'a/y.mdx')).toBeNull();
+    expect(movedPage({ kind: 'diff', path: 'content/notes/a/b.mdx' }, 'a/b.mdx', 'a/c.mdx')).toBeNull();
+    expect(movedPage(null, 'a/b.mdx', 'a/c.mdx')).toBeNull();
   });
 
   it('opens the preview at the page shown, and at the notes home where the page has none', () => {
