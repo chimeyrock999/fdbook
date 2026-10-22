@@ -79,9 +79,26 @@ describe('Studio MCP server', () => {
 
   it('lists the change request tools and the note tools, each note tool taking cr', async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((tool) => tool.name).sort()).toEqual(['add_comment', 'create_cr', 'list_assets', 'list_crs', 'list_notes', 'note_graph', 'propose_edit', 'read_note', 'search_notes', 'test_write']);
+    expect(tools.map((tool) => tool.name).filter((name) => !name.startsWith('diagram_')).sort()).toEqual(['add_comment', 'create_cr', 'list_assets', 'list_crs', 'list_notes', 'note_graph', 'propose_edit', 'read_note', 'search_notes', 'test_write']);
+    expect(tools.filter((tool) => tool.name.startsWith('diagram_'))).toHaveLength(11);
     expect(tools.find((tool) => tool.name === 'read_note')?.inputSchema.properties).toHaveProperty('cr');
     expect(tools.find((tool) => tool.name === 'list_crs')?.inputSchema.properties ?? {}).not.toHaveProperty('cr');
+  });
+
+  it('mounts the diagram tools (#82): a diagram created in the change request, drawn and checked', async () => {
+    const content = {
+      title: 'Pipeline',
+      kinds: [{ id: 'step', label: 'Step', tone: 'blue' }],
+      nodes: [{ id: 'read', kind: 'step', label: 'Read' }, { id: 'write', kind: 'step', label: 'Write' }],
+      edges: [{ id: 'flow', from: 'read', to: 'write', label: 'rows' }],
+    };
+    const created = await call(client, 'diagram_create', { cr: cr.slug, src: 'guide/pipeline', content });
+    expect(created.error).toBe(false);
+    expect(JSON.parse(await readFile(worktree('diagrams/guide/pipeline.diagram.json'), 'utf8'))).toMatchObject({ title: 'Pipeline', layout: { nodes: { read: {}, write: {} } } });
+    const drawn = (await client.callTool({ name: 'diagram_render_png', arguments: { cr: cr.slug, src: 'guide/pipeline', scale: 1 } })) as CallToolResult;
+    expect(drawn.content[0]).toMatchObject({ type: 'image', mimeType: 'image/png' });
+    expect((await call(client, 'diagram_validate', { cr: cr.slug, src: 'guide/pipeline' })).text).toContain('No issues.');
+    expect((await call(client, 'diagram_read', { cr: '_main', src: 'guide/pipeline' })).error).toBe(true);
   });
 
   it('refuses main, a missing or unknown change request, and paths outside the notes', async () => {

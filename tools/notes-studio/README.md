@@ -1146,8 +1146,8 @@ they are listed, watched and diffed, and show in Changes (a commit of only
 diagrams is named after them).
 
 Agents change diagrams through the Studio MCP server's `diagram_*` tools
-(`server/mcp/diagram-tools.ts`; the MCP host that mounts them,
-`server/mcp/registry.ts` at `/api/mcp`, comes with #85):
+(`server/mcp/diagram-tools.ts`, mounted at `/api/mcp` beside the note
+tools):
 `diagram_create`, `diagram_add_node`, `diagram_connect`, `diagram_move`,
 `diagram_set_note`, `diagram_remove_node` and `diagram_layout` write through
 `ctx.files` with the mtime they read, so a save made meanwhile is refused,

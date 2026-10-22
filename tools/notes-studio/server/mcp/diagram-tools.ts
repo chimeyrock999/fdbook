@@ -8,8 +8,8 @@ import { listEditableFiles } from '../files/store.ts';
 import { classifyPath, DIAGRAM_SUFFIX, DIAGRAMS_DIR } from '../security/asset-types.ts';
 import type { StudioTool, StudioToolContext, ToolResult } from './tool.ts';
 
-// The diagram tools of the Studio MCP, which its host (server/mcp/registry.ts,
-// coming with #85) mounts:
+// The diagram tools of the Studio MCP, mounted beside the note tools
+// (server/studio-server.ts):
 // small edits to `diagrams/**/*.diagram.json` in the change request's
 // worktree, so an agent never rewrites a whole file or a coordinate by hand.
 // Every write goes through ctx.files with the mtime it read, lays out any
