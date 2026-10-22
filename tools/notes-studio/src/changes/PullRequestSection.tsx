@@ -37,7 +37,7 @@ export function PullRequestSection({ preview, unsaved, busy, onPublish }: {
           <a className="studio-button gap-1.5" href={pr.url} target="_blank" rel="noreferrer"><ExternalLink size={14} aria-hidden />View on GitHub</a>
         </div>
         {pr.state !== 'OPEN' && (
-          <p className="studio-changes-why">This pull request is {STATUS_LABELS[STATUS_OF[pr.state]].toLowerCase()}. Clean up the branch from the change request list.</p>
+          <p className="studio-changes-why">This pull request is {STATUS_LABELS[STATUS_OF[pr.state]].toLowerCase()}. Clean it up from the notice above.</p>
         )}
       </>
     );

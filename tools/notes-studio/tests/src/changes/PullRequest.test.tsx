@@ -59,7 +59,7 @@ describe('PullRequestSection', () => {
     cleanup();
     section(at({ pr: { ...PR, state: 'MERGED' } }));
     expect(chip()).toBe('Merged');
-    expect(screen.getByText('This pull request is merged. Clean up the branch from the change request list.')).toBeTruthy();
+    expect(screen.getByText('This pull request is merged. Clean it up from the notice above.')).toBeTruthy();
     cleanup();
     section(at({ pr: { ...PR, state: 'CLOSED' } }));
     expect(chip()).toBe('Closed');
