@@ -13,6 +13,7 @@ import type { AssetAnswer, AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
 import { createChangesClient, type ChangedFile } from './api/changes';
 import { assetChanged } from './api/asset-versions';
+import { leavePage } from './api/connection';
 import { createCrClient, type ChangeRequest, type Discard } from './api/crs';
 import { createFilesClient } from './api/files';
 import { classifyPath } from '../server/security/asset-types';
@@ -251,6 +252,7 @@ export function App() {
   const switchTo = (cr: string | null, next: Page | null = page) => {
     if (unsaved !== null) return;
     if (cr !== CURRENT_CR) rememberLeave(leaveNotice(git.changes, CURRENT_CR));
+    leavePage();
     window.location.assign(pageQuery(next, cr));
   };
   const openList = () => {
@@ -260,7 +262,10 @@ export function App() {
   const discarded = (discard: Discard) => {
     setCrDialog(null);
     // Its edits went with it: nothing to wait for.
-    if (discard.slug === CURRENT_CR) window.location.assign(pageQuery({ kind: 'crs' }, null));
+    if (discard.slug === CURRENT_CR) {
+      leavePage();
+      window.location.assign(pageQuery({ kind: 'crs' }, null));
+    }
     else void crs.reload();
   };
 

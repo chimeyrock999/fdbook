@@ -1,6 +1,7 @@
 // Client for the Studio file API (server/files/api.ts, server/files/events.ts).
 
 import { assetUrl } from './asset-versions';
+import { watchEvents } from './connection';
 import { errorOf, readJson } from './json';
 import { studioFetch } from './session';
 import { API_BASE } from './workspace';
@@ -36,7 +37,7 @@ export function createFilesClient(base = API_BASE) {
   }
 
   const listeners = new Set<(event: FileEvent) => void>();
-  let events: EventSource | null = null;
+  let stopEvents: (() => void) | null = null;
 
   return {
     async listFiles(): Promise<FileEntry[]> {
@@ -75,19 +76,21 @@ export function createFilesClient(base = API_BASE) {
 
     // Follows file changes on disk. The Studio's own saves arrive too: compare
     // the event's mtimeMs with the one writeFile returned to skip them. All
-    // subscribers share one EventSource, closed with the last of them.
+    // subscribers share one stream, closed with the last of them. It opens
+    // again after a drop, under the page's connection watch (connection.ts).
     subscribeFileEvents(listener: (event: FileEvent) => void): () => void {
       listeners.add(listener);
-      events ??= new EventSource(`${base}/api/events`);
-      events.onmessage = (message: MessageEvent<string>) => {
-        const event = JSON.parse(message.data) as FileEvent;
-        for (const each of [...listeners]) each(event);
-      };
+      stopEvents ??= watchEvents(`${base}/api/events`, (events) => {
+        events.onmessage = (message: MessageEvent<string>) => {
+          const event = JSON.parse(message.data) as FileEvent;
+          for (const each of [...listeners]) each(event);
+        };
+      });
       return () => {
         listeners.delete(listener);
         if (listeners.size === 0) {
-          events?.close();
-          events = null;
+          stopEvents?.();
+          stopEvents = null;
         }
       };
     },

@@ -2,14 +2,12 @@
 // edits (src/api/workspace.ts). Types are server/agents/shared.ts.
 
 import type { AgentId, AgentInfo, AgentRole, Attachment, Conversation, ConversationEvent, ConversationRead, ConversationTotals, Mention, MentionKind, MessageContext, MessageSelection, StreamEvent, TurnChange } from '../../server/agents/shared';
+import { watchEvents } from './connection';
 import { errorOf, readJson } from './json';
 import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
 export type { AgentId, AgentInfo, AgentRole, Attachment, Conversation, ConversationEvent, ConversationRead, ConversationTotals, Mention, MentionKind, MessageContext, MessageSelection, StreamEvent, TurnChange };
-
-// How long a refused event stream waits before it is opened again.
-const REOPEN_MS = 5000;
 
 const postJson = (path: string, body: unknown) =>
   studioFetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -80,27 +78,12 @@ export function createAgentsClient(base = API_BASE) {
     // Every event of the change request's conversations, from now on (and,
     // on each connect, a snapshot of each one with a turn going on).
     // `onOpen` runs on every connect, so the caller reads again what
-    // changed while it was down. A stream the server refuses (signed out,
-    // 409) is opened again after a pause; `onOpen` then goes through
-    // studioFetch, which tells the page when nobody is signed in.
+    // changed while it was down. The stream opens again after a drop,
+    // under the page's connection watch (connection.ts).
     subscribe(listener: (event: StreamEvent) => void, onOpen: () => void = () => undefined): () => void {
-      let events: EventSource | null = null;
-      let retry: ReturnType<typeof setTimeout> | undefined;
-      const open = () => {
-        events = new EventSource(`${base}/api/agents/events`);
-        events.onopen = onOpen;
+      return watchEvents(`${base}/api/agents/events`, (events) => {
         events.onmessage = (message: MessageEvent<string>) => { listener(JSON.parse(message.data) as StreamEvent); };
-        events.onerror = () => {
-          if (events?.readyState !== EventSource.CLOSED) return;
-          onOpen();
-          retry = setTimeout(open, REOPEN_MS);
-        };
-      };
-      open();
-      return () => {
-        clearTimeout(retry);
-        events?.close();
-      };
+      }, onOpen);
     },
   };
 }
