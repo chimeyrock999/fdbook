@@ -922,17 +922,25 @@ are listed greyed, with how to install them (`GET /api/agents`).
 - **Actions.** In an author chat (and a new author chat), a row over the
   message box offers one-click actions (`src/agents/actions.ts`): with a
   selection, **Rewrite**, **Tighten**, **Expand**, **VI ↔ EN**,
-  **Callout**, **Table**; without one, **Fill frontmatter**, **Suggest
-  links** (through `related_notes`) and **Diagram** (through the diagram
-  tools). Each is a written message sent with the same context; it goes to
-  the author chat on screen when that one waits for a message, else to a
-  new author chat. Every edit comes back as a suggestion (`propose_edit`);
-  a new note or diagram lands on the turn's Keep/Revert list. While the
-  panel is open, **Fill** at the top of the note header asks for the
-  frontmatter the same way. **New note** opens a form (folder, title, the
-  path it makes, an outline, links to read) above a composer for mentions,
-  attachments and anything else; it starts an author chat that drafts the
-  note there and lists it in `meta.yaml`.
+  **Callout**, **Table** and **Diagram**; without one, **Fill
+  frontmatter** (through `note_vocabulary`), **Suggest links** (through
+  `related_notes`) and **Diagram**. **Diagram** changes the diagram the
+  note shows there (`<Diagram src>`) with the diagram edit tools, or else
+  draws one and embeds it; either way it checks with `diagram_validate`
+  and looks with `diagram_render_png`. Each action is a written message
+  sent with the editor's place; the text, mentions and attachments being
+  written stay for their own message. It goes to the author chat on
+  screen when that one waits for a message, else to a new author chat,
+  whose composer starts with the message being written. Every edit comes
+  back as a suggestion (`propose_edit`); a new note or diagram lands on
+  the turn's Keep/Revert list. While the panel is open for someone who
+  may run agents and an author agent can run, **Fill** at the top of the
+  note header asks it for the frontmatter the same way, pending while its
+  ask goes (`src/agents/agent-ask.ts`). **New note** opens a form
+  (folder, title, the path it makes, an outline, links to read) above a
+  composer for mentions, attachments and anything else; it sends once the
+  path shown is looked up and holds no note, and starts an author chat
+  that drafts the note there and lists it in `meta.yaml`.
 - **History.** Every chat of the change request, last active first, with
   its agent, role, turns, cost and last activity, filtered by its first
   message. One opens to read and go on with; an admin deletes one, or
