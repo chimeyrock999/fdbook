@@ -99,6 +99,9 @@ export function createAgentConversations(
   const streams = new Map<ServerResponse, Viewer>();
   let closed = false;
   const closing = () => closed;
+  // Ids being deleted, from the call on: a message meanwhile is refused,
+  // whether the conversation is held in memory or read from disk.
+  const removing = new Set<string>();
 
   // To every stream whose viewer may still read; one who may not is closed.
   const broadcast = (frame: string) => {
@@ -351,7 +354,7 @@ export function createAgentConversations(
       const conversation = live.get(id) ?? (await revive(id));
       // It may have begun closing, or the conversation been deleted, while it was read from disk.
       if (closing()) throw new HttpError(409, 'this change request is closing');
-      if (conversation.deleted) throw new HttpError(404, `no such conversation: ${id}`);
+      if (conversation.deleted || removing.has(id)) throw new HttpError(404, `no such conversation: ${id}`);
       if (conversation.turn !== null) throw new HttpError(409, 'the agent is still answering: wait for it, or cancel the turn');
       if (conversation.agent === null) {
         try {
@@ -406,18 +409,23 @@ export function createAgentConversations(
     async remove(id: string) {
       const conversation = live.get(id);
       if (conversation?.turn != null) throw new HttpError(409, 'the agent is still answering: cancel the turn first');
-      if (conversation === undefined) {
-        await transcripts.settled();
-        if ((await transcripts.read(slug, id)) === null) throw new HttpError(404, `no such conversation: ${id}`);
-      } else {
-        // Held in memory, and refused a message, until its files are gone.
-        conversation.deleted = true;
-        const { agent } = conversation;
-        stopAgent(conversation);
-        if (agent !== null) await agent.exited;
+      removing.add(id);
+      try {
+        if (conversation === undefined) {
+          await transcripts.settled();
+          if ((await transcripts.read(slug, id)) === null) throw new HttpError(404, `no such conversation: ${id}`);
+        } else {
+          // Held in memory, and refused a message, until its files are gone.
+          conversation.deleted = true;
+          const { agent } = conversation;
+          stopAgent(conversation);
+          if (agent !== null) await agent.exited;
+        }
+        await transcripts.removeOne(slug, id);
+        if (conversation !== undefined && live.get(id) === conversation) live.delete(id);
+      } finally {
+        removing.delete(id);
       }
-      await transcripts.removeOne(slug, id);
-      if (live.get(id) === conversation) live.delete(id);
       send({ type: 'deleted', at: Date.now(), conversationId: id });
     },
 

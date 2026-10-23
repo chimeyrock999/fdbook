@@ -215,6 +215,22 @@ describe('agent conversations over many turns', () => {
     expect(existsSync(join(home, 'agents', 'turns', `${conversation.id}.json`))).toBe(false);
   });
 
+  it('refuses a message to a stored conversation being deleted, and leaves nothing of it', async () => {
+    const first = make();
+    const conversation = start(first, 'env');
+    await waitFor(first, conversation.id, ended);
+    await first.close();
+    const again = make();
+    const [removed, messaged] = await Promise.allSettled([again.remove(conversation.id), again.message(conversation.id, 'recall', null)]);
+    expect(removed.status).toBe('fulfilled');
+    expect(messaged.status).toBe('rejected');
+    expect(messaged.status === 'rejected' ? (messaged.reason as Error).message : '').toMatch(/no such conversation/);
+    await again.close();
+    expect(existsSync(join(home, 'agents', 'turns', `${conversation.id}.jsonl`))).toBe(false);
+    expect(existsSync(join(home, 'agents', 'turns', `${conversation.id}.json`))).toBe(false);
+    expect((await make().list()).map((each) => each.id)).not.toContain(conversation.id);
+  });
+
   it('numbers the events it records, so a read and the stream line up', async () => {
     const conversations = make();
     const conversation = start(conversations, 'env');
