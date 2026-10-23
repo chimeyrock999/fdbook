@@ -28,7 +28,11 @@ Archify's JSON IR, its HTML pipeline and its other renderers are not ported;
 `import-archify.ts` converts its architecture, dataflow and sequence specs
 (`archify-sequence.ts`). Archify's sequence takes each message's `y` from
 its author; `sequence.ts` derives it from the order (its `messageYs`), and
-the rest of the geometry is Archify's.
+the rest of the geometry is Archify's. Two deliberate differences: segments
+do not nest (Archify's phases may; the import refuses a spec whose segments
+share a message), and the header-clear fallback of Archify's
+`segmentLabelBox` is not ported, since `messageYs` keeps every segment title
+below the participant headers.
 
 ## Checking a release
 

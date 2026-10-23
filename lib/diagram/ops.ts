@@ -31,7 +31,7 @@ function freeId(diagram: Input, id: string) {
 }
 
 // What only an architecture has: positions, route pins. A sequence is laid
-// out from its order (ops-sequence.ts reorders it).
+// out from its order (`reorder` below moves it).
 function placedOnly(diagram: Input, what: string) {
   if (diagram.type === 'sequence') throw new DiagramOpError('op/sequence-has-no-layout', `A sequence lays itself out from its order, so it takes no ${what}; reorder its participants or messages instead.`);
   diagram.layout ??= { nodes: {} };
@@ -313,22 +313,28 @@ type Range = { from: string; to: string };
 // A sequence's segments and activations once its message order went from
 // `before` to `after`: each keeps the messages it held that are still there,
 // from the first to the last of them in the new order (so a message moved
-// inside its span joins it). One that held only `moved` follows it; one
-// left with nothing goes. A range naming an unknown message stays as it is.
-function rangesAfter<T extends Range>(ranges: T[], before: readonly string[], after: readonly string[], moved?: string): T[] {
+// inside its span joins it). One that held only `moved` follows it, unless
+// it then shares messages with another range (of the same participant, for
+// activations): the message now belongs to the range it landed in. One left
+// with nothing goes. A range naming an unknown message stays as it is.
+function rangesAfter<T extends Range>(ranges: T[], before: readonly string[], after: readonly string[], moved?: string, apart: (a: T, b: T) => boolean = () => false): T[] {
   const was = new Map(before.map((id, at) => [id, at]));
   const now = new Map(after.map((id, at) => [id, at]));
-  return ranges.flatMap((range) => {
+  const placed = ranges.flatMap((range) => {
     const first = was.get(range.from);
     const last = was.get(range.to);
-    if (first === undefined || last === undefined) return [range];
+    if (first === undefined || last === undefined) return [{ range, follows: false }];
     const held = before.slice(Math.min(first, last), Math.max(first, last) + 1);
     let kept = held.filter((id) => now.has(id) && id !== moved);
-    if (!kept.length && moved !== undefined && held.includes(moved)) kept = [moved];
+    const follows = !kept.length && moved !== undefined && held.includes(moved);
+    if (follows) kept = [moved];
     if (!kept.length) return [];
     kept.sort((x, y) => (now.get(x) ?? 0) - (now.get(y) ?? 0));
-    return [{ ...range, from: kept[0], to: kept[kept.length - 1] }];
+    return [{ range: { ...range, from: kept[0], to: kept[kept.length - 1] }, follows }];
   });
+  const span = (range: T) => [now.get(range.from) ?? -1, now.get(range.to) ?? -1] as const;
+  const overlaps = (a: T, b: T) => !apart(a, b) && span(a)[0] <= span(b)[1] && span(b)[0] <= span(a)[1];
+  return placed.filter(({ range, follows }) => !follows || !placed.some((other) => other.range !== range && overlaps(range, other.range))).map(({ range }) => range);
 }
 
 function setRanges(diagram: Input, before: readonly string[], moved?: string) {
@@ -338,7 +344,7 @@ function setRanges(diagram: Input, before: readonly string[], moved?: string) {
     if (!diagram.segments.length) delete diagram.segments;
   }
   if (diagram.activations) {
-    diagram.activations = rangesAfter(diagram.activations, before, after, moved);
+    diagram.activations = rangesAfter(diagram.activations, before, after, moved, (a, b) => a.node !== b.node);
     if (!diagram.activations.length) delete diagram.activations;
   }
 }

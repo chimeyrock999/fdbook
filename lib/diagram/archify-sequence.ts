@@ -72,10 +72,7 @@ export function importArchifySequence(spec: ArchifySequenceSpec, { schemaPath, n
       detail: message.note || undefined,
       variant: VARIANT_IN[message.variant ?? 'default'],
     })),
-    segments: (spec.segments ?? []).flatMap((segment) => {
-      const range = spanned(segment.from, segment.to);
-      return range ? [{ label: segment.label, ...range }] : [];
-    }),
+    segments: segmentsOf(spec, messages, spanned),
     activations: (spec.activations ?? []).flatMap((activation) => {
       const range = spanned(activation.from, activation.to, activation.participant);
       return range ? [{ node: activation.participant, ...range }] : [];
@@ -89,6 +86,24 @@ export function importArchifySequence(spec: ArchifySequenceSpec, { schemaPath, n
   if (input.$schema === undefined) delete input.$schema;
   diagramSchema.parse(input);
   return input;
+}
+
+// Archify lets phases nest; here segments do not (sequence/segments-overlap),
+// so a spec whose segments share a message is refused with what to change.
+function segmentsOf(spec: ArchifySequenceSpec, messages: { id: string }[], spanned: (from: number, to: number) => { from: string; to: string } | null) {
+  const order = new Map(messages.map((message, index) => [message.id, index]));
+  const segments = (spec.segments ?? []).flatMap((segment) => {
+    const range = spanned(segment.from, segment.to);
+    return range ? [{ label: segment.label, ...range }] : [];
+  });
+  segments.forEach((segment, index) => {
+    for (const other of segments.slice(index + 1)) {
+      if (order.get(segment.from)! <= order.get(other.to)! && order.get(other.from)! <= order.get(segment.to)!) {
+        throw new Error(`segments "${segment.label}" and "${other.label}" share messages; Archify nests phases, a diagram's segments do not: make them consecutive in the spec (or drop the outer one) and import again`);
+      }
+    }
+  });
+  return segments;
 }
 
 // A spec Archify draws as the scene does: the same participants, messages

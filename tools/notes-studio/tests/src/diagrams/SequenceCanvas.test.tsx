@@ -140,13 +140,15 @@ describe('the sequence editor', () => {
     expect(screen.getByRole('status').textContent).toBe('Saved');
   });
 
-  it('adds a message dropped inside a segment below its last message to that segment', async () => {
+  it.each([
+    ['below its last message', (box: { y: number; height: number }) => box.y + box.height - 4, 'done', { from: 'pause', to: 'b-io' }],
+    ['above its first message', (box: { y: number }) => box.y + 4, 'query', { from: 'b-io', to: 'done' }],
+  ] as const)('adds a message dropped inside a segment %s to that segment', async (_where, at, before, range) => {
     const { container, last, writeFile } = await open();
-    const frame = layer.segments[0].frame;
-    drag(one(container, '[data-lifeline-port="b"]'), [layer.columns.b, 400], [layer.columns.io, frame.y + frame.height - 4]);
+    drag(one(container, '[data-lifeline-port="b"]'), [layer.columns.b, 400], [layer.columns.io, at(layer.segments[0].frame)]);
     await waitFor(() => { expect(writeFile).toHaveBeenCalled(); });
-    expect(ids(last().edges).indexOf('b-io')).toBe(ids(last().edges).indexOf('done') + 1);
-    expect(last().segments).toEqual([{ label: 'A waits', from: 'pause', to: 'b-io' }]);
+    expect(ids(last().edges).indexOf('b-io')).toBe(ids(last().edges).indexOf(before) + 1);
+    expect(last().segments).toEqual([{ label: 'A waits', ...range }]);
   });
 
   it('copies no participant: ⌘D does nothing, and an edit that needs a layout is refused', async () => {

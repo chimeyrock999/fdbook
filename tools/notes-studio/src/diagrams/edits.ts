@@ -342,14 +342,19 @@ export const moveParticipant = (diagram: Input, id: string, index: number) => re
 export const moveMessage = (diagram: Input, id: string, index: number) => reorder(diagram, 'edges', id, index);
 
 // A new message from `from` to `to`, after the last message above `y`.
-// Dropped inside a segment's frame below its last message, it joins that
-// segment, which now ends with it.
+// Dropped inside a segment's frame but above its first message or below its
+// last one, it joins that segment, which now starts or ends with it.
 export function addMessage(diagram: Input, layer: SequenceLayer, from: string, to: string, y: number): { diagram: Input; id: string } {
   const id = freeId(diagram, `${from}-${to}`);
   const above = layer.messages.filter((message) => message.y < y).at(-1);
   const next = connect(diagram, { id, from, to, label: 'message', after: above ? above.edge.id : null });
-  const frame = layer.segments.find(({ segment, frame: box }) => segment.to === above?.edge.id && y >= box.y && y <= box.y + box.height);
-  if (frame) next.segments = (next.segments ?? []).map((segment) => (segment.from === frame.segment.from && segment.to === frame.segment.to ? { ...segment, to: id } : segment));
+  const yOf = new Map(layer.messages.map((message) => [message.edge.id, message.y]));
+  const hit = layer.segments.find(({ frame }) => y >= frame.y && y <= frame.y + frame.height);
+  if (hit) {
+    const { segment } = hit;
+    const edge = y < (yOf.get(segment.from) ?? -Infinity) ? 'from' : segment.to === above?.edge.id ? 'to' : null;
+    if (edge) next.segments = (next.segments ?? []).map((each) => (each.from === segment.from && each.to === segment.to ? { ...each, [edge]: id } : each));
+  }
   return { diagram: next, id };
 }
 
