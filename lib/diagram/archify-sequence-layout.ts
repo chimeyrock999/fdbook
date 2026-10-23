@@ -36,7 +36,14 @@ const unescape = (text: string) => text.replace(/&#(\d+);/g, (_, code: string) =
 // Reads the drawing out of the HTML page Archify writes.
 export function sequenceFixtureOf(html: string, source: string): SequenceLayoutFixture {
   const svg = html.slice(html.indexOf('<svg viewBox'), html.indexOf('</svg>'));
-  const section = (name: string, next: string) => svg.slice(svg.indexOf(`<!-- ${name} -->`), svg.indexOf(`<!-- ${next} -->`));
+  // Archify marks each part of the drawing with a comment; one missing means
+  // the drawing changed shape, and the fixture must not be guessed.
+  const section = (name: string, next: string) => {
+    const start = svg.indexOf(`<!-- ${name} -->`);
+    const end = svg.indexOf(`<!-- ${next} -->`);
+    if (start < 0 || end < start) throw new Error(`Archify's drawing has no "${name}" part before "${next}"; read its SVG again`);
+    return svg.slice(start, end);
+  };
   const [, , width, height] = numbers(attr(svg.slice(0, svg.indexOf('>')), 'viewBox'));
   const participants = [...section('Participants', 'Legend').matchAll(/<g [^>]*data-node-id="[^"]*"[^>]*>\s*<title>[^<]*<\/title>\s*(<rect [^>]*>)/g)].map((match) => box(match[1]));
   const lifelines = [...section('Lifelines', 'Activations').matchAll(/<path d="M ([\d.]+) ([\d.]+) L [\d.]+ ([\d.]+)"/g)]

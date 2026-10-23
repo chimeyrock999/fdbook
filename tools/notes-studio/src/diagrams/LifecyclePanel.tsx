@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
+import { mainPathGaps } from '@site/lib/diagram/validate-lifecycle';
 import { setMainPath, type Input } from './edits';
 import { Choice, Section } from './panel-fields';
 
@@ -8,16 +9,11 @@ import { Choice, Section } from './panel-fields';
 
 type Change = (next: Input) => void;
 
-// Each step a transition must join to the next: a missing one is named here.
-const gaps = (doc: Input) => {
-  const path = doc.mainPath ?? [];
-  return path.slice(1).filter((id, index) => !(doc.edges ?? []).some((edge) => edge.from === path[index] && edge.to === id));
-};
-
 export function MainPathFields({ doc, onChange, readOnly }: { doc: Input; onChange: Change; readOnly: boolean }) {
   const path = doc.mainPath ?? [];
   const label = (id: string) => doc.nodes.find((node) => node.id === id)?.label ?? id;
-  const missing = gaps(doc);
+  // The steps the checks name in lifecycle/main-path-gap.
+  const missing = mainPathGaps(doc).map((gap) => gap.to);
   const off = doc.nodes.filter((node) => !path.includes(node.id)).map((node) => ({ value: node.id, label: node.label }));
   return (
     <Section title="Main path">

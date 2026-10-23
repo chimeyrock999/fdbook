@@ -241,14 +241,21 @@ function parseIssues(value: unknown): { diagram: Diagram } | { issues: DiagramIs
   }
 }
 
+// Errors a diagram still draws with, so the editor shows what to fix: a
+// lifecycle's main path is laid out from the states it names once.
+const DRAWS_ANYWAY = new Set([
+  'lifecycle/main-path-gap', 'lifecycle/main-path-too-short', 'lifecycle/unknown-main-path-state',
+  'lifecycle/repeated-main-path-state', 'lifecycle/two-way-transition', 'lifecycle/state-text-too-long',
+]);
+
 // Parses, checks and lays out a diagram file's content. The scene is only
-// built when the structure is sound.
+// built when the structure is sound, but for the errors above.
 export function validateDiagram(value: unknown): DiagramReport {
   const parsed = parseIssues(value);
   if (!('diagram' in parsed)) return { diagram: null, scene: null, issues: parsed.issues };
   const { diagram } = parsed;
   const issues = checkStructure(diagram);
-  if (issues.some((issue) => issue.severity === 'error')) return { diagram, scene: null, issues };
+  if (issues.some((issue) => issue.severity === 'error' && !DRAWS_ANYWAY.has(issue.code))) return { diagram, scene: null, issues };
   const scene = buildScene(diagram);
   return { diagram, scene, issues: [...issues, ...checkScene(scene)] };
 }

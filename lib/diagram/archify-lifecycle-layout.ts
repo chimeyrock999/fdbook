@@ -32,7 +32,14 @@ const box = (tag: string): Box => [Number(attr(tag, 'x')), Number(attr(tag, 'y')
 
 export function lifecycleFixtureOf(html: string, source: string): LifecycleLayoutFixture {
   const svg = html.slice(html.indexOf('<svg viewBox'), html.indexOf('</svg>'));
-  const section = (name: string, next: string) => svg.slice(svg.indexOf(`<!-- ${name} -->`), svg.indexOf(`<!-- ${next} -->`));
+  // Archify marks each part of the drawing with a comment; one missing means
+  // the drawing changed shape, and the fixture must not be guessed.
+  const section = (name: string, next: string) => {
+    const start = svg.indexOf(`<!-- ${name} -->`);
+    const end = svg.indexOf(`<!-- ${next} -->`);
+    if (start < 0 || end < start) throw new Error(`Archify's drawing has no "${name}" part before "${next}"; read its SVG again`);
+    return svg.slice(start, end);
+  };
   const [, , width, height] = attr(svg.slice(0, svg.indexOf('>')), 'viewBox').split(/\s+/).map(Number);
   return {
     source,

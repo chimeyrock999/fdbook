@@ -5,7 +5,7 @@
 // formatDiagramJson writes it. A missing id or an id clash throws
 // DiagramOpError with a stable code.
 
-import type { DiagramInput, EdgeVariant, Side, Tone } from './schema.ts';
+import { laysItselfOut, type DiagramInput, type EdgeVariant, type Side, type Tone } from './schema.ts';
 
 type Input = DiagramInput;
 type NodeInput = Input['nodes'][number];
@@ -34,10 +34,9 @@ function freeId(diagram: Input, id: string) {
 // out from its order (`reorder` below moves it), a lifecycle from its main
 // path and transitions.
 function placedOnly(diagram: Input, what: string) {
+  if (!laysItselfOut(diagram.type)) return (diagram.layout ??= { nodes: {} });
   if (diagram.type === 'sequence') throw new DiagramOpError('op/sequence-has-no-layout', `A sequence lays itself out from its order, so it takes no ${what}; reorder its participants or messages instead.`);
-  if (diagram.type === 'lifecycle') throw new DiagramOpError('op/lifecycle-has-no-layout', `A lifecycle lays itself out from its main path and transitions, so it takes no ${what}; change mainPath or the transitions instead.`);
-  diagram.layout ??= { nodes: {} };
-  return diagram.layout;
+  throw new DiagramOpError('op/lifecycle-has-no-layout', `A lifecycle lays itself out from its main path and transitions, so it takes no ${what}; change mainPath or the transitions instead.`);
 }
 
 function nodeOf(diagram: Input, id: string) {

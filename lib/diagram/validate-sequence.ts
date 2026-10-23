@@ -5,10 +5,10 @@
 // labels, segment titles). Message spacing needs no check: the order sets
 // it (lib/diagram/sequence.ts).
 
-import { minimumReadableSourceTextPx, rectsOverlap, textUnits } from './geometry.ts';
+import { availableTextWidth, minimumReadableSourceTextPx, minimumTextWidth, rectsOverlap, textUnits } from './geometry.ts';
 import type { Scene } from './scene.ts';
 import type { Diagram } from './schema.ts';
-import { availableTextWidth, MESSAGE_FONT, messageLabelRect, minimumTextWidth, NOTE_FONT, PARTICIPANT_LABEL_UNIT, participantLabelWidth } from './sequence.ts';
+import { MESSAGE_FONT, messageLabelRect, NOTE_FONT, PARTICIPANT_LABEL_UNIT, participantLabelWidth } from './sequence.ts';
 import type { DiagramIssue } from './validate.ts';
 
 const MIN_SPAN = 60;

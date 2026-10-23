@@ -3,10 +3,22 @@
 // path, and Archify's checks of render-lifecycle.mjs (state text, the canvas
 // width, labels that found no clear spot, crowded neighbours).
 
-import { STATE_MAX_W, TEXT, availableTextWidth, minimumTextWidth, stateTextFits } from './lifecycle.ts';
+import { availableTextWidth, minimumTextWidth } from './geometry.ts';
+import { STATE_MAX_W, TEXT, stateTextFits } from './lifecycle.ts';
 import type { Scene } from './scene.ts';
 import type { Diagram } from './schema.ts';
 import type { DiagramIssue } from './validate.ts';
+
+// The main-path steps with no transition into them from the step before,
+// among the states the diagram has; the Studio's panel names the same ones.
+export function mainPathGaps(diagram: { mainPath?: string[]; nodes: { id: string }[]; edges?: { from: string; to: string }[] }) {
+  const ids = new Set(diagram.nodes.map((node) => node.id));
+  const path = diagram.mainPath ?? [];
+  return path.slice(0, -1).flatMap((from, index) => {
+    const to = path[index + 1];
+    return ids.has(from) && ids.has(to) && !(diagram.edges ?? []).some((edge) => edge.from === from && edge.to === to) ? [{ from, to, index }] : [];
+  });
+}
 
 export function checkLifecycleStructure(diagram: Diagram): DiagramIssue[] {
   const issues: DiagramIssue[] = [];
@@ -34,12 +46,9 @@ export function checkLifecycleStructure(diagram: Diagram): DiagramIssue[] {
   diagram.edges.forEach((edge, index) => {
     if (edge.bidirectional) error('lifecycle/two-way-transition', `Transition "${edge.id}" has heads at both ends; a transition goes one way.`, 'add the way back as its own transition', `edges[${index}].bidirectional`);
   });
-  for (let index = 0; index + 1 < diagram.mainPath.length; index += 1) {
-    const [from, to] = [diagram.mainPath[index], diagram.mainPath[index + 1]];
-    if (ids.has(from) && ids.has(to) && !diagram.edges.some((edge) => edge.from === from && edge.to === to)) {
-      error('lifecycle/main-path-gap', `The main path steps from "${from}" to "${to}" with no transition between them.`,
-        `add a transition from "${from}" to "${to}", or take the state out of mainPath if it is not on the happy path`, `mainPath[${index}]`);
-    }
+  for (const { from, to, index } of mainPathGaps(diagram)) {
+    error('lifecycle/main-path-gap', `The main path steps from "${from}" to "${to}" with no transition between them.`,
+      `add a transition from "${from}" to "${to}", or take the state out of mainPath if it is not on the happy path`, `mainPath[${index}]`);
   }
   diagram.nodes.forEach((node, index) => {
     for (const [field, minimum] of [['label', TEXT.labelMinimum], ['sublabel', TEXT.sublabelMinimum], ['tag', TEXT.tagMinimum]] as const) {

@@ -133,7 +133,7 @@ function NodeFields({ doc, node, onChange, readOnly }: { doc: Input; node: NodeI
   );
 }
 
-function EdgeFields({ doc, id, onChange, readOnly }: { doc: Input; id: string; onChange: Change; readOnly: boolean }) {
+function EdgeFields({ doc, id, onChange, onSelect, readOnly }: { doc: Input; id: string; onChange: Change; onSelect: (selection: Selection) => void; readOnly: boolean }) {
   const edge = (doc.edges ?? []).find((each) => each.id === id);
   if (!edge) return null;
   const layout = doc.layout?.edges?.[id];
@@ -141,6 +141,10 @@ function EdgeFields({ doc, id, onChange, readOnly }: { doc: Input; id: string; o
   const side = (key: 'fromSide' | 'toSide') => (value: Side | undefined) => { onChange(setEdgeSides(doc, id, { ...layout, [key]: value })); };
   if (doc.type === 'lifecycle') {
     const states = doc.nodes.map((node) => ({ value: node.id, label: node.label }));
+    // Exits to the same state with the same label, detail and variant are
+    // drawn once (from a frame or a bus): the others are picked from here.
+    const same = (other: typeof edge) => other.to === edge.to && other.label === edge.label && other.detail === edge.detail && (other.variant ?? 'default') === (edge.variant ?? 'default');
+    const shared = (doc.edges ?? []).filter((other) => other.id !== edge.id && same(other));
     return (
       <Section title={`Transition ${edge.from} → ${edge.to}`}>
         <TextField label="Label" value={edge.label ?? ''} readOnly={readOnly} hint="The event, and a guard in [brackets]." onCommit={(label) => { set({ label: label.trim() || undefined }); }} />
@@ -148,6 +152,15 @@ function EdgeFields({ doc, id, onChange, readOnly }: { doc: Input; id: string; o
         <Choice label="Variant" value={edge.variant ?? 'default'} readOnly={readOnly} options={EDGE_VARIANTS} onChange={(variant) => { set({ variant: variant === 'default' ? undefined : variant }); }} />
         <Choice label="From" value={edge.from} options={states} readOnly={readOnly} onChange={(from) => { if (from) set({ from }); }} />
         <Choice label="To" value={edge.to} options={states} readOnly={readOnly} onChange={(to) => { if (to) set({ to }); }} />
+        {edge.bidirectional && <Check label="Arrow at both ends (a lifecycle draws one)" checked readOnly={readOnly} onChange={() => { set({ bidirectional: undefined }); }} />}
+        {shared.length > 0 && (
+          <div className="studio-dg-shared">
+            <span className="studio-dg-muted">May share its arrow with:</span>
+            {shared.map((other) => (
+              <button key={other.id} type="button" className="studio-button" onClick={() => { onSelect({ type: 'edge', id: other.id }); }}>{other.from} → {other.to}</button>
+            ))}
+          </div>
+        )}
       </Section>
     );
   }
@@ -229,7 +242,7 @@ export function DiagramPanel({ doc, selection, onSelect, onChange, readOnly }: {
       );
     }
   }
-  if (selection?.type === 'edge') return <div className="studio-dg-panel"><EdgeFields key={selection.id} doc={doc} id={selection.id} onChange={onChange} readOnly={readOnly} /></div>;
+  if (selection?.type === 'edge') return <div className="studio-dg-panel"><EdgeFields key={selection.id} doc={doc} id={selection.id} onChange={onChange} onSelect={onSelect} readOnly={readOnly} /></div>;
   if (selection?.type === 'group') return <div className="studio-dg-panel"><GroupFields key={selection.id} doc={doc} id={selection.id} onChange={onChange} readOnly={readOnly} /></div>;
   if (selection?.type === 'card') return <div className="studio-dg-panel"><CardFields key={selection.index} doc={doc} index={selection.index} onChange={onChange} readOnly={readOnly} /></div>;
   return (

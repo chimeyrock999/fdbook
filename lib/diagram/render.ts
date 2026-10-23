@@ -117,7 +117,8 @@ function renderIcon({ kind, x, y, icon: own }: SceneNode) {
   return `<g aria-hidden="true" class="semantic-sigil" transform="translate(${num(x + 6)} ${num(y + 6)}) scale(${SIGIL_SIZE / 16})">${ICON_SHAPE[icon]}</g>`;
 }
 
-function renderNode(scene: SceneNode) {
+// `inside` is drawn over the box, under the glyph and text: a final state's border.
+function renderNode(scene: SceneNode, inside = '') {
   const { node, x, y, width, height, cx } = scene;
   const parts = [node.label, node.sublabel, scene.context.at(-1), node.tag].filter(Boolean);
   const aria = [node.label, node.sublabel, scene.context.at(-1)].filter(Boolean).join(', ');
@@ -133,7 +134,7 @@ function renderNode(scene: SceneNode) {
   const box = `x="${num(x)}" y="${num(y)}" width="${num(width)}" height="${num(height)}" rx="8"`;
   return `<g data-node-id="${esc(node.id)}" data-node-kind="${esc(node.kind)}" class="${toneClass(scene.kind.tone)}" tabindex="0" role="button" aria-pressed="false" aria-label="${esc(aria)}">`
     + `<title>${esc(parts.join(' · '))}</title>`
-    + `<rect ${box} class="c-mask"/><rect ${box} class="c-node" stroke-width="1.5"/>${renderIcon(scene)}`
+    + `<rect ${box} class="c-mask"/><rect ${box} class="c-node" stroke-width="1.5"/>${inside}${renderIcon(scene)}`
     + `<text x="${num(scene.text?.x ?? cx)}" y="${num(labelY)}" class="t-primary" font-size="${scene.labelFont}" font-weight="600" text-anchor="middle">${esc(node.label)}</text>${sub}${tag}</g>`;
 }
 
@@ -170,8 +171,7 @@ function renderLifecycle(prefix: string, scene: Scene, layer: LifecycleLayer) {
     const final = layer.finals.has(node.node.id)
       ? `<rect x="${num(node.x + 3)}" y="${num(node.y + 3)}" width="${num(node.width - 6)}" height="${num(node.height - 6)}" rx="5" class="c-final" stroke-width="1"/>`
       : '';
-    // The double border sits inside the node's group, under its text.
-    return final ? renderNode(node).replace(/(<rect [^>]*class="c-node"[^>]*\/>)/, `$1${final}`) : renderNode(node);
+    return renderNode(node, final);
   });
   const labels = scene.edges.map((edge) => {
     const label = edge.label;
@@ -218,7 +218,7 @@ function renderSequence(prefix: string, scene: Scene, layer: SequenceLayer) {
     + layer.messages.map((message, index) => renderMessage(prefix, message, scene.edges[index])).join('')
     + layer.segments.map(({ segment, label }) => `<g data-graph-role="segment-label"><rect x="${num(label.x)}" y="${num(label.y)}" width="${num(label.width)}" height="${label.height}" rx="3" class="c-segment-pill"/>`
       + `<text x="${num(label.x + 6)}" y="${num(label.y + 13)}" class="t-segment" font-size="9" font-weight="600">${esc(segment.label)}</text></g>`).join('')
-    + scene.nodes.map(renderNode).join('');
+    + scene.nodes.map((node) => renderNode(node)).join('');
 }
 
 // `idPrefix` keeps marker ids distinct when several diagrams share a page;
@@ -240,7 +240,7 @@ function renderArchitecture(prefix: string, scene: Scene) {
   return scene.lanes.map(renderLane).join('')
     + scene.frames.map(renderFrame).join('')
     + scene.edges.map((edge) => renderEdgePath(prefix, edge)).join('')
-    + scene.nodes.map(renderNode).join('')
+    + scene.nodes.map((node) => renderNode(node)).join('')
     + scene.edges.map(renderEdgeLabel).join('')
     + scene.frames.map(renderFrameTitle).join('');
 }

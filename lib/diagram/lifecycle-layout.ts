@@ -379,7 +379,7 @@ function placeRow(model: Model, row: number, rowGap: number) {
       bracket.targets.forEach((id) => ideal.set(id, center));
     }
   }
-  const fallback = Math.max(...mainPath.map((id) => states.get(id)!.cx)) + 1;
+  const fallback = mainPath.length ? Math.max(...mainPath.map((id) => states.get(id)!.cx)) + 1 : MARGIN_X;
   type Block = { members: LifeState[]; ideal: number; weight: number; order: number };
   const blocks: Block[] = [];
   const grouped = new Set<string>();
@@ -644,11 +644,16 @@ function placeLabels(model: Model, routes: Map<DiagramEdge, Route>, contentRight
     const points = routes.get(transition)?.points ?? [];
     return points.slice(1).map((end, index) => ({ start: points[index], end }));
   };
-  const siblings = (transition: DiagramEdge) => {
+  // The transitions drawn as one exit with each, worked out once.
+  const siblingsOf = new Map(transitions.map((transition) => {
     const bracket = routes.get(transition)?.bracket;
-    return bracket ? bracket.transitions.filter((other) => other.to === transition.to) : [transition];
+    return [transition, new Set(bracket ? bracket.transitions.filter((other) => other.to === transition.to) : [transition])];
+  }));
+  const siblings = (transition: DiagramEdge) => [...siblingsOf.get(transition)!];
+  const others = (transition: DiagramEdge) => {
+    const own = siblingsOf.get(transition)!;
+    return transitions.filter((other) => !own.has(other));
   };
-  const others = (transition: DiagramEdge) => transitions.filter((other) => !siblings(transition).includes(other));
   for (const transition of transitions) {
     const route = routes.get(transition);
     if (!route || route.labelMode === 'none' || !model.hasLabel(transition)) continue;

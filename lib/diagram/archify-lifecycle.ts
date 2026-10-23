@@ -5,7 +5,7 @@
 // kept: a diagram has no step rail. lifecycleSpecOf turns a diagram back
 // into a spec Archify draws, for the parity fixture (scripts/archify-fixtures.ts).
 
-import { DOT_TONE, defined, mdxText, uniqueId } from './import-archify.ts';
+import { DOT_TONE, EVIDENCE, defined, mdxText, uniqueId, type ArchifyNote, type ImportOptions } from './import-archify.ts';
 import { diagramSchema, type Diagram, type DiagramInput, type EdgeVariant, type ICONS, type Tone } from './schema.ts';
 
 export interface ArchifyLifecycleSpec {
@@ -37,7 +37,11 @@ const VARIANT_IN: Record<string, EdgeVariant | undefined> = { security: 'alert',
 // Archify's lifecycle has no reply line; a return is drawn like a dashed one.
 const VARIANT_OUT: Record<EdgeVariant, string> = { default: 'default', emphasis: 'emphasis', alert: 'security', dashed: 'dashed', return: 'dashed' };
 
-export function importArchifyLifecycle(spec: ArchifyLifecycleSpec, { schemaPath }: { schemaPath?: string } = {}): DiagramInput {
+// The `.notes.json` sidecar gives states their notes, as it gives
+// architecture components theirs.
+export function importArchifyLifecycle(spec: ArchifyLifecycleSpec, { schemaPath, notes }: Pick<ImportOptions, 'schemaPath' | 'notes'> = {}): DiagramInput {
+  const unknown = spec.states.find((state) => !(state.type in LIFECYCLE_TYPES));
+  if (unknown) throw new Error(`state "${unknown.id}" has type "${unknown.type}", which Archify's lifecycle does not have: use one of ${Object.keys(LIFECYCLE_TYPES).join(', ')}`);
   const taken = new Set<string>([...spec.states.map((state) => state.id), ...spec.transitions.flatMap((transition) => (transition.id ? [transition.id] : []))]);
   const used = new Set(spec.states.map((state) => state.type));
   const kindIds = new Map<string, string>();
@@ -46,21 +50,28 @@ export function importArchifyLifecycle(spec: ArchifyLifecycleSpec, { schemaPath 
     kindIds.set(type, id);
     return defined({ id, label, tone, icon });
   });
+  const evidence = new Set(Object.values(notes ?? {}).map((note) => note.evidence));
+  const badges = (Object.keys(EVIDENCE) as ArchifyNote['evidence'][]).filter((level) => evidence.has(level)).map((level) => ({ id: level, ...EVIDENCE[level] }));
   const input: DiagramInput = {
     $schema: schemaPath,
     version: 1,
     type: 'lifecycle',
     title: spec.meta.title,
     kinds,
+    badges,
     legend: spec.meta.legend?.mode === 'hidden' ? false : undefined,
     mainPath: spec.mainPath,
-    nodes: spec.states.map((state) => defined({
-      id: state.id,
-      kind: kindIds.get(state.type)!,
-      label: state.label,
-      sublabel: state.sublabel || undefined,
-      tag: state.tag || undefined,
-    })),
+    nodes: spec.states.map((state) => {
+      const note = notes?.[state.id];
+      return defined({
+        id: state.id,
+        kind: kindIds.get(state.type)!,
+        label: state.label,
+        sublabel: state.sublabel || undefined,
+        tag: state.tag || undefined,
+        note: note && defined({ role: mdxText(note.role), badge: note.evidence, points: note.points?.map(mdxText) }),
+      });
+    }),
     edges: spec.transitions.map((transition) => defined({
       id: transition.id ?? uniqueId(`${transition.from}-${transition.to}`, 'transition', taken),
       from: transition.from,
@@ -75,6 +86,7 @@ export function importArchifyLifecycle(spec: ArchifyLifecycleSpec, { schemaPath 
     }),
   };
   if (!input.cards?.length) delete input.cards;
+  if (!input.badges?.length) delete input.badges;
   if (input.$schema === undefined) delete input.$schema;
   if (input.legend === undefined) delete input.legend;
   diagramSchema.parse(input);

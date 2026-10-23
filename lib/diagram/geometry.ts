@@ -522,12 +522,21 @@ export function textUnits(text: string | undefined) {
   return units;
 }
 
+// Node text measures (Archify's renderers/shared/text-fit.mjs): px of
+// advance per text unit per px of font, and the padding inside a box.
+export const TEXT_WIDTH_FACTOR = 0.6;
+export const NODE_TEXT_PADDING = 8;
+// The width `text` takes at font `size`.
+export const minimumTextWidth = (text: string, size: number) => textUnits(text) * size * TEXT_WIDTH_FACTOR;
+// The width a box `width` wide leaves its text.
+export const availableTextWidth = (width: number) => width - NODE_TEXT_PADDING;
+
 // The largest font size, between `minimum` and `preferred`, at which `text`
 // fits a node `width` wide.
 export function fittedNodeFontSize(text: string, width: number, preferred: number, minimum: number) {
   const units = Math.max(1, textUnits(text));
-  const available = Math.max(1, width - 8);
-  const fitted = Math.min(preferred, available / (units * 0.6));
+  const available = Math.max(1, width - NODE_TEXT_PADDING);
+  const fitted = Math.min(preferred, available / (units * TEXT_WIDTH_FACTOR));
   return Math.max(minimum, Math.floor(fitted * 10) / 10);
 }
 

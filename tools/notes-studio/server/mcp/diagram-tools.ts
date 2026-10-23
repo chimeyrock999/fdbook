@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { formatDiagramJson } from '../../../../lib/diagram/format.ts';
 import { addNode, connect, DiagramOpError, moveNode, removeEdge, removeNode, reorder, setNote, updateEdge, updateGroup, updateNode } from '../../../../lib/diagram/ops.ts';
-import { EDGE_VARIANTS, SIDES, TONES, type DiagramInput } from '../../../../lib/diagram/schema.ts';
+import { EDGE_VARIANTS, laysItselfOut, SIDES, TONES, type DiagramInput } from '../../../../lib/diagram/schema.ts';
 import { diagramPathOf } from '../../../../lib/diagram/source.ts';
 import { checkSchema, validateDiagram, type DiagramIssue } from '../../../../lib/diagram/validate.ts';
 import { listEditableFiles } from '../files/store.ts';
@@ -169,13 +169,13 @@ export const diagramTools: StudioTool[] = [
       // The file's own fields come first, whatever the content says of them.
       const rest = Object.fromEntries(Object.entries(content).filter(([key]) => key !== '$schema' && key !== 'version' && key !== 'layout'));
       // A sequence or lifecycle takes no layout; one given anyway is kept, for the check to name.
-      const layout = content.layout ?? (content.type === 'sequence' || content.type === 'lifecycle' ? undefined : { nodes: {} });
+      const layout = content.layout ?? (laysItselfOut(content.type as string | undefined) ? undefined : { nodes: {} });
       const diagram = { $schema: `${'../'.repeat(depth)}diagram.schema.json`, version: 1, ...rest, ...(layout === undefined ? {} : { layout }) } as DiagramInput;
       editable(path, diagram);
       const { layoutDiagram } = await import('../../../../lib/diagram/auto-layout.ts');
       const { diagram: laid, placed } = await layoutDiagram(diagram);
       const saved = await save(ctx, path, laid, null);
-      return report(`Created ${path}.${diagram.type === 'sequence' || diagram.type === 'lifecycle' ? '' : ` Placed ${String(placed.length)} node${placed.length === 1 ? '' : 's'}.`}`, validateDiagram(laid).issues, { path, mtimeMs: saved, placed });
+      return report(`Created ${path}.${laysItselfOut(diagram.type) ? '' : ` Placed ${String(placed.length)} node${placed.length === 1 ? '' : 's'}.`}`, validateDiagram(laid).issues, { path, mtimeMs: saved, placed });
     },
   }),
   tool({
@@ -337,6 +337,7 @@ export const diagramTools: StudioTool[] = [
     async run({ src: name, node, edge, index }, ctx) {
       if ((node === undefined) === (edge === undefined)) throw new ToolError('diagram_reorder moves exactly one of node and edge');
       return edit(ctx, name, (diagram) => {
+        if (diagram.type === 'lifecycle') throw new ToolError('a lifecycle is laid out from its main path and transitions: change mainPath with diagram_update');
         if (diagram.type !== 'sequence') throw new ToolError('only a sequence is laid out by its order; use diagram_move');
         return node !== undefined ? reorder(diagram, 'nodes', node, index) : reorder(diagram, 'edges', edge ?? '', index);
       }, `Moved "${node ?? edge ?? ''}" to ${String(index)}`);
@@ -372,7 +373,7 @@ export const diagramTools: StudioTool[] = [
       const { diagram: laid, placed } = await layoutDiagram(diagram, { all });
       const saved = placed.length ? await save(ctx, path, laid, mtimeMs) : mtimeMs;
       const { type } = diagram as { type?: string };
-      const none = type === 'sequence' || type === 'lifecycle' ? `${path} is a ${type}: its structure lays it out, nothing to place.` : `Every node of ${path} already has a position.`;
+      const none = laysItselfOut(type) ? `${path} is a ${type}: its structure lays it out, nothing to place.` : `Every node of ${path} already has a position.`;
       return report(placed.length ? `Placed ${placed.join(', ')} in ${path}.` : none, validateDiagram(laid).issues, { path, mtimeMs: saved, placed });
     },
   }),

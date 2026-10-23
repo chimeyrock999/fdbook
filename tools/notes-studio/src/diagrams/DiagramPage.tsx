@@ -1,5 +1,6 @@
 import { Braces, Copy, FileText, Frame, Plus, Redo2, StickyNote, Trash2, Undo2, Workflow } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { laysItselfOut } from '@site/lib/diagram/schema';
 import { DIAGRAM_SUFFIX, DIAGRAMS_DIR } from '@site/lib/diagram/source';
 import type { AssetUsage } from '../api/assets';
 import type { createFilesClient } from '../api/files';
@@ -95,7 +96,7 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
   // and transitions: no positions, frames or copies.
   const sequence = doc?.type === 'sequence';
   const lifecycle = doc?.type === 'lifecycle';
-  const structural = sequence || lifecycle;
+  const structural = laysItselfOut(doc?.type);
   const nodes = useMemo(() => (selection?.type === 'nodes' ? selection.ids : []), [selection]);
 
   const remove = useCallback(() => {

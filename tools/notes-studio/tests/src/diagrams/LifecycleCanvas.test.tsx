@@ -31,8 +31,8 @@ afterEach(() => {
   cleanup();
 });
 
-function disk() {
-  const state = { content: real, mtimeMs: 1 };
+function disk(content = real) {
+  const state = { content, mtimeMs: 1 };
   const writes: string[] = [];
   const writeFile = vi.fn((_path: string, text: string) => {
     state.content = text;
@@ -46,8 +46,8 @@ function disk() {
   return { files, writeFile, last };
 }
 
-async function open(readOnly = false) {
-  const fake = disk();
+async function open(readOnly = false, content = real) {
+  const fake = disk(content);
   const { container } = render(<DiagramPage files={fake.files} path={PATH} readOnly={readOnly} usages={[]} onOpenUsage={vi.fn()} />);
   await waitFor(() => { expect(container.querySelector('svg.dg-svg')).not.toBeNull(); });
   return { ...fake, container };
@@ -87,6 +87,42 @@ describe('the lifecycle editor', () => {
     drag(one(container, '[data-state-port="idle"]'), handle('idle'), centre('idle'));
     await waitFor(() => { expect(writeFile).toHaveBeenCalledTimes(2); });
     expect(last().edges?.at(-1)).toMatchObject({ id: 'idle-idle', from: 'idle', to: 'idle' });
+  });
+
+  it('adds nothing for a press and release on a handle without a drag', async () => {
+    const { container, writeFile } = await open();
+    drag(one(container, '[data-state-port="idle"]'), handle('idle'), handle('idle'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it('keeps drawing, with its handles, while the main path is broken, so it can be fixed here', async () => {
+    const { container, last } = await open();
+    await userEvent.click(screen.getByRole('button', { name: 'Take READY off the main path' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Take PLACED off the main path' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Take TERMINATED off the main path' }));
+    await waitFor(() => { expect(last().mainPath).toEqual(['launching']); });
+    expect(container.querySelector('svg.dg-svg')).not.toBeNull();
+    expect(container.querySelectorAll('.studio-dg-overlay [data-state-port]')).toHaveLength(6);
+  });
+
+  it('lists the exits drawn with a transition, and selects one from there', async () => {
+    const { container } = await open();
+    click(one(container, '[data-hit-edge="launch-lost"]'));
+    await userEvent.click(screen.getByRole('button', { name: 'placed → failed' }));
+    expect(screen.getByRole('heading', { name: 'Transition placed → failed' })).toBeTruthy();
+    // One hit per drawn route: a bus gives each exit its own tick, a frame
+    // exit is one route for all.
+    expect(container.querySelectorAll('.studio-dg-overlay [data-hit-edge]')).toHaveLength(new Set(scene.edges.map((edge) => edge.d)).size);
+  });
+
+  it('gives an exit several framed phases share one hit on the canvas', async () => {
+    // Building and Verifying both abort into Aborted: one route from their frame.
+    const release = readFileSync(join(import.meta.dirname, '../../../../..', 'diagrams/examples/deployment-release.diagram.json'), 'utf8');
+    const { container } = await open(false, release);
+    const hits = [...container.querySelectorAll<SVGElement>('.studio-dg-overlay [data-hit-edge]')].map((hit) => hit.dataset.hitEdge);
+    expect(hits).toContain('building-aborted');
+    expect(hits).not.toContain('verifying-aborted');
   });
 
   it('tells a state where it sits: initial, a main-path step, final', async () => {

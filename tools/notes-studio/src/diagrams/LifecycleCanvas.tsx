@@ -4,8 +4,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEven
 import type { Drawn, Selection } from './DiagramCanvas';
 import { addTransition, type Input, type Point } from './edits';
 
-// A connection being drawn from a state's handle, in SVG units.
-type Wire = { from: string; start: Point; to: Point };
+// A connection being drawn from a state's handle, in SVG units; `moved`
+// once the pointer travelled far enough to count as a drag.
+type Wire = { from: string; start: Point; to: Point; moved: boolean };
+
+// Pointer travel, in screen pixels, before a press counts as a drag.
+const DRAG_PX = 3;
 
 // A lifecycle drawn by the site's renderer, with a layer on top for editing.
 // The layout places every state and route, so nothing is dragged into
@@ -32,6 +36,7 @@ export function LifecycleCanvas({ doc, readOnly, selection, onSelect, onChange, 
   const svg = useMemo(() => (scene ? renderDiagramSvg(scene, 'studio-editor') : null), [scene]);
   const [wire, setWire] = useState<Wire | null>(null);
   const overlay = useRef<SVGSVGElement>(null);
+  const press = useRef<{ x: number; y: number } | null>(null);
   const current = useRef(scene);
   const latest = useRef(doc);
   useLayoutEffect(() => {
@@ -51,18 +56,23 @@ export function LifecycleCanvas({ doc, readOnly, selection, onSelect, onChange, 
     if (!wire) return undefined;
     let last = wire;
     const follow = (event: PointerEvent) => {
-      last = { ...last, to: at(event) };
+      const far = press.current !== null && Math.hypot(event.clientX - press.current.x, event.clientY - press.current.y) >= DRAG_PX;
+      last = { ...last, to: at(event), moved: last.moved || far };
       setWire(last);
     };
+    // A press and release on the handle, or a cancelled gesture, adds nothing.
     const end = (event: PointerEvent) => {
       const [x, y] = at(event);
-      const target = current.current?.nodes.find((node) => x >= node.x && x <= node.x + node.width && y >= node.y && y <= node.y + node.height);
+      const target = event.type === 'pointerup' && last.moved
+        ? current.current?.nodes.find((node) => x >= node.x && x <= node.x + node.width && y >= node.y && y <= node.y + node.height)
+        : undefined;
       if (target) {
         const made = addTransition(latest.current, last.from, target.id);
         onChange(made.diagram);
         onSelect({ type: 'edge', id: made.id });
       }
       setWire(null);
+      press.current = null;
     };
     window.addEventListener('pointermove', follow);
     window.addEventListener('pointerup', end);
@@ -88,7 +98,8 @@ export function LifecycleCanvas({ doc, readOnly, selection, onSelect, onChange, 
       event.preventDefault();
       const id = port.dataset.statePort ?? '';
       const box = scene.nodes.find((each) => each.id === id);
-      if (box) setWire({ from: id, start: [box.x + box.width, box.cy], to: at(event) });
+      press.current = { x: event.clientX, y: event.clientY };
+      if (box) setWire({ from: id, start: [box.x + box.width, box.cy], to: at(event), moved: false });
     } else if (edge) onSelect({ type: 'edge', id: edge.dataset.hitEdge ?? '' });
     else if (node) onSelect({ type: 'nodes', ids: [node.dataset.nodeId ?? ''] });
     else onSelect(null);
@@ -111,8 +122,9 @@ export function LifecycleCanvas({ doc, readOnly, selection, onSelect, onChange, 
     <div className="studio-dg-canvas dg" tabIndex={0} aria-label="Lifecycle canvas" data-dragging={wire ? 'connect' : undefined} onPointerDown={down}>
       <div className="dg-canvas" dangerouslySetInnerHTML={{ __html: svg }} />
       <svg ref={overlay} className="studio-dg-overlay" viewBox={view} aria-hidden>
-        {scene.edges.map((each) => (
-          <path key={each.edge.id} d={each.d} className="studio-dg-hit" data-hit-edge={each.edge.id} data-selected={selectedEdge?.edge.id === each.edge.id || undefined} />
+        {/* An exit several phases share is one route: its hit selects the first of them, and the panel lists the rest. */}
+        {scene.edges.filter((each, index) => scene.edges.findIndex((other) => other.d === each.d) === index).map((each) => (
+          <path key={each.edge.id} d={each.d} className="studio-dg-hit" data-hit-edge={each.edge.id} data-selected={selectedEdge?.d === each.d || undefined} />
         ))}
         {selectedNode && <rect className="studio-dg-outline" x={selectedNode.x - 3} y={selectedNode.y - 3} width={selectedNode.width + 6} height={selectedNode.height + 6} rx={10} />}
         {!readOnly && scene.nodes.map((node) => (

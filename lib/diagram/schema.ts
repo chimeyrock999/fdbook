@@ -13,6 +13,9 @@ export const TONES = ['blue', 'green', 'gold', 'orange', 'red', 'teal', 'slate']
 // lays its states (nodes) out from `mainPath` and its transitions (edges).
 export const DIAGRAM_TYPES = ['architecture', 'sequence', 'lifecycle'] as const;
 // `return` is a reply, quieter than the call it answers; sequences use it.
+// A sequence or lifecycle lays itself out from its structure: it has no
+// positions, frames, lanes or `layout`.
+export const laysItselfOut = (type: string | undefined) => type === 'sequence' || type === 'lifecycle';
 export const EDGE_VARIANTS = ['default', 'emphasis', 'dashed', 'alert', 'return'] as const;
 export const SIDES = ['top', 'right', 'bottom', 'left'] as const;
 // The small glyphs a kind can show in a node's corner.

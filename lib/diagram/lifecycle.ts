@@ -8,7 +8,7 @@
 // kind, the initial marker and the final state's double border from the
 // structure. lifecycle-layout.ts holds one layout pass.
 
-import { fittedNodeFontSize, roundedPath, textUnits, type Point, type Rect } from './geometry.ts';
+import { availableTextWidth, fittedNodeFontSize, minimumTextWidth, NODE_TEXT_PADDING, roundedPath, type Point, type Rect } from './geometry.ts';
 import { legendFootprint, lifecycleLegendEntries, placeLegend } from './legend.ts';
 import { layout, MARGIN_X, STATE_H, type LayoutResult, type Spacing } from './lifecycle-layout.ts';
 import type { Scene, SceneEdge, SceneNode } from './scene.ts';
@@ -21,12 +21,8 @@ const STATE_MIN_W = 140;
 export const STATE_MAX_W = 220;
 export const CORNER = 12;
 const SPACING_ROUNDS = 5;
-// Node text fitting and the corner sigil's rail (Archify's text-fit.mjs, utils.mjs).
-const TEXT_WIDTH_FACTOR = 0.6;
-const TEXT_PADDING = 8;
+// The corner sigil's rail (Archify's utils.mjs).
 const SIGIL_FOOTPRINT = 6 + 11;
-export const minimumTextWidth = (text: string, size: number) => textUnits(text) * size * TEXT_WIDTH_FACTOR;
-export const availableTextWidth = (width: number) => width - TEXT_PADDING;
 
 export interface LifeState extends Rect {
   id: string;
@@ -91,7 +87,7 @@ const fonts = (node: DiagramNode, width: number) => ({
 // Wide enough for every row at its preferred size; the label also clears
 // the corner sigil that shares its row.
 function preferredWidth(node: DiagramNode) {
-  const need = (text: string | undefined, font: number) => (text ? textUnits(text) * font * TEXT_WIDTH_FACTOR + TEXT_PADDING + 36 : 0);
+  const need = (text: string | undefined, font: number) => (text ? minimumTextWidth(text, font) + NODE_TEXT_PADDING + 36 : 0);
   const label = minimumTextWidth(node.label, TEXT.labelPreferred) + (SIGIL_FOOTPRINT + 2) + 4 + 4;
   return Math.ceil(Math.min(STATE_MAX_W, Math.max(STATE_MIN_W, label, need(node.sublabel, TEXT.sublabelPreferred), need(node.tag, TEXT.tagPreferred))));
 }
@@ -123,14 +119,17 @@ export function variantOf(model: Pick<Model, 'kindOf'>, transition: DiagramEdge)
 
 function buildModel(diagram: Diagram): Model {
   const transitions = diagram.edges;
-  const mainPath = diagram.mainPath;
+  // A main path the checks refuse (an unknown or repeated state) still
+  // draws, from the states it names once, so the editor can fix it.
+  const known = new Set(diagram.nodes.map((node) => node.id));
+  const mainPath = [...new Set(diagram.mainPath)].filter((id) => known.has(id));
   const states = new Map(diagram.nodes.map((node) => [node.id, { id: node.id, node, x: 0, y: 0, width: preferredWidth(node), height: STATE_H, cx: 0, cy: 0 }]));
   const spineIndex = new Map(mainPath.map((id, index) => [id, index]));
   const hasLabel = (transition: DiagramEdge) => Boolean(transition.label || transition.detail);
   const labelBox = (transition: DiagramEdge) => {
     const text = transition.label ?? '';
     const note = transition.detail ?? '';
-    const width = Math.ceil(Math.max(text ? textUnits(text) * LABEL_FONT * 0.6 : 0, note ? textUnits(note) * NOTE_FONT * 0.6 : 0) + 12);
+    const width = Math.ceil(Math.max(text ? minimumTextWidth(text, LABEL_FONT) : 0, note ? minimumTextWidth(note, NOTE_FONT) : 0) + 12);
     return { width, height: text && note ? 28 : 16 };
   };
 
@@ -235,12 +234,18 @@ function settle(model: Model, readableWidth: number): LayoutResult {
   const mainPathStateWidth = model.mainPath.reduce((sum, id) => sum + model.states.get(id)!.width, 0);
   let spacing = { spineGap: 72, rowGap: 44, drop: 58, firstTrack: 34 };
   let result: LayoutResult | null = null;
+  // A pass moves the shared states; each candidate keeps where it put them.
+  const states = [...model.states.values()];
+  const snapshot = () => states.map(({ x, y, width, height, cx, cy }) => ({ x, y, width, height, cx, cy }));
   for (let round = 0; round < SPACING_ROUNDS; round += 1) {
-    const candidates = (['partner', 'even'] as const).map((ports) => ({ ports, ...layout(model, { ...spacing, ports }) }));
+    const candidates = (['partner', 'even'] as const).map((ports) => {
+      const pass = layout(model, { ...spacing, ports } as Spacing);
+      return { ...pass, boxes: snapshot() };
+    });
     const placed = candidates.filter((candidate) => !candidate.unplacedLabels.length);
     const best = placed.sort((a, b) => routeCost(a.routes) - routeCost(b.routes))[0] ?? candidates[0];
-    // A pass moves the shared states, so the winner is laid out again.
-    result = best === candidates[candidates.length - 1] ? best : layout(model, { ...spacing, ports: best.ports } as Spacing);
+    best.boxes.forEach((box, index) => Object.assign(states[index], box));
+    result = best;
     if (placed.length) break;
     const nextSpineGap = spacing.spineGap + 28;
     const nextMainPathWidth = MARGIN_X * 2 + mainPathStateWidth
@@ -276,7 +281,7 @@ export function buildLifecycleScene(diagram: Diagram): Scene {
   const outgoing = new Set(model.transitions.map((transition) => transition.from));
   const finals = new Set(diagram.nodes.filter((node) => !outgoing.has(node.id)).map((node) => node.id));
 
-  const entries = lifecycleLegendEntries(diagram, finals.size > 0);
+  const entries = lifecycleLegendEntries(diagram, finals.size > 0, model.mainPath[0]);
   const width = Math.max(640, Math.ceil(geometry.contentRight + MARGIN_X));
   const footprint = legendFootprint(entries, width - 80);
   const height = Math.ceil(geometry.contentBottom + (entries.length ? 78 + footprint.extraHeight : 32));

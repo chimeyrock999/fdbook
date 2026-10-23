@@ -242,6 +242,13 @@
     content: counter(step) '. ';
     color: var(--fde-muted-foreground);
   }
+  .studio-dg-shared {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+  }
   .studio-dg-path-gap {
     margin: 0 0 8px;
     font-size: 12px;

@@ -1,5 +1,5 @@
 import { addNode, connect, DiagramOpError, moveNode, removeEdge as removeEdgeOp, removeNode, reorder } from '@site/lib/diagram/ops';
-import type { DiagramInput, Side } from '@site/lib/diagram/schema';
+import { laysItselfOut, type DiagramInput, type Side } from '@site/lib/diagram/schema';
 import type { SequenceLayer } from '@site/lib/diagram/sequence';
 
 // What the diagram editor changes, on the file's input form (no schema
@@ -26,9 +26,9 @@ export const snap = (value: number) => Math.round(value / GRID) * GRID;
 // lifecycle has none, and an edit that would give it one is refused here, whatever
 // reached it.
 function layoutOf(diagram: Input) {
+  if (!laysItselfOut(diagram.type)) return (diagram.layout ??= { nodes: {} });
   if (diagram.type === 'sequence') throw new DiagramOpError('op/sequence-has-no-layout', 'A sequence lays itself out from its order: reorder its participants or messages instead.');
-  if (diagram.type === 'lifecycle') throw new DiagramOpError('op/lifecycle-has-no-layout', 'A lifecycle lays itself out from its main path and transitions.');
-  return (diagram.layout ??= { nodes: {} });
+  throw new DiagramOpError('op/lifecycle-has-no-layout', 'A lifecycle lays itself out from its main path and transitions.');
 }
 
 // A record without `key`.
