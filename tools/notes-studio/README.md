@@ -910,7 +910,9 @@ are listed greyed, with how to install them (`GET /api/agents`).
   a file changed again since the run ended, and does not touch files
   outside the notes and their assets, files over 25 MB, or files a person
   saved through the file API during the run (it says so: revert those by
-  hand).
+  hand). Edits made in the editor during the run go through the notes sync
+  socket and are not marked (the sync server has no write hook yet): look
+  at the diff before reverting a note you edited meanwhile.
 - **Tools.** Every session gets the Studio's MCP server (see MCP server),
   over HTTP when the agent says it can (`mcpCapabilities.http`), else
   through the stdio bridge, with a token for the run that ends with it.
