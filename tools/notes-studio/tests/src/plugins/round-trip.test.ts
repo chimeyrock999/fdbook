@@ -44,13 +44,13 @@ describe('editor syntax', () => {
   });
 
   // An edited block is serialized from the document, not copied from the
-  // source: an HtmlEmbed must come back with the same attributes.
-  it('reads HtmlEmbed in a real note as a component and writes it back', async () => {
+  // source: a Diagram must come back with the same attributes.
+  it('reads Diagram in a real note as a component and writes it back', async () => {
     const path = 'content/notes/data-platform/stacks-integration/databricks/databricks-interactive-runtime/driver-container-first-look.mdx';
     const source = await readFile(join(repoRoot, path), 'utf8');
-    const embeds = find(parseMdxToDoc(source, syntax).doc, 'HtmlEmbed');
+    const embeds = find(parseMdxToDoc(source, syntax).doc, 'Diagram');
     expect(embeds.length).toBeGreaterThan(0);
-    const lines = source.split('\n').filter((line) => line.startsWith('<HtmlEmbed '));
+    const lines = source.split('\n').filter((line) => line.startsWith('<Diagram '));
     const written = embeds.map((embed) => serializeDocToMdx({ type: 'doc', content: [embed] }, undefined, syntax).trim());
     expect(written).toEqual(lines);
   });

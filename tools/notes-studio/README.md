@@ -700,12 +700,14 @@ that does not parse but holds the file's name (whole, so `data.png` is not
 `ta.png`). They count as unsure uses, so delete is refused and a rename
 waits until they are fixed.
 
-Diagram sources are the Archify specs under `diagrams/` (their
-`meta.output`) and the `*.regen.sh` scripts (their `OUT=`). Regenerating
-writes that path again, so the Studio does not delete such a file. It does
-not edit `diagrams/` either: after a rename, update the source before
-regenerating. The list reads them again when a note or an asset changes, not
-when a diagram does.
+Diagram sources are files under `diagrams/` that generate an asset: a JSON
+spec naming it in `meta.output`, or a `*.regen.sh` script naming it in
+`OUT=`, as the retired Archify pipeline wrote them. Regenerating writes that
+path again, so the Studio does not delete such a file. It does not edit
+`diagrams/` either: after a rename, update the source before regenerating.
+The list reads them again when a note or an asset changes, not when a
+diagram does. The repo has none left: a `<Diagram>` (`diagrams/**/*.diagram.json`)
+is drawn when the site builds and generates no asset.
 
 Changes go through `POST /api/assets`, and a replace through
 `PUT /api/assets` with the file's bytes; both take the same lock as page
@@ -1148,7 +1150,8 @@ markers the editor writes.
 | `callout-style` | error | `<Callout style="…">` as a string: the site only reads a `style` object, so the string sets nothing (use `type` for the look) |
 | `accordion-kind` | error | `kind` of `:::accordion` or `<Accordion>` outside the site's list |
 | `link-broken` | error | A `./` or `../` link that reaches no note, resolved like `source.resolveHref` (as a file next to the note, then as a URL against the page), and `/notes/…` links with no page |
-| `asset-missing` | error | `src` of `HtmlEmbed`, `SvgDiagram`, `::html`, `::svg`, `::diagram`, or a `/…` image, that is not a file in `public/` (a URL such as `https://…` included: the site only reads `public/`) |
+| `asset-missing` | error | `src` of `HtmlEmbed`, `SvgDiagram`, `::html`, `::svg`, `::diagram`, or a `/…` image, that is not a file in `public/` (a URL such as `https://…` included: the site only reads `public/`); a `<Diagram src>` with no `diagrams/<src>.diagram.json` |
+| `diagram-invalid` | error, warning | A `<Diagram>` file the site checks (`lib/diagram/validate.ts`) and finds wrong: an error when it cannot be laid out, so the site shows a placeholder; a warning when it draws with a layout problem (nodes too close, a label that overflows) |
 | `graph-id-duplicate` | error | Two sections with one id in a note: `GraphMeta`, `:graph-meta`, `SectionTitle`, `GraphSection`, or any marker with `graphType`/`graphKind="section"`. Keywords may reuse a section's id, and the same id on two notes is how the graph links them. |
 | `graph-meta-incomplete` | error, warning | A marker with no `id`, a Keyword, Tag or SectionTitle with no `displayName` (the graph drops it); a warning for GraphMeta with no `displayName`, since the heading text stands in |
 | `emphasis-marker` | warning | Emphasis or strong written with `_` / `__`: the notes use `*text*` / `**text**`, as the editor writes them, so a Visual edit leaves them as they are |

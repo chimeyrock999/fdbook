@@ -10,6 +10,7 @@ export type LintRule =
   | 'accordion-kind'
   | 'link-broken'
   | 'asset-missing'
+  | 'diagram-invalid'
   | 'graph-id-duplicate'
   | 'graph-meta-incomplete'
   | 'emphasis-marker';
@@ -29,12 +30,18 @@ export type LintIssue = {
 
 // What a rule needs to know beyond the note itself. Paths are relative to
 // content/notes (`guide/intro.mdx`); assets are relative to public/
-// (`notes/guide/demo.html`).
+// (`notes/guide/demo.html`); a diagram is its `<Diagram src>`, the path under
+// diagrams/ without `.diagram.json`.
 export type LintContext = {
   path: string;
   pages: ReadonlySet<string>;
   assetExists: (asset: string) => boolean;
+  // What keeps a diagram from drawing as the site draws it: null when it
+  // draws cleanly, `missing` when there is no such file.
+  diagramProblem: (src: string) => DiagramProblem | null;
 };
+
+export type DiagramProblem = 'missing' | { severity: LintSeverity; message: string };
 
 export type Report = (issue: LintIssue) => void;
 

@@ -1,12 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { lintNote } from '../../../server/lint/lint';
-import type { LintIssue } from '../../../server/lint/types';
+import type { DiagramProblem, LintIssue } from '../../../server/lint/types';
 
 const PAGES = ['index.mdx', 'guide/index.mdx', 'guide/intro.mdx', 'guide/setup.mdx', 'other/page.mdx'];
 const ASSETS = ['notes/guide/demo.html', 'notes/guide/arch.svg', 'images/logo.png'];
+// Diagrams by src, and what keeps each from drawing cleanly.
+const DIAGRAMS: Record<string, DiagramProblem | null> = {
+  'guide/flow': null,
+  'guide/broken': { severity: 'error', message: '[structure/unknown-endpoint] Edge "ab" ends at "ghost"' },
+  'guide/tight': { severity: 'warning', message: '[layout/node-overlap] Nodes "a" and "b" are less than 8px apart.' },
+};
 
 function lint(source: string, { path = 'guide/intro.mdx', pages = PAGES, assets = ASSETS } = {}) {
-  return lintNote(source, { path, pages: new Set(pages), assetExists: (asset) => assets.includes(asset) });
+  return lintNote(source, {
+    path,
+    pages: new Set(pages),
+    assetExists: (asset) => assets.includes(asset),
+    diagramProblem: (src) => (src in DIAGRAMS ? DIAGRAMS[src] : 'missing'),
+  });
 }
 
 // rule@line, for compact assertions.
@@ -161,6 +172,22 @@ describe('assets', () => {
   it('flags missing assets and embeds with no source', () => {
     const source = '<HtmlEmbed src="/notes/guide/gone.html" />\n\n::diagram{src="/notes/x.svg"}\n\n![a](/images/none.png)\n\n<HtmlEmbed title="t" />\n';
     expect(summary(lint(source))).toEqual(['asset-missing@1', 'asset-missing@3', 'asset-missing@5', 'asset-missing@7']);
+  });
+});
+
+describe('diagrams', () => {
+  it('accepts a <Diagram> that draws cleanly', () => {
+    expect(lint('<Diagram src="guide/flow" caption="Flow" />\n')).toEqual([]);
+  });
+
+  it('flags a <Diagram> with no src or no file', () => {
+    expect(summary(lint('<Diagram src="guide/gone" />\n\n<Diagram title="t" />\n'))).toEqual(['asset-missing@1', 'asset-missing@3']);
+  });
+
+  it('says why a diagram shows a placeholder, and warns of one that draws with a layout problem', () => {
+    const issues = lint('<Diagram src="guide/broken" />\n\n<Diagram src="guide/tight" />\n');
+    expect(issues.map((issue) => [issue.rule, issue.severity])).toEqual([['diagram-invalid', 'error'], ['diagram-invalid', 'warning']]);
+    expect(issues[0].message).toContain('unknown-endpoint');
   });
 });
 
