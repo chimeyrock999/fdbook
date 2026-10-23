@@ -1,12 +1,12 @@
 // Client for the agents API (server/agents/api.ts), in the worktree the page
 // edits (src/api/workspace.ts). Types are server/agents/shared.ts.
 
-import type { AgentId, AgentInfo, AgentRole, Conversation, ConversationEvent, ConversationRead, ConversationTotals, StreamEvent, TurnChange } from '../../server/agents/shared';
+import type { AgentId, AgentInfo, AgentRole, Attachment, Conversation, ConversationEvent, ConversationRead, ConversationTotals, Mention, MentionKind, MessageContext, MessageSelection, StreamEvent, TurnChange } from '../../server/agents/shared';
 import { errorOf, readJson } from './json';
 import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
-export type { AgentId, AgentInfo, AgentRole, Conversation, ConversationEvent, ConversationRead, ConversationTotals, StreamEvent, TurnChange };
+export type { AgentId, AgentInfo, AgentRole, Attachment, Conversation, ConversationEvent, ConversationRead, ConversationTotals, Mention, MentionKind, MessageContext, MessageSelection, StreamEvent, TurnChange };
 
 // How long a refused event stream waits before it is opened again.
 const REOPEN_MS = 5000;
@@ -32,11 +32,21 @@ export function createAgentsClient(base = API_BASE) {
     async conversations(): Promise<Conversation[]> {
       return (await answer<{ conversations: Conversation[] }>(await studioFetch(`${base}/api/agents/conversations`))).conversations;
     },
-    async start(agent: AgentId, role: AgentRole, prompt: string): Promise<Conversation> {
-      return (await answer<{ conversation: Conversation }>(await postJson(`${base}/api/agents/conversations`, { agent, role, prompt }))).conversation;
+    // `context`: what goes with the message besides its text (#86).
+    async start(agent: AgentId, role: AgentRole, prompt: string, context: MessageContext | null = null): Promise<Conversation> {
+      return (await answer<{ conversation: Conversation }>(await postJson(`${base}/api/agents/conversations`, { agent, role, prompt, context }))).conversation;
     },
-    async message(id: string, prompt: string): Promise<Conversation> {
-      return (await answer<{ conversation: Conversation }>(await postJson(`${one(id)}/messages`, { prompt }))).conversation;
+    async message(id: string, prompt: string, context: MessageContext | null = null): Promise<Conversation> {
+      return (await answer<{ conversation: Conversation }>(await postJson(`${one(id)}/messages`, { prompt, context }))).conversation;
+    },
+    // Notes, assets and other files of the worktree to mention, best match first.
+    async mentions(query: string): Promise<Mention[]> {
+      return (await answer<{ mentions: Mention[] }>(await studioFetch(`${base}/api/agents/mentions?${new URLSearchParams({ q: query }).toString()}`))).mentions;
+    },
+    // A document for a message, kept with the change request's agents.
+    async attach(file: File): Promise<Attachment> {
+      const response = await studioFetch(`${base}/api/agents/attachments`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) }, body: file });
+      return (await answer<{ attachment: Attachment }>(response)).attachment;
     },
     async read(id: string): Promise<ConversationRead> {
       return answer<ConversationRead>(await studioFetch(one(id)));

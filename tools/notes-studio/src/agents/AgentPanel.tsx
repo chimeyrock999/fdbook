@@ -35,7 +35,9 @@ function NewChat({ agents, onStarted, onFailed }: { agents: Agents; onStarted: (
       <Composer
         placeholder={role === 'author' ? 'What should the agent write or change?' : 'What should the agent review?'}
         busy={agent === null}
-        onSend={(text) => agents.start(role, text).then((started) => { onStarted(started.id); return true; }, (reason: unknown) => { onFailed(messageOf(reason)); return false; })}
+        onSend={(text, context) => agents.start(role, text, context).then((started) => { onStarted(started.id); return true; }, (reason: unknown) => { onFailed(messageOf(reason)); return false; })}
+        client={agents.client}
+        onFailed={onFailed}
       >
         <span className="studio-agent-roles" role="group" aria-label="Role">
           {(['author', 'reviewer'] as const).map((each) => (
@@ -117,7 +119,9 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, onOpenDiff, onOpen
               key={current.id}
               placeholder="Reply to the agent…"
               busy={current.status === 'running'}
-              onSend={(text) => agents.message(current.id, text).then(() => true, (reason: unknown) => { setFailed(messageOf(reason)); return false; })}
+              onSend={(text, context) => agents.message(current.id, text, context).then(() => true, (reason: unknown) => { setFailed(messageOf(reason)); return false; })}
+              client={agents.client}
+              onFailed={setFailed}
             >
               <span className="studio-agent-who"><AgentLogo id={current.agent} size={14} /> {current.agentName} · {roleLabel(current.role)}</span>
             </Composer>

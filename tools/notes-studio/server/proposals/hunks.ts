@@ -17,6 +17,9 @@ const syntax = createSyntax([], NOTE_SYNTAX);
 export type Block = { text: string; start: number; end: number };
 
 // Throws when the body does not parse.
+// The line (from 1) that the character at `offset` of `text` is on.
+export const lineAt = (text: string, offset: number) => text.slice(0, offset).split('\n').length;
+
 export function blocksOf(source: string): Block[] {
   const front = findBlock(source);
   const offset = front?.end ?? 0;

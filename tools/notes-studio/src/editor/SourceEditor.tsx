@@ -4,7 +4,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { yamlFrontmatter } from '@codemirror/lang-yaml';
 import { syntaxHighlighting } from '@codemirror/language';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
-import { Compartment, EditorState, Transaction, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, Transaction, type Extension, type Text } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers } from '@codemirror/view';
 import { useSourceText } from '@fumadocs-editor/ui';
 import { useEffect, useLayoutEffect, useRef } from 'react';
@@ -17,16 +17,22 @@ const locked = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), Editor
 // here parses back into the document once it parses; visual edits and disk
 // changes arrive as new text. `reveal` selects a range (a lint issue);
 // `completion` suggests values as they are typed (asset paths); `extra`
-// draws more over the text (agent suggestions, src/suggestions/source.ts).
-export function SourceEditor({ reveal = null, completion = null, extra = null }: { reveal?: RevealRequest | null; completion?: CompletionSource | null; extra?: Extension | null }) {
+// draws more over the text (agent suggestions, src/suggestions/source.ts);
+// `onSelect` hears of each selection (from..to in the text), the first one too.
+export function SourceEditor({ reveal = null, completion = null, extra = null, onSelect = null }: {
+  reveal?: RevealRequest | null;
+  completion?: CompletionSource | null;
+  extra?: Extension | null;
+  onSelect?: ((from: number, to: number, doc: Text) => void) | null;
+}) {
   const { value, onChange, error, readOnly } = useSourceText();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const editable = useRef(new Compartment());
   const extras = useRef(new Compartment());
-  const latest = useRef({ onChange, value, readOnly, completion });
+  const latest = useRef({ onChange, value, readOnly, completion, onSelect });
   useLayoutEffect(() => {
-    latest.current = { onChange, value, readOnly, completion };
+    latest.current = { onChange, value, readOnly, completion, onSelect };
   });
 
   useEffect(() => {
@@ -52,6 +58,10 @@ export function SourceEditor({ reveal = null, completion = null, extra = null }:
           editable.current.of(locked(latest.current.readOnly)),
           extras.current.of([]),
           EditorView.updateListener.of((update) => {
+            if (update.selectionSet || update.docChanged) {
+              const { from, to } = update.state.selection.main;
+              latest.current.onSelect?.(from, to, update.state.doc);
+            }
             if (!update.docChanged) return;
             const text = update.state.doc.toString();
             if (text !== latest.current.value) latest.current.onChange(text);
@@ -60,6 +70,8 @@ export function SourceEditor({ reveal = null, completion = null, extra = null }:
       }),
     });
     view.current = created;
+    const { from, to } = created.state.selection.main;
+    latest.current.onSelect?.(from, to, created.state.doc);
     return () => {
       created.destroy();
       view.current = null;

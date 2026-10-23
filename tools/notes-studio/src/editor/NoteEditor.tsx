@@ -23,6 +23,7 @@ import { GraphTools } from '../graph/GraphTools';
 import { editorConfig } from '../plugins';
 import { decorationsPlugin, useEditorPlugin } from './decorations';
 import { NoteHeader } from './NoteHeader';
+import { useReportPlace } from './report-place';
 import type { RevealRequest } from './reveal';
 import { SourceEditor } from './SourceEditor';
 import { ConflictDialog, SaveStatus } from './SyncState';
@@ -148,6 +149,8 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
   const suggestions = useNoteSuggestions(review, opened ? source.value : '');
   const layer = useMemo(() => createSuggestionLayer(), []);
   useEditorPlugin(editor, layer.plugin);
+  // Where the person is, for the agent panel (#86).
+  const onSourceSelect = useReportPlace(editor, notePath, source.value, opened);
   const canDecide = !locked && !source.readOnly;
   const sourceExtra = useMemo(() => (review === null || suggestions.placement.hunks.length === 0 ? null : sourceSuggestions(source.value, suggestions.placement.hunks, canDecide ? (hunk, op) => review.act(hunk.proposal.id, op, [hunk.hunk.id]) : null)), [review, source.value, suggestions.placement.hunks, canDecide]);
   const stepTo = (by: number) => {
@@ -241,7 +244,7 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
             </div>
           </div>
         ) : (
-          <SourceEditor reveal={reveal} completion={completion} extra={sourceExtra} />
+          <SourceEditor reveal={reveal} completion={completion} extra={sourceExtra} onSelect={onSourceSelect} />
         )}
         {unsaved.offer && <UnsavedNotice offer={unsaved.offer} writable={!locked} onRestore={unsaved.restore} onDiscard={unsaved.discard} />}
       </section>

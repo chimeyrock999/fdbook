@@ -1,0 +1,122 @@
+/* What a message carries besides its text (#86): the chips over the
+   composer and under a sent message, the composer's attach and mention
+   buttons, and the list of mentions. Same tokens as agents.css. */
+@layer components {
+  .studio-agent-composer {
+    position: relative;
+  }
+  .studio-agent-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+  }
+  .studio-agent-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 100%;
+    min-width: 0;
+    padding: 1px 6px;
+    border: 1px solid var(--fde-border);
+    border-radius: 6px;
+    background: var(--fde-background);
+    font-size: 11.5px;
+  }
+  .studio-agent-chip:has(.studio-agent-chip-remove) {
+    padding-right: 3px;
+  }
+  .studio-agent-chip > svg {
+    flex: none;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-chip-label {
+    min-width: 0;
+    overflow: hidden;
+    font: 11px var(--font-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-agent-chip[data-kind='selection'] {
+    border-color: color-mix(in srgb, var(--fde-info) 55%, var(--fde-border));
+  }
+  .studio-agent-chip[data-kind='selection'] > svg {
+    color: var(--fde-info);
+  }
+  /* Where the caret is: always sent, so it has no ×. */
+  .studio-agent-chip[data-kind='caret'] {
+    border-style: dashed;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-chip-remove {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-chip-remove:hover {
+    background: var(--fde-muted);
+    color: var(--fde-foreground);
+  }
+  .studio-agent-prompt-context {
+    align-self: flex-end;
+    justify-content: flex-end;
+    max-width: 92%;
+    margin-top: -3px;
+  }
+  .studio-agent-composer-tool {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-composer-tool:hover {
+    background: var(--fde-muted);
+    color: var(--fde-foreground);
+  }
+  .studio-agent-composer-tool:disabled {
+    opacity: 0.4;
+    cursor: progress;
+  }
+
+  /* Over the composer, as wide as it. */
+  .studio-agent-mentions {
+    position: absolute;
+    inset: auto 0 calc(100% + 4px);
+    z-index: 5;
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid var(--fde-border);
+    border-radius: 9px;
+    background: var(--fde-popover);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+  }
+  .studio-agent-mention {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 4px 8px;
+    border-radius: 6px;
+    text-align: left;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-mention > span {
+    overflow: hidden;
+    font: 11.5px var(--font-mono);
+    color: var(--fde-foreground);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-agent-mention[aria-selected='true'] {
+    background: var(--fde-accent);
+  }
+}

@@ -8,6 +8,7 @@ import {
   PROTOCOL_VERSION,
   RequestError,
   type AgentCapabilities,
+  type PromptCapabilities,
   type PromptResponse,
   type McpServer,
   type RequestPermissionRequest,
@@ -15,6 +16,7 @@ import {
   type SessionModeState,
   type SessionUpdate,
 } from '@agentclientprotocol/sdk';
+import { attachmentBlocks, type AttachedFile } from './attachment-blocks.ts';
 import { readForAgent } from './fs-policy.ts';
 import { agentEnv, type AgentProfile } from './profiles.ts';
 import type { AgentRole, Cost, PermissionOption, SessionStart } from './shared.ts';
@@ -37,7 +39,8 @@ export type AgentSession = {
   // One turn: the agent's answer to `text`, in the same session as the
   // last. It is sent once `ready` settles: the turn's start is recorded
   // (watch.ts), so no file changes before its earlier version is kept.
-  prompt: (text: string, ready?: Promise<void>) => Promise<PromptResponse>;
+  // `files`: documents attached to the message (attachment-blocks.ts).
+  prompt: (text: string, ready?: Promise<void>, files?: AttachedFile[]) => Promise<PromptResponse>;
   // Asks the agent to stop its turn; stops the process if it does not.
   cancel: () => void;
   // Stops the process now.
@@ -174,6 +177,7 @@ export function connectAgent(
 
   // The session again, or null when the agent cannot take it up.
   let mcpServers: McpServer[] = [];
+  let promptCapabilities: PromptCapabilities | null = null;
   const again = async (id: string, way: 'resume' | 'load'): Promise<{ modes?: SessionModeState | null; configOptions?: SessionConfigOption[] | null } | null> => {
     try {
       if (way === 'resume') return await signedIn(agent.request(methods.agent.session.resume, { sessionId: id, cwd: root, mcpServers, _meta: meta }));
@@ -195,6 +199,7 @@ export function connectAgent(
       clientInfo: { name: 'notes-studio', version: '0' },
     });
     mcpServers = mcpServersFor(mcp, agentCapabilities?.mcpCapabilities?.http === true);
+    promptCapabilities = agentCapabilities?.promptCapabilities ?? null;
     const way = resume === null ? null : resumeWay(agentCapabilities);
     let how: SessionStart = resume === null ? 'new' : 'fresh';
     let session = resume !== null && way !== null ? await again(resume, way) : null;
@@ -247,14 +252,15 @@ export function connectAgent(
 
   return {
     ready,
-    prompt(text, start = Promise.resolve()) {
+    prompt(text, start = Promise.resolve(), files = []) {
       turn = 'waiting';
       cancelled = false;
-      const answer = orDied(Promise.all([ready, start]).then(([{ sessionId: id }]): Promise<PromptResponse> => {
+      const answer = orDied(Promise.all([ready, start]).then(async ([{ sessionId: id }]): Promise<PromptResponse> => {
+        const attached = await attachmentBlocks(files, promptCapabilities);
         // Cancelled while the session opened: the message is never sent.
-        if (cancelled) return Promise.resolve({ stopReason: 'cancelled' });
+        if (cancelled) return { stopReason: 'cancelled' };
         turn = 'sent';
-        return agent.request(methods.agent.session.prompt, { sessionId: id, prompt: [{ type: 'text', text }] });
+        return agent.request(methods.agent.session.prompt, { sessionId: id, prompt: [{ type: 'text', text }, ...attached] });
       }));
       const settled = () => {
         turn = 'none';
