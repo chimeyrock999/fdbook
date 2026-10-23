@@ -34,8 +34,8 @@ the rest of the geometry is Archify's.
 
 `tests/fixtures/archify` holds the Archify specs the diagrams were converted
 from, Archify's own layout of each architecture spec (`*.layout.json`, from
-`render-architecture.mjs --layout-json`), and, for every sequence under
-`diagrams/`, Archify's drawing of it at the `y` our layout gives
+`render-architecture.mjs --layout-json`), and, for every sequence in
+`diagrams/examples/`, Archify's drawing of it at the `y` our layout gives
 (`*.layout.json` with `"diagram_type": "sequence"`, read off the SVG
 `render-sequence.mjs` writes, as it has no layout report). The script sends
 Archify that sequence through `archify-sequence.ts` (`sequenceSpecOf`), and

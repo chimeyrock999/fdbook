@@ -8,7 +8,7 @@
 import { minimumReadableSourceTextPx, rectsOverlap, textUnits } from './geometry.ts';
 import type { Scene } from './scene.ts';
 import type { Diagram } from './schema.ts';
-import { MESSAGE_FONT, NOTE_FONT, messageLabelRect } from './sequence.ts';
+import { availableTextWidth, MESSAGE_FONT, messageLabelRect, minimumTextWidth, NOTE_FONT, PARTICIPANT_LABEL_UNIT, participantLabelWidth } from './sequence.ts';
 import type { DiagramIssue } from './validate.ts';
 
 const MIN_SPAN = 60;
@@ -93,13 +93,14 @@ export function checkSequenceScene(scene: Scene): DiagramIssue[] {
 
   for (const node of scene.nodes) {
     const field = `nodes[${nodeIndex.get(node.id)}]`;
-    const labelWidth = textUnits(node.node.label) * 6.8;
+    const labelWidth = participantLabelWidth(node.node.label);
     if (labelWidth > width + 6) {
       error('text/label-overflow', `The label of "${node.id}" needs ~${Math.round(labelWidth)}px but participants are ${width}px wide here.`,
-        `shorten it to ${Math.floor((width + 6) / 6.8)} characters or fewer (wide characters count 2)`, `${field}.label`);
+        `shorten it to ${Math.floor((width + 6) / PARTICIPANT_LABEL_UNIT)} characters or fewer (wide characters count 2)`, `${field}.label`);
     }
-    if (node.node.sublabel && textUnits(node.node.sublabel) * layer.sublabelMinimum * 0.6 > width - 8) {
-      error('text/sublabel-overflow', `The sublabel of "${node.id}" needs ~${Math.ceil(textUnits(node.node.sublabel) * layer.sublabelMinimum * 0.6)}px at ${layer.sublabelMinimum}px, but a participant gives ${width - 8}px.`,
+    const sublabelWidth = node.node.sublabel ? minimumTextWidth(node.node.sublabel, layer.sublabelMinimum) : 0;
+    if (sublabelWidth > availableTextWidth(width)) {
+      error('text/sublabel-overflow', `The sublabel of "${node.id}" needs ~${Math.ceil(sublabelWidth)}px at ${layer.sublabelMinimum}px, but a participant gives ${availableTextWidth(width)}px.`,
         'shorten the sublabel; move the rest into the note', `${field}.sublabel`);
     }
     for (const [name, size] of [['label', node.labelFont], ['sublabel', node.node.sublabel ? node.sublabelFont : Infinity]] as const) {

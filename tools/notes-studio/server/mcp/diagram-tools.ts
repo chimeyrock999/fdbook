@@ -299,8 +299,8 @@ export const diagramTools: StudioTool[] = [
         return edit(ctx, name, (diagram) => {
           if (diagram.type !== 'sequence') throw new ToolError(`only a sequence has ${key}`);
           const next = structuredClone(diagram);
-          if (list.length) (next as Record<string, unknown>)[key] = list;
-          else delete next[key];
+          if (key === 'segments') next.segments = list.length ? segments : undefined;
+          else next.activations = list.length ? activations : undefined;
           return next;
         }, `Set the ${key}`);
       }
@@ -331,8 +331,8 @@ export const diagramTools: StudioTool[] = [
       if ((node === undefined) === (edge === undefined)) throw new ToolError('diagram_reorder moves exactly one of node and edge');
       return edit(ctx, name, (diagram) => {
         if (diagram.type !== 'sequence') throw new ToolError('only a sequence is laid out by its order; use diagram_move');
-        return node !== undefined ? reorder(diagram, 'nodes', node, index) : reorder(diagram, 'edges', edge!, index);
-      }, `Moved "${node ?? edge}" to ${String(index)}`);
+        return node !== undefined ? reorder(diagram, 'nodes', node, index) : reorder(diagram, 'edges', edge ?? '', index);
+      }, `Moved "${node ?? edge ?? ''}" to ${String(index)}`);
     },
   }),
   tool({

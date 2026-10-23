@@ -74,7 +74,11 @@ export function SequenceCanvas({ doc, readOnly, selection, onSelect, onChange, o
       const done = last;
       const now = latest.current;
       const layer = current.current?.sequence;
-      if (layer && done.type === 'column' && done.moved) onChange(moveParticipant(now, done.id, participantIndexAt(layer, done.id, point[0])));
+      if (layer && done.type === 'column' && done.moved) {
+        // Dropped back in its own column, nothing changes, so no undo step.
+        const index = participantIndexAt(layer, done.id, point[0]);
+        if (index !== now.nodes.findIndex((node) => node.id === done.id)) onChange(moveParticipant(now, done.id, index));
+      }
       else if (layer && done.type === 'message') {
         const index = messageIndexAt(layer, done.id, point[1]);
         if (index !== null) onChange(moveMessage(now, done.id, index));

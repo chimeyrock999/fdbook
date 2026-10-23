@@ -15,11 +15,16 @@ import type { Diagram, DiagramActivation, DiagramEdge, DiagramSegment } from './
 // Node text fitting, Archify's renderers/shared/text-fit.mjs.
 const TEXT_PADDING = 8;
 const TEXT_WIDTH_FACTOR = 0.6;
-const minimumTextWidth = (text: string, size: number) => textUnits(text) * size * TEXT_WIDTH_FACTOR;
-const availableTextWidth = (width: number) => width - TEXT_PADDING;
+export const minimumTextWidth = (text: string, size: number) => textUnits(text) * size * TEXT_WIDTH_FACTOR;
+export const availableTextWidth = (width: number) => width - TEXT_PADDING;
+// How wide Archify takes a participant label to be, at 11px bold.
+export const PARTICIPANT_LABEL_UNIT = 6.8;
+export const participantLabelWidth = (label: string) => textUnits(label) * PARTICIPANT_LABEL_UNIT;
+// A segment title's pill.
+const segmentTitleWidth = (label: string) => Math.max(42, textUnits(label) * 5.2 + 14);
 
 const SUBLABEL_PREFERRED = 7;
-const SUBLABEL_MINIMUM = 6;
+export const SUBLABEL_MINIMUM = 6;
 // The 930px desktop reading column at the 6px floor: past this width the
 // 7px sublabels read too small.
 const READABLE_CANVAS_WIDTH = Math.floor(930 * SUBLABEL_PREFERRED / 6);
@@ -192,14 +197,14 @@ function labelsFit(diagram: Diagram, canvasWidth: number) {
     if (from === undefined || to === undefined) return true;
     const half = labelWidth(edge.label) / 2;
     return (from + to) / 2 - half >= 0 && (from + to) / 2 + half <= canvasWidth;
-  }) && diagram.segments.every((segment) => 56 + Math.max(42, textUnits(segment.label) * 5.2 + 14) <= canvasWidth - 48);
+  }) && diagram.segments.every((segment) => SEGMENT_LABEL_X + segmentTitleWidth(segment.label) <= canvasWidth - 48);
 }
 
 // The canvas width: 920 for four participants or more, narrower for two or
 // three short ones, wider (up to the readable limit) for labels that need it.
 export function sequenceCanvasWidth(diagram: Diagram) {
   const count = Math.max(1, diagram.nodes.length);
-  const fits = (width: number) => diagram.nodes.every((node) => textUnits(node.label) * 6.8 <= width + 6
+  const fits = (width: number) => diagram.nodes.every((node) => participantLabelWidth(node.label) <= width + 6
     && (!node.sublabel || minimumTextWidth(node.sublabel, SUBLABEL_MINIMUM) <= availableTextWidth(width)));
   if (fits(spreadWidth(920, count))) {
     if (count <= 3) {
@@ -211,7 +216,7 @@ export function sequenceCanvasWidth(diagram: Diagram) {
     return 920;
   }
   const needed = Math.max(...diagram.nodes.map((node) => Math.max(
-    textUnits(node.label) * 6.8 - 6,
+    participantLabelWidth(node.label) - 6,
     node.sublabel ? minimumTextWidth(node.sublabel, SUBLABEL_PREFERRED) + 86 - availableTextWidth(86) : 0,
   )));
   return Math.min(READABLE_CANVAS_WIDTH, Math.max(920, Math.ceil((Math.min(190, needed) + 25) * count + 124)));
@@ -222,9 +227,9 @@ function columnsFor(diagram: Diagram, canvasWidth: number, sublabelMinimum: numb
   const count = Math.max(1, diagram.nodes.length);
   const nominal = spreadColumns(canvasWidth, count);
   // Only a label that does not fit opens the spare room beside the columns.
-  if (!diagram.nodes.some((node) => textUnits(node.label) * 6.8 > nominal.width + 6)) return nominal;
+  if (!diagram.nodes.some((node) => participantLabelWidth(node.label) > nominal.width + 6)) return nominal;
   const required = Math.ceil(Math.max(nominal.width, ...diagram.nodes.map((node) => Math.max(
-    textUnits(node.label) * 6.8 - 6,
+    participantLabelWidth(node.label) - 6,
     node.sublabel ? minimumTextWidth(node.sublabel, sublabelMinimum) + nominal.width - availableTextWidth(nominal.width) : 0,
   ))));
   const capacity = Math.floor(Math.min(190, (canvasWidth - 80 - (count - 1) * 16) / count));
@@ -290,8 +295,11 @@ export function buildSequenceScene(diagram: Diagram): Scene {
     const bottom = y + 22 + (lines.length - 1) * NOTE_LINE_HEIGHT;
     return { x, y: top, width: Math.max(...lines.map(noteWidth)), height: bottom - top, baseline, lines };
   };
+  // Each note is wrapped once, while the timeline is spaced, and kept.
+  const notes = new Map<DiagramEdge, SequenceNote | null>();
   const bottomOf = (edge: DiagramEdge, y: number) => {
     const note = noteAt(edge, y);
+    notes.set(edge, note);
     return note ? note.y + note.height : y + 6;
   };
 
@@ -301,7 +309,9 @@ export function buildSequenceScene(diagram: Diagram): Scene {
     const from = columns[edge.from] ?? 0;
     const to = columns[edge.to] ?? 0;
     const direction = to > from ? 1 : -1;
-    return { edge, y, start: from + direction * ARROW_INSET, end: to - direction * ARROW_INSET, note: noteAt(edge, y) };
+    // The last message's note was never needed for spacing.
+    const note = notes.has(edge) ? notes.get(edge)! : noteAt(edge, y);
+    return { edge, y, start: from + direction * ARROW_INSET, end: to - direction * ARROW_INSET, note };
   });
   const yOf = new Map(messages.map((message) => [message.edge.id, message]));
   const bottomOfMessage = (message: SequenceMessage) => (message.note ? message.note.y + message.note.height : message.y + 6);
@@ -354,7 +364,6 @@ export function buildSequenceScene(diagram: Diagram): Scene {
     { x: Math.min(message.start, message.end), y: message.y - 2, width: Math.abs(message.end - message.start), height: 4 },
     ...(message.note ? [message.note] : []),
   ]);
-  const titleWidth = (segment: DiagramSegment) => Math.max(42, textUnits(segment.label) * 5.2 + 14);
   const misplaced = (label: Rect, range: { segment: DiagramSegment; from: number; to: number }) => {
     const half = label.height / 2;
     if (TOP_Y + PARTICIPANT_H - label.y > half) return true;
@@ -362,11 +371,11 @@ export function buildSequenceScene(diagram: Diagram): Scene {
     return segmentRanges.some((other) => other !== range && Math.min(label.y + label.height, other.to) - Math.max(label.y, other.from) > half);
   };
   const titleOf = (range: (typeof segmentRanges)[number]): Rect => {
-    const width = titleWidth(range.segment);
+    const width = segmentTitleWidth(range.segment.label);
     const label = { x: SEGMENT_LABEL_X, y: range.from - 22, width, height: 18 };
     for (let attempt = 0; attempt < 4 && occupants.some((rect) => rectsOverlap(label, rect, 2)); attempt += 1) label.y -= 22;
     if (!misplaced(label, range)) return label;
-    const others = segmentRanges.filter((other) => other !== range).map((other) => ({ x: SEGMENT_LABEL_X, y: other.from - 22, width: titleWidth(other.segment), height: 18 }));
+    const others = segmentRanges.filter((other) => other !== range).map((other) => ({ x: SEGMENT_LABEL_X, y: other.from - 22, width: segmentTitleWidth(other.segment.label), height: 18 }));
     const inside = { x: SEGMENT_LABEL_X, y: range.from + 4, width, height: 18 };
     for (let attempt = 0; attempt < 4 && inside.y + inside.height <= range.to - 2; attempt += 1) {
       if (!misplaced(inside, range) && ![...occupants, ...others, ...nodes].some((rect) => rectsOverlap(inside, rect, 2))) return inside;

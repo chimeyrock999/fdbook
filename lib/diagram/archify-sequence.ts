@@ -8,7 +8,7 @@
 
 import { diagramSchema, type DiagramInput, type EdgeVariant } from './schema.ts';
 import type { Scene } from './scene.ts';
-import { ARCHIFY_TYPES, DOT_TONE, defined, mdxText, uniqueId } from './import-archify.ts';
+import { ARCHIFY_TYPES, DOT_TONE, EVIDENCE, defined, mdxText, uniqueId, type ArchifyNote, type ImportOptions } from './import-archify.ts';
 
 export interface ArchifySequenceSpec {
   schema_version?: 1;
@@ -23,9 +23,11 @@ export interface ArchifySequenceSpec {
 
 // The variant names that differ: Archify's security line is our alert.
 const VARIANT_IN: Record<string, EdgeVariant | undefined> = { security: 'alert', emphasis: 'emphasis', dashed: 'dashed', return: 'return' };
-const VARIANT_OUT: Record<EdgeVariant, string> = { default: 'default', emphasis: 'emphasis', alert: 'security', dashed: 'dashed', return: 'return' };
+export const VARIANT_OUT: Record<EdgeVariant, string> = { default: 'default', emphasis: 'emphasis', alert: 'security', dashed: 'dashed', return: 'return' };
 
-export function importArchifySequence(spec: ArchifySequenceSpec, { schemaPath }: { schemaPath?: string } = {}): DiagramInput {
+// The `.notes.json` sidecar gives participants their notes, as it gives
+// architecture components theirs.
+export function importArchifySequence(spec: ArchifySequenceSpec, { schemaPath, notes }: Pick<ImportOptions, 'schemaPath' | 'notes'> = {}): DiagramInput {
   const taken = new Set<string>([...spec.participants.map((participant) => participant.id), ...spec.messages.flatMap((message) => (message.id ? [message.id] : []))]);
   const used = new Set(spec.participants.map((participant) => participant.type));
   const kindIds = new Map<string, string>();
@@ -43,18 +45,25 @@ export function importArchifySequence(spec: ArchifySequenceSpec, { schemaPath }:
     const inside = messages.filter((message) => message.y >= from && message.y <= to && (!participant || message.from === participant || message.to === participant));
     return inside.length ? { from: inside[0].id, to: inside.at(-1)!.id } : null;
   };
+  const evidence = new Set(Object.values(notes ?? {}).map((note) => note.evidence));
+  const badges = (Object.keys(EVIDENCE) as ArchifyNote['evidence'][]).filter((level) => evidence.has(level)).map((level) => ({ id: level, ...EVIDENCE[level] }));
   const input: DiagramInput = {
     $schema: schemaPath,
     version: 1,
     type: 'sequence',
     title: spec.meta.title,
     kinds,
-    nodes: spec.participants.map((participant) => defined({
-      id: participant.id,
-      kind: kindIds.get(participant.type)!,
-      label: participant.label,
-      sublabel: participant.sublabel || undefined,
-    })),
+    badges,
+    nodes: spec.participants.map((participant) => {
+      const note = notes?.[participant.id];
+      return defined({
+        id: participant.id,
+        kind: kindIds.get(participant.type)!,
+        label: participant.label,
+        sublabel: participant.sublabel || undefined,
+        note: note && defined({ role: mdxText(note.role), badge: note.evidence, points: note.points?.map(mdxText) }),
+      });
+    }),
     edges: messages.map((message) => defined({
       id: message.id,
       from: message.from,
@@ -76,7 +85,7 @@ export function importArchifySequence(spec: ArchifySequenceSpec, { schemaPath }:
       return defined({ title: card.title, tone: tone === 'blue' ? undefined : tone, items: card.items.map(mdxText) });
     }),
   };
-  for (const key of ['segments', 'activations', 'cards'] as const) if (!input[key]?.length) delete input[key];
+  for (const key of ['badges', 'segments', 'activations', 'cards'] as const) if (!input[key]?.length) delete input[key];
   if (input.$schema === undefined) delete input.$schema;
   diagramSchema.parse(input);
   return input;

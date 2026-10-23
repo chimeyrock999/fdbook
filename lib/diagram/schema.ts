@@ -128,7 +128,7 @@ export const diagramSchema = z.strictObject({
   segments: z.array(segmentSchema).default([]),
   activations: z.array(activationSchema).default([]),
   // Architecture only: a sequence is laid out from its order alone.
-  layout: layoutSchema.default({ nodes: {} }),
+  layout: layoutSchema.default(() => ({ nodes: {} })),
 });
 
 export type DiagramInput = z.input<typeof diagramSchema>;

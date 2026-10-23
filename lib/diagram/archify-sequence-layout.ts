@@ -5,6 +5,7 @@
 // scripts/archify-fixtures.ts writes them; tests/diagram-archify.test.ts
 // holds the port to them.
 
+import { VARIANT_OUT } from './archify-sequence.ts';
 import { formatDiagramJson } from './format.ts';
 import type { Scene } from './scene.ts';
 
@@ -66,8 +67,6 @@ export function sequenceFixtureOf(html: string, source: string): SequenceLayoutF
   };
 }
 
-const ARCHIFY_VARIANT: Record<string, string> = { alert: 'security' };
-
 // The same reading of a scene, so the test compares like with like.
 export function sequenceFixtureOfScene(scene: Scene, source: string): SequenceLayoutFixture {
   const layer = scene.sequence!;
@@ -85,7 +84,7 @@ export function sequenceFixtureOfScene(scene: Scene, source: string): SequenceLa
     }),
     segments: layer.segments.map(({ frame, label }) => ({ frame: rect(frame), label: rect(label) })),
     activations: layer.activations.map(rect),
-    legend: (scene.legend?.entries ?? []).map((entry) => [ARCHIFY_VARIANT[entry.kind] ?? entry.kind, entry.x, entry.baseline]),
+    legend: (scene.legend?.entries ?? []).map((entry) => [entry.variant ? VARIANT_OUT[entry.variant] : entry.kind, entry.x, entry.baseline]),
   };
 }
 

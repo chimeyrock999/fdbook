@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { createFilesClient } from '../../../src/api/files';
 import { DiagramPage } from '../../../src/diagrams/DiagramPage';
+import { setWaypoints } from '../../../src/diagrams/edits';
 import { buildScene } from '@site/lib/diagram/scene';
 import { parseDiagram, type DiagramInput } from '@site/lib/diagram/schema';
 import { stubLayout } from '../../support/visual-editor';
@@ -13,8 +14,10 @@ import { stubLayout } from '../../support/visual-editor';
 const PATH = 'diagrams/examples/coroutine-yield.diagram.json';
 // The repository root, from tools/notes-studio/tests/src/diagrams.
 const real = readFileSync(join(import.meta.dirname, '../../../../..', PATH), 'utf8');
-const layer = buildScene(parseDiagram(JSON.parse(real))).sequence!;
-const yOf = (id: string) => layer.messages.find((message) => message.edge.id === id)!.y;
+const drawn = buildScene(parseDiagram(JSON.parse(real))).sequence;
+if (!drawn) throw new Error('not a sequence');
+const layer = drawn;
+const yOf = (id: string) => layer.messages.find((message) => message.edge.id === id)?.y ?? NaN;
 
 beforeAll(stubLayout);
 
@@ -82,8 +85,8 @@ describe('the sequence editor', () => {
     drag(one(container, '[data-grip="pause"]'), [12, yOf('pause')], [12, yOf('done') + 10]);
     await waitFor(() => { expect(writeFile).toHaveBeenCalled(); });
     expect(ids(last().edges)).toEqual(['run-a', 'query', 'run-b', 'done', 'pause', 'resume']);
-    // The segment that opened at "pause" is turned the right way round.
-    expect(last().segments).toEqual([{ label: 'A waits', from: 'done', to: 'pause' }]);
+    // "pause" opened the segment and leaves it; the segment keeps the rest.
+    expect(last().segments).toEqual([{ label: 'A waits', from: 'run-b', to: 'done' }]);
   });
 
   it('adds a message from one lifeline to another where it is dropped, and selects it', async () => {
@@ -93,7 +96,7 @@ describe('the sequence editor', () => {
     await waitFor(() => { expect(writeFile).toHaveBeenCalled(); });
     const edges = ids(last().edges);
     expect(edges[edges.indexOf('run-b') + 1]).toBe('b-io');
-    expect(last().edges!.find((edge) => edge.id === 'b-io')).toEqual({ id: 'b-io', from: 'b', to: 'io', label: 'message' });
+    expect(last().edges?.find((edge) => edge.id === 'b-io')).toEqual({ id: 'b-io', from: 'b', to: 'io', label: 'message' });
     expect(screen.getByRole('heading', { name: 'Message b → io' })).toBeTruthy();
   });
 
@@ -127,6 +130,33 @@ describe('the sequence editor', () => {
     await waitFor(() => { expect(last().segments).toBeUndefined(); });
     await userEvent.click(screen.getByRole('button', { name: /Add a segment/ }));
     await waitFor(() => { expect(last().segments).toEqual([{ label: 'Phase', from: 'resume', to: 'resume' }]); });
+  });
+
+  it('leaves the file alone when a participant is dropped back in its own column', async () => {
+    const { container, writeFile } = await open();
+    drag(one(container, '.dg-svg [data-node-id="b"]'), [layer.columns.b, 100], [layer.columns.b + 20, 100]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toBe('Saved');
+  });
+
+  it('adds a message dropped inside a segment below its last message to that segment', async () => {
+    const { container, last, writeFile } = await open();
+    const frame = layer.segments[0].frame;
+    drag(one(container, '[data-lifeline-port="b"]'), [layer.columns.b, 400], [layer.columns.io, frame.y + frame.height - 4]);
+    await waitFor(() => { expect(writeFile).toHaveBeenCalled(); });
+    expect(ids(last().edges).indexOf('b-io')).toBe(ids(last().edges).indexOf('done') + 1);
+    expect(last().segments).toEqual([{ label: 'A waits', from: 'pause', to: 'b-io' }]);
+  });
+
+  it('copies no participant: ⌘D does nothing, and an edit that needs a layout is refused', async () => {
+    const { container, writeFile } = await open();
+    fireEvent.pointerDown(one(container, '.dg-svg [data-node-id="b"]'), { button: 0, clientX: layer.columns.b, clientY: 100 });
+    fireEvent.pointerUp(window, { clientX: layer.columns.b, clientY: 100 });
+    fireEvent.keyDown(one(container, '.studio-dg-canvas'), { key: 'd', metaKey: true });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(() => setWaypoints(JSON.parse(real) as DiagramInput, 'pause', [[0, 0]])).toThrow(/sequence lays itself out/);
   });
 
   it('shows the drawing without handles when read only', async () => {

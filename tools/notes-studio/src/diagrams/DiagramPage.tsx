@@ -105,7 +105,8 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
 
   const { scene } = drawn;
   const duplicate = useCallback(() => {
-    if (!doc || !selection) return;
+    // A sequence copies only its cards (the button says so too).
+    if (!doc || !selection || (sequence && selection.type !== 'card')) return;
     if (selection.type === 'nodes') {
       if (!scene) return;
       const made = duplicateNodes(doc, nodes, placeCopy(doc, scene, { nodes }));
@@ -120,7 +121,7 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
       apply(duplicateCard(doc, selection.index));
       setSelection({ type: 'card', index: selection.index + 1 });
     }
-  }, [doc, scene, selection, nodes, apply]);
+  }, [doc, scene, selection, nodes, apply, sequence]);
 
   // Keys act while the focus is on the page (the canvas takes it on a
   // click), not in its fields or elsewhere in the Studio.

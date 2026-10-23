@@ -1,4 +1,4 @@
-import { addNode, connect, moveNode, removeEdge as removeEdgeOp, removeNode, reorder } from '@site/lib/diagram/ops';
+import { addNode, connect, DiagramOpError, moveNode, removeEdge as removeEdgeOp, removeNode, reorder } from '@site/lib/diagram/ops';
 import type { DiagramInput, Side } from '@site/lib/diagram/schema';
 import type { SequenceLayer } from '@site/lib/diagram/sequence';
 
@@ -23,8 +23,12 @@ const NEW_NODE = { w: 160, h: 64 };
 export const snap = (value: number) => Math.round(value / GRID) * GRID;
 
 // An architecture's layout; one without it gets an empty one. A sequence
-// has none: these edits are not offered on one.
-const layoutOf = (diagram: Input) => (diagram.layout ??= { nodes: {} });
+// has none, and an edit that would give it one is refused here, whatever
+// reached it.
+function layoutOf(diagram: Input) {
+  if (diagram.type === 'sequence') throw new DiagramOpError('op/sequence-has-no-layout', 'A sequence lays itself out from its order: reorder its participants or messages instead.');
+  return (diagram.layout ??= { nodes: {} });
+}
 
 // A record without `key`.
 const without = <T>(record: Record<string, T>, key: string) => Object.fromEntries(Object.entries(record).filter(([each]) => each !== key));
@@ -338,10 +342,15 @@ export const moveParticipant = (diagram: Input, id: string, index: number) => re
 export const moveMessage = (diagram: Input, id: string, index: number) => reorder(diagram, 'edges', id, index);
 
 // A new message from `from` to `to`, after the last message above `y`.
+// Dropped inside a segment's frame below its last message, it joins that
+// segment, which now ends with it.
 export function addMessage(diagram: Input, layer: SequenceLayer, from: string, to: string, y: number): { diagram: Input; id: string } {
   const id = freeId(diagram, `${from}-${to}`);
   const above = layer.messages.filter((message) => message.y < y).at(-1);
-  return { diagram: connect(diagram, { id, from, to, label: 'message', after: above ? above.edge.id : null }), id };
+  const next = connect(diagram, { id, from, to, label: 'message', after: above ? above.edge.id : null });
+  const frame = layer.segments.find(({ segment, frame: box }) => segment.to === above?.edge.id && y >= box.y && y <= box.y + box.height);
+  if (frame) next.segments = (next.segments ?? []).map((segment) => (segment.from === frame.segment.from && segment.to === frame.segment.to ? { ...segment, to: id } : segment));
+  return { diagram: next, id };
 }
 
 // A new participant, the last column.

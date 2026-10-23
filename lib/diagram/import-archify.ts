@@ -97,7 +97,7 @@ const DATAFLOW_NAMES: Record<string, string> = {
   messagebus: 'Exchange',
   external: 'External system',
 };
-const EVIDENCE: Record<ArchifyNote['evidence'], { label: string; tone: Tone }> = {
+export const EVIDENCE: Record<ArchifyNote['evidence'], { label: string; tone: Tone }> = {
   observed: { label: 'Observed', tone: 'green' },
   inferred: { label: 'Inferred', tone: 'gold' },
   hypothesis: { label: 'Hypothesis', tone: 'red' },
@@ -129,7 +129,7 @@ export const defined = <T extends object>(value: T) => Object.fromEntries(Object
 
 // The result is the file's content: defaults left out, checked against the schema.
 export function importArchify(spec: ArchifySpec | ArchifySequenceSpec, options: ImportOptions = {}): DiagramInput {
-  if (spec.diagram_type === 'sequence') return importArchifySequence(spec, { schemaPath: options.schemaPath });
+  if (spec.diagram_type === 'sequence') return importArchifySequence(spec, options);
   const taken = new Set<string>();
   const dataflow = spec.diagram_type === 'dataflow';
   const sourceNodes = (dataflow ? spec.nodes : spec.components) ?? [];
