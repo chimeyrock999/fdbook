@@ -22,16 +22,28 @@ from that commit.
 | `scene.ts`, `render.ts` | `renderers/architecture/render-architecture.mjs` (showcase profile); icons and arrow markers from `renderers/shared/utils.mjs` |
 | `validate.ts` (text and overlap limits) | `renderers/architecture/render-architecture.mjs` validation, `renderers/shared/text-fit.mjs`, `desktop-readability.mjs` |
 | `import-archify.ts` (dataflow grid: `leftX`, `colGap`, `stageW`, `nodeW`, `nodeH`, `rowYs`) | `renderers/dataflow/dataflow-compiler.mjs` |
+| `sequence.ts`, `validate-sequence.ts` (layout checks), the variant legend in `legend.ts` | `renderers/sequence/render-sequence.mjs` (showcase profile, automatic canvas), `renderers/shared/text-fit.mjs` |
 
 Archify's JSON IR, its HTML pipeline and its other renderers are not ported;
-`import-archify.ts` converts its architecture and dataflow specs.
+`import-archify.ts` converts its architecture, dataflow and sequence specs
+(`archify-sequence.ts`). Archify's sequence takes each message's `y` from
+its author; `sequence.ts` derives it from the order (its `messageYs`), and
+the rest of the geometry is Archify's. Two deliberate differences: segments
+do not nest (Archify's phases may; the import refuses a spec whose segments
+share a message), and the header-clear fallback of Archify's
+`segmentLabelBox` is not ported, since `messageYs` keeps every segment title
+below the participant headers.
 
 ## Checking a release
 
-`tests/fixtures/archify` holds eight Archify specs with Archify's own layout
-of each architecture spec (`*.layout.json`, from
-`render-architecture.mjs --layout-json`), and `tests/diagram-archify.test.ts`
-holds the port to those layouts.
+`tests/fixtures/archify` holds the Archify specs the diagrams were converted
+from, Archify's own layout of each architecture spec (`*.layout.json`, from
+`render-architecture.mjs --layout-json`), and, for every sequence in
+`diagrams/examples/`, Archify's drawing of it at the `y` our layout gives
+(`*.layout.json` with `"diagram_type": "sequence"`, read off the SVG
+`render-sequence.mjs` writes, as it has no layout report). The script sends
+Archify that sequence through `archify-sequence.ts` (`sequenceSpecOf`), and
+`tests/diagram-archify.test.ts` holds the port to every layout.
 
 1. Get the release: the installed skill (`~/.claude/skills/archify`, kept
    current by its updater), an unpacked release, or a checkout

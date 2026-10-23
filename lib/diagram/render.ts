@@ -10,8 +10,9 @@
 // `data-detail="fine"` and shows once the diagram is expanded.
 
 import type { Scene, SceneEdge, SceneFrame, SceneLane, SceneNode } from './scene.ts';
-import { LEGEND_SWATCH_OFFSET } from './legend.ts';
+import { LEGEND_SWATCH_OFFSET, LINE_SWATCH_OFFSET, LINE_SWATCH_WIDTH } from './legend.ts';
 import type { EdgeVariant } from './schema.ts';
+import { MESSAGE_FONT, NOTE_FONT, NOTE_LINE_HEIGHT, type SequenceLayer, type SequenceMessage } from './sequence.ts';
 
 // `tone-<name>` sets the --tone-* variables the drawing classes read
 // (styles/diagram.css), so one rule colours a node, frame or swatch of any tone.
@@ -43,10 +44,15 @@ const MARKER_VARIANTS: EdgeVariant[] = ['default', 'emphasis', 'alert', 'dashed'
 const markerId = (prefix: string, variant: EdgeVariant, start = false) => `${prefix}-arrow-${variant}${start ? '-start' : ''}`;
 
 function renderDefinitions(prefix: string) {
-  const markers = MARKER_VARIANTS.flatMap((variant) => [
+  // A reply's head is open, so it reads quieter than the call it answers.
+  const reply = [
+    `<marker id="${markerId(prefix, 'return')}" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M1 1 9 4 1 7" class="m-return"/></marker>`,
+    `<marker id="${markerId(prefix, 'return', true)}" markerWidth="10" markerHeight="8" refX="1" refY="4" orient="auto"><path d="M9 1 1 4 9 7" class="m-return"/></marker>`,
+  ];
+  const markers = [...reply, ...MARKER_VARIANTS.flatMap((variant) => [
     `<marker id="${markerId(prefix, variant)}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" class="m-${variant}"/></marker>`,
     `<marker id="${markerId(prefix, variant, true)}" markerWidth="10" markerHeight="7" refX="1" refY="3.5" orient="auto"><polygon points="10 0, 0 3.5, 10 7" class="m-${variant}"/></marker>`,
-  ]);
+  ])];
   return `<defs>${markers.join('')}</defs>`;
 }
 
@@ -86,6 +92,7 @@ const LABEL_CLASS: Record<EdgeVariant, string> = {
   emphasis: 't-edge-emphasis',
   alert: 't-edge-alert',
   dashed: 't-edge-dashed',
+  return: 't-edge-default',
 };
 
 function renderEdgeLabel(scene: SceneEdge) {
@@ -108,11 +115,12 @@ function renderNode(scene: SceneNode) {
   const { node, x, y, width, height, cx } = scene;
   const parts = [node.label, node.sublabel, scene.context.at(-1), node.tag].filter(Boolean);
   const aria = [node.label, node.sublabel, scene.context.at(-1)].filter(Boolean).join(', ');
-  const labelY = node.sublabel ? y + height / 2 - 2 : y + height / 2 + 4;
+  const labelY = scene.text?.label ?? (node.sublabel ? y + height / 2 - 2 : y + height / 2 + 4);
   const sub = node.sublabel
-    ? `<text x="${num(cx)}" y="${num(y + height / 2 + 14)}" class="t-muted" font-size="${scene.sublabelFont}" text-anchor="middle">${esc(node.sublabel)}</text>`
+    ? `<text x="${num(cx)}" y="${num(scene.text?.sublabel ?? y + height / 2 + 14)}" class="t-muted" font-size="${scene.sublabelFont}" text-anchor="middle">${esc(node.sublabel)}</text>`
     : '';
-  const tag = node.tag
+  // A participant box has no room for a tag.
+  const tag = node.tag && !scene.text
     ? `<text data-detail="fine" x="${num(cx)}" y="${num(y + height - 8)}" class="t-tone" font-size="${scene.tagFont}" text-anchor="middle">${esc(node.tag)}</text>`
     : '';
   const box = `x="${num(x)}" y="${num(y)}" width="${num(width)}" height="${num(height)}" rx="8"`;
@@ -122,12 +130,44 @@ function renderNode(scene: SceneNode) {
     + `<text x="${num(cx)}" y="${num(labelY)}" class="t-primary" font-size="${scene.labelFont}" font-weight="600" text-anchor="middle">${esc(node.label)}</text>${sub}${tag}</g>`;
 }
 
-function renderLegend({ legend }: Scene) {
+function renderLegend({ legend }: Scene, prefix: string) {
   if (!legend) return '';
-  const entries = legend.entries.map((entry) => `<g data-legend-kind="${esc(entry.kind)}" class="${toneClass(entry.tone)}">`
-    + `<rect x="${entry.x}" y="${entry.baseline - 9}" width="16" height="10" rx="2.5" class="c-node" stroke-width="1"/>`
-    + `<text x="${entry.x + LEGEND_SWATCH_OFFSET}" y="${entry.baseline}" class="t-muted" font-size="${legend.fontSize}" font-weight="500">${esc(entry.label)} <tspan class="t-dim">${entry.count}</tspan></text></g>`);
+  const entries = legend.entries.map((entry) => (entry.variant
+    // A message variant: a line in its style, as the messages draw it.
+    ? `<g data-legend-variant="${esc(entry.variant)}">`
+      + `<path d="M${num(entry.x)} ${num(entry.baseline - 3)}H${num(entry.x + LINE_SWATCH_WIDTH)}" class="a-${entry.variant}" stroke-width="${entry.variant === 'emphasis' ? 1.8 : 1.4}" marker-end="url(#${markerId(prefix, entry.variant)})"/>`
+      + `<text x="${num(entry.x + LINE_SWATCH_OFFSET)}" y="${entry.baseline}" class="t-muted" font-size="${legend.fontSize}" font-weight="500">${esc(entry.label)}</text></g>`
+    : `<g data-legend-kind="${esc(entry.kind)}" class="${toneClass(entry.tone)}">`
+      + `<rect x="${entry.x}" y="${entry.baseline - 9}" width="16" height="10" rx="2.5" class="c-node" stroke-width="1"/>`
+      + `<text x="${entry.x + LEGEND_SWATCH_OFFSET}" y="${entry.baseline}" class="t-muted" font-size="${legend.fontSize}" font-weight="500">${esc(entry.label)} <tspan class="t-dim">${entry.count}</tspan></text></g>`));
   return `<g data-legend=""><text x="${legend.x}" y="${legend.titleY}" class="t-primary" font-size="12" font-weight="650">Legend</text>${entries.join('')}</g>`;
+}
+
+// A sequence, in Archify's order: segment frames, lifelines, activation bars,
+// messages (each with its label and note), segment titles, participants.
+// A message's group carries its ends, so hovering a participant lights it.
+function renderMessage(prefix: string, message: SequenceMessage, scene: SceneEdge) {
+  const { edge } = message;
+  const label = scene.label && edge.label
+    ? `<rect x="${num(scene.label.x)}" y="${num(scene.label.y)}" width="${num(scene.label.width)}" height="${num(scene.label.height)}" rx="3" class="c-mask"/>`
+      + `<text x="${num(scene.label.lx)}" y="${num(scene.label.ly)}" class="${edge.variant === 'default' || edge.variant === 'return' ? 't-muted' : LABEL_CLASS[edge.variant]}" font-size="${MESSAGE_FONT}" text-anchor="middle">${esc(edge.label)}</text>`
+    : '';
+  const { note } = message;
+  const noteText = note
+    ? `<text x="${num(note.x)}" y="${num(note.baseline)}" class="t-muted" font-size="${NOTE_FONT}">${note.lines.map((line, index) => `<tspan x="${num(note.x)}" dy="${index ? NOTE_LINE_HEIGHT : 0}">${esc(line)}</tspan>`).join('')}</text>`
+    : '';
+  return `<g data-edge-group="" ${edgeAttrs(scene)}><path d="${scene.d}" class="a-${edge.variant}" stroke-width="${scene.strokeWidth}" marker-end="url(#${markerId(prefix, edge.variant)})"/>${label}${noteText}</g>`;
+}
+
+function renderSequence(prefix: string, scene: Scene, layer: SequenceLayer) {
+  const tone = new Map(scene.nodes.map((node) => [node.node.id, node.kind.tone]));
+  return layer.segments.map(({ frame }) => `<rect data-graph-role="segment" x="${num(frame.x)}" y="${num(frame.y)}" width="${num(frame.width)}" height="${num(frame.height)}" rx="10" class="c-segment" stroke-width="1"/>`).join('')
+    + layer.lifelines.map((line) => `<path data-lifeline="${esc(line.node)}" d="M${num(line.x)} ${line.top}V${num(line.bottom)}" class="c-lifeline" stroke-width="0.8"/>`).join('')
+    + layer.activations.map((bar) => `<g class="${toneClass(tone.get(bar.activation.node) ?? 'slate')}"><rect x="${num(bar.x)}" y="${num(bar.y)}" width="${bar.width}" height="${num(bar.height)}" rx="3" class="c-mask"/><rect x="${num(bar.x)}" y="${num(bar.y)}" width="${bar.width}" height="${num(bar.height)}" rx="3" class="c-activation" stroke-width="1"/></g>`).join('')
+    + layer.messages.map((message, index) => renderMessage(prefix, message, scene.edges[index])).join('')
+    + layer.segments.map(({ segment, label }) => `<g data-graph-role="segment-label"><rect x="${num(label.x)}" y="${num(label.y)}" width="${num(label.width)}" height="${label.height}" rx="3" class="c-segment-pill"/>`
+      + `<text x="${num(label.x + 6)}" y="${num(label.y + 13)}" class="t-segment" font-size="9" font-weight="600">${esc(segment.label)}</text></g>`).join('')
+    + scene.nodes.map(renderNode).join('');
 }
 
 // `idPrefix` keeps marker ids distinct when several diagrams share a page;
@@ -138,12 +178,16 @@ export function renderDiagramSvg(scene: Scene, idPrefix: string, title = scene.d
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${scene.width} ${scene.height}" class="dg-svg" data-diagram="" role="img" aria-labelledby="${titleId}">`
     + `<title id="${titleId}">${esc(title)}</title>`
     + renderDefinitions(prefix)
-    + scene.lanes.map(renderLane).join('')
+    + (scene.sequence ? renderSequence(prefix, scene, scene.sequence) : renderArchitecture(prefix, scene))
+    + renderLegend(scene, prefix)
+    + '</svg>';
+}
+
+function renderArchitecture(prefix: string, scene: Scene) {
+  return scene.lanes.map(renderLane).join('')
     + scene.frames.map(renderFrame).join('')
     + scene.edges.map((edge) => renderEdgePath(prefix, edge)).join('')
     + scene.nodes.map(renderNode).join('')
     + scene.edges.map(renderEdgeLabel).join('')
-    + scene.frames.map(renderFrameTitle).join('')
-    + renderLegend(scene)
-    + '</svg>';
+    + scene.frames.map(renderFrameTitle).join('');
 }

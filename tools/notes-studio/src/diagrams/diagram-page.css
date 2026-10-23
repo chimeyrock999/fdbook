@@ -189,6 +189,33 @@
     cursor: copy;
     opacity: 0.7;
   }
+  /* A sequence: a message's grip in the left margin, the line where a
+     dragged message lands, and the header following a column drag. */
+  .studio-dg-grip {
+    cursor: grab;
+    pointer-events: all;
+  }
+  .studio-dg-grip rect {
+    fill: var(--fde-background);
+    stroke: var(--fde-primary);
+    stroke-width: 1.2px;
+  }
+  .studio-dg-grip circle {
+    fill: var(--fde-primary);
+  }
+  .studio-dg-drop {
+    stroke: var(--fde-primary);
+    stroke-width: 2px;
+  }
+  .studio-dg-ghost {
+    fill: color-mix(in srgb, var(--fde-primary) 8%, transparent);
+  }
+  .studio-dg-canvas[data-dragging='column'],
+  .studio-dg-canvas[data-dragging='column'] *,
+  .studio-dg-canvas[data-dragging='message'],
+  .studio-dg-canvas[data-dragging='message'] * {
+    cursor: grabbing;
+  }
   .studio-dg-wire {
     stroke: var(--fde-primary);
     stroke-width: 1.5px;

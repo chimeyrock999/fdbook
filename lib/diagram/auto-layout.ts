@@ -255,11 +255,15 @@ export interface LayoutResult {
 // out: a schema error, an unknown id, a group cycle.
 export async function layoutDiagram(diagram: Input, { all = false }: { all?: boolean } = {}): Promise<LayoutResult> {
   const next = structuredClone(diagram);
+  // A sequence has no positions: its order lays it out.
+  if (next.type === 'sequence') return { diagram: next, placed: [] };
   // Nothing to place leaves even a broken diagram as it is, so an edit that
   // fixes it can still be saved.
   const nodes = Array.isArray(next.nodes) ? next.nodes : [];
   const kept = new Map<string, Box>(all ? [] : Object.entries(next.layout?.nodes ?? {}).filter(([id]) => nodes.some((node) => node.id === id)));
   if (nodes.every((node) => kept.has(node.id))) return { diagram: next, placed: [] };
+  next.layout ??= { nodes: {} };
+  const layout = next.layout;
   const blocking = checkBeforeLayout(diagram);
   if (blocking.length) {
     const listed = blocking.slice(0, 5).map((issue) => `[${issue.code}${issue.path ? ` at ${issue.path}` : ''}] ${issue.message}`).join(' ');
@@ -268,13 +272,13 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
   const missing = next.nodes.filter((node) => !kept.has(node.id));
 
   const sizes = new Map(next.nodes.map((node) => {
-    const box = kept.get(node.id) ?? (all ? next.layout.nodes[node.id] : undefined);
+    const box = kept.get(node.id) ?? (all ? layout.nodes[node.id] : undefined);
     return [node.id, box ? { w: box.w, h: box.h } : defaultNodeSize(node)];
   }));
   if (!kept.size) {
     if (all) {
-      delete next.layout.edges;
-      delete next.layout.canvas;
+      delete layout.edges;
+      delete layout.canvas;
     }
     let best: { diagram: Input; errors: number } | null = null;
     // Each direction, then each with more room between layers for labels.
@@ -288,9 +292,9 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
       const offsetY = MARGIN + ((next.groups ?? []).length ? FRAME_TOP : 0) - minY;
       for (const node of next.nodes) {
         const box = elk.get(node.id)!;
-        candidate.layout.nodes[node.id] = { x: snap(box.x + offsetX), y: snap(box.y + offsetY), w: box.w, h: box.h };
+        candidate.layout!.nodes[node.id] = { x: snap(box.x + offsetX), y: snap(box.y + offsetY), w: box.w, h: box.h };
       }
-      growCanvas(candidate, next.nodes.map((node) => candidate.layout.nodes[node.id]));
+      growCanvas(candidate, next.nodes.map((node) => candidate.layout!.nodes[node.id]));
       const errors = validateDiagram(candidate).issues.filter((issue) => issue.severity === 'error').length;
       if (!best || errors < best.errors) best = { diagram: candidate, errors };
     }
@@ -307,7 +311,7 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
   // As wide as the canvas, or the drawing, or the reading column, whichever is widest.
   const contentRight = Math.max(...[...kept.values()].map((box) => box.x + box.w)) + MARGIN;
   // The same margin growCanvas keeps, so a node at the edge does not widen it.
-  const maxRight = Math.max(next.layout.canvas?.[0] ?? contentRight, contentRight, READING_WIDTH) - MARGIN;
+  const maxRight = Math.max(layout.canvas?.[0] ?? contentRight, contentRight, READING_WIDTH) - MARGIN;
   const queue = [...missing];
   while (queue.length) {
     queue.sort((a, b) => Number(neighbours(b.id).some((id) => kept.has(id))) - Number(neighbours(a.id).some((id) => kept.has(id))));
@@ -332,7 +336,7 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
       .flatMap((id) => (kept.has(id) ? [kept.get(id)!] : []));
     const box = freeSpot(want, node.id, inGroups.get(node.id) ?? noGroups, next, kept, maxRight, near);
     kept.set(node.id, box);
-    next.layout.nodes[node.id] = box;
+    layout.nodes[node.id] = box;
     placed.push(node.id);
   }
   growCanvas(next, placed.map((id) => kept.get(id)!));
@@ -341,9 +345,9 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
 
 // A set canvas grows to hold what was placed.
 function growCanvas(diagram: Input, added: Box[]) {
-  if (!diagram.layout.canvas || !added.length) return;
+  if (!diagram.layout!.canvas || !added.length) return;
   const right = Math.max(...added.map((box) => box.x + box.w)) + MARGIN;
   const bottom = Math.max(...added.map((box) => box.y + box.h)) + MARGIN;
-  const [width, height] = diagram.layout.canvas;
-  if (right > width || bottom > height) diagram.layout.canvas = [Math.max(width, right), Math.max(height, bottom)];
+  const [width, height] = diagram.layout!.canvas;
+  if (right > width || bottom > height) diagram.layout!.canvas = [Math.max(width, right), Math.max(height, bottom)];
 }

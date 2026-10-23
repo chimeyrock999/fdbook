@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { formatDiagramJson } from '../../../../lib/diagram/format.ts';
-import { addNode, connect, DiagramOpError, moveNode, removeEdge, removeNode, setNote, updateEdge, updateGroup, updateNode } from '../../../../lib/diagram/ops.ts';
+import { addNode, connect, DiagramOpError, moveNode, removeEdge, removeNode, reorder, setNote, updateEdge, updateGroup, updateNode } from '../../../../lib/diagram/ops.ts';
 import { EDGE_VARIANTS, SIDES, TONES, type DiagramInput } from '../../../../lib/diagram/schema.ts';
 import { diagramPathOf } from '../../../../lib/diagram/source.ts';
 import { checkSchema, validateDiagram, type DiagramIssue } from '../../../../lib/diagram/validate.ts';
@@ -115,7 +115,7 @@ export const diagramTools: StudioTool[] = [
   }),
   tool({
     name: 'diagram_read',
-    description: 'Reads a diagram file as JSON, with its checks. The format (kinds, badges, nodes, groups, edges, lanes, cards, layout) is in diagrams/README.md and diagrams/diagram.schema.json.',
+    description: 'Reads a diagram file as JSON, with its checks. The format (type, kinds, badges, nodes, groups, edges, lanes, cards, layout; a sequence\'s segments and activations) is in diagrams/README.md and diagrams/diagram.schema.json.',
     access: 'read',
     input: z.object({ src }),
     async run({ src: name }, ctx) {
@@ -156,11 +156,11 @@ export const diagramTools: StudioTool[] = [
   }),
   tool({
     name: 'diagram_create',
-    description: 'Creates a diagram from its content (title, kinds, nodes, edges, and optionally badges, groups, lanes, cards). Leave out layout.nodes: every node is placed automatically. Lanes are not: a diagram with lanes needs layout.lanes, a box per lane. Then check it with diagram_render_png.',
+    description: 'Creates a diagram from its content (title, kinds, nodes, edges, and optionally badges, groups, lanes, cards). Leave out layout.nodes: every node is placed automatically. Lanes are not: a diagram with lanes needs layout.lanes, a box per lane. With "type": "sequence" the nodes are the participants (columns, in order), the edges the messages (down the timeline, in order, each with a label), plus optional segments [{ label, from, to }] and activations [{ node, from, to }] naming message ids; a sequence has no groups, lanes or layout. Then check it with diagram_render_png.',
     access: 'write',
     input: z.object({
       src,
-      content: z.record(z.string(), z.unknown()).describe('The diagram without "version" and "$schema": { "title", "kinds": [{ "id", "label", "tone", "icon"? }], "nodes": [{ "id", "kind", "label", "sublabel"?, "note"? }], "edges"?: [{ "id", "from", "to", "label"?, "variant"? }], "groups"?, "badges"?, "lanes"?, "cards"? }.'),
+      content: z.record(z.string(), z.unknown()).describe('The diagram without "version" and "$schema": { "type"?: "architecture" | "sequence", "title", "kinds": [{ "id", "label", "tone", "icon"? }], "nodes": [{ "id", "kind", "label", "sublabel"?, "note"? }], "edges"?: [{ "id", "from", "to", "label"?, "detail"?, "variant"? }], "groups"?, "badges"?, "lanes"?, "cards"?, "segments"?, "activations"? }.'),
     }),
     async run({ src: name, content }, ctx) {
       const path = pathOf(name);
@@ -168,17 +168,19 @@ export const diagramTools: StudioTool[] = [
       const depth = path.split('/').length - 2;
       // The file's own fields come first, whatever the content says of them.
       const rest = Object.fromEntries(Object.entries(content).filter(([key]) => key !== '$schema' && key !== 'version' && key !== 'layout'));
-      const diagram = { $schema: `${'../'.repeat(depth)}diagram.schema.json`, version: 1, ...rest, layout: content.layout ?? { nodes: {} } } as DiagramInput;
+      // A sequence takes no layout; one given anyway is kept, for the check to name.
+      const layout = content.layout ?? (content.type === 'sequence' ? undefined : { nodes: {} });
+      const diagram = { $schema: `${'../'.repeat(depth)}diagram.schema.json`, version: 1, ...rest, ...(layout === undefined ? {} : { layout }) } as DiagramInput;
       editable(path, diagram);
       const { layoutDiagram } = await import('../../../../lib/diagram/auto-layout.ts');
       const { diagram: laid, placed } = await layoutDiagram(diagram);
       const saved = await save(ctx, path, laid, null);
-      return report(`Created ${path}. Placed ${String(placed.length)} node${placed.length === 1 ? '' : 's'}.`, validateDiagram(laid).issues, { path, mtimeMs: saved, placed });
+      return report(`Created ${path}.${diagram.type === 'sequence' ? '' : ` Placed ${String(placed.length)} node${placed.length === 1 ? '' : 's'}.`}`, validateDiagram(laid).issues, { path, mtimeMs: saved, placed });
     },
   }),
   tool({
     name: 'diagram_add_node',
-    description: 'Adds a node, with its edges if given. Without `at` it is placed next to the nodes it connects to, clear of the others, and no existing node moves.',
+    description: 'Adds a node, with its edges if given. Without `at` it is placed next to the nodes it connects to, clear of the others, and no existing node moves. In a sequence it is a participant, added as the last column (diagram_reorder moves it), and takes no `at` or `group`.',
     access: 'write',
     input: z.object({
       src,
@@ -209,7 +211,7 @@ export const diagramTools: StudioTool[] = [
   }),
   tool({
     name: 'diagram_move',
-    description: 'Moves or resizes a node: x/y set the top-left corner, dx/dy shift it, w/h resize it. Positions are SVG units on the canvas.',
+    description: 'Moves or resizes a node: x/y set the top-left corner, dx/dy shift it, w/h resize it. Positions are SVG units on the canvas. Not for a sequence, which has no positions: use diagram_reorder.',
     access: 'write',
     input: z.object({
       src,
@@ -227,15 +229,16 @@ export const diagramTools: StudioTool[] = [
   }),
   tool({
     name: 'diagram_connect',
-    description: 'Adds an edge between two nodes or groups. Variants: default, emphasis (the main path), dashed (optional or async), alert (a failure path). Routes and label places are planned automatically.',
+    description: 'Adds an edge between two nodes or groups. Variants: default, emphasis (the main path), dashed (optional or async), alert (a failure path), return (a reply). Routes and label places are planned automatically. In a sequence it is a message between two participants: give it a label, a detail for the small note under the arrow, and `after` to place it in the timeline (last by default).',
     access: 'write',
     input: z.object({
       src,
       id: id.optional().describe('Defaults to "<from>-<to>".'),
+      after: id.nullable().optional().describe('Sequence: the message this one follows; null puts it first.'),
       from: id,
       to: id,
       label: z.string().min(1).optional(),
-      detail: z.string().min(1).optional().describe('A second, smaller label line, shown in the expanded view.'),
+      detail: z.string().min(1).optional().describe('A second, smaller label line, shown in the expanded view; in a sequence, the note under the arrow.'),
       variant: z.enum(EDGE_VARIANTS).optional(),
       bidirectional: z.boolean().optional(),
     }),
@@ -254,7 +257,7 @@ export const diagramTools: StudioTool[] = [
   }),
   tool({
     name: 'diagram_update',
-    description: 'Changes one node, edge or group, giving exactly one of them by id with the fields to change; null removes an optional field. A node: label, sublabel, tag, kind. An edge: label, detail, variant, bidirectional, and where it is pinned: fromSide/toSide, and labelDx/labelDy (shift the label) or labelAt (place it), the fix for a label/collision. A group: label, tone, dashed, and members (the full list).',
+    description: 'Changes one node, edge or group, giving exactly one of them by id with the fields to change; null removes an optional field. A node: label, sublabel, tag, kind. An edge: label, detail, variant, bidirectional, and where it is pinned: fromSide/toSide, and labelDx/labelDy (shift the label) or labelAt (place it), the fix for a label/collision. A group: label, tone, dashed, and members (the full list). Or, for a sequence, the full list of segments or of activations, each naming its first and last message.',
     access: 'write',
     input: z.object({
       src,
@@ -284,10 +287,22 @@ export const diagramTools: StudioTool[] = [
         dashed: z.boolean().optional(),
         members: z.array(id).optional(),
       }).optional(),
+      segments: z.array(z.object({ label: z.string().min(1), from: id, to: id })).optional().describe('Sequence: every segment, a frame around the messages from `from` to `to`; [] removes them.'),
+      activations: z.array(z.object({ node: id, from: id, to: id })).optional().describe('Sequence: every activation, a participant busy from message `from` to message `to`; [] removes them.'),
     }),
-    async run({ src: name, node, edge, group }, ctx) {
-      if ([node, edge, group].filter((each) => each !== undefined).length !== 1) {
-        throw new ToolError('diagram_update changes exactly one of node, edge and group');
+    async run({ src: name, node, edge, group, segments, activations }, ctx) {
+      if ([node, edge, group, segments, activations].filter((each) => each !== undefined).length !== 1) {
+        throw new ToolError('diagram_update changes exactly one of node, edge, group, segments and activations');
+      }
+      for (const [key, list] of [['segments', segments], ['activations', activations]] as const) {
+        if (list === undefined) continue;
+        return edit(ctx, name, (diagram) => {
+          if (diagram.type !== 'sequence') throw new ToolError(`only a sequence has ${key}`);
+          const next = structuredClone(diagram);
+          if (key === 'segments') next.segments = list.length ? segments : undefined;
+          else next.activations = list.length ? activations : undefined;
+          return next;
+        }, `Set the ${key}`);
       }
       if (node) {
         const { id: nodeId, ...change } = node;
@@ -297,14 +312,32 @@ export const diagramTools: StudioTool[] = [
         const { id: edgeId, ...change } = edge;
         return edit(ctx, name, (diagram) => updateEdge(diagram, edgeId, change), `Updated edge "${edgeId}"`);
       }
-      if (!group) throw new ToolError('diagram_update changes exactly one of node, edge and group');
+      if (!group) throw new ToolError('diagram_update changes exactly one of node, edge, group, segments and activations');
       const { id: groupId, ...change } = group;
       return edit(ctx, name, (diagram) => updateGroup(diagram, groupId, change), `Updated group "${groupId}"`);
     },
   }),
   tool({
+    name: 'diagram_reorder',
+    description: 'Sequence: moves a participant to another column, or a message to another place in the timeline, by its new index (0 is the first). A segment or activation keeps its first and last message.',
+    access: 'write',
+    input: z.object({
+      src,
+      node: id.optional().describe('A participant to move.'),
+      edge: id.optional().describe('A message to move.'),
+      index: z.number().int().min(0),
+    }),
+    async run({ src: name, node, edge, index }, ctx) {
+      if ((node === undefined) === (edge === undefined)) throw new ToolError('diagram_reorder moves exactly one of node and edge');
+      return edit(ctx, name, (diagram) => {
+        if (diagram.type !== 'sequence') throw new ToolError('only a sequence is laid out by its order; use diagram_move');
+        return node !== undefined ? reorder(diagram, 'nodes', node, index) : reorder(diagram, 'edges', edge ?? '', index);
+      }, `Moved "${node ?? edge ?? ''}" to ${String(index)}`);
+    },
+  }),
+  tool({
     name: 'diagram_remove_edge',
-    description: 'Removes an edge and where it was pinned.',
+    description: 'Removes an edge and where it was pinned. In a sequence, a segment or activation that ended at that message ends at its neighbour.',
     access: 'write',
     input: z.object({ src, id }),
     async run({ src: name, id: edgeId }, ctx) {
@@ -322,7 +355,7 @@ export const diagramTools: StudioTool[] = [
   }),
   tool({
     name: 'diagram_layout',
-    description: 'Places every node that has no position yet, keeping the ones a person placed. With all: true, lays out the whole diagram again, which drops every hand-placed position, route pin and the canvas size; use it only for a diagram nobody arranged by hand.',
+    description: 'Places every node that has no position yet, keeping the ones a person placed. With all: true, lays out the whole diagram again, which drops every hand-placed position, route pin and the canvas size; use it only for a diagram nobody arranged by hand. A sequence has nothing to place.',
     access: 'write',
     input: z.object({ src, all: z.boolean().optional() }),
     async run({ src: name, all }, ctx) {
@@ -331,7 +364,8 @@ export const diagramTools: StudioTool[] = [
       const { layoutDiagram } = await import('../../../../lib/diagram/auto-layout.ts');
       const { diagram: laid, placed } = await layoutDiagram(diagram, { all });
       const saved = placed.length ? await save(ctx, path, laid, mtimeMs) : mtimeMs;
-      return report(placed.length ? `Placed ${placed.join(', ')} in ${path}.` : `Every node of ${path} already has a position.`, validateDiagram(laid).issues, { path, mtimeMs: saved, placed });
+      const none = (diagram as { type?: string }).type === 'sequence' ? `${path} is a sequence: its order lays it out, nothing to place.` : `Every node of ${path} already has a position.`;
+      return report(placed.length ? `Placed ${placed.join(', ')} in ${path}.` : none, validateDiagram(laid).issues, { path, mtimeMs: saved, placed });
     },
   }),
 ];
