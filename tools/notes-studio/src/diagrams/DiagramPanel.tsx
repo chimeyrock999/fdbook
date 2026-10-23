@@ -2,6 +2,7 @@ import { EDGE_VARIANTS, ICONS, SIDES, TONES, type Side } from '@site/lib/diagram
 import { Plus, Trash2 } from 'lucide-react';
 import type { Selection } from './DiagramCanvas';
 import { Check, Choice, Section, TextField } from './panel-fields';
+import { MainPathFields, StateMarksFields } from './LifecyclePanel';
 import { ActivationsFields, MessageOrderFields, ParticipantOrderFields, SegmentsFields } from './SequencePanel';
 import {
   addKind,
@@ -87,9 +88,10 @@ function NodeFields({ doc, node, onChange, readOnly }: { doc: Input; node: NodeI
     else set({ note: { role: next.role, ...(next.badge ? { badge: next.badge } : {}), ...(next.points?.length ? { points: next.points } : {}) } });
   };
   const sequence = doc.type === 'sequence';
+  const lifecycle = doc.type === 'lifecycle';
   return (
     <>
-      <Section title={`${sequence ? 'Participant' : 'Node'} ${node.id}`}>
+      <Section title={`${sequence ? 'Participant' : lifecycle ? 'State' : 'Node'} ${node.id}`}>
         <TextField label="Label" value={node.label} readOnly={readOnly} onCommit={(label) => { if (label.trim()) set({ label }); }} />
         <TextField label="Sublabel" value={node.sublabel ?? ''} readOnly={readOnly} onCommit={(sublabel) => { set({ sublabel: sublabel.trim() || undefined }); }} />
         {(!sequence || node.tag) && <TextField label="Tag" value={node.tag ?? ''} readOnly={readOnly} hint={sequence ? 'A participant box does not show it.' : undefined} onCommit={(tag) => { set({ tag: tag.trim() || undefined }); }} />}
@@ -105,6 +107,7 @@ function NodeFields({ doc, node, onChange, readOnly }: { doc: Input; node: NodeI
         />
       </Section>
       {sequence && <ParticipantOrderFields doc={doc} id={node.id} onChange={onChange} readOnly={readOnly} />}
+      {lifecycle && <StateMarksFields doc={doc} id={node.id} onChange={onChange} readOnly={readOnly} />}
       {kind && (
         <Section title={`Kind ${kind.label}`}>
           <KindFields doc={doc} kind={kind} onChange={onChange} readOnly={readOnly} every />
@@ -136,6 +139,18 @@ function EdgeFields({ doc, id, onChange, readOnly }: { doc: Input; id: string; o
   const layout = doc.layout?.edges?.[id];
   const set = (patch: Parameters<typeof updateEdge>[2]) => { onChange(updateEdge(doc, id, patch)); };
   const side = (key: 'fromSide' | 'toSide') => (value: Side | undefined) => { onChange(setEdgeSides(doc, id, { ...layout, [key]: value })); };
+  if (doc.type === 'lifecycle') {
+    const states = doc.nodes.map((node) => ({ value: node.id, label: node.label }));
+    return (
+      <Section title={`Transition ${edge.from} → ${edge.to}`}>
+        <TextField label="Label" value={edge.label ?? ''} readOnly={readOnly} hint="The event, and a guard in [brackets]." onCommit={(label) => { set({ label: label.trim() || undefined }); }} />
+        <TextField label="Note" value={edge.detail ?? ''} readOnly={readOnly} hint="A second, smaller line, shown in the expanded view." onCommit={(detail) => { set({ detail: detail.trim() || undefined }); }} />
+        <Choice label="Variant" value={edge.variant ?? 'default'} readOnly={readOnly} options={EDGE_VARIANTS} onChange={(variant) => { set({ variant: variant === 'default' ? undefined : variant }); }} />
+        <Choice label="From" value={edge.from} options={states} readOnly={readOnly} onChange={(from) => { if (from) set({ from }); }} />
+        <Choice label="To" value={edge.to} options={states} readOnly={readOnly} onChange={(to) => { if (to) set({ to }); }} />
+      </Section>
+    );
+  }
   if (doc.type === 'sequence') {
     return (
       <>
@@ -234,6 +249,7 @@ export function DiagramPanel({ doc, selection, onSelect, onChange, readOnly }: {
         />
       </Section>
       <KindsFields doc={doc} onChange={onChange} readOnly={readOnly} />
+      {doc.type === 'lifecycle' && <MainPathFields doc={doc} onChange={onChange} readOnly={readOnly} />}
       {doc.type === 'sequence' && (
         <>
           <SegmentsFields doc={doc} onChange={onChange} readOnly={readOnly} />
@@ -252,6 +268,8 @@ export function DiagramPanel({ doc, selection, onSelect, onChange, readOnly }: {
       </Section>
       <p className="studio-dg-muted">{doc.type === 'sequence'
         ? 'Click a participant or a message to edit it. Drag from the handle under a lifeline to another lifeline to add a message.'
+        : doc.type === 'lifecycle'
+          ? 'Click a state or a transition to edit it. Drag from the handle on a state to another state to add a transition.'
         : 'Click a node, an edge or a frame to edit it. Double click the canvas to add a node.'}</p>
     </div>
   );

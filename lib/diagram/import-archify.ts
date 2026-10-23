@@ -1,10 +1,11 @@
-// Converts an Archify spec (architecture, dataflow or sequence) and its `.notes.json`
+// Converts an Archify spec (architecture, dataflow, sequence or lifecycle) and its `.notes.json`
 // sidecar into a diagram. Architecture specs map field for field; a dataflow
 // spec's stage/row grid becomes positions and its stages become lanes, with
 // the same layout constants Archify's dataflow compiler uses. Archify's fixed
 // component types become the diagram's own kinds, named as its legend named
 // them, and the sidecar's evidence levels become badges.
 
+import { importArchifyLifecycle, type ArchifyLifecycleSpec } from './archify-lifecycle.ts';
 import { importArchifySequence, type ArchifySequenceSpec } from './archify-sequence.ts';
 import { diagramSchema, type DiagramInput, type EdgeVariant, type ICONS, type Tone } from './schema.ts';
 
@@ -128,8 +129,9 @@ export const mdxText = (text: string) => text.replace(/[<{}]/g, (character) => `
 export const defined = <T extends object>(value: T) => Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 
 // The result is the file's content: defaults left out, checked against the schema.
-export function importArchify(spec: ArchifySpec | ArchifySequenceSpec, options: ImportOptions = {}): DiagramInput {
+export function importArchify(spec: ArchifySpec | ArchifySequenceSpec | ArchifyLifecycleSpec, options: ImportOptions = {}): DiagramInput {
   if (spec.diagram_type === 'sequence') return importArchifySequence(spec, options);
+  if (spec.diagram_type === 'lifecycle') return importArchifyLifecycle(spec, options);
   const taken = new Set<string>();
   const dataflow = spec.diagram_type === 'dataflow';
   const sourceNodes = (dataflow ? spec.nodes : spec.components) ?? [];

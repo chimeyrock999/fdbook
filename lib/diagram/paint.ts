@@ -119,6 +119,10 @@ function paintOf(tag: string, classes: string[], tone: string | null, parent: Pa
   if (has('c-segment-pill')) return { ...fill(mask), ...stroke(token('--lane-stroke')), 'stroke-width': 0.75 };
   if (has('c-lifeline')) return { fill: 'none', ...stroke(token('--arrow')), 'stroke-dasharray': '3 7' };
   if (has('c-activation')) return { ...fill(mix(toneStroke(), 0.16, mask)), ...stroke(toneStroke()) };
+  if (has('c-initial')) return { ...fill(token('--arrow-emphasis')), stroke: 'none' };
+  if (has('c-final')) return { fill: 'none', ...stroke(toneStroke()) };
+  if (has('c-composite')) return { fill: 'none', ...stroke(token('--arrow')), 'stroke-opacity': 0.55, 'stroke-dasharray': '1.5 3.5', 'stroke-linecap': 'round' };
+  if (has('c-junction')) return { ...fill(token('--arrow')), stroke: 'none' };
   if (has('m-return')) return { fill: 'none', ...stroke(token('--arrow')), 'stroke-width': 1.1 };
   const text: Record<string, () => Rgba> = {
     't-primary': () => token('--text'),

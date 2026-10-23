@@ -9,15 +9,17 @@ import { z } from 'zod';
 export const TONES = ['blue', 'green', 'gold', 'orange', 'red', 'teal', 'slate'] as const;
 // What a diagram draws: an architecture places its nodes where `layout` says;
 // a sequence lays its participants (nodes) out in columns and its messages
-// (edges) down the timeline in the order the file lists them.
-export const DIAGRAM_TYPES = ['architecture', 'sequence'] as const;
+// (edges) down the timeline in the order the file lists them; a lifecycle
+// lays its states (nodes) out from `mainPath` and its transitions (edges).
+export const DIAGRAM_TYPES = ['architecture', 'sequence', 'lifecycle'] as const;
 // `return` is a reply, quieter than the call it answers; sequences use it.
 export const EDGE_VARIANTS = ['default', 'emphasis', 'dashed', 'alert', 'return'] as const;
 export const SIDES = ['top', 'right', 'bottom', 'left'] as const;
 // The small glyphs a kind can show in a node's corner.
 export const ICONS = [
   'window', 'code', 'cylinder', 'cloud', 'shield', 'queue', 'external',
-  'calendar', 'clock', 'person', 'briefcase', 'flag', 'moon', 'dot', 'none',
+  'calendar', 'clock', 'person', 'briefcase', 'flag', 'moon', 'dot',
+  'hourglass', 'diamond', 'check', 'cross', 'stop', 'none',
 ] as const;
 
 const id = z.string().regex(/^[A-Za-z][\w-]*$/, 'an id starts with a letter and holds letters, digits, _ or -');
@@ -127,7 +129,9 @@ export const diagramSchema = z.strictObject({
   // Sequence only.
   segments: z.array(segmentSchema).default([]),
   activations: z.array(activationSchema).default([]),
-  // Architecture only: a sequence is laid out from its order alone.
+  // Lifecycle only: the happy path, state ids from the initial state on.
+  mainPath: z.array(id).default([]),
+  // Architecture only: a sequence or lifecycle is laid out from its structure alone.
   layout: layoutSchema.default(() => ({ nodes: {} })),
 });
 

@@ -10,7 +10,8 @@
 // `data-detail="fine"` and shows once the diagram is expanded.
 
 import type { Scene, SceneEdge, SceneFrame, SceneLane, SceneNode } from './scene.ts';
-import { LEGEND_SWATCH_OFFSET, LINE_SWATCH_OFFSET, LINE_SWATCH_WIDTH } from './legend.ts';
+import { FINAL_SWATCH_WIDTH, INITIAL_SWATCH_WIDTH, LEGEND_SWATCH_OFFSET, LINE_SWATCH_OFFSET, LINE_SWATCH_WIDTH, type PlacedLegendEntry } from './legend.ts';
+import { LABEL_FONT, NOTE_FONT as LIFECYCLE_NOTE_FONT, type LifecycleLayer } from './lifecycle.ts';
 import type { EdgeVariant } from './schema.ts';
 import { MESSAGE_FONT, NOTE_FONT, NOTE_LINE_HEIGHT, type SequenceLayer, type SequenceMessage } from './sequence.ts';
 
@@ -38,6 +39,11 @@ const ICON_SHAPE: Record<string, string> = {
   queue: '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/><circle cx="5" cy="4.5" r="1" class="sigil-fill"/><circle cx="10.5" cy="8" r="1" class="sigil-fill"/><circle cx="7" cy="11.5" r="1" class="sigil-fill"/>',
   external: '<rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/><path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>',
   dot: '<rect x="3" y="3" width="10" height="10" rx="2"/><circle cx="8" cy="8" r="1.2" class="sigil-fill"/>',
+  hourglass: '<path d="M4 2.5h8M4 13.5h8M5 3c0 2.8 2 3.2 3 5-1 1.8-3 2.2-3 5M11 3c0 2.8-2 3.2-3 5 1 1.8 3 2.2 3 5"/>',
+  diamond: '<path d="M8 2.2 13.8 8 8 13.8 2.2 8Z"/>',
+  check: '<circle cx="8" cy="8" r="5.3"/><path d="m5.2 8 1.8 1.8 3.8-4"/>',
+  cross: '<circle cx="8" cy="8" r="5.3"/><path d="m5.7 5.7 4.6 4.6m0-4.6-4.6 4.6"/>',
+  stop: '<circle cx="8" cy="8" r="5.3"/><rect x="6.1" y="6.1" width="3.8" height="3.8" rx=".5" class="sigil-fill"/>',
 };
 
 const MARKER_VARIANTS: EdgeVariant[] = ['default', 'emphasis', 'alert', 'dashed'];
@@ -105,8 +111,8 @@ function renderEdgeLabel(scene: SceneEdge) {
     + `<text x="${num(label.lx)}" y="${num(label.ly)}" class="${LABEL_CLASS[edge.variant]}" font-size="8" text-anchor="middle">${esc(edge.label)}</text>${detail}</g>`;
 }
 
-function renderIcon({ kind, x, y }: SceneNode) {
-  const icon = kind.icon ?? 'dot';
+function renderIcon({ kind, x, y, icon: own }: SceneNode) {
+  const icon = own ?? kind.icon ?? 'dot';
   if (icon === 'none') return '';
   return `<g aria-hidden="true" class="semantic-sigil" transform="translate(${num(x + 6)} ${num(y + 6)}) scale(${SIGIL_SIZE / 16})">${ICON_SHAPE[icon]}</g>`;
 }
@@ -119,20 +125,24 @@ function renderNode(scene: SceneNode) {
   const sub = node.sublabel
     ? `<text x="${num(cx)}" y="${num(scene.text?.sublabel ?? y + height / 2 + 14)}" class="t-muted" font-size="${scene.sublabelFont}" text-anchor="middle">${esc(node.sublabel)}</text>`
     : '';
-  // A participant box has no room for a tag.
-  const tag = node.tag && !scene.text
-    ? `<text data-detail="fine" x="${num(cx)}" y="${num(y + height - 8)}" class="t-tone" font-size="${scene.tagFont}" text-anchor="middle">${esc(node.tag)}</text>`
+  // A participant box has no room for a tag; a state places its own.
+  const tagY = scene.text ? scene.text.tag : y + height - 8;
+  const tag = node.tag && tagY !== undefined
+    ? `<text data-detail="fine" x="${num(cx)}" y="${num(tagY)}" class="t-tone" font-size="${scene.tagFont}" text-anchor="middle">${esc(node.tag)}</text>`
     : '';
   const box = `x="${num(x)}" y="${num(y)}" width="${num(width)}" height="${num(height)}" rx="8"`;
   return `<g data-node-id="${esc(node.id)}" data-node-kind="${esc(node.kind)}" class="${toneClass(scene.kind.tone)}" tabindex="0" role="button" aria-pressed="false" aria-label="${esc(aria)}">`
     + `<title>${esc(parts.join(' · '))}</title>`
     + `<rect ${box} class="c-mask"/><rect ${box} class="c-node" stroke-width="1.5"/>${renderIcon(scene)}`
-    + `<text x="${num(cx)}" y="${num(labelY)}" class="t-primary" font-size="${scene.labelFont}" font-weight="600" text-anchor="middle">${esc(node.label)}</text>${sub}${tag}</g>`;
+    + `<text x="${num(scene.text?.x ?? cx)}" y="${num(labelY)}" class="t-primary" font-size="${scene.labelFont}" font-weight="600" text-anchor="middle">${esc(node.label)}</text>${sub}${tag}</g>`;
 }
 
 function renderLegend({ legend }: Scene, prefix: string) {
   if (!legend) return '';
-  const entries = legend.entries.map((entry) => (entry.variant
+  const entries = legend.entries.map((entry) => (entry.mark
+    ? `<g data-legend-mark="${entry.mark}">${entry.mark === 'initial' ? initialMarker(entry.x + 4.5, entry.x + 24, entry.baseline - 3.5) : finalSwatch(entry)}`
+      + `<text x="${num(entry.x + (entry.mark === 'initial' ? INITIAL_SWATCH_WIDTH : FINAL_SWATCH_WIDTH) + 8)}" y="${entry.baseline}" class="t-muted" font-size="${legend.fontSize}" font-weight="500">${esc(entry.label)}</text></g>`
+    : entry.variant
     // A message variant: a line in its style, as the messages draw it.
     ? `<g data-legend-variant="${esc(entry.variant)}">`
       + `<path d="M${num(entry.x)} ${num(entry.baseline - 3)}H${num(entry.x + LINE_SWATCH_WIDTH)}" class="a-${entry.variant}" stroke-width="${entry.variant === 'emphasis' ? 1.8 : 1.4}" marker-end="url(#${markerId(prefix, entry.variant)})"/>`
@@ -141,6 +151,47 @@ function renderLegend({ legend }: Scene, prefix: string) {
       + `<rect x="${entry.x}" y="${entry.baseline - 9}" width="16" height="10" rx="2.5" class="c-node" stroke-width="1"/>`
       + `<text x="${entry.x + LEGEND_SWATCH_OFFSET}" y="${entry.baseline}" class="t-muted" font-size="${legend.fontSize}" font-weight="500">${esc(entry.label)} <tspan class="t-dim">${entry.count}</tspan></text></g>`));
   return `<g data-legend=""><text x="${legend.x}" y="${legend.titleY}" class="t-primary" font-size="12" font-weight="650">Legend</text>${entries.join('')}</g>`;
+}
+
+// The UML initial marker: a dot with an arrow into the first state.
+function initialMarker(dotX: number, tipX: number, y: number) {
+  return `<g aria-hidden="true" data-initial-marker=""><circle cx="${num(dotX)}" cy="${num(y)}" r="4.5" class="c-initial"/><path d="M${num(dotX + 4.5)} ${num(y)}H${num(tipX - 6)}" class="a-emphasis" stroke-width="1.4"/><path d="M${num(tipX - 7)} ${num(y - 3.5)}L${num(tipX)} ${num(y)}L${num(tipX - 7)} ${num(y + 3.5)}Z" class="c-initial"/></g>`;
+}
+
+function finalSwatch(entry: PlacedLegendEntry) {
+  return `<g class="tone-slate"><rect x="${entry.x}" y="${entry.baseline - 8}" width="14" height="9" rx="2" class="c-node" stroke-width="1"/><rect x="${entry.x + 2.5}" y="${entry.baseline - 5.5}" width="9" height="4" rx="1" class="c-final" stroke-width="0.8"/></g>`;
+}
+
+// A lifecycle, in Archify's order: composite frames, transitions (each with
+// a halo where it crosses another), bus junctions, states (the final ones
+// with a double border, the first with the initial marker), labels.
+function renderLifecycle(prefix: string, scene: Scene, layer: LifecycleLayer) {
+  const states = scene.nodes.map((node) => {
+    const final = layer.finals.has(node.node.id)
+      ? `<rect x="${num(node.x + 3)}" y="${num(node.y + 3)}" width="${num(node.width - 6)}" height="${num(node.height - 6)}" rx="5" class="c-final" stroke-width="1"/>`
+      : '';
+    // The double border sits inside the node's group, under its text.
+    return final ? renderNode(node).replace(/(<rect [^>]*class="c-node"[^>]*\/>)/, `$1${final}`) : renderNode(node);
+  });
+  const labels = scene.edges.map((edge) => {
+    const label = edge.label;
+    if (!label) return '';
+    const { variant } = edge.edge;
+    const name = edge.edge.label
+      ? `<text x="${num(label.lx)}" y="${num(label.ly)}" class="${variant === 'default' || variant === 'return' ? 't-muted' : LABEL_CLASS[variant]}" font-size="${LABEL_FONT}" text-anchor="middle">${esc(edge.edge.label)}</text>`
+      : '';
+    const note = edge.edge.detail
+      ? `<text data-detail="fine" x="${num(label.lx)}" y="${num(label.ly + (edge.edge.label ? 12 : 0))}" class="t-muted" font-size="${LIFECYCLE_NOTE_FONT}" text-anchor="middle">${esc(edge.edge.detail)}</text>`
+      : '';
+    return `<g data-edge-label="" ${edgeAttrs(edge)}><rect x="${num(label.x)}" y="${num(label.y)}" width="${num(label.width)}" height="${num(label.height)}" rx="4" class="c-mask"/>${name}${note}</g>`;
+  });
+  const first = layer.initial;
+  return layer.frames.map((frame) => `<rect data-graph-role="composite" x="${num(frame.x)}" y="${num(frame.y)}" width="${num(frame.width)}" height="${num(frame.height)}" rx="14" class="c-composite" stroke-width="1"/>`).join('')
+    + scene.edges.map((edge) => renderEdgePath(prefix, edge)).join('')
+    + layer.junctions.map(([x, y]) => `<circle cx="${num(x)}" cy="${num(y)}" r="2.6" class="c-junction"/>`).join('')
+    + (first ? initialMarker(first[0] - 26, first[0] - 1, first[1]) : '')
+    + states.join('')
+    + labels.join('');
 }
 
 // A sequence, in Archify's order: segment frames, lifelines, activation bars,
@@ -178,7 +229,9 @@ export function renderDiagramSvg(scene: Scene, idPrefix: string, title = scene.d
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${scene.width} ${scene.height}" class="dg-svg" data-diagram="" role="img" aria-labelledby="${titleId}">`
     + `<title id="${titleId}">${esc(title)}</title>`
     + renderDefinitions(prefix)
-    + (scene.sequence ? renderSequence(prefix, scene, scene.sequence) : renderArchitecture(prefix, scene))
+    + (scene.sequence ? renderSequence(prefix, scene, scene.sequence)
+      : scene.lifecycle ? renderLifecycle(prefix, scene, scene.lifecycle)
+        : renderArchitecture(prefix, scene))
     + renderLegend(scene, prefix)
     + '</svg>';
 }

@@ -422,6 +422,7 @@ export function buildSequenceScene(diagram: Diagram): Scene {
     lanes: [],
     legend,
     legendUnfit: entries.length > 0 && legend === null,
+    lifecycle: null,
     sequence: {
       participantWidth: participantW,
       columns,

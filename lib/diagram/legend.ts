@@ -24,6 +24,8 @@ export interface LegendEntry {
   width: number;
   // A sequence's legend lists message variants, each with a line swatch.
   variant?: EdgeVariant;
+  // A lifecycle's legend adds the initial marker and the final border.
+  mark?: 'initial' | 'final';
 }
 
 export interface PlacedLegendEntry extends LegendEntry {
@@ -78,6 +80,22 @@ export function variantLegendEntries(diagram: Diagram): LegendEntry[] {
     width: Math.ceil(LINE_SWATCH_OFFSET + textUnits(label) * legendTextSize() * TEXT_ADVANCE_EM),
     variant,
   }));
+}
+
+// A lifecycle's legend: the initial marker, the kinds in use, and the final
+// border when a state ends the lifecycle (Archify's order and names).
+export const INITIAL_SWATCH_WIDTH = 26;
+export const FINAL_SWATCH_WIDTH = 16;
+export function lifecycleLegendEntries(diagram: Diagram, hasFinal: boolean): LegendEntry[] {
+  if (!diagram.legend) return [];
+  const mark = (kind: 'initial' | 'final', label: string, swatch: number): LegendEntry => ({
+    kind, tone: 'slate', label, count: 0, mark: kind, width: Math.ceil(swatch + SWATCH_GAP + textUnits(label) * legendTextSize() * TEXT_ADVANCE_EM),
+  });
+  return [
+    mark('initial', 'initial state', INITIAL_SWATCH_WIDTH),
+    ...legendEntries(diagram),
+    ...(hasFinal ? [mark('final', 'final state', FINAL_SWATCH_WIDTH)] : []),
+  ];
 }
 
 export function legendFootprint(entries: readonly LegendEntry[], width: number) {

@@ -18,6 +18,7 @@ export function checkSequenceStructure(diagram: Diagram): DiagramIssue[] {
   const error = (code: string, message: string, fix?: string, path?: string) => issues.push({ code, severity: 'error', message, fix, path });
   const unused = 'a sequence lays itself out from its order: participants are its nodes, messages its edges';
   if (diagram.groups.length) error('sequence/no-groups', 'A sequence has no frames around participants.', `remove groups; for phases of the timeline use segments (${unused})`, 'groups');
+  if (diagram.mainPath.length) error('structure/lifecycle-only', 'A main path belongs to a lifecycle.', 'remove mainPath', 'mainPath');
   if (diagram.lanes.length) error('sequence/no-lanes', 'A sequence has no lanes: its participants are its columns.', 'remove lanes', 'lanes');
   if (Object.keys(diagram.layout).some((key) => key !== 'nodes') || Object.keys(diagram.layout.nodes).length) {
     error('sequence/no-layout', 'A sequence places everything itself; layout does not apply.', `remove layout (${unused})`, 'layout');

@@ -9,6 +9,7 @@ import { DiagramJson } from './DiagramJson';
 import { JsonSplit } from './JsonSplit';
 import { SPLIT_MIN, useJsonHeight } from './useJsonHeight';
 import { DiagramPanel } from './DiagramPanel';
+import { LifecycleCanvas } from './LifecycleCanvas';
 import { SequenceCanvas } from './SequenceCanvas';
 import { legendBand, placeCopy } from './placement';
 import {
@@ -16,6 +17,7 @@ import {
   addGroup,
   addNodeAt,
   addParticipant,
+  addState,
   duplicateCard,
   duplicateGroup,
   duplicateNodes,
@@ -89,8 +91,11 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
   const column = useRef<HTMLDivElement>(null);
   const { doc, apply, undo, redo } = file;
   const selection = doc ? existing(doc, chosen) : null;
-  // A sequence is laid out from its order: no positions, frames or copies.
+  // A sequence is laid out from its order, a lifecycle from its main path
+  // and transitions: no positions, frames or copies.
   const sequence = doc?.type === 'sequence';
+  const lifecycle = doc?.type === 'lifecycle';
+  const structural = sequence || lifecycle;
   const nodes = useMemo(() => (selection?.type === 'nodes' ? selection.ids : []), [selection]);
 
   const remove = useCallback(() => {
@@ -105,8 +110,8 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
 
   const { scene } = drawn;
   const duplicate = useCallback(() => {
-    // A sequence copies only its cards (the button says so too).
-    if (!doc || !selection || (sequence && selection.type !== 'card')) return;
+    // A sequence or lifecycle copies only its cards (the button says so too).
+    if (!doc || !selection || (structural && selection.type !== 'card')) return;
     if (selection.type === 'nodes') {
       if (!scene) return;
       const made = duplicateNodes(doc, nodes, placeCopy(doc, scene, { nodes }));
@@ -121,7 +126,7 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
       apply(duplicateCard(doc, selection.index));
       setSelection({ type: 'card', index: selection.index + 1 });
     }
-  }, [doc, scene, selection, nodes, apply, sequence]);
+  }, [doc, scene, selection, nodes, apply, structural]);
 
   // Keys act while the focus is on the page (the canvas takes it on a
   // click), not in its fields or elsewhere in the Studio.
@@ -148,7 +153,7 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
           if (index + step < 0 || index + step >= edges.length) return;
           apply(moveMessage(doc, selection.id, index + step));
         } else return;
-      } else if (event.key.startsWith('Arrow') && nodes.length && !readOnly) {
+      } else if (event.key.startsWith('Arrow') && nodes.length && !readOnly && !lifecycle) {
         const step = event.shiftKey ? 4 * GRID : GRID;
         const [dx, dy] = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[event.key] ?? [0, 0];
         apply(moveNodes(doc, nodes, dx, dy));
@@ -172,9 +177,9 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
         <span className="flex-1" />
         {!readOnly && doc && (
           <div className="studio-dg-tools" role="toolbar" aria-label="Diagram tools">
-            <button type="button" className="studio-icon-button" title={sequence ? 'Add a participant' : 'Add a node'} aria-label={sequence ? 'Add a participant' : 'Add a node'} onClick={() => {
-              if (sequence) {
-                const made = addParticipant(doc);
+            <button type="button" className="studio-icon-button" title={sequence ? 'Add a participant' : lifecycle ? 'Add a state' : 'Add a node'} aria-label={sequence ? 'Add a participant' : lifecycle ? 'Add a state' : 'Add a node'} onClick={() => {
+              if (structural) {
+                const made = sequence ? addParticipant(doc) : addState(doc);
                 apply(made.diagram);
                 setSelection({ type: 'nodes', ids: [made.id] });
                 return;
@@ -184,7 +189,7 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
               apply(made.diagram);
               setSelection({ type: 'nodes', ids: [made.id] });
             }}><Plus size={16} /></button>
-            {!sequence && <button type="button" className="studio-icon-button" title="Wrap the selected nodes in a frame" aria-label="Add a frame" disabled={nodes.length === 0} onClick={() => {
+            {!structural && <button type="button" className="studio-icon-button" title="Wrap the selected nodes in a frame" aria-label="Add a frame" disabled={nodes.length === 0} onClick={() => {
               const made = addGroup(doc, nodes);
               apply(made.diagram);
               setSelection({ type: 'group', id: made.id });
@@ -193,7 +198,7 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
               apply(addCard(doc));
               setSelection({ type: 'card', index: doc.cards?.length ?? 0 });
             }}><StickyNote size={16} /></button>
-            <button type="button" className="studio-icon-button" title="Duplicate (⌘D)" aria-label="Duplicate" disabled={!selection || selection.type === 'edge' || (sequence && selection.type !== 'card')} onClick={duplicate}><Copy size={16} /></button>
+            <button type="button" className="studio-icon-button" title="Duplicate (⌘D)" aria-label="Duplicate" disabled={!selection || selection.type === 'edge' || (structural && selection.type !== 'card')} onClick={duplicate}><Copy size={16} /></button>
             <button type="button" className="studio-icon-button" title="Delete (Delete)" aria-label="Delete" disabled={!canDelete} onClick={remove}><Trash2 size={16} /></button>
             <span className="studio-dg-sep" />
             <button type="button" className="studio-icon-button" title="Undo (⌘Z)" aria-label="Undo" disabled={!file.canUndo} onClick={undo}><Undo2 size={16} /></button>
@@ -218,7 +223,9 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
           {doc && <div className="studio-dg-main">
             {sequence
               ? <SequenceCanvas doc={doc} readOnly={readOnly} selection={selection} onSelect={setSelection} onChange={apply} onDrawn={setDrawn} />
-              : <DiagramCanvas doc={doc} readOnly={readOnly} selection={selection} onSelect={setSelection} onChange={apply} onDrawn={setDrawn} />}
+              : lifecycle
+                ? <LifecycleCanvas doc={doc} readOnly={readOnly} selection={selection} onSelect={setSelection} onChange={apply} onDrawn={setDrawn} />
+                : <DiagramCanvas doc={doc} readOnly={readOnly} selection={selection} onSelect={setSelection} onChange={apply} onDrawn={setDrawn} />}
             {issues.length > 0 && (
               <details className="studio-dg-issues" open={errors.length > 0}>
                 <summary>{plural(issues.length, 'issue')} from the checks</summary>
