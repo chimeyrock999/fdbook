@@ -25,6 +25,8 @@ afterEach(() => {
   cleanup();
 });
 
+let changes = 0;
+
 // The file API over one file on a pretend disk: a write from a stale mtime
 // is a conflict, as the server answers.
 function disk(content = real) {
@@ -43,7 +45,9 @@ function disk(content = real) {
   // A change made elsewhere: an agent or the CLI.
   const elsewhere = (text: string) => {
     state.content = text;
-    state.mtimeMs += 10;
+    // Unique across tests: the versions assetChanged keeps are the page's, not a test's.
+    changes += 1;
+    state.mtimeMs = 1000 * changes;
     act(() => { assetChanged(PATH, state.mtimeMs); });
   };
   const last = () => JSON.parse(writes.at(-1) ?? 'null') as Doc;
@@ -343,6 +347,62 @@ describe('DiagramPage', () => {
     elsewhere(JSON.stringify(changed));
     await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Changed on disk'); });
     expect(node(container, 'logic').textContent).not.toContain('Changed by an agent');
+  });
+
+  it('applies a drag to a change on disk that loaded while it lasted', async () => {
+    const { container, elsewhere, last } = await open();
+    fireEvent.pointerDown(node(container, 'plan'), { button: 0, clientX: 600, clientY: 150 });
+    fireEvent.pointerMove(window, { clientX: 643, clientY: 150 });
+    const changed = JSON.parse(real) as Doc;
+    changed.nodes[0].label = 'Changed by an agent';
+    elsewhere(JSON.stringify(changed));
+    await waitFor(() => { expect(node(container, 'logic').textContent).toContain('Changed by an agent'); });
+    fireEvent.pointerUp(window, { clientX: 643, clientY: 150 });
+    await waitFor(() => { expect(last().layout.nodes.plan.x).toBe(600); });
+    expect(last().nodes[0].label).toBe('Changed by an agent');
+  });
+
+  it('leaves the Enter that ends an IME composition to the IME', async () => {
+    const { container, writeFile } = await open();
+    click(node(container, 'plan'));
+    const label = screen.getByRole('textbox', { name: 'Label' });
+    await userEvent.clear(label);
+    await userEvent.type(label, 'Ti');
+    fireEvent.keyDown(label, { key: 'Enter', isComposing: true, keyCode: 229 });
+    fireEvent.keyDown(label, { key: 'Escape', keyCode: 229 });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(writeFile).not.toHaveBeenCalled();
+    expect((label as HTMLInputElement).value).toBe('Ti');
+    expect((label as HTMLInputElement).value).toBe('Ti');
+  });
+
+  it('holds no lock for a file that does not parse until it is edited', async () => {
+    const fake = disk('{ "version": 1,');
+    const onWaiting = vi.fn();
+    render(<DiagramPage files={fake.files} path={PATH} readOnly={false} usages={[]} onOpenUsage={vi.fn()} onWaiting={onWaiting} />);
+    await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Not valid JSON'); });
+    expect(onWaiting).not.toHaveBeenCalledWith(true);
+    act(() => { jsonView().dispatch({ changes: { from: 0, insert: ' ' } }); });
+    expect(onWaiting).toHaveBeenLastCalledWith(true);
+  });
+
+  it('shows edits left in a conflict again on the next open', async () => {
+    const fake = disk();
+    const page = () => <DiagramPage files={fake.files} path={PATH} readOnly={false} usages={[]} onOpenUsage={vi.fn()} />;
+    const first = render(page());
+    await waitFor(() => { expect(first.container.querySelector('svg.dg-svg')).not.toBeNull(); });
+    fake.state.mtimeMs = 99;
+    drag(node(first.container, 'plan'), [600, 150], [643, 150]);
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('changed on disk'); });
+    first.unmount();
+    const second = render(page());
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('changed on disk'); });
+    await userEvent.click(screen.getByRole('button', { name: 'Keep mine' }));
+    await waitFor(() => { expect(fake.last().layout.nodes.plan.x).toBe(600); });
+    second.unmount();
+    // Saved: nothing is kept for a third open.
+    render(page());
+    await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Saved'); });
   });
 
   it('tells the App while edits are not on disk yet', async () => {

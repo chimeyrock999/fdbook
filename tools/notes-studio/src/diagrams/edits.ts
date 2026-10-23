@@ -17,8 +17,6 @@ type Box = { x: number; y: number; w: number; h: number };
 
 // Nodes land on this grid when they are dragged or added.
 export const GRID = 8;
-// How far a duplicate sits from what it copies.
-const OFFSET = 3 * GRID;
 const NEW_NODE = { w: 160, h: 64 };
 
 export const snap = (value: number) => Math.round(value / GRID) * GRID;
@@ -61,17 +59,27 @@ type Rect = { x: number; y: number; width: number; height: number };
 const GAP = 3 * GRID;
 const clear = (box: Box, rect: Rect) => box.x + box.w + GAP <= rect.x || rect.x + rect.width + GAP <= box.x || box.y + box.h + GAP <= rect.y || rect.y + rect.height + GAP <= box.y;
 
-// Where a new node fits without touching what is drawn (`taken`: node
-// boxes and frames, as the scene has them) inside the drawing's `width` by
-// `height`, scanning rows from the top left; below everything when nothing
-// fits. Never to the right: a wider canvas shrinks all of its text.
-export function freeSpot(taken: readonly Rect[], width: number, height: number): { x: number; y: number } {
-  const margin = 5 * GRID;
-  for (let y = margin; y + NEW_NODE.h <= height - margin; y += 2 * GRID) {
-    for (let x = margin; x + NEW_NODE.w <= width - margin; x += 2 * GRID) {
-      if (taken.every((rect) => clear({ x, y, ...NEW_NODE }, rect))) return { x, y };
+export type Size = { w: number; h: number };
+
+// The first spot where `size` fits in `bounds` without touching what is
+// drawn (`taken`: node boxes and frames, as the scene has them), scanning
+// rows from the top left; null when there is none.
+export function roomFor(taken: readonly Rect[], bounds: Rect, size: Size = NEW_NODE): { x: number; y: number } | null {
+  for (let y = bounds.y; y + size.h <= bounds.y + bounds.height; y += 2 * GRID) {
+    for (let x = bounds.x; x + size.w <= bounds.x + bounds.width; x += 2 * GRID) {
+      if (taken.every((rect) => clear({ x, y, ...size }, rect))) return { x, y };
     }
   }
+  return null;
+}
+
+// Where a new node (or a copy of `size`) goes in the drawing's `width` by
+// `height`: the first free spot, or below everything when none is free.
+// Never to the right: a wider canvas shrinks all of its text.
+export function freeSpot(taken: readonly Rect[], width: number, height: number, size: Size = NEW_NODE): { x: number; y: number } {
+  const margin = 5 * GRID;
+  const spot = roomFor(taken, { x: margin, y: margin, width: width - 2 * margin, height: height - 2 * margin }, size);
+  if (spot) return spot;
   const bottom = Math.max(0, ...taken.map((rect) => rect.y + rect.height));
   return { x: margin, y: snap(bottom + GAP) };
 }
@@ -83,12 +91,19 @@ export function addNodeAt(diagram: Input, at: { x: number; y: number }): { diagr
   return { diagram: addNode(diagram, { id, kind: diagram.kinds[0].id, label: 'New node', at: box }), id };
 }
 
-// The groups that list `id` among their members.
-const groupsWith = (diagram: Input, id: string) => (diagram.groups ?? []).filter((group) => group.members.includes(id));
+// Where copies go: moved by `dx`, `dy` from what they copy, members of the
+// frames in `join`, and, for a fixed canvas that must grow to hold them,
+// its new `height` (placement.ts picks them, clear of the drawing).
+export type Place = { dx: number; dy: number; join: readonly string[]; height?: number };
 
-// Copies of the nodes in `ids` beside them, in the same frames, with their
-// notes. The answer maps each id to its copy's.
-export function duplicateNodes(diagram: Input, ids: readonly string[]): { diagram: Input; ids: string[] } {
+function grown(diagram: Input, height: number | undefined) {
+  const canvas = diagram.layout.canvas;
+  if (canvas && height !== undefined && height > canvas[1]) diagram.layout.canvas = [canvas[0], height];
+}
+
+// Copies of the nodes in `ids` at `place`, with their notes and the edges
+// between them. The answer lists the copies' ids in the order of `ids`.
+export function duplicateNodes(diagram: Input, ids: readonly string[], place: Place): { diagram: Input; ids: string[] } {
   let next = structuredClone(diagram);
   const copies: string[] = [];
   for (const id of ids) {
@@ -96,12 +111,12 @@ export function duplicateNodes(diagram: Input, ids: readonly string[]): { diagra
     if (!node) continue;
     const copy = { ...structuredClone(node), id: freeId(next, node.id) };
     next.nodes.push(copy);
-    for (const group of groupsWith(next, id)) group.members.push(copy.id);
+    for (const group of next.groups ?? []) if (place.join.includes(group.id)) group.members.push(copy.id);
     const box = next.layout.nodes[id] as Box | undefined;
-    if (box) next.layout.nodes[copy.id] = { ...box, x: box.x + OFFSET, y: box.y + OFFSET };
+    if (box) next.layout.nodes[copy.id] = { ...box, x: box.x + place.dx, y: box.y + place.dy };
     copies.push(copy.id);
   }
-  // Edges between two copied nodes come along too.
+  grown(next, place.height);
   const copied = new Map(ids.map((id, index) => [id, copies[index]]));
   for (const edge of diagram.edges ?? []) {
     const from = copied.get(edge.from);
@@ -157,29 +172,16 @@ export function groupNodes(diagram: Input, id: string, seen = new Set<string>())
   return [...new Set(group.members.flatMap((member) => (nodes.has(member) ? [member] : groupNodes(diagram, member, seen))))];
 }
 
-// The frame and the frames inside it.
-function framesIn(diagram: Input, id: string, seen = new Set<string>()): Set<string> {
-  if (seen.has(id)) return seen;
-  seen.add(id);
-  const group = (diagram.groups ?? []).find((candidate) => candidate.id === id);
-  for (const member of group?.members ?? []) if ((diagram.groups ?? []).some((candidate) => candidate.id === member)) framesIn(diagram, member, seen);
-  return seen;
-}
-
-// A copy of the frame, beside it, around copies of the nodes inside it (the
-// frames inside are not copied: the copy holds their nodes' copies), in the
-// same frames as the original.
-export function duplicateGroup(diagram: Input, id: string): { diagram: Input; id: string } {
+// A copy of the frame at `place`, around copies of the nodes inside it
+// (the frames inside are not copied: the copy holds their nodes' copies),
+// itself a member of the frames in `place.join`.
+export function duplicateGroup(diagram: Input, id: string, place: Place): { diagram: Input; id: string } {
   const group = (diagram.groups ?? []).find((candidate) => candidate.id === id);
   if (!group) return { diagram, id };
-  const { diagram: withNodes, ids } = duplicateNodes(diagram, groupNodes(diagram, id));
+  const { diagram: withNodes, ids } = duplicateNodes(diagram, groupNodes(diagram, id), { ...place, join: [] });
   const next = structuredClone(withNodes);
-  const inside = framesIn(diagram, id);
   const copy: GroupInput = { ...structuredClone(group), id: freeId(next, group.id), members: ids };
-  for (const each of next.groups ?? []) {
-    if (inside.has(each.id)) each.members = each.members.filter((member) => !ids.includes(member));
-    else if (each.members.includes(id)) each.members.push(copy.id);
-  }
+  for (const each of next.groups ?? []) if (place.join.includes(each.id)) each.members.push(copy.id);
   next.groups = [...(next.groups ?? []), copy];
   const pad = next.layout.groups?.[id];
   if (pad) next.layout.groups = { ...next.layout.groups, [copy.id]: { ...pad } };

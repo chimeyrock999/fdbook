@@ -1,6 +1,5 @@
 import { Braces, Copy, FileText, Frame, Plus, Redo2, StickyNote, Trash2, Undo2, Workflow } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { Scene } from '@site/lib/diagram/scene';
 import { DIAGRAM_SUFFIX, DIAGRAMS_DIR } from '@site/lib/diagram/source';
 import type { AssetUsage } from '../api/assets';
 import type { createFilesClient } from '../api/files';
@@ -10,6 +9,7 @@ import { DiagramJson } from './DiagramJson';
 import { JsonSplit } from './JsonSplit';
 import { SPLIT_MIN, useJsonHeight } from './useJsonHeight';
 import { DiagramPanel } from './DiagramPanel';
+import { legendBand, placeCopy } from './placement';
 import {
   addCard,
   addGroup,
@@ -38,9 +38,6 @@ const STATUS: Record<SaveStatus, string> = {
   conflict: 'Changed on disk',
   failed: 'Could not save',
 };
-
-// The band the legend takes at the bottom, which a new node keeps clear of.
-const legendBand = (scene: Scene) => ({ x: 0, y: scene.height - 72, width: scene.width, height: 72 });
 
 // The `src` a <Diagram> names the file with (lib/diagram/source.ts, the other way).
 const srcOf = (path: string) => path.slice(DIAGRAMS_DIR.length + 1, -DIAGRAM_SUFFIX.length);
@@ -80,7 +77,7 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
   const [json, setJson] = useState(false);
   // A file that is not JSON opens in the JSON view, which stays open once it parses.
   if (!file.doc && file.status === 'invalid' && !json) setJson(true);
-  const waiting = ['unsaved', 'saving', 'invalid', 'conflict'].includes(file.status) || (file.status === 'failed' && file.doc !== null);
+  const { waiting } = file;
   useEffect(() => { onWaiting?.(waiting); }, [waiting, onWaiting]);
   useEffect(() => () => { onWaiting?.(false); }, [onWaiting]);
   const [drawn, setDrawn] = useState<Drawn>({ scene: null, issues: [] });
@@ -100,21 +97,24 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
     setSelection(null);
   }, [doc, selection, nodes, apply]);
 
+  const { scene } = drawn;
   const duplicate = useCallback(() => {
     if (!doc || !selection) return;
     if (selection.type === 'nodes') {
-      const made = duplicateNodes(doc, nodes);
+      if (!scene) return;
+      const made = duplicateNodes(doc, nodes, placeCopy(doc, scene, { nodes }));
       apply(made.diagram);
       setSelection({ type: 'nodes', ids: made.ids });
     } else if (selection.type === 'group') {
-      const made = duplicateGroup(doc, selection.id);
+      if (!scene) return;
+      const made = duplicateGroup(doc, selection.id, placeCopy(doc, scene, { group: selection.id }));
       apply(made.diagram);
       setSelection({ type: 'group', id: made.id });
     } else if (selection.type === 'card') {
       apply(duplicateCard(doc, selection.index));
       setSelection({ type: 'card', index: selection.index + 1 });
     }
-  }, [doc, selection, nodes, apply]);
+  }, [doc, scene, selection, nodes, apply]);
 
   // Keys act while the focus is on the page (the canvas takes it on a
   // click), not in its fields or elsewhere in the Studio.
@@ -152,7 +152,6 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
         {!readOnly && doc && (
           <div className="studio-dg-tools" role="toolbar" aria-label="Diagram tools">
             <button type="button" className="studio-icon-button" title="Add a node" aria-label="Add a node" onClick={() => {
-              const { scene } = drawn;
               const spot = scene ? freeSpot([...scene.nodes, ...scene.frames, ...(scene.legend ? [legendBand(scene)] : [])], scene.width, scene.height) : { x: 40, y: 40 };
               const made = addNodeAt(doc, spot);
               apply(made.diagram);

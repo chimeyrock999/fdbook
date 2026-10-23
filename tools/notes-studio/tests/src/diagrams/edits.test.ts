@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { globSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatDiagramJson } from '@site/lib/diagram/format';
 import { validateDiagram } from '@site/lib/diagram/validate';
@@ -27,6 +27,7 @@ import {
   updateNode,
   type Input,
 } from '../../../src/diagrams/edits';
+import { placeCopy } from '../../../src/diagrams/placement';
 
 const PATH = 'diagrams/data-platform/processing/apache-spark/spark-logic-to-execution.diagram.json';
 // The repository root, from tools/notes-studio/tests/src/diagrams.
@@ -41,6 +42,15 @@ function draws(diagram: Input) {
   if (!scene) throw new Error('the diagram does not draw');
   return scene;
 }
+
+// No error the original did not have.
+function noNewErrors(before: Input, after: Input) {
+  const errors = (diagram: Input) => validateDiagram(diagram).issues.filter((issue) => issue.severity === 'error').map((issue) => issue.code);
+  expect(errors(after)).toEqual(errors(before));
+}
+
+const RUNTIME = 'diagrams/data-platform/stacks-integration/databricks/databricks-interactive-runtime/runtime-architecture-from-process-signals.diagram.json';
+const runtime = () => JSON.parse(readFileSync(join(import.meta.dirname, '../../../../..', RUNTIME), 'utf8')) as Input;
 
 // The lines of the formatted file that differ.
 function changedLines(before: Input, after: Input) {
@@ -89,13 +99,22 @@ describe('diagram edits', () => {
     expect(freeSpot(full, scene.width, scene.height)).toEqual({ x: 40, y: snap(scene.height + 24) });
   });
 
-  it('duplicates nodes beside them, in their frames, with the edges between them', () => {
-    const { diagram, ids } = duplicateNodes(real(), ['plan', 'physical']);
+  it('duplicates nodes inside the frame that holds them, clear of the rest, with the edges between them', () => {
+    const { diagram, ids } = duplicateNodes(real(), ['plan', 'physical'], placeCopy(real(), draws(real()), { nodes: ['plan', 'physical'] }));
     expect(ids).toEqual(['plan-2', 'physical-2']);
-    expect(diagram.layout.nodes['plan-2']).toEqual({ x: 584, y: 144, w: 190, h: 68 });
     expect(diagram.groups?.[0].members).toEqual(['ops', 'plan', 'physical', 'units', 'plan-2', 'physical-2']);
+    expect(diagram.layout.nodes['plan-2']).toMatchObject({ w: 190, h: 68 });
+    // The pair keeps its spacing.
+    expect(diagram.layout.nodes['physical-2'].x - diagram.layout.nodes['plan-2'].x).toBe(260);
     expect(diagram.edges?.at(-1)).toMatchObject({ from: 'plan-2', to: 'physical-2', label: real().edges?.find((edge) => edge.id === 'optimize')?.label });
     expect(diagram.nodes.find((node) => node.id === 'plan-2')?.note).toEqual(real().nodes.find((node) => node.id === 'plan')?.note);
+    noNewErrors(real(), diagram);
+  });
+
+  it('duplicates a node with no room in its frame outside every frame', () => {
+    const { diagram, ids } = duplicateNodes(real(), ['logic'], placeCopy(real(), draws(real()), { nodes: ['logic'] }));
+    expect(diagram.groups?.[0].members).not.toContain(ids[0]);
+    noNewErrors(real(), diagram);
   });
 
   it('wraps nodes in a new frame inside the one that holds them, and removes it again', () => {
@@ -118,14 +137,35 @@ describe('diagram edits', () => {
     expect(next.layout.edges?.['logic-spark-application-runtime-boundary']).toBeUndefined();
   });
 
-  it('duplicates a frame around copies of its nodes, beside it', () => {
-    const { diagram, id } = duplicateGroup(real(), FRAME);
+  it('duplicates a frame around copies of its nodes, clear of the drawing', () => {
+    const { diagram, id } = duplicateGroup(real(), FRAME, placeCopy(real(), draws(real()), { group: FRAME }));
     expect(id).toBe(`${FRAME}-2`);
     const copy = diagram.groups?.find((group) => group.id === id);
     expect(copy?.members).toEqual(['ops-2', 'plan-2', 'physical-2', 'units-2']);
     expect(diagram.groups?.find((group) => group.id === FRAME)?.members).toEqual(['ops', 'plan', 'physical', 'units']);
-    expect(diagram.layout.nodes['ops-2']).toMatchObject({ x: 324, y: 144 });
+    noNewErrors(real(), diagram);
   });
+
+  it('keeps the copy of a frame out of the frames inside the original', () => {
+    const doc = runtime();
+    const frame = 'driver-node-one-machine';
+    const { diagram, id } = duplicateGroup(doc, frame, placeCopy(doc, draws(doc), { group: frame }));
+    const copies = groupNodes(diagram, id);
+    expect(copies.length).toBe(groupNodes(doc, frame).length);
+    for (const group of doc.groups ?? []) {
+      if (group.id === frame) continue;
+      expect(diagram.groups?.find((each) => each.id === group.id)?.members, group.id).toEqual(group.members);
+    }
+    noNewErrors(doc, diagram);
+  });
+
+  // Every node and every frame of the repository's diagrams, one at a time.
+  it.each(globSync('diagrams/**/*.diagram.json', { cwd: join(import.meta.dirname, '../../../../..') }))('duplicates anything in %s without a new error', (path) => {
+    const doc = JSON.parse(readFileSync(join(import.meta.dirname, '../../../../..', path), 'utf8')) as Input;
+    const scene = draws(doc);
+    for (const node of doc.nodes) noNewErrors(doc, duplicateNodes(doc, [node.id], placeCopy(doc, scene, { nodes: [node.id] })).diagram);
+    for (const group of doc.groups ?? []) noNewErrors(doc, duplicateGroup(doc, group.id, placeCopy(doc, scene, { group: group.id })).diagram);
+  }, 30_000);
 
   it('connects two nodes from the sides they were drawn between', () => {
     const { diagram, id } = connectAt(real(), 'logic', 'executors', 'bottom', 'left');

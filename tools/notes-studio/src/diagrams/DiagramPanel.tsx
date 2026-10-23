@@ -1,6 +1,7 @@
 import { EDGE_VARIANTS, ICONS, SIDES, TONES, type Side } from '@site/lib/diagram/schema';
 import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { composing } from '../keyboard';
 import type { Selection } from './DiagramCanvas';
 import {
   addKind,
@@ -55,7 +56,15 @@ function TextField({ label, value, onCommit, multiline = false, readOnly, hint }
       {multiline ? (
         <textarea {...props} rows={3} />
       ) : (
-        <input {...props} onKeyDown={(event) => { if (event.key === 'Enter') commit(); else if (event.key === 'Escape') setDraft(null); }} />
+        <input
+          {...props}
+          onKeyDown={(event) => {
+            // The Enter or Escape that ends an IME composition (Telex, VNI) is the IME's.
+            if (composing(event)) return;
+            if (event.key === 'Enter') commit();
+            else if (event.key === 'Escape') setDraft(null);
+          }}
+        />
       )}
       {hint && <small>{hint}</small>}
     </label>

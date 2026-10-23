@@ -1166,7 +1166,11 @@ drawing, so it looks as the note will, with an editing layer on top:
   one; a double click removes it and **Route it again** clears them all;
 - add a node (where it fits, or with a double click on the canvas), wrap the
   selection in a frame, add a card; duplicate (⌘D) and delete (Delete) what
-  is selected; undo and redo (⌘Z, ⇧⌘Z) cover every edit, the JSON's too;
+  is selected; undo and redo (⌘Z, ⇧⌘Z) cover every edit, the JSON's too. A
+  copy goes where it overlaps nothing (`src/diagrams/placement.ts`): inside
+  the innermost frame that holds the original when it has room there, else
+  in the first free spot of the drawing, else below it, a fixed canvas
+  growing to hold it;
 - the panel edits what is selected: a node's label, sublabel, tag, kind
   (or a **New kind…** for it), its kind's name, tone and icon, and its note
   (role, evidence badge, points); an edge's label, detail, variant, arrows
@@ -1182,7 +1186,11 @@ through the file API with the mtime they read, written by
 `formatDiagramJson` so a move changes one line. A change on disk (an agent,
 the CLI) loads while nothing waits to be saved, and undo can go back past
 it; with edits waiting, the page asks whether to load the disk's version or
-keep its own. On main, or for a reader, the editor only shows.
+keep its own. A gesture under way applies to the version that loaded.
+Edits not on disk yet hold the same lock as a note's (switching change
+request, renames, Commit); left in a conflict or as JSON that does not
+parse, they show again the next time the file is opened in the tab. On
+main, or for a reader, the editor only shows.
 
 Agents change diagrams through the Studio MCP server's `diagram_*` tools
 (`server/mcp/diagram-tools.ts`, mounted at `/api/mcp` beside the note

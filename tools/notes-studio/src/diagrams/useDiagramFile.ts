@@ -17,6 +17,8 @@ type State = {
   future: Input[];
   status: SaveStatus;
   error: string | null;
+  // The text the disk holds, as far as this page knows; null before it was read.
+  onDisk: string | null;
   // What the disk holds after a change made elsewhere, in `conflict`; a
   // null content: the file is gone (or could not be read).
   disk: { content: string | null; mtimeMs: number | null } | null;
@@ -27,7 +29,21 @@ const SAVE_MS = 400;
 const TYPING_MS = 1000;
 const HISTORY = 200;
 
-const EMPTY: State = { doc: null, text: '', past: [], future: [], status: 'loading', error: null, disk: null };
+const EMPTY: State = { doc: null, text: '', past: [], future: [], status: 'loading', error: null, onDisk: null, disk: null };
+
+// Edits a page left before they were on disk (a conflict, JSON that did not
+// parse, a save still under way), by file client (one worktree) and path,
+// for the next page that opens the file in this tab: it shows them again,
+// saved or in conflict.
+type Left = Map<string, { text: string; base: number | null }>;
+const leftBy = new WeakMap<Files, Left>();
+function leftIn(files: Files): Left {
+  const known = leftBy.get(files);
+  if (known) return known;
+  const left: Left = new Map();
+  leftBy.set(files, left);
+  return left;
+}
 
 function parsed(text: string): Input | null {
   try {
@@ -46,6 +62,7 @@ function parsed(text: string): Input | null {
 // edits waiting it is a conflict the page resolves (`resolve`).
 export function useDiagramFile(files: Files, path: string, readOnly: boolean) {
   const [state, setState] = useState<State>(EMPTY);
+  const left = leftIn(files);
   const url = useAssetUrl(path);
   // The mtime the next write is based on; null writes a new file. `known`:
   // the file was read once, so writing makes sense.
@@ -80,7 +97,8 @@ export function useDiagramFile(files: Files, path: string, readOnly: boolean) {
     try {
       base.current = await files.writeFile(path, text, base.current);
       saved.current = text;
-      update((current) => ({ ...current, status: current.text === text ? 'saved' : 'unsaved' }));
+      if (left.get(path)?.text === text) left.delete(path);
+      update((current) => ({ ...current, onDisk: text, status: current.text === text ? 'saved' : 'unsaved' }));
     } catch (error) {
       if (error instanceof FileConflictError) {
         update((current) => ({ ...current, status: 'conflict', disk: error.disk ?? { content: null, mtimeMs: null } }));
@@ -110,7 +128,22 @@ export function useDiagramFile(files: Files, path: string, readOnly: boolean) {
       future: [],
       status: doc ? 'saved' : 'invalid',
       error: null,
+      onDisk: content,
       disk: null,
+    }));
+  }, [update]);
+
+  // Edits an earlier page left for this file: on the disk's version they
+  // were made from, they wait to be saved; on another, they are a conflict.
+  const restore = useCallback((kept: { text: string; base: number | null }, content: string, mtimeMs: number) => {
+    const doc = parsed(kept.text);
+    const conflict = kept.base !== mtimeMs;
+    update((current) => ({
+      ...current,
+      doc: doc ?? current.doc,
+      text: kept.text,
+      status: conflict ? 'conflict' : doc ? 'unsaved' : 'invalid',
+      disk: conflict ? { content, mtimeMs } : null,
     }));
   }, [update]);
 
@@ -125,10 +158,19 @@ export function useDiagramFile(files: Files, path: string, readOnly: boolean) {
         if (known.current && (content === saved.current || content === latest.current.text)) {
           base.current = mtimeMs;
           saved.current = content;
+          update((state) => ({ ...state, onDisk: content }));
           return;
         }
         const first = !known.current;
-        if (first || latest.current.text === saved.current) loaded(content, mtimeMs, !first);
+        const kept = first ? left.get(path) : undefined;
+        if (kept) {
+          left.delete(path);
+          loaded(content, mtimeMs, false);
+          if (kept.text !== content) {
+            restore(kept, content, mtimeMs);
+            later();
+          }
+        } else if (first || latest.current.text === saved.current) loaded(content, mtimeMs, !first);
         else update((state) => ({ ...state, status: 'conflict', disk: { content, mtimeMs } }));
       },
       (error: unknown) => {
@@ -139,12 +181,19 @@ export function useDiagramFile(files: Files, path: string, readOnly: boolean) {
       },
     );
     return () => { current = false; };
-  }, [files, path, url, loaded, update]);
+  }, [files, path, url, loaded, restore, later, update]);
 
-  // Leaving the page saves what is waiting.
-  useEffect(() => () => {
-    if (latest.current.status === 'unsaved') void save();
-  }, [save]);
+  // Leaving the page saves what is waiting, and keeps what is not on disk
+  // yet for the next page that opens the file.
+  const leave = useRef<() => void>(() => undefined);
+  useLayoutEffect(() => {
+    leave.current = () => {
+      const { text, onDisk, status } = latest.current;
+      if (onDisk !== null && text !== onDisk) left.set(path, { text, base: base.current });
+      if (status === 'unsaved') void save();
+    };
+  });
+  useEffect(() => () => { leave.current(); }, []);
 
   // A new document from the canvas or the panel: one undo step.
   const apply = useCallback((next: Input) => {
@@ -211,6 +260,8 @@ export function useDiagramFile(files: Files, path: string, readOnly: boolean) {
 
   return {
     ...state,
+    // Edits not on disk yet: the App waits for them as for a note's.
+    waiting: state.onDisk !== null && state.text !== state.onDisk,
     canUndo: state.past.length > 0 && !readOnly,
     canRedo: state.future.length > 0 && !readOnly,
     apply,

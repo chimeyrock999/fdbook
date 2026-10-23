@@ -4,7 +4,8 @@ import { dirname, join } from 'node:path';
 import { slugify } from '../../src/slug.ts';
 import { listEditableFiles, statOrNull, writeAtomic } from '../files/store.ts';
 import { HttpError } from '../http.ts';
-import { ASSETS_DIR, extensionOf, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
+import { DIAGRAM_SUFFIX } from '../security/asset-types.ts';
+import { ASSETS_DIR, classifyPath, DIAGRAMS_DIR, extensionOf, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 import { findAssetRefs, rewriteAssetRefs, type AssetRef } from './refs.ts';
 import { findAssetSources, type AssetSource } from './sources.ts';
 
@@ -90,9 +91,9 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&
 
 // Where a note that does not parse may use `asset`: the first line that
 // holds its file name whole (`data.png` is not `ta.png`), as written or
-// percent-encoded.
+// percent-encoded; for a diagram, the `src` a <Diagram> names it with.
 function unsureUsage(note: string, lines: string[], asset: string): AssetUsage | null {
-  const name = baseOf(asset);
+  const name = classifyPath(asset) === 'diagram' ? asset.slice(DIAGRAMS_DIR.length + 1, -DIAGRAM_SUFFIX.length) : baseOf(asset);
   const pattern = new RegExp(`(?<![\\w.%-])(${escapeRegExp(name)}|${escapeRegExp(encodeURIComponent(name))})(?![\\w-])`);
   for (const [index, line] of lines.entries()) {
     const match = pattern.exec(line);

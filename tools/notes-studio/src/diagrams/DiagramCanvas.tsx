@@ -22,6 +22,13 @@ type Drag =
   | { type: 'connect'; node: string; side: Side; from: Point; to: Point }
   | { type: 'waypoint'; edge: string; via: Point[]; index: number; from: Point; moved: boolean };
 
+// What a gesture changes so far.
+type Preview = { type: 'move'; ids: string[]; dx: number; dy: number } | { type: 'bend'; edge: string; via: Point[] };
+
+const previewed = (doc: Input, preview: Preview) => (preview.type === 'move'
+  ? moveNodes(doc, preview.ids, preview.dx, preview.dy)
+  : (doc.edges ?? []).some((edge) => edge.id === preview.edge) ? setWaypoints(doc, preview.edge, preview.via) : doc);
+
 // Pointer travel, in screen pixels, before a press counts as a drag.
 const DRAG_PX = 3;
 const SIDES: Side[] = ['top', 'right', 'bottom', 'left'];
@@ -74,10 +81,11 @@ export function DiagramCanvas({ doc, readOnly, selection, onSelect, onChange, on
   onChange: (next: Input) => void;
   onDrawn?: (drawn: Drawn) => void;
 }) {
-  // The document as the gesture under way has it.
-  const [preview, setPreview] = useState<Input | null>(null);
+  // The gesture under way, drawn on the document as it is now, so a change
+  // on disk during a drag shows too.
+  const [preview, setPreview] = useState<Preview | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
-  const shown = preview ?? doc;
+  const shown = useMemo(() => (preview ? previewed(doc, preview) : doc), [doc, preview]);
   const drawn = useMemo<Drawn>(() => {
     try {
       const { scene, issues } = validateDiagram(shown);
@@ -92,7 +100,13 @@ export function DiagramCanvas({ doc, readOnly, selection, onSelect, onChange, on
   const press = useRef<{ x: number; y: number } | null>(null);
   // The scene drawn now: an automatic canvas grows while a node is dragged out.
   const current = useRef(scene);
-  useLayoutEffect(() => { current.current = scene; });
+  // The document now: a change on disk can load while a gesture lasts, and
+  // the gesture then applies to it, not to the one it started on.
+  const latest = useRef(doc);
+  useLayoutEffect(() => {
+    current.current = scene;
+    latest.current = doc;
+  });
 
   // Not while a gesture redraws it: the page around would render every frame.
   useEffect(() => { if (!preview) onDrawn?.(drawn); }, [drawn, preview, onDrawn]);
@@ -119,7 +133,7 @@ export function DiagramCanvas({ doc, readOnly, selection, onSelect, onChange, on
       if (last.type === 'move') {
         if (!far && !last.moved) return;
         last = { ...last, moved: true };
-        const next = moveNodes(doc, last.ids, point[0] - last.from[0], point[1] - last.from[1]);
+        const next: Preview = { type: 'move', ids: last.ids, dx: point[0] - last.from[0], dy: point[1] - last.from[1] };
         cancelAnimationFrame(frame);
         frame = requestAnimationFrame(() => { setPreview(next); });
       } else if (last.type === 'connect') {
@@ -130,7 +144,7 @@ export function DiagramCanvas({ doc, readOnly, selection, onSelect, onChange, on
         if (!far && !bend.moved) return;
         const via = bend.via.map((each, index): Point => (index === bend.index ? point : each));
         last = { ...bend, via, moved: true };
-        const next = setWaypoints(doc, bend.edge, via);
+        const next: Preview = { type: 'bend', edge: bend.edge, via };
         cancelAnimationFrame(frame);
         frame = requestAnimationFrame(() => { setPreview(next); });
       }
@@ -139,12 +153,16 @@ export function DiagramCanvas({ doc, readOnly, selection, onSelect, onChange, on
       cancelAnimationFrame(frame);
       const point = at(event);
       const done = last;
-      if (done.type === 'move' && done.moved) onChange(moveNodes(doc, done.ids, point[0] - done.from[0], point[1] - done.from[1]));
-      else if (done.type === 'waypoint' && done.moved) onChange(setWaypoints(doc, done.edge, done.via.map((each, index): Point => (index === done.index ? point : each))));
-      else if (done.type === 'connect' && scene) {
-        const target = endAt(scene, point);
-        if (target && target.id !== done.node) {
-          const made = connectAt(doc, done.node, target.id, done.side, nearestSide(target.box, point));
+      const now = latest.current;
+      const drawnNow = current.current;
+      const has = (id: string) => [...now.nodes, ...(now.groups ?? [])].some((item) => item.id === id);
+      if (done.type === 'move' && done.moved) onChange(moveNodes(now, done.ids, point[0] - done.from[0], point[1] - done.from[1]));
+      else if (done.type === 'waypoint' && done.moved && (now.edges ?? []).some((edge) => edge.id === done.edge)) {
+        onChange(setWaypoints(now, done.edge, done.via.map((each, index): Point => (index === done.index ? point : each))));
+      } else if (done.type === 'connect' && drawnNow && has(done.node)) {
+        const target = endAt(drawnNow, point);
+        if (target && target.id !== done.node && has(target.id)) {
+          const made = connectAt(now, done.node, target.id, done.side, nearestSide(target.box, point));
           onChange(made.diagram);
           onSelect({ type: 'edge', id: made.id });
         }
@@ -162,7 +180,8 @@ export function DiagramCanvas({ doc, readOnly, selection, onSelect, onChange, on
       window.removeEventListener('pointerup', end);
       window.removeEventListener('pointercancel', end);
     };
-    // A gesture keeps the document it started on; `drag` changes only by its own updates.
+    // The gesture reads the document and the scene through refs, so it
+    // follows a change on disk; `drag` changes only by its own updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drag?.type]);
 
