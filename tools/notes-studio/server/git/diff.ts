@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { HttpError } from '../http.ts';
 import { isTextPath, MAX_ASSET_BYTES } from '../security/asset-types.ts';
-import { ASSETS_DIR, classifyPath, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
+import { classifyPath, EDITABLE_AREAS, resolveWorktreePath } from '../security/paths.ts';
 import { statOrNull } from '../files/store.ts';
 import { assertWorktreeTop, runGit, runGitBytes } from './git.ts';
 import { baseOf } from './history.ts';
@@ -75,7 +75,7 @@ async function sameBlob(root: string, base: string, from: string, path: string) 
 // comes from comparing the worktree with the base. A file not yet known to
 // git (a rename the Studio made, not committed) has none.
 async function renamedFrom(root: string, base: string, path: string) {
-  const output = await runGit(root, ['diff', '-z', '--name-status', '--find-renames', base, '--', NOTES_DIR, ASSETS_DIR]);
+  const output = await runGit(root, ['diff', '-z', '--name-status', '--find-renames', base, '--', ...EDITABLE_AREAS]);
   const entries = output.split('\0');
   for (let index = 0; index < entries.length; index += 1) {
     if (!entries[index].startsWith('R')) continue;

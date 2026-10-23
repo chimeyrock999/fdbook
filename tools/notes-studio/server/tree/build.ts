@@ -39,7 +39,7 @@ export async function readNotesContent(root: string): Promise<NotesContent> {
   const pages = new Map<string, Data>();
   const metas = new Map<string, Data>();
   const mtimes = new Map<string, number>();
-  const files = (await listEditableFiles(root)).filter((file) => file.kind !== 'asset');
+  const files = (await listEditableFiles(root)).filter((file) => file.kind === 'note' || file.kind === 'meta');
   await Promise.all(
     files.map(async (file) => {
       const text = await readFile(join(root, file.path), 'utf8').catch(() => null);

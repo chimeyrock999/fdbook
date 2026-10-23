@@ -1,0 +1,29 @@
+/* The drawing inside a <Diagram> card; the site's styles/diagram.css colours it. */
+.studio-diagram-view {
+  border-bottom: 1px solid var(--fde-border);
+}
+.studio-diagram-view .dg-canvas {
+  padding: 8px;
+}
+.studio-diagram-view svg.dg-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.studio-diagram-problem {
+  display: block;
+  padding: 12px;
+  font-size: 0.8rem;
+  color: var(--fde-muted-foreground);
+}
+.studio-diagram-issues {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--fde-border);
+  border-radius: 999px;
+  font-size: 11px;
+}
+.studio-diagram-issues[data-error] {
+  border-color: color-mix(in srgb, var(--red-stroke, #b03c4e) 60%, transparent);
+  color: var(--red-stroke, #b03c4e);
+}

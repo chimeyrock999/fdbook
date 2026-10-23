@@ -121,9 +121,10 @@ Everything the server touches goes through these checks.
   Requests without them (curl, agents) pass on Host alone. A websocket
   upgrade that is neither Vite HMR nor the notes sync is closed.
 - **Path policy** (`server/security/paths.ts`). Paths are relative to the worktree, in
-  posix form. Only `content/notes/**/*.mdx`, `content/notes/**/meta.yaml` and
+  posix form. Only `content/notes/**/*.mdx`, `content/notes/**/meta.yaml`,
   assets under `public/notes/` (png, jpg, jpeg, gif, webp, avif, svg, html,
-  glb, pdf) are allowed. `..`, empty segments and hidden segments such as
+  glb, pdf) and diagrams, `diagrams/**/*.diagram.json`, are allowed (not
+  `diagrams/diagram.schema.json`). `..`, empty segments and hidden segments such as
   `.obsidian` are refused, and so is any symlink on the path, even one that
   points inside: a save replaces the file, so it would turn a linked note into
   a copy. The file API, the file events and the notes sync all use this check.
@@ -699,8 +700,9 @@ waits until they are fixed.
 Diagram sources are files under `diagrams/` that generate an asset: a JSON
 spec naming it in `meta.output`, or a `*.regen.sh` script naming it in
 `OUT=`, as the retired Archify pipeline wrote them. Regenerating writes that
-path again, so the Studio does not delete such a file. It does not edit
-`diagrams/` either: after a rename, update the source before regenerating.
+path again, so the Studio does not delete such a file. Under `diagrams/` it
+edits only `*.diagram.json` (see Diagrams), never a source: after a rename,
+update the source before regenerating.
 The list reads them again when a note or an asset changes, not when a
 diagram does. The repo has none left: a `<Diagram>` (`diagrams/**/*.diagram.json`)
 is drawn when the site builds and generates no asset.
@@ -1137,6 +1139,32 @@ site's directive plugin and components use, so the two cannot drift.
 `npm run studio:lint` (from the repo root) lints every note and exits 1 on
 an error; `tests/server/lint/notes.test.ts` keeps the whole of
 `content/notes` at zero issues.
+
+## Diagrams
+
+A `<Diagram src>` card draws its `diagrams/<src>.diagram.json` with the
+site's renderer (`lib/diagram`, styled by `styles/diagram.css`) and counts the
+problems the site's checks find; it draws again when the file changes on
+disk, as an asset does (`assetChanged`). Diagram files are editable paths:
+they are listed, watched and diffed, and show in Changes (a commit of only
+diagrams is named after them).
+
+Agents change diagrams through the Studio MCP server's `diagram_*` tools
+(`server/mcp/diagram-tools.ts`, mounted at `/api/mcp` beside the note
+tools):
+`diagram_create`, `diagram_add_node`, `diagram_connect`, `diagram_move`,
+`diagram_set_note`, `diagram_update` (a node's, an edge's or a group's fields,
+and an edge's label pin), `diagram_remove_edge`, `diagram_remove_node` and
+`diagram_layout` write through
+`ctx.files` with the mtime they read, so a save made meanwhile is refused,
+not overwritten; `diagram_list`, `diagram_read`, `diagram_validate` and
+`diagram_render_png` (a PNG the agent can look at) only read. Each write lays
+out what has no position (`lib/diagram/auto-layout.ts`, which never moves a
+placed node) and answers with the checks; elkjs and resvg load on first
+use, from the repository root's packages. `server/mcp/tool.ts` is the tool
+contract the MCP host and the tools share. The skill
+`skills/chimeyrock-diagram` (at the repository root) is how an agent uses
+them.
 
 ## Plugins
 
