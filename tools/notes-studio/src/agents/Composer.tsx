@@ -1,12 +1,14 @@
 import { ArrowUp, AtSign, Paperclip } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { useBusy } from '../busy';
-import { composing } from '../keyboard';
 import { ATTACHMENT_MAX_BYTES, SELECTION_MAX } from '../../server/agents/shared';
+import { useBusy } from '../actions/busy';
+import { PendingButton } from '../actions/PendingButton';
+import { toast } from '../actions/toasts';
+import { composing } from '../keyboard';
 import type { Attachment, Mention, MessageContext, MessageSelection } from '../api/agents';
 import { AttachmentChip, CaretChip, MentionChip, SelectionChip } from './ContextChips';
-import { useEditorPlace } from './editor-place';
 import { mentionAt } from './context-labels';
+import { useEditorPlace } from './editor-place';
 import { MentionList } from './MentionList';
 
 // What the composer needs to add context: mentions to look up and
@@ -21,39 +23,48 @@ export type ContextClient = {
 // text (Telex) only confirms it. It grows with its text
 // up to a few lines (agents.css), then scrolls, and keeps its focus after
 // sending. `busy`: the agent is answering, so typing goes on but nothing
-// sends. `onSend` resolves whether the message went, to clear the box.
+// sends. The box empties as the message goes (the thread shows it on its
+// way, AgentPanel); `onSend` resolves whether it went, and a message that
+// did not comes back to the box.
 // With `client`, the message carries context (#86): the note open in the
 // editor and its selection (on its own, no button: × leaves it out of this
 // message), and the notes and files mentioned with @ or attached.
-export function Composer({ placeholder, busy, onSend, client = null, onFailed = () => undefined, children }: {
+export function Composer({ placeholder, busy, onSend, client = null, children }: {
   placeholder: string;
   busy: boolean;
   onSend: (text: string, context: MessageContext | null) => Promise<boolean>;
   client?: ContextClient | null;
-  onFailed?: (message: string) => void;
   children?: ReactNode;
 }) {
   const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
+  const action = useBusy();
+  const upload = useBusy();
   const [mentions, setMentions] = useState<Mention[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   // The selection taken off this message: another one shows, and after sending this one does too.
   const [dropped, setDropped] = useState<MessageSelection | null>(null);
   // The @ being typed, at `start` in the text, and what it matches.
   const [query, setQuery] = useState<{ start: number; text: string } | null>(null);
-  const [uploading, upload] = useBusy();
   const box = useRef<HTMLTextAreaElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const place = useEditorPlace();
   const withContext = client !== null;
   const selection = withContext && place?.selection != null && place.selection !== dropped ? place.selection : null;
-  const blocked = busy || sending || uploading || text.trim() === '';
+  const blocked = busy || action.busy || upload.busy || text.trim() === '';
 
+  // Where the caret goes once the text changed here (a mention picked, an @
+  // put in): set as the new text is committed, before any key that follows.
+  const caretTo = useRef<number | null>(null);
   useLayoutEffect(() => {
     const area = box.current;
     if (area === null) return;
     area.style.height = 'auto';
     area.style.height = `${String(area.scrollHeight)}px`;
+    if (caretTo.current !== null) {
+      area.focus();
+      area.setSelectionRange(caretTo.current, caretTo.current);
+      caretTo.current = null;
+    }
   }, [text]);
 
   const contextOf = (): MessageContext | null => {
@@ -66,26 +77,31 @@ export function Composer({ placeholder, busy, onSend, client = null, onFailed = 
 
   const send = () => {
     if (blocked) return;
-    setSending(true);
+    const message = text;
+    const context = contextOf();
+    const kept = { mentions, attachments };
+    setText('');
     setQuery(null);
-    onSend(text, contextOf()).then((sent) => {
-      if (!sent) return;
-      setText('');
-      setMentions([]);
-      setAttachments([]);
-      setDropped(null);
-    }, () => undefined).finally(() => {
-      setSending(false);
-      box.current?.focus();
-    });
+    setMentions([]);
+    setAttachments([]);
+    void action.run(async () => {
+      if (await onSend(message, context)) {
+        setDropped(null);
+        return;
+      }
+      // What was typed or added meanwhile stays.
+      setText((now) => (now === '' ? message : now));
+      setMentions((now) => (now.length === 0 ? kept.mentions : now));
+      setAttachments((now) => (now.length === 0 ? kept.attachments : now));
+    }).finally(() => { box.current?.focus(); });
   };
 
   const pick = (mention: Mention) => {
     if (query !== null) {
       // The chip names it: the @word goes from the text.
       const end = query.start + 1 + query.text.length;
+      caretTo.current = query.start;
       setText((before) => before.slice(0, query.start) + before.slice(end));
-      requestAnimationFrame(() => { box.current?.setSelectionRange(query.start, query.start); });
     }
     setMentions((before) => (before.some((each) => each.path === mention.path) ? before : [...before, mention]));
     setQuery(null);
@@ -97,20 +113,21 @@ export function Composer({ placeholder, busy, onSend, client = null, onFailed = 
   const attach = (files: FileList | File[] | null) => {
     if (client === null || files === null) return;
     waiting.current.push(...files);
-    void upload(async () => {
+    void upload.run(async () => {
       for (let each = waiting.current.shift(); each !== undefined; each = waiting.current.shift()) {
         if (each.size > ATTACHMENT_MAX_BYTES) {
-          onFailed(`${each.name} is larger than ${String(ATTACHMENT_MAX_BYTES / 1024 / 1024)} MB: attach a smaller document.`);
+          toast.error(`${each.name} is larger than ${String(ATTACHMENT_MAX_BYTES / 1024 / 1024)} MB: attach a smaller document.`);
           continue;
         }
         try {
           const attachment = await client.attach(each);
           setAttachments((before) => [...before, attachment]);
         } catch (reason) {
-          onFailed((reason as Error).message);
+          // The others still go up.
+          toast.error(reason);
         }
       }
-    });
+    }, 'attach');
   };
 
   const typed = (value: string, caret: number) => {
@@ -158,9 +175,9 @@ export function Composer({ placeholder, busy, onSend, client = null, onFailed = 
         {withContext && (
           <>
             <input ref={file} type="file" multiple hidden onChange={(event) => { attach(event.target.files); event.target.value = ''; }} />
-            <button type="button" className="studio-agent-composer-tool" aria-label="Attach a document" title={uploading ? 'Attaching…' : 'Attach a document'} disabled={uploading} onClick={() => { file.current?.click(); }}>
+            <PendingButton className="studio-agent-composer-tool" aria-label="Attach a document" title={upload.busy ? 'Attaching…' : 'Attach a document'} pending={upload.busy} pendingLabel={null} onClick={() => { file.current?.click(); }}>
               <Paperclip size={14} aria-hidden />
-            </button>
+            </PendingButton>
             <button
               type="button"
               className="studio-agent-composer-tool"
@@ -171,9 +188,8 @@ export function Composer({ placeholder, busy, onSend, client = null, onFailed = 
                 const at = area?.selectionStart ?? text.length;
                 const before = text.slice(0, at);
                 const insert = before === '' || /\s$/.test(before) ? '@' : ' @';
-                const next = before + insert + text.slice(at);
-                typed(next, at + insert.length);
-                requestAnimationFrame(() => { area?.focus(); area?.setSelectionRange(at + insert.length, at + insert.length); });
+                caretTo.current = at + insert.length;
+                typed(before + insert + text.slice(at), at + insert.length);
               }}
             >
               <AtSign size={14} aria-hidden />
@@ -182,9 +198,9 @@ export function Composer({ placeholder, busy, onSend, client = null, onFailed = 
         )}
         {children}
         <span className="flex-1" />
-        <button type="submit" className="studio-agent-send" aria-label="Send" title="Send" disabled={blocked}>
+        <PendingButton type="submit" className="studio-agent-send" aria-label="Send" title="Send" pending={action.busy} pendingLabel={null} disabled={blocked}>
           <ArrowUp size={14} aria-hidden />
-        </button>
+        </PendingButton>
       </div>
     </form>
   );

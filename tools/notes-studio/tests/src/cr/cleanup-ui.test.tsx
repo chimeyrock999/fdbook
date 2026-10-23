@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { ToastStack } from '../../../src/actions/ToastStack';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeRequest, CrClient, CrList, Discard } from '../../../src/api/crs';
@@ -83,7 +84,7 @@ describe('cleaning up in the dialog', () => {
   it('says the pull request was merged, lists both sides and cleans up', async () => {
     const discard = vi.fn(() => Promise.resolve(plan()));
     const onDone = vi.fn();
-    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'merged', { pr: { number: 57, url: 'u' } })} current={false} onDone={onDone} onClose={vi.fn()} />);
+    render(<><DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'merged', { pr: { number: 57, url: 'u' } })} current={false} onDone={onDone} onClose={vi.fn()} /><ToastStack /></>);
     const dialog = screen.getByRole('dialog', { name: 'Clean up “done”?' });
     expect(dialog.textContent).toContain('Pull request #57 was merged. Its changes are on main.');
     const origin = await within(dialog).findByRole('list', { name: 'From origin' });
@@ -98,27 +99,27 @@ describe('cleaning up in the dialog', () => {
 
   it('says when the branch is already gone from origin, and what was never pushed', async () => {
     const discard = vi.fn(() => Promise.resolve(plan({ status: 'closed', pushed: false, unpushed: 0, pr: { number: 44, url: 'u' } })));
-    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'closed', { pr: { number: 44, url: 'u' } })} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
+    render(<><DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'closed', { pr: { number: 44, url: 'u' } })} current={false} onDone={vi.fn()} onClose={vi.fn()} /><ToastStack /></>);
     expect(await screen.findByText('The branch is already gone from origin.')).toBeTruthy();
     expect(screen.getByRole('dialog').textContent).toContain('Pull request #44 was closed without merging.');
   });
 
   it('goes by the status the dry run read, not the list\'s', async () => {
     const discard = vi.fn(() => Promise.resolve(plan({ status: 'merged' })));
-    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'review', { pr: { number: 57, url: 'u' } })} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
+    render(<><DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'review', { pr: { number: 57, url: 'u' } })} current={false} onDone={vi.fn()} onClose={vi.fn()} /><ToastStack /></>);
     expect(await screen.findByRole('dialog', { name: 'Clean up “done”?' })).toBeTruthy();
     expect(screen.getByRole('dialog').textContent).toContain('Pull request #57 was merged.');
   });
 
   it('takes the pull request from the dry run when the list had none yet', async () => {
     const discard = vi.fn(() => Promise.resolve(plan({ pr: { number: 58, url: 'u' } })));
-    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'previewing')} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
+    render(<><DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'previewing')} current={false} onDone={vi.fn()} onClose={vi.fn()} /><ToastStack /></>);
     expect(await screen.findByText('Pull request #58 was merged. Its changes are on main.')).toBeTruthy();
   });
 
   it('cannot remove a pushed branch while the pull requests cannot be read', async () => {
     const discard = vi.fn(() => Promise.resolve(plan({ status: 'previewing', pr: null, prError: 'gh: not logged in' })));
-    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'previewing')} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
+    render(<><DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'previewing')} current={false} onDone={vi.fn()} onClose={vi.fn()} /><ToastStack /></>);
     expect((await screen.findByRole('alert')).textContent).toBe('Pull requests could not be read (gh: not logged in). A pull request of this branch would close without notice, so it cannot be discarded until gh works again.');
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Discard' }).disabled).toBe(true);
   });
@@ -130,7 +131,7 @@ describe('cleaning up in the dialog', () => {
       checks += 1;
       return Promise.resolve(plan({ status: checks > 1 ? 'previewing' : 'draft', pr: null, pushed: checks > 1 }));
     });
-    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'draft')} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
+    render(<><DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'draft')} current={false} onDone={vi.fn()} onClose={vi.fn()} /><ToastStack /></>);
     expect(await screen.findByText('Never pushed: nothing to remove there.')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(await screen.findByRole('list', { name: 'From origin' })).toBeTruthy();
@@ -143,9 +144,10 @@ describe('cleaning up in the dialog', () => {
     const discard = vi.fn((_slug: string, dryRun?: boolean) =>
       dryRun ? Promise.resolve(plan()) : Promise.reject(new Error('Could not remove it from origin: denied. Nothing was removed from this machine.')));
     const onDone = vi.fn();
-    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'merged')} current={false} onDone={onDone} onClose={vi.fn()} />);
+    render(<><DiscardDialog client={{ discard } as unknown as CrClient} cr={cr('done', 'merged')} current={false} onDone={onDone} onClose={vi.fn()} /><ToastStack /></>);
     await userEvent.click(await screen.findByRole('button', { name: 'Clean up' }));
-    expect((await screen.findByRole('alert')).textContent).toBe('Could not remove it from origin: denied. Nothing was removed from this machine.');
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not remove it from origin: denied. Nothing was removed from this machine.');
+    expect(screen.getByRole('dialog')).toBeTruthy();
     expect(onDone).not.toHaveBeenCalled();
   });
 });

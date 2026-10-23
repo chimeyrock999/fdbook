@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { ToastStack } from '../../../src/actions/ToastStack';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeRequest, CrClient, CrList, Discard } from '../../../src/api/crs';
@@ -216,7 +217,7 @@ describe('NewCrDialog', () => {
     const created = cr('fix-links-2', 'draft');
     const create = vi.fn(() => Promise.resolve(created));
     const onCreated = vi.fn();
-    render(<NewCrDialog client={{ create } as unknown as CrClient} taken={['fix-links']} onCreated={onCreated} onClose={vi.fn()} />);
+    render(<><NewCrDialog client={{ create } as unknown as CrClient} taken={['fix-links']} onCreated={onCreated} onClose={vi.fn()} /><ToastStack /></>);
     const dialog = screen.getByRole('dialog', { name: 'New change request' });
     const submit = within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Create' });
     expect(submit.disabled).toBe(true);
@@ -229,13 +230,13 @@ describe('NewCrDialog', () => {
 
   it('needs a letter or a digit, and shows why the server refused', async () => {
     const create = vi.fn(() => Promise.reject(new Error('Could not fetch origin/main: offline')));
-    render(<NewCrDialog client={{ create } as unknown as CrClient} taken={[]} onCreated={vi.fn()} onClose={vi.fn()} />);
+    render(<><NewCrDialog client={{ create } as unknown as CrClient} taken={[]} onCreated={vi.fn()} onClose={vi.fn()} /><ToastStack /></>);
     const input = screen.getByRole('textbox', { name: /Name/ });
     await userEvent.type(input, '!!');
     expect(screen.getByRole('dialog').textContent).toContain('The name needs a letter or a digit.');
     await userEvent.clear(input);
     await userEvent.type(input, 'Offline{Enter}');
-    expect((await screen.findByRole('alert')).textContent).toBe('Could not fetch origin/main: offline');
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not fetch origin/main: offline');
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Create' }).disabled).toBe(false);
   });
 });
@@ -248,7 +249,7 @@ describe('DiscardDialog', () => {
   it('lists what goes from this machine, then discards', async () => {
     const discard = vi.fn((_slug: string, dryRun?: boolean) => Promise.resolve(plan({ ...(dryRun ? {} : { commits: 3 }) })));
     const onDone = vi.fn();
-    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[1]} current={false} onDone={onDone} onClose={vi.fn()} />);
+    render(<><DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[1]} current={false} onDone={onDone} onClose={vi.fn()} /><ToastStack /></>);
     const removed = await screen.findByRole('list', { name: 'From this machine' });
     expect([...removed.querySelectorAll('li')].map((item) => item.textContent)).toEqual([
       'Worktree /home/me/.chimey-studio/worktrees/spark-tuning',
@@ -264,15 +265,15 @@ describe('DiscardDialog', () => {
 
   it('says when it is the change request being worked in', async () => {
     const discard = vi.fn(() => Promise.resolve(plan()));
-    const { rerender } = render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[1]} current onDone={vi.fn()} onClose={vi.fn()} />);
+    const { rerender } = render(<><DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[1]} current onDone={vi.fn()} onClose={vi.fn()} /><ToastStack /></>);
     expect(await screen.findByText('You are working in this change request. Studio goes back to main afterwards.')).toBeTruthy();
-    rerender(<DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[1]} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
+    rerender(<><DiscardDialog client={{ discard } as unknown as CrClient} cr={LIST.crs[1]} current={false} onDone={vi.fn()} onClose={vi.fn()} /><ToastStack /></>);
     expect(screen.queryByText(/You are working in this change request/)).toBeNull();
   });
 
   it('closes the open pull request and deletes the branch on origin', async () => {
     const discard = vi.fn(() => Promise.resolve(plan({ pushed: true, unpushed: 1, pr: { number: 81, url: 'u' }, closesPr: { number: 81, url: 'u' } })));
-    render(<DiscardDialog client={{ discard } as unknown as CrClient} cr={{ ...LIST.crs[2], previewUrl: 'https://cr-uc-grants.chimey.pages.dev' }} current={false} onDone={vi.fn()} onClose={vi.fn()} />);
+    render(<><DiscardDialog client={{ discard } as unknown as CrClient} cr={{ ...LIST.crs[2], previewUrl: 'https://cr-uc-grants.chimey.pages.dev' }} current={false} onDone={vi.fn()} onClose={vi.fn()} /><ToastStack /></>);
     const origin = await screen.findByRole('list', { name: 'From origin' });
     expect([...origin.querySelectorAll('li')].map((item) => item.textContent)).toEqual([
       'Pull request #81 is closed, not merged',

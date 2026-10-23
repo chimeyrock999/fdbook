@@ -5,7 +5,6 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import type { RefObject } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEditorPlaces, editorPlaces } from '../../../src/agents/editor-place';
-import { useBusy } from '../../../src/busy';
 import { useReportPlace } from '../../../src/editor/report-place';
 import { mountVisual, stubLayout, textAt } from '../../support/visual-editor';
 
@@ -65,23 +64,5 @@ describe('editor place', () => {
     const { result } = renderHook(() => useReportPlace(container, NOTE, TEXT, false));
     act(() => { result.current(0, 3, DOC); });
     expect(editorPlaces.get()).toBeNull();
-  });
-});
-
-describe('useBusy', () => {
-
-  it('ignores a run while one goes, and is free again after a failure', async () => {
-    const { result } = renderHook(() => useBusy());
-    let finish: () => void = () => undefined;
-    const work = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
-    let first: Promise<unknown> = Promise.resolve();
-    act(() => { first = result.current[1](work); });
-    expect(result.current[0]).toBe(true);
-    await act(async () => { expect(await result.current[1](work)).toBeUndefined(); });
-    expect(work).toHaveBeenCalledTimes(1);
-    await act(async () => { finish(); await first; });
-    expect(result.current[0]).toBe(false);
-    await act(async () => { await expect(result.current[1](() => Promise.reject(new Error('no')))).rejects.toThrow('no'); });
-    expect(result.current[0]).toBe(false);
   });
 });

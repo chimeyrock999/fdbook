@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from '../actions/toasts';
+import { isConflict } from '../api/json';
 import type { AgentId, AgentInfo, AgentRole, AgentsClient, MessageContext } from '../api/agents';
 import { EMPTY_CONVERSATIONS, reading, unheld, unread, withEvent, withList, withRead, type ConversationsState } from './transcript';
 
@@ -54,7 +56,8 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
   const [picks, setPicks] = useState(readPicks);
   const [open, setOpen] = useState(readPanel);
   const [state, setState] = useState<ConversationsState>(EMPTY_CONVERSATIONS);
-  const [error, setError] = useState<string | null>(null);
+  // Why the agents could not be listed (the picker says it).
+  const [listError, setListError] = useState<string | null>(null);
   // The state as last rendered, and the reads in flight, for the stream's listener.
   const current = useRef(state);
   useEffect(() => { current.current = state; });
@@ -70,7 +73,7 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
       setState((before) => withRead(before, id, whole));
     } catch (reason) {
       setState((before) => unread(before, id));
-      setError((reason as Error).message);
+      toast.error(reason);
     } finally {
       inFlight.current.delete(id);
     }
@@ -80,7 +83,7 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
     let current = true;
     client.agents().then(
       (list) => { if (current) setAgents(list); },
-      (reason: unknown) => { if (current) setError((reason as Error).message); },
+      (reason: unknown) => { if (current) setListError((reason as Error).message); },
     );
     return () => { current = false; };
   }, [client]);
@@ -93,7 +96,7 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
       // What the page holds may have gone on while the stream was down.
       for (const id of Object.keys(current.current.events)) if (listed.some((each) => each.id === id)) void read(id);
     } catch (reason) {
-      setError((reason as Error).message);
+      toast.error(reason);
     }
   }, [client, inCr, read]);
 
@@ -125,8 +128,6 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
     await read(id);
   }, [read]);
 
-  const failed = (reason: unknown) => { setError((reason as Error).message); };
-
   return {
     client,
     agents,
@@ -137,8 +138,7 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
     conversations: state.conversations,
     events: state.events,
     decisions: state.decisions,
-    error,
-    clearError: () => { setError(null); },
+    listError,
     load,
     start: (role: AgentRole, prompt: string, context: MessageContext | null = null) => {
       const agent = pickOf(agents, picks, role);
@@ -146,19 +146,22 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
       return client.start(agent.id, role, prompt, context);
     },
     message: (id: string, prompt: string, context: MessageContext | null = null) => client.message(id, prompt, context),
-    // Deletes each in turn, off the list at once (the stream tells other pages).
+    // Deletes each in turn, off the list at once (the stream tells other
+    // pages); one that fails says why and the others go on.
     remove: async (ids: string[]) => {
       for (const id of ids) {
         try {
           await client.remove(id);
           setState((before) => withEvent(before, { type: 'deleted', at: Date.now(), conversationId: id }));
         } catch (reason) {
-          failed(reason);
+          toast.error(reason);
         }
       }
     },
-    cancel: (id: string) => client.cancel(id).catch(failed),
-    answer: (id: string, ask: string, optionId: string | null) => client.answer(id, ask, optionId).catch(failed),
+    // A cancel or an answer the server says is done already (409: the turn
+    // ended, another page answered) is no failure.
+    cancel: (id: string) => client.cancel(id).catch((reason: unknown) => { if (!isConflict(reason)) throw reason; }),
+    answer: (id: string, ask: string, optionId: string | null) => client.answer(id, ask, optionId).catch((reason: unknown) => { if (!isConflict(reason)) throw reason; }),
   };
 }
 

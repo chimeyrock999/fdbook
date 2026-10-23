@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConnectDialog } from '../../../src/agents/ConnectDialog';
@@ -14,10 +14,10 @@ afterEach(() => {
 
 const SIGNED_IN: SessionState = { auth: 'github', flows: ['device'], repo: 'o/r', user: { login: 'writer', name: null, avatarUrl: '' }, role: 'writer', csrf: 'csrf' };
 
-function show(state: SessionState) {
+function show(state: SessionState, onClose: () => void = () => undefined) {
   return render(
     <SessionContext.Provider value={{ state, refresh: () => Promise.resolve() } as never}>
-      <ConnectDialog cr="tighten" onClose={() => undefined} />
+      <ConnectDialog cr="tighten" onClose={onClose} />
     </SessionContext.Provider>,
   );
 }
@@ -59,5 +59,20 @@ describe('Connect an agent', () => {
     expect(screen.queryByText(/studio-agent-abc.*codex|codex.*studio-agent-abc/)).toBeNull();
     await user.click(screen.getByRole('button', { name: 'End all my tokens' }));
     expect(await screen.findByText(/Every agent token of yours has ended/)).toBeTruthy();
+  });
+
+  it('does not close while a token is being made: the token is shown once, there', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => undefined)));
+    const onClose = vi.fn();
+    show(SIGNED_IN, onClose);
+    fireEvent.click(screen.getByRole('button', { name: 'Create token' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    if (dialog.parentElement) fireEvent.mouseDown(dialog.parentElement);
+    const done = screen.getByRole<HTMLButtonElement>('button', { name: 'Done' });
+    expect(done.disabled).toBe(true);
+    fireEvent.click(done);
+    fireEvent.submit(dialog);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import { useBusy } from '../actions/busy';
+import { PendingButton } from '../actions/PendingButton';
+import { messageOf } from '../actions/toasts';
 import type { Preview, PreviewClient } from '../api/preview';
 import { plural } from '../assets/asset-changes';
 import { Dialog } from '../tree/TreeDialogs';
 
-const messageOf = (reason: unknown) => (reason instanceof Error ? reason.message : String(reason));
-
 // Publish (#20): the pull request's title and description, filled from the
 // change request's name and commits and free to edit, then a push of what is
-// not pushed and `gh pr create`. A failure stays in the dialog; a push that
-// went through stays pushed. It cannot be closed while it publishes, so
-// what the publish ends with is always shown.
+// not pushed and `gh pr create`. A failure says why in a toast and the
+// dialog stays; a push that went through stays pushed. It cannot be closed
+// while it publishes, so what the publish ends with is always shown.
 export function PublishDialog({ client, preview, onPublished, onClose }: {
   client: PreviewClient;
   preview: Preview;
@@ -18,7 +19,9 @@ export function PublishDialog({ client, preview, onPublished, onClose }: {
 }) {
   const [title, setTitle] = useState<string | null>(null);
   const [body, setBody] = useState('');
-  const [busy, setBusy] = useState(false);
+  const action = useBusy();
+  const { busy } = action;
+  // The draft could not be read: the title starts empty.
   const [failed, setFailed] = useState<string | null>(null);
   const count = preview.unpushed.length;
   const titleInput = useRef<HTMLInputElement>(null);
@@ -47,19 +50,14 @@ export function PublishDialog({ client, preview, onPublished, onClose }: {
   }, [client]);
 
   const empty = (title ?? '').trim() === '';
-  const close = () => { if (!busy) onClose(); };
   const submit = () => {
-    if (title === null || empty || busy) return;
-    setBusy(true);
+    if (title === null || empty) return;
     setFailed(null);
-    client.publish(title, body).then(onPublished, (reason: unknown) => {
-      setBusy(false);
-      setFailed(messageOf(reason));
-    });
+    void action.run(async () => { onPublished(await client.publish(title, body)); });
   };
 
   return (
-    <Dialog title="Publish as a pull request" onClose={close} onSubmit={submit}>
+    <Dialog title="Publish as a pull request" busy={busy} onClose={onClose} onSubmit={submit}>
       <p className="text-[13px] text-[var(--fde-muted-foreground)]">
         Opens a pull request from <code>{preview.branch}</code> to <code>main</code>.{count > 0 && ` Pushes ${plural(count, 'commit')} first.`} Later commits go to it with Update PR.
       </p>
@@ -74,10 +72,10 @@ export function PublishDialog({ client, preview, onPublished, onClose }: {
       </label>
       {failed !== null && <p role="alert" className="studio-tree-error">{failed}</p>}
       <div className="flex justify-end gap-2">
-        <button type="button" className="studio-button" disabled={busy} onClick={close}>Cancel</button>
-        <button type="submit" className="studio-button studio-button-primary" disabled={title === null || empty || busy}>
-          {busy ? 'Publishing…' : count > 0 ? 'Push and publish' : 'Publish'}
-        </button>
+        <button type="button" className="studio-button" disabled={busy} onClick={onClose}>Cancel</button>
+        <PendingButton type="submit" className="studio-button studio-button-primary" pending={busy} pendingLabel="Publishing…" disabled={title === null || empty}>
+          {count > 0 ? 'Push and publish' : 'Publish'}
+        </PendingButton>
       </div>
     </Dialog>
   );

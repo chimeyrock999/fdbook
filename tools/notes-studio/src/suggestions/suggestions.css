@@ -50,16 +50,27 @@
     color: var(--fde-muted-foreground);
     font-variant-numeric: tabular-nums;
   }
-  .studio-suggest-lost,
-  .studio-suggest-error {
+  .studio-suggest-lost {
     display: inline-flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     color: var(--fde-warning);
   }
-  .studio-suggest-error {
-    color: var(--fde-error);
+  /* A decision out on the card, or on several (#138). */
+  .studio-suggest-progress,
+  .studio-suggest-busy {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .studio-suggest-busy {
+    font-size: 11.5px;
+    color: var(--fde-foreground);
+  }
+  .studio-suggest-body[data-busy] > .studio-visual {
+    opacity: 0.6;
+    transition: opacity 0.2s;
   }
   .studio-suggest-icon {
     display: inline-grid;

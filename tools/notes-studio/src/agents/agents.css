@@ -1,5 +1,5 @@
 /* Agents (src/agents): the header control, the panel at the right of the
-   editor, a chat and its history, and the permission dialog. Same tokens and
+   editor, a chat and its history, and an agent's questions in it. Same tokens and
    pieces as the rest of the chrome (.studio-button, .studio-menu, .studio-dialog). */
 @layer components {
   .studio-agent-logo {
@@ -67,6 +67,9 @@
     color: var(--fde-background);
     font-size: 10.5px;
     font-weight: 600;
+  }
+  .studio-agent-count[data-tone='warning'] {
+    background: var(--fde-warning);
   }
 
   /* The picker's menu. */
@@ -312,11 +315,56 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+  .studio-agent-prompt[data-pending] {
+    opacity: 0.6;
+  }
   .studio-agent-prompt-meta {
+    display: inline-flex;
     align-self: flex-end;
+    align-items: center;
+    gap: 4px;
     margin-top: -5px;
     font-size: 10.5px;
     color: var(--fde-muted-foreground);
+  }
+  /* Until the agent says or does anything after a message. */
+  .studio-agent-thinking {
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-dots {
+    display: inline-flex;
+    gap: 3px;
+    margin-left: 4px;
+  }
+  .studio-agent-dots > span {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: studio-agent-blink 1.2s infinite;
+  }
+  .studio-agent-dots > span:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  .studio-agent-dots > span:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+  @keyframes studio-agent-blink {
+    0%,
+    80%,
+    100% {
+      opacity: 0.25;
+    }
+    40% {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .studio-agent-dots > span {
+      animation: none;
+      opacity: 0.7;
+    }
   }
   .studio-agent-message {
     line-height: 1.55;
@@ -518,13 +566,56 @@
     gap: 6px;
   }
 
-  /* The permission dialog. */
-  .studio-agent-ask-lead {
+  /* An agent's question, in its chat (AskCard). */
+  .studio-agent-ask {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid color-mix(in srgb, var(--fde-warning) 50%, var(--fde-border));
+    border-radius: 9px;
+    background: var(--fde-card);
+  }
+  .studio-agent-ask-head {
     display: flex;
     align-items: center;
+    gap: 7px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .studio-agent-ask-head > svg {
+    flex: none;
+    color: var(--fde-warning);
+  }
+  .studio-agent-ask-options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
     gap: 6px;
-    font-size: 12.5px;
-    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-ask-options .studio-agent-meta {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Another chat's question, over the one shown. */
+  .studio-agent-strip {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 12px 0;
+    padding: 6px 9px;
+    border: 1px solid color-mix(in srgb, var(--fde-warning) 45%, var(--fde-border));
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--fde-warning) 10%, var(--fde-card));
+    font-size: 12px;
+  }
+  .studio-agent-strip > svg {
+    flex: none;
+    color: var(--fde-warning);
+  }
+  .studio-agent-strip > span {
+    flex: 1;
+    min-width: 0;
   }
   .studio-agent-ask-command {
     overflow-x: auto;

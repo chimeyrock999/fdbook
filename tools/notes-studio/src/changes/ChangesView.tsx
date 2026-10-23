@@ -1,5 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useBusy } from '../actions/busy';
+import { PendingButton } from '../actions/PendingButton';
 import type { ChangedFile, Changes, ChangesClient, Commit, History } from '../api/changes';
 import { plural } from '../assets/asset-changes';
 import { MAIN_BRANCH } from '../../server/git/branch';
@@ -8,7 +10,8 @@ import { labelOf, shortPath, timeAgo } from './labels';
 import { CHANGE_NAME } from './marks';
 import { suggestMessage } from './message';
 
-type Result = { text: string; error: boolean };
+// What the last commit did; a failed one says why in a toast.
+type Result = { text: string };
 
 // Why Commit is off, or null when it is on.
 function blockedBy({ branch, unsaved, picked, message }: { branch: string | null; unsaved: string | null; picked: number; message: string }) {
@@ -131,7 +134,8 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set());
   // null: the suggestion.
   const [edited, setEdited] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const action = useBusy();
+  const { busy } = action;
   const [result, setResult] = useState<Result | null>(null);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [openCommit, setOpenCommit] = useState<string | null>(null);
@@ -173,19 +177,17 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
   };
 
   const commit = () => {
-    setBusy(true);
     setResult(null);
-    client.commit(message, picked.map((file) => file.path)).then(
-      (made) => {
+    void action.run(async () => {
+      try {
+        const made = await client.commit(message, picked.map((file) => file.path));
         setEdited(null);
         setOpenCommit(made.sha);
         setHistoryOpen(true);
-        setResult({ text: `Committed ${plural(made.files.length, 'file')} (${made.sha.slice(0, 7)}).`, error: false });
-      },
-      (reason: unknown) => { setResult({ text: reason instanceof Error ? reason.message : String(reason), error: true }); },
-    ).finally(() => {
-      setBusy(false);
-      void onCommitted();
+        setResult({ text: `Committed ${plural(made.files.length, 'file')} (${made.sha.slice(0, 7)}).` });
+      } finally {
+        void onCommitted();
+      }
     });
   };
 
@@ -193,7 +195,7 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
   // What Commit did, or why it is off.
   const why = result?.text ?? (files.length > 0 ? blocked : null);
   const whyLine = why !== null && (
-    <p role={result?.error ? 'alert' : 'status'} className="studio-changes-why" data-tone={result === null ? undefined : result.error ? 'error' : 'ok'}>
+    <p role="status" className="studio-changes-why" data-tone={result === null ? undefined : 'ok'}>
       {why}
     </p>
   );
@@ -236,9 +238,9 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
             <p className="studio-changes-hint">
               {edited === null ? 'Suggested from the picked files.' : <>Edited. <button type="button" className="studio-changes-link" onClick={() => { setEdited(null); }}>Use the suggestion</button></>}
             </p>
-            <button type="button" className="studio-button studio-button-primary studio-changes-submit" disabled={blocked !== null} onClick={commit}>
+            <PendingButton className="studio-button studio-button-primary studio-changes-submit" pending={busy} pendingLabel="Committing…" disabled={blocked !== null} onClick={commit}>
               Commit {plural(picked.length, 'file')}
-            </button>
+            </PendingButton>
             {whyLine}
           </div>}
           <FileGroup name="Pages" files={pages} excluded={excluded} titles={titles} readOnly={readOnly} current={current} onOpen={onOpen}

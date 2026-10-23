@@ -1,14 +1,17 @@
 import { Info } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { crSlug } from '../../server/cr/slug';
+import { useBusy } from '../actions/busy';
+import { PendingButton } from '../actions/PendingButton';
+import { messageOf } from '../actions/toasts';
 import type { ChangeRequest, CrClient, Discard } from '../api/crs';
 import { Dialog } from '../tree/TreeDialogs';
 import { isDone, plural } from './cr-status';
 
-const messageOf = (reason: unknown) => (reason instanceof Error ? reason.message : String(reason));
-
 // A new change request: its name, and the branch it will get. The server
 // fetches origin/main and adds the worktree, which can take a few seconds.
+// Once created, the page loads the new change request: the button stays
+// busy until it goes. A failure says why in a toast.
 export function NewCrDialog({ client, taken, onCreated, onClose }: {
   client: CrClient;
   // The slugs in use, so the branch shown is the one the server picks.
@@ -17,31 +20,31 @@ export function NewCrDialog({ client, taken, onCreated, onClose }: {
   onClose: () => void;
 }) {
   const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  const action = useBusy();
+  const [created, setCreated] = useState(false);
+  const busy = action.busy || created;
   const slug = crSlug(name, new Set(taken));
 
   const submit = () => {
     if (slug === null || busy) return;
-    setBusy(true);
-    client.create(name).then(onCreated, (reason: unknown) => {
-      setBusy(false);
-      setFailed(messageOf(reason));
+    void action.run(async () => {
+      const cr = await client.create(name);
+      setCreated(true);
+      onCreated(cr);
     });
   };
 
   return (
-    <Dialog title="New change request" onClose={onClose} onSubmit={submit}>
+    <Dialog title="New change request" busy={busy} onClose={onClose} onSubmit={submit}>
       <p className="text-[13px] text-[var(--fde-muted-foreground)]">A new branch from origin/main, fetched now. What you have open opens in it.</p>
       <label className="grid gap-1">
         <span className="studio-field-label">Name</span>
-        <input className="studio-input" autoFocus value={name} disabled={busy} onChange={(event) => { setName(event.target.value); setFailed(null); }} />
+        <input className="studio-input" autoFocus value={name} disabled={busy} onChange={(event) => { setName(event.target.value); }} />
         <span className="studio-cr-hint">{slug === null ? 'The name needs a letter or a digit.' : `Branch cr/${slug}`}</span>
       </label>
-      {failed !== null && <p role="alert" className="studio-tree-error">{failed}</p>}
       <div className="flex justify-end gap-2">
-        <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
-        <button type="submit" className="studio-button studio-button-primary" disabled={slug === null || busy}>{busy ? 'Creating…' : 'Create'}</button>
+        <button type="button" className="studio-button" disabled={busy} onClick={onClose}>Cancel</button>
+        <PendingButton type="submit" className="studio-button studio-button-primary" pending={busy} pendingLabel="Creating…" disabled={slug === null}>Create</PendingButton>
       </div>
     </Dialog>
   );
@@ -60,7 +63,10 @@ export function DiscardDialog({ client, cr, current, onDone, onClose }: {
   onClose: () => void;
 }) {
   const [plan, setPlan] = useState<Discard | null>(null);
-  const [busy, setBusy] = useState(false);
+  const action = useBusy();
+  const [done, setDone] = useState(false);
+  const busy = action.busy || done;
+  // The dry run could not be read: the dialog has nothing else to show.
   const [failed, setFailed] = useState<string | null>(null);
   useEffect(() => {
     let current = true;
@@ -71,15 +77,21 @@ export function DiscardDialog({ client, cr, current, onDone, onClose }: {
     return () => { current = false; };
   }, [client, cr.slug]);
 
-  // A refused discard (origin changed since the dry run, say) checks again,
-  // so the dialog lists what a new try would do.
+  // A refused discard (origin changed since the dry run, say) says why in
+  // a toast and checks again, so the dialog lists what a new try would do.
+  // Once done, the dialog stays busy until the page moves on (onDone).
   const submit = () => {
     if (plan === null || busy || plan.prError !== null) return;
-    setBusy(true);
-    client.discard(cr.slug, false, { pushed: plan.pushed, closesPr: plan.closesPr?.number ?? null }).then(onDone, (reason: unknown) => {
-      setFailed(messageOf(reason));
-      setPlan(null);
-      client.discard(cr.slug, true).then(setPlan, () => undefined).finally(() => { setBusy(false); });
+    void action.run(async () => {
+      try {
+        const discard = await client.discard(cr.slug, false, { pushed: plan.pushed, closesPr: plan.closesPr?.number ?? null });
+        setDone(true);
+        onDone(discard);
+      } catch (reason) {
+        setPlan(null);
+        await client.discard(cr.slug, true).then(setPlan, (again: unknown) => { setFailed(messageOf(again)); });
+        throw reason;
+      }
     });
   };
 
@@ -92,7 +104,7 @@ export function DiscardDialog({ client, cr, current, onDone, onClose }: {
   const verb = cleanUp ? 'Clean up' : 'Discard';
 
   return (
-    <Dialog title={`${verb} “${cr.name}”?`} onClose={onClose} onSubmit={submit}>
+    <Dialog title={`${verb} “${cr.name}”?`} busy={busy} onClose={onClose} onSubmit={submit}>
       {current && (
         <p className="studio-cr-inside">
           <Info size={15} aria-hidden /> You are working in this change request. Studio goes back to main afterwards.
@@ -128,10 +140,10 @@ export function DiscardDialog({ client, cr, current, onDone, onClose }: {
       )}
       {failed !== null && <p role="alert" className="studio-tree-error">{failed}</p>}
       <div className="flex justify-end gap-2">
-        <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
-        <button type="submit" className={`studio-button ${cleanUp ? 'studio-button-primary' : 'studio-button-danger'}`} disabled={plan === null || busy || plan.prError !== null}>
-          {busy ? (cleanUp ? 'Cleaning up…' : 'Discarding…') : verb}
-        </button>
+        <button type="button" className="studio-button" disabled={busy} onClick={onClose}>Cancel</button>
+        <PendingButton type="submit" className={`studio-button ${cleanUp ? 'studio-button-primary' : 'studio-button-danger'}`} pending={busy} pendingLabel={cleanUp ? 'Cleaning up…' : 'Discarding…'} disabled={plan?.prError !== null}>
+          {verb}
+        </PendingButton>
       </div>
     </Dialog>
   );

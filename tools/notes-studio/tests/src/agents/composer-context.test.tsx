@@ -106,6 +106,18 @@ describe('message context in the composer (#86)', () => {
     expect(client.message).toHaveBeenLastCalledWith('c1', 'Tighten it all', { note: NOTE, selection: { lines: [1, 2000], source: '', text: '' }, caret: null, mentions: [], attachments: [] });
   });
 
+  it('gives the text and its chips back when the message is refused, with the reason in a toast', async () => {
+    const { client, user, box, chips } = await openChat();
+    vi.mocked(client.message).mockRejectedValueOnce(new Error('the agent is still answering'));
+    await user.type(box, 'Compare @');
+    await screen.findByRole('option', { name: /helper/ });
+    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+    await user.type(box, 'please{Enter}');
+    expect(await screen.findByText('the agent is still answering')).toBeTruthy();
+    await waitFor(() => { expect(box.value).toBe('Compare please'); });
+    expect(chips().getByText('@lib/helper.ts')).toBeTruthy();
+  });
+
   it('closes the list on Escape, and an IME\'s Enter neither picks nor sends', async () => {
     const { client, user, box } = await openChat();
     await user.type(box, '@first');

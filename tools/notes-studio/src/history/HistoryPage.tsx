@@ -1,6 +1,9 @@
 import { ChevronLeft, FileX, Image, Pencil, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { extensionOf } from '../../server/security/asset-types';
+import { useBusy } from '../actions/busy';
+import { PendingButton } from '../actions/PendingButton';
+import { messageOf } from '../actions/toasts';
 import { NOW, type Comparison, type HistoryClient, type PageHistory } from '../api/history';
 import { ComparisonBody } from './ComparisonBody';
 import { isAsset, modesOf, type Mode } from './modes';
@@ -8,7 +11,6 @@ import { RestoreDeleted } from './RestoreDeleted';
 import { comparedWith, restoreBlocked, shortVersion, versionIds } from './versions';
 import { VersionList } from './VersionList';
 
-const messageOf = (reason: unknown) => (reason instanceof Error ? reason.message : String(reason));
 
 function Options({ ids, selected, previous, history }: { ids: readonly string[]; selected: string; previous: string | null; history: PageHistory }) {
   const bySha = new Map(history.versions.map((version) => [version.sha, version]));
@@ -53,12 +55,11 @@ export function HistoryPage({ client, path, title, readOnly, reader = false, rev
   const [comparison, setComparison] = useState<{ key: string; data: Comparison } | null>(null);
   const [mode, setMode] = useState<Mode>('rendered');
   const [confirming, setConfirming] = useState(false);
-  const [restoring, setRestoring] = useState(false);
+  const action = useBusy();
+  const restoring = action.busy;
   // The version last restored, while the page is still as the restore left
   // it: the same mtime, and no commit since.
   const [restored, setRestored] = useState<{ sha: string; mtimeMs: number; head: string | null } | null>(null);
-  // Why the last restore failed: kept while the history loads again.
-  const [refused, setRefused] = useState<string | null>(null);
   // On a phone the list and the comparison take turns.
   const [pane, setPane] = useState<'list' | 'detail'>('list');
   const [reloads, setReloads] = useState(0);
@@ -68,7 +69,6 @@ export function HistoryPage({ client, path, title, readOnly, reader = false, rev
     setSelected(null);
     setAgainst(null);
     setRestored(null);
-    setRefused(null);
     setConfirming(false);
     setError(null);
     setPane('list');
@@ -120,23 +120,24 @@ export function HistoryPage({ client, path, title, readOnly, reader = false, rev
   const gone = data !== null && data.mtimeMs === null;
   const blocked = shown === null || data === null ? 'Loading.' : restoreBlocked({ selected: shown, readOnly, reader, mtimeMs: data.mtimeMs, asset, generated: data.generated });
 
-  const restore = async () => {
+  // A failure says why in a toast, and the history is read again.
+  const restore = () => {
     if (shown === null || data?.mtimeMs == null) return;
-    setRestoring(true);
-    setRefused(null);
-    try {
-      const answer = await client.restore(path, shown, data.mtimeMs);
-      setRestored({ sha: shown, mtimeMs: answer.mtimeMs, head });
-      setSelected(NOW);
-      setAgainst(null);
-      onRestored(answer.path);
-    } catch (reason) {
-      setRefused(`Could not restore: ${messageOf(reason)}. The history is read again: look once more, then restore.`);
-    } finally {
-      setRestoring(false);
-      setConfirming(false);
-      setReloads((count) => count + 1);
-    }
+    const { mtimeMs } = data;
+    void action.run(async () => {
+      try {
+        const answer = await client.restore(path, shown, mtimeMs);
+        setRestored({ sha: shown, mtimeMs: answer.mtimeMs, head });
+        setSelected(NOW);
+        setAgainst(null);
+        onRestored(answer.path);
+      } catch (reason) {
+        throw new Error(`Could not restore: ${messageOf(reason)}. The history is read again: look once more, then restore.`, { cause: reason });
+      } finally {
+        setConfirming(false);
+        setReloads((count) => count + 1);
+      }
+    });
   };
 
   const version = data?.versions.find((each) => each.sha === shown);
@@ -195,7 +196,7 @@ export function HistoryPage({ client, path, title, readOnly, reader = false, rev
           </button>
         )}
       </div>
-      {[error, refused].map((message) => message !== null && <p key={message} role="alert" className="studio-diff-note studio-changes-error">{message}</p>)}
+      {error !== null && <p role="alert" className="studio-diff-note studio-changes-error">{error}</p>}
       {data === null ? (
         error === null && <p className="studio-diff-note">Loading the history…</p>
       ) : (
@@ -246,10 +247,10 @@ export function HistoryPage({ client, path, title, readOnly, reader = false, rev
                     {' '}Nothing is committed: the change shows in Changes, and you commit it from there.
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" className="studio-button studio-history-danger" disabled={restoring} onClick={() => { void restore(); }}>
+                    <PendingButton className="studio-button studio-history-danger" pending={restoring} pendingLabel="Restoring…" onClick={restore}>
                       Restore {shortVersion(shown)}
-                    </button>
-                    <button type="button" className="studio-button" onClick={() => { setConfirming(false); }}>Cancel</button>
+                    </PendingButton>
+                    <button type="button" className="studio-button" disabled={restoring} onClick={() => { setConfirming(false); }}>Cancel</button>
                   </div>
                 </div>
               )}

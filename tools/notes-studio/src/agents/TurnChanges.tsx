@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useBusy } from '../actions/busy';
+import { PendingButton } from '../actions/PendingButton';
 import type { AgentsClient, TurnChange } from '../api/agents';
 import { SourceDiff } from '../diff/SourceDiff';
 
@@ -9,7 +11,8 @@ type Of = { id: string; turn: number };
 // before the turn (opened on demand), and Keep or Revert.
 function Change({ client, of, change, canDecide, onDecided }: { client: AgentsClient; of: Of; change: TurnChange; canDecide: boolean; onDecided: (change: TurnChange) => void }) {
   const [diff, setDiff] = useState<{ before: string | null; after: string | null } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const action = useBusy();
+  // The diff could not be read (a decision's failure is a toast).
   const [failed, setFailed] = useState<string | null>(null);
   const toggleDiff = () => {
     if (diff !== null) {
@@ -19,9 +22,7 @@ function Change({ client, of, change, canDecide, onDecided }: { client: AgentsCl
     client.compare(of.id, of.turn, change.path).then(setDiff, (reason: unknown) => { setFailed((reason as Error).message); });
   };
   const decide = (op: 'keep' | 'revert') => {
-    setBusy(true);
-    setFailed(null);
-    client.decide(of.id, of.turn, change.path, op).then(onDecided, (reason: unknown) => { setFailed((reason as Error).message); }).finally(() => { setBusy(false); });
+    void action.run(async () => { onDecided(await client.decide(of.id, of.turn, change.path, op)); }, op);
   };
   const viewDiff = <button type="button" className="studio-agent-link" aria-expanded={diff !== null} onClick={toggleDiff}>{diff === null ? 'View diff' : 'Hide diff'}</button>;
   return (
@@ -45,8 +46,8 @@ function Change({ client, of, change, canDecide, onDecided }: { client: AgentsCl
             <span className="flex-1" />
             {canDecide && (
               <>
-                <button type="button" className="studio-button" disabled={busy} onClick={() => { decide('keep'); }}>Keep</button>
-                <button type="button" className="studio-button" data-tone="error" disabled={busy} onClick={() => { decide('revert'); }}>{change.existed ? 'Revert' : 'Delete'}</button>
+                <PendingButton className="studio-button" pending={action.is('keep')} pendingLabel="Keeping…" disabled={action.busy} onClick={() => { decide('keep'); }}>Keep</PendingButton>
+                <PendingButton className="studio-button" data-tone="error" pending={action.is('revert')} pendingLabel={change.existed ? 'Reverting…' : 'Deleting…'} disabled={action.busy} onClick={() => { decide('revert'); }}>{change.existed ? 'Revert' : 'Delete'}</PendingButton>
               </>
             )}
           </>

@@ -65,7 +65,9 @@ describe('what a turn changed', () => {
     expect(await meta.findByText('Reverted')).toBeTruthy();
     const late = within(section.getByText('content/notes/late.mdx').closest('li') as HTMLElement);
     await user.click(late.getByRole('button', { name: 'Revert' }));
-    expect((await late.findByRole('alert')).textContent).toMatch(/changed since the turn ended/);
+    // The failure is a toast; the row stays, to try again or keep.
+    expect((await screen.findByRole('alert')).textContent).toMatch(/changed since the turn ended/);
+    expect(late.queryByRole('alert')).toBeNull();
     await user.click(late.getByRole('button', { name: 'Keep' }));
     expect(await late.findByText('Kept')).toBeTruthy();
 

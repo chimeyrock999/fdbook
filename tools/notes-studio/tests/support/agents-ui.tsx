@@ -1,8 +1,10 @@
 import { act } from '@testing-library/react';
+import { ToastStack } from '../../src/actions/ToastStack';
 import { vi } from 'vitest';
 import { AgentControl } from '../../src/agents/AgentControl';
 import { AgentPanel } from '../../src/agents/AgentPanel';
 import { useAgents } from '../../src/agents/useAgents';
+import { useAsking } from '../../src/agents/useAsking';
 import type { AgentInfo, AgentsClient, Attachment, Conversation, ConversationRead, Mention, StreamEvent, TurnChange } from '../../src/api/agents';
 
 export const AGENTS: AgentInfo[] = [
@@ -68,10 +70,12 @@ export function fakeClient(conversations: Conversation[] = [], changes: TurnChan
 export function Harness({ client, inCr = true, canRun = true, onOpenDiff = () => undefined, onOpenNote = () => undefined }: { client: AgentsClient; inCr?: boolean; canRun?: boolean; onOpenDiff?: (path: string) => void; onOpenNote?: (path: string) => void }) {
   const agents = useAgents(client, inCr);
   const live = agents.conversations.filter((conversation) => conversation.status === 'running').length;
+  const { asking, asks } = useAsking(agents, canRun);
   return (
     <>
-      <AgentControl agents={agents} live={live} />
-      {agents.open && <AgentPanel agents={agents} inCr={inCr} canRun={canRun} canDecide onOpenDiff={onOpenDiff} onOpenNote={onOpenNote} />}
+      <AgentControl agents={agents} live={live} asks={asks} />
+      {agents.open && <AgentPanel agents={agents} inCr={inCr} canRun={canRun} canDecide asking={asking} onOpenDiff={onOpenDiff} onOpenNote={onOpenNote} />}
+      <ToastStack />
     </>
   );
 }

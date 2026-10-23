@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useBusy } from '../actions/busy';
+import { PendingButton } from '../actions/PendingButton';
+import { messageOf } from '../actions/toasts';
 import type { DeletedRestore, HistoryClient } from '../api/history';
 import { shortVersion } from './versions';
-
-const messageOf = (reason: unknown) => (reason instanceof Error ? reason.message : String(reason));
 
 // Asks before a deleted page comes back as version `sha`, listing every
 // file the restore writes (a dry run): the page, the folders deleted with
@@ -17,8 +18,9 @@ export function RestoreDeleted({ client, path, sha, title, onDone, onCancel }: {
   onCancel: () => void;
 }) {
   const [plan, setPlan] = useState<{ key: string; data: DeletedRestore } | null>(null);
+  // What the restore would write could not be read.
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const action = useBusy();
   const key = `${path}\0${sha}`;
 
   useEffect(() => {
@@ -31,17 +33,14 @@ export function RestoreDeleted({ client, path, sha, title, onDone, onCancel }: {
   }, [client, path, sha, key]);
 
   const shown = plan?.key === key ? plan.data : null;
-  const restore = async () => {
-    setBusy(true);
-    setError(null);
+  // A failure says why in a toast.
+  const restore = () => action.run(async () => {
     try {
       onDone(await client.restoreDeleted(path, sha));
     } catch (reason) {
-      setError(`Could not restore: ${messageOf(reason)}`);
-    } finally {
-      setBusy(false);
+      throw new Error(`Could not restore: ${messageOf(reason)}`, { cause: reason });
     }
-  };
+  });
   const folders = shown?.changes.some((change) => change.type === 'add' && change.path !== path) === true;
 
   return (
@@ -65,10 +64,10 @@ export function RestoreDeleted({ client, path, sha, title, onDone, onCancel }: {
         </ul>
       )}
       <div className="flex flex-wrap gap-2">
-        <button type="button" className="studio-button studio-history-danger" disabled={busy || shown === null} onClick={() => { void restore(); }}>
+        <PendingButton className="studio-button studio-history-danger" pending={action.busy} pendingLabel="Restoring…" disabled={shown === null} onClick={() => { void restore(); }}>
           Restore and open
-        </button>
-        <button type="button" className="studio-button" onClick={onCancel}>Cancel</button>
+        </PendingButton>
+        <button type="button" className="studio-button" disabled={action.busy} onClick={onCancel}>Cancel</button>
       </div>
     </div>
   );

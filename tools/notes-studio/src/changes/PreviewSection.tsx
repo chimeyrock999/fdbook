@@ -1,4 +1,5 @@
 import { ArrowUp, ExternalLink, ScrollText } from 'lucide-react';
+import { PendingButton } from '../actions/PendingButton';
 import type { BuildState, Preview } from '../api/preview';
 import { plural } from '../assets/asset-changes';
 import { timeAgo } from './labels';
@@ -66,7 +67,7 @@ export function PreviewSection({ pusher, preview, error, unsaved, route }: {
   const state = build?.state ?? 'unpushed';
   const disabled = busy || unsaved !== null || count === 0;
   const updates = preview.pr?.state === 'OPEN' && count > 0;
-  const label = busy ? 'Pushing…' : updates ? `Update PR (${plural(count, 'commit')})` : pushed !== null && count > 0 ? `Push ${plural(count, 'commit')}` : 'Preview';
+  const label = updates ? `Update PR (${plural(count, 'commit')})` : pushed !== null && count > 0 ? `Push ${plural(count, 'commit')}` : 'Preview';
   const push = () => { void pusher.push(preview); };
 
   const shown = result?.key === keyOf(preview) && unsaved === null ? result : null;
@@ -104,9 +105,9 @@ export function PreviewSection({ pusher, preview, error, unsaved, route }: {
           </p>
         )}
         <div className="studio-preview-actions">
-          <button type="button" className={`studio-button gap-1.5 ${disabled ? '' : 'studio-button-primary'}`} disabled={disabled} onClick={push}>
+          <PendingButton className={`studio-button gap-1.5 ${disabled ? '' : 'studio-button-primary'}`} pending={busy} pendingLabel="Pushing…" disabled={disabled} onClick={push}>
             <ArrowUp size={14} aria-hidden />{label}
-          </button>
+          </PendingButton>
           {pushed !== null && url !== null && (
             <a className="studio-button gap-1.5" href={`${url}${route}`} target="_blank" rel="noreferrer">
               <ExternalLink size={14} aria-hidden />Open preview
@@ -119,7 +120,7 @@ export function PreviewSection({ pusher, preview, error, unsaved, route }: {
           )}
         </div>
         {why !== null && (
-          <p role={shown?.error ? 'alert' : 'status'} className="studio-changes-why" data-tone={shown === null ? undefined : shown.error ? 'error' : 'ok'}>{why}</p>
+          <p role="status" className="studio-changes-why" data-tone={shown === null ? undefined : 'ok'}>{why}</p>
         )}
       </div>
     </section>

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { useBusy } from '../actions/busy';
+import { PendingButton } from '../actions/PendingButton';
 import type { CreateKind, TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
 import { makeOthersInert, trapFocus } from '../dialog-focus';
 import { slugify } from '../slug';
@@ -61,26 +63,38 @@ function Changes({ changes }: { changes: TreeChange[] }) {
 
 // A modal over the whole Studio: the rest of the page is inert while it is
 // open, so the note behind it cannot change, and Tab stays inside. The
-// asset dialogs use it too.
-export function Dialog({ title, onClose, onSubmit, children }: { title: string; onClose: () => void; onSubmit: () => void; children: ReactNode }) {
+// asset dialogs use it too. While its request is out (`busy`, #138), it
+// neither closes nor sends again: Escape, the backdrop and Enter wait.
+export function Dialog({ title, busy = false, onClose, onSubmit, children }: { title: string; busy?: boolean; onClose: () => void; onSubmit: () => void; children: ReactNode }) {
   const layer = useRef<HTMLDivElement>(null);
+  const form = useRef<HTMLFormElement>(null);
   useEffect(() => makeOthersInert(layer.current), []);
+  // A busy dialog disables what had the focus: once it is free, the focus
+  // comes back in, so Tab and Escape work again.
+  useEffect(() => {
+    const element = form.current;
+    if (busy || element === null || element.contains(document.activeElement)) return;
+    element.querySelector<HTMLElement>('input:not(:disabled), textarea:not(:disabled), button:not(:disabled)')?.focus();
+  }, [busy]);
+  const close = () => { if (!busy) onClose(); };
   const submit = (event: SyntheticEvent) => {
     event.preventDefault();
-    onSubmit();
+    if (!busy) onSubmit();
   };
   return createPortal(
-    <div ref={layer} className="studio-dialog-back" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div ref={layer} className="studio-dialog-back" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <form
+        ref={form}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        aria-busy={busy || undefined}
         className="studio-dialog"
         onSubmit={submit}
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
             event.preventDefault();
-            onClose();
+            close();
           }
           if (event.key === 'Tab') trapFocus(event.currentTarget, event);
         }}
@@ -93,8 +107,7 @@ export function Dialog({ title, onClose, onSubmit, children }: { title: string; 
   );
 }
 
-function Preview({ preview, failed }: { preview: ReturnType<typeof usePreview>; failed: string | null }) {
-  if (failed !== null) return <p role="alert" className="studio-tree-error">{failed}</p>;
+function Preview({ preview }: { preview: ReturnType<typeof usePreview> }) {
   if (preview === null) return null;
   if (preview.error !== null) return <p role="alert" className="studio-tree-error">{preview.error}</p>;
   return (
@@ -125,7 +138,7 @@ export function CreateDialog({ client, parent, after, onDone, onClose }: {
   const [slug, setSlug] = useState<string | null>(null);
   const [kind, setKind] = useState<CreateKind>('page');
   const [defaultOpen, setDefaultOpen] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  const action = useBusy();
   // Typed freely; what is saved is its slug form.
   const shownSlug = slug ?? slugify(title);
   const finalSlug = slugify(shownSlug);
@@ -133,36 +146,35 @@ export function CreateDialog({ client, parent, after, onDone, onClose }: {
     finalSlug === '' ? null : { op: 'create', parent: parent.path, slug: finalSlug, title, kind, defaultOpen: kind !== 'page' && defaultOpen, after };
   const preview = usePreview(client, request);
 
+  // A failure says why in a toast; the dialog stays, to try again.
   const submit = () => {
-    if (request === null) return;
-    client.change(request).then(
-      (answer) => {
-        // A plain folder has no note to open: the server says where it is.
-        onDone(answer.open === null ? { folder: answer.created ?? '' } : { open: answer.open });
-      },
-      (reason: unknown) => { setFailed(reason instanceof Error ? reason.message : String(reason)); },
-    );
+    if (request === null || preview?.error != null) return;
+    void action.run(async () => {
+      const answer = await client.change(request);
+      // A plain folder has no note to open: the server says where it is.
+      onDone(answer.open === null ? { folder: answer.created ?? '' } : { open: answer.open });
+    });
   };
 
   return (
-    <Dialog title={`${KINDS.find((each) => each.kind === kind)?.title ?? 'New page in'} ${parent.title}`} onClose={onClose} onSubmit={submit}>
+    <Dialog title={`${KINDS.find((each) => each.kind === kind)?.title ?? 'New page in'} ${parent.title}`} busy={action.busy} onClose={onClose} onSubmit={submit}>
       <label className="grid gap-1">
         <span className="studio-field-label">Title</span>
-        <input className="studio-input" autoFocus value={title} onChange={(event) => { setTitle(event.target.value); setFailed(null); }} />
+        <input className="studio-input" autoFocus value={title} onChange={(event) => { setTitle(event.target.value); }} />
       </label>
       <label className="grid gap-1">
         <span className="studio-field-label">Slug</span>
         <input
           className="studio-input font-mono"
           value={shownSlug}
-          onChange={(event) => { setSlug(event.target.value); setFailed(null); }}
+          onChange={(event) => { setSlug(event.target.value); }}
         />
       </label>
       <fieldset className="studio-tree-kinds">
         <legend className="studio-field-label">Kind</legend>
         {KINDS.map((each) => (
           <label key={each.kind}>
-            <input type="radio" name="kind" checked={kind === each.kind} onChange={() => { setKind(each.kind); setFailed(null); }} />
+            <input type="radio" name="kind" checked={kind === each.kind} onChange={() => { setKind(each.kind); }} />
             {each.label} <small>{each.file(finalSlug || 'slug')}</small>
           </label>
         ))}
@@ -176,10 +188,10 @@ export function CreateDialog({ client, parent, after, onDone, onClose }: {
           </span>
         </label>
       )}
-      <Preview preview={preview} failed={failed} />
+      <Preview preview={preview} />
       <div className="flex justify-end gap-2">
-        <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
-        <button type="submit" className="studio-button studio-button-primary" disabled={request === null || preview?.error != null}>Create</button>
+        <button type="button" className="studio-button" disabled={action.busy} onClick={onClose}>Cancel</button>
+        <PendingButton type="submit" className="studio-button studio-button-primary" pending={action.busy} pendingLabel="Creating…" disabled={request === null || preview?.error != null}>Create</PendingButton>
       </div>
     </Dialog>
   );
@@ -195,7 +207,7 @@ export function RenameDialog({ client, node, unsaved, onDone, onClose }: {
   onClose: () => void;
 }) {
   const [typed, setTyped] = useState(slugOf(node.path));
-  const [failed, setFailed] = useState<string | null>(null);
+  const action = useBusy();
   const slug = slugify(typed);
   const changed = slug !== '' && slug !== slugOf(node.path);
   // Moving the file under the editor would drop its pending save.
@@ -205,18 +217,16 @@ export function RenameDialog({ client, node, unsaved, onDone, onClose }: {
   const dir = node.path.includes('/') ? `${node.path.slice(0, node.path.lastIndexOf('/'))}/` : '';
 
   const submit = () => {
-    if (request === null || waiting) return;
-    client.change(request).then(
-      (answer) => {
-        const move = answer.changes.find((change) => change.type === 'move');
-        onDone(node.path, move?.type === 'move' ? move.to : node.path);
-      },
-      (reason: unknown) => { setFailed(reason instanceof Error ? reason.message : String(reason)); },
-    );
+    if (request === null || waiting || preview?.error != null) return;
+    void action.run(async () => {
+      const answer = await client.change(request);
+      const move = answer.changes.find((change) => change.type === 'move');
+      onDone(node.path, move?.type === 'move' ? move.to : node.path);
+    });
   };
 
   return (
-    <Dialog title={`Rename “${node.title}”`} onClose={onClose} onSubmit={submit}>
+    <Dialog title={`Rename “${node.title}”`} busy={action.busy} onClose={onClose} onSubmit={submit}>
       <div className="grid gap-1">
         <label className="grid gap-1">
           <span className="studio-field-label">{node.kind === 'folder' ? 'Folder name' : 'File name'}</span>
@@ -224,18 +234,18 @@ export function RenameDialog({ client, node, unsaved, onDone, onClose }: {
             className="studio-input font-mono"
             autoFocus
             value={typed}
-            onChange={(event) => { setTyped(event.target.value); setFailed(null); }}
+            onChange={(event) => { setTyped(event.target.value); }}
           />
         </label>
         <span className="text-[11.5px] text-[var(--fde-muted-foreground)]">
           URL: /notes/{dir}{slug}. Change the title at the top of the note.
         </span>
       </div>
-      <Preview preview={preview} failed={failed} />
+      <Preview preview={preview} />
       {waiting && <p role="status" className="studio-tree-error">The open note has unsaved changes. Rename once it shows Saved.</p>}
       <div className="flex justify-end gap-2">
-        <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
-        <button type="submit" className="studio-button studio-button-primary" disabled={!changed || waiting || preview?.error != null}>Rename</button>
+        <button type="button" className="studio-button" disabled={action.busy} onClick={onClose}>Cancel</button>
+        <PendingButton type="submit" className="studio-button studio-button-primary" pending={action.busy} pendingLabel="Renaming…" disabled={!changed || waiting || preview?.error != null}>Rename</PendingButton>
       </div>
     </Dialog>
   );

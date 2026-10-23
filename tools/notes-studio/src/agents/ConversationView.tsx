@@ -1,8 +1,10 @@
-import { FilePen, FileText, Search, ShieldCheck, ShieldQuestion, ShieldX, Square, Terminal, Wrench } from 'lucide-react';
+import { FilePen, FileText, Search, Square, Terminal, Wrench } from 'lucide-react';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { ToolCallUpdate } from '../../server/agents/shared';
+import { PendingButton, Spinner } from '../actions/PendingButton';
 import type { AgentsClient, Conversation, ConversationEvent } from '../api/agents';
 import { AgentLogo } from './AgentLogo';
+import { AskCard, AskLine } from './AskCard';
 import { ContextChips } from './ContextChips';
 import { Markdown } from './Markdown';
 import { TurnChanges } from './TurnChanges';
@@ -35,6 +37,8 @@ type ItemContext = {
   canDecide: boolean;
   // Keep/Revert decisions per turn (`decisionKey`), from the stream.
   decisions: Record<string, number>;
+  // Answers a question of the agent's; null for a viewer who may not.
+  onAnswer: ((ask: string, optionId: string) => Promise<void>) | null;
 };
 
 function Item({ item, context }: { item: TranscriptItem; context: ItemContext }) {
@@ -94,17 +98,11 @@ function Item({ item, context }: { item: TranscriptItem; context: ItemContext })
     );
   }
   if (item.kind === 'ask') {
-    const picked = item.answer === null ? null : item.ask.options.find((option) => option.optionId === item.answer?.optionId);
-    const allowed = picked?.kind.startsWith('allow') === true;
-    return (
-      <div className="studio-agent-tool" data-status={item.answer === null ? 'asking' : allowed ? 'completed' : 'failed'}>
-        {item.answer === null ? <ShieldQuestion size={14} aria-hidden /> : allowed ? <ShieldCheck size={14} aria-hidden /> : <ShieldX size={14} aria-hidden />}
-        <span className="studio-agent-tool-title">{item.ask.toolCall.title ?? 'Permission'}</span>
-        <span className="studio-agent-tool-state">
-          {item.answer === null ? 'Waiting for you' : `${picked?.name ?? 'Rejected'}${item.answer.by === null ? (picked ? '' : ': no answer') : ` by ${item.answer.by}`}`}
-        </span>
-      </div>
-    );
+    const { onAnswer } = context;
+    if (item.answer === null && onAnswer !== null && conversation.status === 'running') {
+      return <AskCard conversation={conversation} ask={item.ask} at={item.at} onAnswer={(optionId) => onAnswer(item.ask.id, optionId)} />;
+    }
+    return <AskLine ask={item.ask} answer={item.answer} />;
   }
   return (
     <div className="studio-agent-tool" data-status="wrote">
@@ -121,25 +119,40 @@ const FOLLOW_PX = 48;
 
 // One conversation: who it is with, on one line (the model cut short with
 // its full name as a title, so the status stays on that line), and every
-// turn. The thread follows new text while it is scrolled to the bottom.
-// `onCancel` is there while a turn runs and the viewer may stop it.
+// turn. The thread follows new text while it is scrolled to the bottom,
+// and goes down to a new question of the agent's. `onCancel` is there while
+// a turn runs and the viewer may stop it (`cancelling`: asked to, until the
+// turn ends). `sending`: a message on its way, shown before the stream
+// brings it. Until the agent says or does anything after the last message,
+// the thread says it is thinking.
 // `client` reads and decides the files each turn changed (TurnChanges),
-// which `canDecide` allows.
-export function ConversationView({ conversation, events, onCancel, onOpenDiff, onOpenNote, client, canDecide, decisions }: {
+// which `canDecide` allows; `onAnswer` answers its questions.
+export function ConversationView({ conversation, events, onCancel, cancelling, sending, onAnswer, onOpenDiff, onOpenNote, client, canDecide, decisions }: {
   conversation: Conversation;
   events: ConversationEvent[] | undefined;
   onCancel: (() => void) | null;
+  cancelling: boolean;
+  sending: string | null;
+  onAnswer: ((ask: string, optionId: string) => Promise<void>) | null;
   onOpenDiff: (path: string) => void;
   onOpenNote: (path: string) => void;
   client: AgentsClient;
   canDecide: boolean;
   decisions: Record<string, number>;
 }) {
-  const context: ItemContext = { conversation, onOpenDiff, onOpenNote, client, canDecide, decisions };
+  const context: ItemContext = { conversation, onOpenDiff, onOpenNote, client, canDecide, decisions, onAnswer };
   const items = events === undefined ? null : transcriptOf(events);
+  const running = conversation.status === 'running';
+  const asking = items?.filter((item) => item.kind === 'ask' && item.answer === null).at(-1)?.key ?? null;
+  const thinking = running && asking === null && (sending !== null || items?.at(-1)?.kind === 'prompt');
   const thread = useRef<HTMLDivElement>(null);
   const following = useRef(true);
+  const shownAsk = useRef<string | null>(null);
   useLayoutEffect(() => {
+    if (asking !== shownAsk.current) {
+      shownAsk.current = asking;
+      if (asking !== null) following.current = true;
+    }
     const element = thread.current;
     if (element !== null && following.current) element.scrollTop = element.scrollHeight;
   });
@@ -151,8 +164,8 @@ export function ConversationView({ conversation, events, onCancel, onOpenDiff, o
         <span className="studio-agent-role">{roleLabel(conversation.role)}</span>
         {conversation.model !== null && <span className="studio-agent-model" title={conversation.model}>{conversation.model}</span>}
         <span className="studio-agent-grow" />
-        {conversation.status === 'running' && onCancel !== null ? (
-          <button type="button" className="studio-button gap-1.5" onClick={onCancel}><Square size={12} aria-hidden /> Cancel</button>
+        {running && onCancel !== null ? (
+          <PendingButton className="studio-button gap-1.5" pending={cancelling} pendingLabel="Cancelling…" onClick={onCancel}><Square size={12} aria-hidden /> Cancel</PendingButton>
         ) : <TurnStatus conversation={conversation} />}
       </header>
       <div
@@ -163,9 +176,29 @@ export function ConversationView({ conversation, events, onCancel, onOpenDiff, o
           following.current = element.scrollHeight - element.scrollTop - element.clientHeight < FOLLOW_PX;
         }}
       >
-        {items === null && <p className="studio-agent-meta">Loading the chat…</p>}
+        {items === null && sending === null && <p className="studio-agent-meta">Loading the chat…</p>}
         {items?.map((item) => <Item key={item.key} item={item} context={context} />)}
+        {sending !== null && <Sending text={sending} />}
+        {thinking && <Thinking name={conversation.agentName} />}
       </div>
     </section>
+  );
+}
+
+// A message on its way to the agent.
+export function Sending({ text }: { text: string }) {
+  return (
+    <>
+      <p className="studio-agent-prompt" data-pending>{text}</p>
+      <span className="studio-agent-prompt-meta" role="status"><Spinner size={11} /> Sending…</span>
+    </>
+  );
+}
+
+export function Thinking({ name, doing = 'is thinking' }: { name: string; doing?: string }) {
+  return (
+    <p className="studio-agent-thinking" role="status">
+      {name} {doing}<span className="studio-agent-dots" aria-hidden><span /><span /><span /></span>
+    </p>
   );
 }

@@ -11,8 +11,10 @@ import { useEditorPlugin } from '../../../src/editor/decorations';
 import { placeAll } from '../../../src/suggestions/places';
 import { sourceSuggestions } from '../../../src/suggestions/source';
 import { SuggestionBar, VisualSuggestions, type NoteReview } from '../../../src/suggestions/Suggestions';
-import { failureOn, useProposals } from '../../../src/suggestions/useProposals';
+import { useNoteSuggestions } from '../../../src/suggestions/useNoteSuggestions';
+import { useProposals } from '../../../src/suggestions/useProposals';
 import { createSuggestionLayer } from '../../../src/suggestions/visual';
+import { ToastStack } from '../../../src/actions/ToastStack';
 import { mountVisual, stubLayout } from '../../support/visual-editor';
 
 const PATH = 'content/notes/guide.mdx';
@@ -58,7 +60,13 @@ describe('placeAll', () => {
 });
 
 function review(proposals: ProposalView[], act = vi.fn(() => Promise.resolve())): NoteReview & { act: typeof act } {
-  return { proposals, comments: [], error: null, act };
+  return { proposals, comments: [], act };
+}
+
+// The bar over `text`, deciding as NoteEditor does.
+function Bar({ decide, text }: { decide: NoteReview; text: string }) {
+  const suggestions = useNoteSuggestions(decide, text);
+  return <SuggestionBar placement={suggestions.placement} focus={suggestions.focus} onStep={() => undefined} decisions={suggestions.decisions} />;
 }
 
 describe('SuggestionBar', () => {
@@ -67,9 +75,8 @@ describe('SuggestionBar', () => {
     const first = proposal(NOTE.replace('First paragraph.', 'One.').replace('Third paragraph.', 'Three.'), 'p1');
     const second = proposal(NOTE.replace('# Guide', '# The guide'), 'p2');
     const now = NOTE.replace('Third paragraph.', 'Third, by a person.');
-    const placement = placeAll(now, [first, second]);
     const decide = review([first, second]);
-    render(<SuggestionBar review={decide} placement={placement} focus={placement.hunks[0]?.key ?? null} onStep={() => undefined} />);
+    render(<Bar decide={decide} text={now} />);
     const bar = screen.getByRole('region', { name: 'Suggestions' });
     expect(within(bar).getByText('3 suggestions')).toBeTruthy();
     expect(within(bar).getByText('1 stale')).toBeTruthy();
@@ -81,7 +88,7 @@ describe('SuggestionBar', () => {
   });
 
   it('shows nothing once every suggestion is decided', () => {
-    const { container } = render(<SuggestionBar review={review([])} placement={placeAll(NOTE, [])} focus={null} onStep={() => undefined} />);
+    const { container } = render(<Bar decide={review([])} text={NOTE} />);
     expect(container.innerHTML).toBe('');
   });
 });
@@ -130,8 +137,8 @@ describe('suggestions in Source', () => {
 function Layer({ container, text, decide }: { container: RefObject<HTMLElement | null>; text: string; decide: NoteReview }) {
   const layer = useMemo(createSuggestionLayer, []);
   useEditorPlugin(container, layer.plugin);
-  const placement = placeAll(text, decide.proposals, decide.comments);
-  return <VisualSuggestions layer={layer} review={decide} placement={placement} focus={placement.hunks[0]?.key ?? null} readOnly={false} />;
+  const { placement, focus, decisions } = useNoteSuggestions(decide, text);
+  return <VisualSuggestions layer={layer} placement={placement} focus={focus} readOnly={false} decisions={decisions} />;
 }
 
 describe('suggestions in Visual', () => {
@@ -159,7 +166,7 @@ describe('suggestions in Visual', () => {
 });
 
 describe('useProposals', () => {
-  it('keeps a failed action on its own note, and a failed reload on every note', async () => {
+  it('throws a failed action to the button that sent it, and says why a reload failed in a toast', async () => {
     const other = { ...proposal(NOTE.replace('First paragraph.', 'One.'), 'p2'), path: 'content/notes/other.mdx' };
     let listing: () => Promise<ProposalView[]> = () => Promise.resolve([proposal(NOTE.replace('First paragraph.', 'One.')), other]);
     const client = {
@@ -168,13 +175,13 @@ describe('useProposals', () => {
       subscribe: (_merge: unknown, reopened: () => void) => { reopened(); return () => undefined; },
       act: () => Promise.reject(new Error('nothing left to decide in these hunks')),
     } as unknown as ProposalsClient;
+    render(<ToastStack />);
     const { result } = renderHook(() => useProposals(client, true));
     await waitFor(() => { expect(result.current.proposals).toHaveLength(2); });
-    await act(() => result.current.act('p2', 'accept', ['1']));
-    expect(failureOn(result.current.error, 'content/notes/other.mdx')).toBe('nothing left to decide in these hunks');
-    expect(failureOn(result.current.error, PATH)).toBeNull();
+    await expect(result.current.act('p2', 'accept', ['1'])).rejects.toThrow('nothing left to decide in these hunks');
+    expect(screen.queryByRole('alert')).toBeNull();
     listing = () => Promise.reject(new Error('offline'));
-    const { result: again } = renderHook(() => useProposals(client, true));
-    await waitFor(() => { expect(failureOn(again.current.error, PATH)).toBe('offline'); });
+    renderHook(() => useProposals(client, true));
+    expect((await screen.findByRole('alert')).textContent).toContain('offline');
   });
 });
