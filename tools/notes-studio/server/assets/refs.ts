@@ -5,7 +5,8 @@ import { visit } from 'unist-util-visit';
 import { parseNote } from '../lint/lint.ts';
 import { decodeRefs, markdownRange, type Range } from '../markdown/destination.ts';
 import { pageUrl } from '../lint/rules/links.ts';
-import { ASSETS_DIR, extensionOf, isAssetExtension, publicAsset } from '../security/asset-types.ts';
+import { diagramPathOf } from '../../../../lib/diagram/source.ts';
+import { ASSETS_DIR, classifyPath, extensionOf, isAssetExtension, publicAsset } from '../security/asset-types.ts';
 
 // References from a note to files under public/notes, found on the parsed
 // note so code blocks and the frontmatter never count. Each reference is
@@ -18,8 +19,11 @@ import { ASSETS_DIR, extensionOf, isAssetExtension, publicAsset } from '../secur
 //   build instead, so they are not public/ files.
 // - Markdown links, link definitions and <img src>: a URL, resolved against
 //   the page URL, as the browser does.
+// - `src` of <Diagram>: a file under diagrams/ without its extension
+//   (lib/read-diagram.ts). It is listed with the assets so a diagram shows
+//   where it is used, and never rewritten: diagrams are not renamed here.
 
-export type AssetRefKind = 'image' | 'link' | 'jsx' | 'directive';
+export type AssetRefKind = 'image' | 'link' | 'jsx' | 'directive' | 'diagram';
 
 // `asset` is a worktree path (`public/notes/…`); `start`/`end` are offsets
 // of the path as written, without its query or hash; line and column are
@@ -48,6 +52,13 @@ function urlAsset(href: string, notePath: string) {
 function managed(asset: string | null) {
   if (asset === null || !asset.startsWith('notes/') || !isAssetExtension(extensionOf(asset))) return null;
   return `public/${asset}`;
+}
+
+// The file a <Diagram src> draws, as the site resolves it, or null when
+// that is no diagram file the Studio may touch.
+function diagramFile(src: string) {
+  const path = diagramPathOf(src);
+  return path !== null && classifyPath(path) === 'diagram' ? path : null;
 }
 
 // Where the query or hash starts; the `#` of a character reference (`&#46;`)
@@ -145,6 +156,10 @@ function referenceOf(node: Nodes, source: string, notePath: string): Found | nul
     if (!node.url.startsWith('/') || node.url.startsWith('//')) return null;
     return { kind: 'image', asset: urlAsset(node.url, notePath), range: markdownRange(node, source) };
   }
+  if ((node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') && node.name === 'Diagram') {
+    const { value, range } = jsxSrc(node, source);
+    return value === null ? null : { kind: 'diagram', asset: diagramFile(value), range };
+  }
   if ((node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') && node.name) {
     if (!PUBLIC_EMBEDS.includes(node.name) && node.name !== 'img') return null;
     const { value, range } = jsxSrc(node, source);
@@ -181,7 +196,7 @@ export function findAssetRefs(source: string, notePath: string): AssetRef[] | nu
   const refs: AssetRef[] = [];
   visit(tree, (node) => {
     const found = referenceOf(node, source, notePath);
-    const asset = managed(found?.asset ?? null);
+    const asset = found?.kind === 'diagram' ? found.asset : managed(found?.asset ?? null);
     if (!found || asset === null) return;
     const at = found.range?.start ?? node.position?.start.offset ?? 0;
     const end = found.range ? at + pathEnd(source.slice(at, found.range.end)) : at;
@@ -228,7 +243,7 @@ export function rewriteAssetRefs(
   let limit = Infinity;
   for (const ref of [...refs].sort((a, b) => b.start - a.start)) {
     const to = moved(ref.asset);
-    if (!ref.exact || to === null || to === ref.asset || ref.end > limit) continue;
+    if (!ref.exact || ref.kind === 'diagram' || to === null || to === ref.asset || ref.end > limit) continue;
     limit = ref.start;
     next = next.slice(0, ref.start) + movedRaw(ref, source.slice(ref.start, ref.end), ref.asset, to) + next.slice(ref.end);
     count += 1;

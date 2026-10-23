@@ -76,7 +76,7 @@ describe('assets API', () => {
   it('lists every asset with the notes and lines that use it', async () => {
     const assets = await list();
     const byPath = (path: string) => assets.find((asset) => asset.path === path);
-    expect(assets.every((asset) => asset.path.startsWith('public/notes/'))).toBe(true);
+    expect(assets.every((asset) => asset.path.startsWith('public/notes/') || asset.path.startsWith('diagrams/'))).toBe(true);
     expect(byPath(SUPERSET)).toMatchObject({
       mtimeMs: await mtime(SUPERSET),
       usages: [{ note: 'content/notes/data-platform/stacks-integration/index.mdx', line: 157, unsure: false }],
@@ -86,6 +86,16 @@ describe('assets API', () => {
     expect(assets.flatMap((asset) => asset.usages).length).toBeGreaterThanOrEqual(9);
     expect(await missingAssets()).toEqual([]);
   }, 20_000);
+
+  it('lists the diagrams with the notes whose <Diagram> draws them', async () => {
+    const assets = await list();
+    const diagrams = assets.filter((asset) => asset.path.startsWith('diagrams/'));
+    expect(diagrams.length).toBeGreaterThanOrEqual(8);
+    expect(diagrams.every((asset) => asset.path.endsWith('.diagram.json'))).toBe(true);
+    const vantage = diagrams.find((asset) => asset.path.endsWith('/driver-container-vantage-point.diagram.json'));
+    expect(vantage?.usages).toMatchObject([{ note: 'content/notes/data-platform/stacks-integration/databricks/databricks-interactive-runtime/driver-container-first-look.mdx', line: 39, unsure: false }]);
+    expect(vantage?.usages[0].text).toMatch(/^<Diagram src="/);
+  });
 
   it('names the diagram sources that generate an asset', async () => {
     const generated = await find(MADE.asset);

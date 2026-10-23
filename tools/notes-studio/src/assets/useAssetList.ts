@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AssetInfo, AssetsClient } from '../api/assets';
 import type { createFilesClient } from '../api/files';
+import { classifyPath } from '../../server/security/asset-types';
 
 const SETTLE_MS = 300;
 
@@ -33,7 +34,8 @@ export function useAssetList(client: AssetsClient, files: ReturnType<typeof crea
     };
     reloadRef.current = load;
     const unsubscribe = files.subscribeFileEvents((event) => {
-      if (event.path.endsWith('/meta.yaml')) return;
+      // A meta.yaml uses nothing; a diagram's own change changes no usage.
+      if (event.path.endsWith('/meta.yaml') || (event.type === 'change' && classifyPath(event.path) === 'diagram')) return;
       clearTimeout(timer);
       timer = setTimeout(load, SETTLE_MS);
     });

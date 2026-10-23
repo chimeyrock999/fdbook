@@ -42,6 +42,8 @@ import { CrListPage } from './cr/CrListPage';
 import { CrNotice } from './cr/CrNotice';
 import { CrPicker, EditMenu } from './cr/CrMenus';
 import { useCrs } from './cr/useCrs';
+import { DiagramPage } from './diagrams/DiagramPage';
+import { useLeftEdits } from './diagrams/useDiagramFile';
 import { DiffPage } from './diff/DiffPage';
 import { createHistoryClient } from './api/history';
 import { DeletedPagesPage } from './history/DeletedPagesPage';
@@ -86,6 +88,7 @@ export function App() {
   const [page, setPage] = useState(() => pageFromUrl(window.location.search));
   const active = page?.kind === 'note' ? page.path : null;
   const asset = page?.kind === 'asset' ? page.path : null;
+  const diagram = page?.kind === 'diagram' ? page.path : null;
   const diff = page?.kind === 'diff' ? page : null;
   const history = page?.kind === 'history' ? page.path : null;
   // The note the page tree marks: the one open, or the one whose history is.
@@ -96,7 +99,12 @@ export function App() {
   const deletedPage = history === null ? undefined : deleted.pages?.find((each) => each.path === history);
   // The open note's autosave state, by path: a rename waits until it is saved.
   const [saved, setSaved] = useState<{ path: string; status: DocumentStatus } | null>(null);
-  const unsaved = unsavedNote(active, saved);
+  // The open diagram's save state: edits not on disk yet hold the same lock.
+  const [diagramWaits, setDiagramWaits] = useState<string | null>(null);
+  // Diagram edits a page left in a conflict or as JSON that does not parse.
+  const leftDiagram = useLeftEdits(files);
+  const unsaved = unsavedNote(active, saved) ?? (diagram !== null && diagramWaits === diagram ? diagram : null) ?? leftDiagram;
+  const diagramWaiting = useCallback((waiting: boolean) => { setDiagramWaits(waiting ? diagram : null); }, [diagram]);
   const crs = useCrs(crClient, files, page?.kind === 'crs');
   // With change requests, main is read only until one is opened (`?cr=`); a
   // Studio over one worktree (enabled: false) edits it as it is.
@@ -156,7 +164,7 @@ export function App() {
   const closeDrawer = useCallback(() => { setDrawer(false); }, []);
   const { show, select } = sidebar;
   // The assets list follows the disk only while the Assets view or an asset page is shown.
-  const assetList = useAssetList(assetsClient, files, (sidebar.view === 'assets' && (sidebar.shown || drawer)) || asset !== null);
+  const assetList = useAssetList(assetsClient, files, (sidebar.view === 'assets' && (sidebar.shown || drawer)) || asset !== null || diagram !== null);
   // On a phone the drawer opens on the view, leaving the desktop layout as it
   // was; on a desktop the sidebar shows the view.
   const openView = useCallback((view: SidebarView) => {
@@ -214,9 +222,10 @@ export function App() {
     setPlace(null);
     go({ kind: 'note', path });
   };
+  // An asset, or a diagram (the Assets view lists both), opens its page.
   const openAsset = (path: string) => {
     setPlace(null);
-    go({ kind: 'asset', path });
+    go({ kind: classifyPath(path) === 'diagram' ? 'diagram' : 'asset', path });
   };
   // A changed file picked in the Changes view: its diff against main.
   const openChanged = (file: ChangedFile) => {
@@ -362,7 +371,7 @@ export function App() {
               client={assetsClient}
               list={assetList}
               active={active}
-              current={asset}
+              current={asset ?? diagram}
               unsaved={unsaved !== null}
               readOnly={readOnly}
               onOpen={openAsset}
@@ -417,6 +426,16 @@ export function App() {
             onOpenUsage={openUsage}
             onChanged={assetChangedBy}
             onShowHistory={() => { go({ kind: 'history', path: asset }); }}
+          />
+        ) : diagram ? (
+          <DiagramPage
+            key={diagram}
+            files={files}
+            path={diagram}
+            readOnly={readOnly}
+            usages={assetList.assets === null ? null : assetList.assets.find((each) => each.path === diagram)?.usages ?? []}
+            onOpenUsage={openUsage}
+            onWaiting={diagramWaiting}
           />
         ) : diff ? (
           <DiffPage

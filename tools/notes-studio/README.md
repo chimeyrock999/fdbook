@@ -91,6 +91,7 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     Issues), its width and whether it is shown.
   - `assets/` is the Assets view, the asset page in the main pane, and the
     rename, replace and delete dialogs.
+  - `diagrams/` is the diagram editor in the main pane (see Diagrams).
   - `tree/` is the page tree in the Notes view and its dialogs.
   - `changes/` is the Changes view, the suggested commit message, the
     Preview and Pull request sections, the Publish dialog, the header's main
@@ -153,7 +154,7 @@ without `changeRequests`, as the tests start it, edits the one worktree at
 | `POST /api/lint` | Takes JSON `{ path, content }` for a note and returns `{ path, issues }` (see Lint). Writes nothing. |
 | `GET /api/tree` | The page tree: `{ tree }` (see Page tree) |
 | `POST /api/tree` | Takes JSON `{ op: "create" \| "rename" \| "move" \| "set-open", dryRun?, … }`, changes the tree and returns `{ changes, open }`. With `dryRun` it writes nothing. |
-| `GET /api/assets` | Every file under `public/notes` with where notes use it and the diagram sources that generate it: `{ assets: [{ path, mtimeMs, size, usages: [{ note, line, column, length, text, unsure }], sources: [{ path, line, text }] }] }` (see Assets) |
+| `GET /api/assets` | Every file under `public/notes`, then every `diagrams/**/*.diagram.json`, with where notes use it (a diagram: the `<Diagram src>` that draw it) and the diagram sources that generate it: `{ assets: [{ path, mtimeMs, size, usages: [{ note, line, column, length, text, unsure }], sources: [{ path, line, text }] }] }` (see Assets) |
 | `POST /api/assets` | Takes JSON `{ op: "rename" \| "delete" \| "replace", path, name?, extension?, baseMtime, dryRun? }`, changes the asset and the notes that use it, and returns `{ changes, usages }`. With `dryRun` it writes nothing; a replace is a dry run only here. |
 | `PUT /api/assets?path=…&extension=…&baseMtime=…` | Replaces the asset's content with the raw bytes (`X-Studio-Write: 1`, up to 25 MB), at its path or, with another extension, at its name with that one, and returns `{ changes, usages, mtimeMs }` (see Assets) |
 | `GET /api/changes` | What `git status` says changed under `content/notes` and `public/notes`, only files the path policy allows: `{ branch, files: [{ path, status: "M" \| "A" \| "D" \| "R", from? }] }` (see Changes) |
@@ -646,7 +647,10 @@ Renaming or deleting an asset is in the Assets view.
 
 The sidebar's Assets view shows `public/notes` as folders, the open note's
 asset folder open, each file with how many times notes use it (`unused` when
-none does) and `diagram` when a diagram source generates it. Filter by name,
+none does) and `diagram` when a diagram source generates it; under
+**Diagrams** follow the `diagrams/**/*.diagram.json` files, each with the
+`<Diagram>` that draw it, opening the diagram editor (see Diagrams; they are
+not renamed or deleted here). Filter by name,
 or show the unused files only. A file opens its asset page in the main
 pane, where the editor sits, and its row is marked as the open one. The URL
 names it (`?asset=public/notes/…`), so back and forward move between notes
@@ -1218,6 +1222,47 @@ problems the site's checks find; it draws again when the file changes on
 disk, as an asset does (`assetChanged`). Diagram files are editable paths:
 they are listed, watched and diffed, and show in Changes (a commit of only
 diagrams is named after them).
+
+A diagram picked in the Assets view opens the diagram editor in the main
+pane (`?diagram=diagrams/…`, `src/diagrams/`). The canvas is the site's own
+drawing, so it looks as the note will, with an editing layer on top:
+
+- drag a node (Shift-click adds to the selection and the drag moves them
+  all) or a frame (its nodes move and it follows them); nodes land on an
+  8-unit grid, the arrow keys nudge them;
+- drag from a selected node's side handle to another node or a frame to
+  connect them, with both ends pinned to the sides drawn between;
+- on a selected edge, drag a waypoint, or the middle of a segment to add
+  one; a double click removes it and **Route it again** clears them all;
+- add a node (where it fits, or with a double click on the canvas), wrap the
+  selection in a frame, add a card; duplicate (⌘D) and delete (Delete) what
+  is selected; undo and redo (⌘Z, ⇧⌘Z) cover every edit, the JSON's too. A
+  copy goes where it overlaps nothing (`src/diagrams/placement.ts`): inside
+  the innermost frame that holds the original when it has room there, else
+  in the first free spot of the drawing, else below it, a fixed canvas
+  growing to hold it;
+- the panel edits what is selected: a node's label, sublabel, tag, kind
+  (or a **New kind…** for it), its kind's name, tone and icon, and its note
+  (role, evidence badge, points); an edge's label, detail, variant, arrows
+  and end sides; a frame's label, tone and dashes; a card; or, with nothing
+  selected, the title, legend, kinds (add one, remove one no node is of) and
+  cards;
+- **JSON** shows the file under the drawing (drag the bar between them to
+  resize, double-click it for halves); typing there draws once it parses;
+- under the drawing, the checks' findings and the notes that use it.
+
+Edits save a moment after each change (`src/diagrams/useDiagramFile.ts`)
+through the file API with the mtime they read, written by
+`formatDiagramJson` so a move changes one line. A change on disk (an agent,
+the CLI) loads while nothing waits to be saved, and undo can go back past
+it; with edits waiting, the page asks whether to load the disk's version or
+keep its own. A gesture under way applies to the version that loaded.
+Edits not on disk yet hold the same lock as a note's (switching change
+request, renames, Commit), and the tab asks before it closes; left in a
+conflict or as JSON that does not parse, they keep holding both until they
+are saved, and show again the next time the file is opened in the tab
+(they last as long as the tab: a reload, after its prompt, drops them). On
+main, or for a reader, the editor only shows.
 
 Agents change diagrams through the Studio MCP server's `diagram_*` tools
 (`server/mcp/diagram-tools.ts`, mounted at `/api/mcp` beside the note

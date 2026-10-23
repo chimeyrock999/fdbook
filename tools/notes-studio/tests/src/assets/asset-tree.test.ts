@@ -36,6 +36,18 @@ describe('buildAssetTree', () => {
   });
 });
 
+describe('buildAssetTree under diagrams/', () => {
+  it('builds the diagrams/ tree apart from public/notes', () => {
+    const diagram = { path: 'diagrams/guide/flow.diagram.json', mtimeMs: 1, size: 1, usages: [], sources: [] };
+    const tree = buildAssetTree([...ASSETS, diagram], { prefix: 'diagrams/' });
+    expect(tree.path).toBe('diagrams');
+    expect(tree.folders.map((folder) => folder.path)).toEqual(['diagrams/guide']);
+    expect(tree.folders[0].files.map((file) => file.path)).toEqual([diagram.path]);
+    expect(JSON.stringify(buildAssetTree([...ASSETS, diagram]))).not.toContain('diagrams/');
+    expect(foldersTo('diagrams/guide/deep')).toEqual(['diagrams/guide', 'diagrams/guide/deep']);
+  });
+});
+
 describe('foldersTo', () => {
   it('lists the folders down to the given one', () => {
     expect(foldersTo('public/notes/guide/deep')).toEqual(['public/notes/guide', 'public/notes/guide/deep']);

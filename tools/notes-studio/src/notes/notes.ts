@@ -23,16 +23,16 @@ export function noteFromUrl(search: string): string | null {
   return path !== null && isNote(path) ? path : null;
 }
 
-// What the main pane shows: a note or an asset, by worktree path, a file's
-// diff against main (renamed `from` an old path), a note's or an asset's
+// What the main pane shows: a note, an asset or a diagram (diagrams/), by
+// worktree path, a file's diff against main (renamed `from` an old path), a note's or an asset's
 // history, the list of change requests, or the deleted pages.
-export type Page = { kind: 'note' | 'asset' | 'history'; path: string } | { kind: 'diff'; path: string; from?: string } | { kind: 'crs' | 'deleted' };
+export type Page = { kind: 'note' | 'asset' | 'diagram' | 'history'; path: string } | { kind: 'diff'; path: string; from?: string } | { kind: 'crs' | 'deleted' };
 
 // Whether a page shows no file of its own: a list.
 export const isList = (page: Page | null): page is { kind: 'crs' | 'deleted' } => page?.kind === 'crs' || page?.kind === 'deleted';
 
 // The page to open from the URL: `?path=` names a note, `?asset=` a file
-// under public/notes, `?diff=` (with `&from=` for a rename) any file the
+// under public/notes, `?diagram=` a diagram under diagrams/, `?diff=` (with `&from=` for a rename) any file the
 // Studio may touch, `?history=` a note or an asset, `?view=crs` the change
 // requests, `?view=deleted` the deleted pages.
 // Paths take the server's own lexical check, so the page opens only what it
@@ -48,6 +48,8 @@ export function pageFromUrl(search: string): Page | null {
   if (history !== null && ((historyKind === 'note' && isNote(history)) || historyKind === 'asset')) return { kind: 'history', path: history };
   const asset = params.get('asset');
   if (asset !== null && classifyPath(asset) === 'asset') return { kind: 'asset', path: asset };
+  const diagram = params.get('diagram');
+  if (diagram !== null && classifyPath(diagram) === 'diagram') return { kind: 'diagram', path: diagram };
   const diff = params.get('diff');
   if (diff === null || classifyPath(diff) === null) return null;
   const from = params.get('from');
@@ -71,7 +73,7 @@ export function pageQuery(page: Page | null, cr: string | null = CURRENT_CR) {
   else if (page?.kind === 'diff') {
     parts.push(`diff=${encodeURIComponent(page.path)}`);
     if (page.from !== undefined) parts.push(`from=${encodeURIComponent(page.from)}`);
-  } else if (page) parts.push(`${{ note: 'path', asset: 'asset', history: 'history' }[page.kind]}=${encodeURIComponent(page.path)}`);
+  } else if (page) parts.push(`${{ note: 'path', asset: 'asset', diagram: 'diagram', history: 'history' }[page.kind]}=${encodeURIComponent(page.path)}`);
   return `?${parts.join('&')}`;
 }
 
@@ -86,9 +88,10 @@ export function noteRoute(path: string) {
 }
 
 // What the site serves for a worktree path: a note's page, a file under
-// public/ as it is (`/notes/…`), and the notes' home for anything else.
+// public/ as it is (`/notes/…`), and the notes' home for anything else (a
+// diagram is drawn in the notes, not served).
 export function siteRoute(path: string | null) {
-  if (path === null) return '/notes';
+  if (path === null || !(path.startsWith('public/') || path.startsWith(NOTES_PREFIX))) return '/notes';
   if (path.startsWith('public/')) return `/${path.slice('public/'.length).split('/').map(encodeURIComponent).join('/')}`;
   return noteRoute(path);
 }

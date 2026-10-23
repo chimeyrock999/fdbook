@@ -274,7 +274,8 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
     input: z.object({}),
     access: 'read',
     async run(_args, ctx) {
-      const assets = await listAssets(ctx.root);
+      // The list also holds the diagrams, which diagram_list answers for.
+      const assets = (await listAssets(ctx.root)).filter((asset) => classifyPath(asset.path) === 'asset');
       return json({ assets: assets.map((asset) => ({ path: asset.path, size: asset.size, usedBy: asset.usages.map((usage) => ({ note: usage.note, line: usage.line })) })) });
     },
   };

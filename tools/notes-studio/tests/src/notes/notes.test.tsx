@@ -44,6 +44,18 @@ describe('note helpers', () => {
     }
   });
 
+  it('reads a diagram to open: ?diagram= for a file under diagrams/', () => {
+    const page = { kind: 'diagram', path: 'diagrams/guide/a b.diagram.json' } as const;
+    expect(pageQuery(page)).toBe('?diagram=diagrams%2Fguide%2Fa%20b.diagram.json');
+    expect(pageFromUrl(pageQuery(page))).toEqual(page);
+    expect(pageFromUrl('?diagram=diagrams/diagram.schema.json')).toBeNull();
+    expect(pageFromUrl('?diagram=diagrams/../package.diagram.json')).toBeNull();
+    expect(pageFromUrl('?diagram=public/notes/a.png')).toBeNull();
+    // A diagram is drawn in notes, not served: Open preview goes home.
+    expect(previewRoute(page, () => true)).toBe('/notes');
+    expect(previewRoute({ kind: 'diff', path: page.path }, () => true)).toBe('/notes');
+  });
+
   it('reads a diff to open: ?diff= for any file the Studio touches, &from= for its old name', () => {
     expect(pageFromUrl('?diff=content%2Fnotes%2Fa%2Fmeta.yaml')).toEqual({ kind: 'diff', path: 'content/notes/a/meta.yaml' });
     expect(pageFromUrl('?diff=public/notes/a.png')).toEqual({ kind: 'diff', path: 'public/notes/a.png' });
