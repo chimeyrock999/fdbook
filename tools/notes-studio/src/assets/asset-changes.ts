@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
+import { messageOf } from '../actions/toasts';
 import type { AssetAnswer, AssetChange, AssetRequest, AssetsClient } from '../api/assets';
 import { nameOf } from './asset-tree';
 
 // The parts of an asset change the view, the page and the dialogs share.
 
 const PREVIEW_MS = 200;
-
-export const message = (reason: unknown) => (reason instanceof Error ? reason.message : String(reason));
 
 // What the server would write for `request`, asked again as it changes.
 export function usePreview(client: AssetsClient, request: AssetRequest | null) {
@@ -18,7 +17,7 @@ export function usePreview(client: AssetsClient, request: AssetRequest | null) {
     const timer = setTimeout(() => {
       client.change(request, true).then(
         (answer) => { if (current) setPreview({ changes: answer.changes, error: null }); },
-        (reason: unknown) => { if (current) setPreview({ changes: [], error: message(reason) }); },
+        (reason: unknown) => { if (current) setPreview({ changes: [], error: messageOf(reason) }); },
       );
     }, PREVIEW_MS);
     return () => {

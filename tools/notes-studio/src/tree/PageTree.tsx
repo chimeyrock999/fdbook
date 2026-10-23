@@ -1,5 +1,7 @@
 import { ArrowDown, ArrowUp, Check, ChevronRight, ExternalLink, Eye, EyeOff, FileText, Folder, GripVertical, icons, Lock, MoreHorizontal, Pencil, Plus, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { createElement, useEffect, useRef, useState, type DragEvent } from 'react';
+import { useBusy } from '../actions/busy';
+import { Spinner } from '../actions/PendingButton';
 import type { TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
 import { CHANGE_NAME, folderMarked, missingStatus, type TreeMarks } from '../changes/marks';
 import { CreateDialog, RenameDialog } from './TreeDialogs';
@@ -46,6 +48,11 @@ type View = {
   readOnly: boolean;
   marks: TreeMarks | null;
   suggested: ReadonlyMap<string, number> | null;
+  // A change from a row menu or a drop is out (#138): rows neither move
+  // nor open their menu until the tree is read again; `changing` is the
+  // row it is about.
+  busy: boolean;
+  changing: string | null;
 };
 
 // The icon the site's sidebar shows. The server keeps only names the site's
@@ -54,11 +61,11 @@ type View = {
 const iconOf = (name: string | null): LucideIcon | undefined => (name === null ? undefined : (icons as Partial<Record<string, LucideIcon>>)[name]);
 
 function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; dim: boolean; view: View }) {
-  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu, readOnly, marks, suggested } = view;
+  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu, readOnly, marks, suggested, busy, changing } = view;
   const hidden = 'hidden' in node ? node.hidden : null;
   const note = noteOf(node);
   const open = node.kind === 'folder' && (filtering || isOpen(node));
-  const canMove = movable(node) && !filtering && !readOnly;
+  const canMove = movable(node) && !filtering && !readOnly && !busy;
   const faded = dim || hidden !== null;
   // Its git status (#17): the note's, or a missing entry's deleted page.
   const change = marks === null ? null : node.kind === 'missing' ? missingStatus(marks, node) : note === null ? null : (marks.notes.get(note) ?? null);
@@ -84,6 +91,7 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
         className="studio-tree-row"
         data-drop={drop?.id === node.id ? drop.place : undefined}
         data-faded={faded || undefined}
+        aria-busy={changing === node.id || undefined}
         aria-current={note !== null && note === active ? 'page' : undefined}
         onDragOver={(event) => { onDragOver(event, node, parent); }}
         onDrop={(event) => { onDrop(event, node, parent); }}
@@ -129,12 +137,13 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
             type="button"
             className="studio-tree-more"
             aria-label={`Actions for ${titleOf(node)}`}
+            disabled={busy}
             onClick={(event) => {
               const box = event.currentTarget.getBoundingClientRect();
               openMenu({ node, parent, top: box.bottom + 2, left: box.left });
             }}
           >
-            <MoreHorizontal size={14} />
+            {changing === node.id ? <Spinner size={14} /> : <MoreHorizontal size={14} />}
           </button>
         )}
       </div>
@@ -176,7 +185,9 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
   const [query, setQuery] = useState('');
   const [menu, setMenu] = useState<Menu | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
-  const [status, setStatus] = useState<{ text: string; error: boolean } | null>(null);
+  // What the last change did; a failed one says why in a toast.
+  const [status, setStatus] = useState<string | null>(null);
+  const action = useBusy();
   const [dragging, setDragging] = useState<{ node: TreeNode; parent: TreeFolder } | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
   const { isOpen, toggle, openFolder } = useOpenFolders(root, active);
@@ -210,13 +221,19 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
     };
   }, [menu]);
 
-  // A change from the row menu, reported in the status line.
-  const send = (request: TreeRequest, report: (changes: TreeChange[]) => string) => {
+  // A change from the row menu or a drop, reported in the status line.
+  // The tree waits for it and for the tree it reads after, so no second
+  // change goes out on what the first one changed (its meta.yaml mtime).
+  const send = (node: TreeNode, request: TreeRequest, report: (changes: TreeChange[]) => string) => {
     setMenu(null);
-    client.change(request).then(
-      (answer) => { setStatus({ text: report(answer.changes), error: false }); },
-      (reason: unknown) => { setStatus({ text: reason instanceof Error ? reason.message : String(reason), error: true }); },
-    ).finally(() => { void onChanged(); });
+    setStatus(null);
+    void action.run(async () => {
+      try {
+        setStatus(report((await client.change(request)).changes));
+      } finally {
+        await onChanged();
+      }
+    }, node.id);
   };
 
   const move = (parent: TreeFolder, node: TreeNode, to: number | null) => {
@@ -224,7 +241,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
       setMenu(null);
       return;
     }
-    send({ op: 'move', folder: parent.path, from: node.entry, to, baseMtime: parent.metaMtime }, said);
+    send(node, { op: 'move', folder: parent.path, from: node.entry, to, baseMtime: parent.metaMtime }, said);
   };
 
   if (!root) return <p className="px-3 py-2 text-[12.5px] text-[var(--fde-muted-foreground)]">Loading notes…</p>;
@@ -246,7 +263,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
     setDrop(null);
   };
 
-  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu, readOnly, marks, suggested };
+  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu, readOnly, marks, suggested, busy: action.busy, changing: action.running };
   const menuNode = menu?.node ?? null;
   const movesUnsaved =
     unsaved !== null && (menuNode?.kind === 'page' || menuNode?.kind === 'folder') && renamedPath(unsaved, menuNode.path, menuNode.path) !== null;
@@ -275,11 +292,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
       ) : (
         <div className="min-h-0 overflow-auto"><Items folder={shown} dim={false} view={view} /></div>
       )}
-      {status && (
-        <p role={status.error ? 'alert' : 'status'} className={status.error ? 'studio-tree-error' : 'studio-tree-status'}>
-          {status.text}
-        </p>
-      )}
+      {status !== null && <p role="status" className="studio-tree-status">{status}</p>}
       {menu !== null && menuNode !== null && (
         <div ref={menuRef} role="menu" className="studio-menu" style={{ top: menu.top, left: menu.left }}>
           {menuNode.kind === 'folder' && (
@@ -309,7 +322,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
               disabled={menuNode.path === 'index.mdx' || menuNode.path === '' || writesUnsaved}
               onClick={() => {
                 const visible = menuNode.hidden !== null;
-                send({ op: 'visibility', path: menuNode.path, visible }, (changes) =>
+                send(menuNode, { op: 'visibility', path: menuNode.path, visible }, (changes) =>
                   changes.length === 0 ? 'Nothing to change.' : visible ? `Showed ${menuNode.path} in the sidebar.` : `Hid ${menuNode.path} from the sidebar.`);
               }}
             >
@@ -330,7 +343,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
                 disabled={menuNode.meta === null}
                 onClick={() => {
                   const defaultOpen = !menuNode.defaultOpen;
-                  send({ op: 'set-open', folder: menuNode.path, defaultOpen, baseMtime: menuNode.metaMtime }, (changes) =>
+                  send(menuNode, { op: 'set-open', folder: menuNode.path, defaultOpen, baseMtime: menuNode.metaMtime }, (changes) =>
                     changes.length === 0 ? 'Nothing to change.' : `Saved defaultOpen: ${String(defaultOpen)} in ${menuNode.meta ?? 'meta.yaml'}.`);
                 }}
               >
@@ -361,12 +374,12 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
             setDialog(null);
             const reloaded = onChanged();
             if ('open' in created) {
-              setStatus({ text: `Created ${created.open}.`, error: false });
+              setStatus(`Created ${created.open}.`);
               onOpen(created.open);
             } else {
               openFolder({ id: `folder:${created.folder}` });
               reveal.current = created.folder;
-              setStatus({ text: `Created ${created.folder}/.`, error: false });
+              setStatus(`Created ${created.folder}/.`);
               void reloaded.then((loaded) => {
                 if (!loaded && reveal.current === created.folder) reveal.current = null;
               });
@@ -382,7 +395,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
           onClose={() => { setDialog(null); }}
           onDone={(from, to) => {
             setDialog(null);
-            setStatus({ text: `Renamed to ${to}.`, error: false });
+            setStatus(`Renamed to ${to}.`);
             void onChanged();
             onRenamed(from, to);
           }}

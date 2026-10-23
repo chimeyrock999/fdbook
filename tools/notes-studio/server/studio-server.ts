@@ -131,6 +131,7 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
       // An MCP caller's `runId` is its conversation (agents/conversations.ts).
       modelOf: (slug, runId) => workspaces.peek(slug)?.conversations?.modelOf(runId) ?? null,
       createdBy: (slug, runId, path) => workspaces.peek(slug)?.conversations?.created(runId, path) ?? Promise.resolve(false),
+      selectionOf: (slug, runId) => workspaces.peek(slug)?.conversations?.selection(runId) ?? null,
     }).concat(diagramTools, tools),
     grants,
     auth,

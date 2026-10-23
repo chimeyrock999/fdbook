@@ -1,3 +1,6 @@
+import { afterEach } from 'vitest';
+import { clearToasts } from '../../src/actions/toasts';
+
 // Runs before every test file (vitest.config.ts). jsdom has no matchMedia,
 // and the editor asks it about touch input and reduced motion once its live
 // editor mounts, a moment after the first paint: a test that renders it
@@ -16,3 +19,7 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
     return Object.assign(target, { matches: false, media, onchange: null }, legacy) as MediaQueryList;
   };
 }
+
+// The toasts are one stack per page (src/actions/toasts.ts): a case starts
+// with none from the one before.
+afterEach(() => { clearToasts(); });

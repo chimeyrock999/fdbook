@@ -7,12 +7,18 @@ const isJson = (response: Response) => (response.headers.get('content-type') ?? 
 
 // The error of a failed request: the API's `{ error }`, or the restart hint
 // when the answer is not the API's (a POST to an endpoint an older server
-// lacks gets Vite's plain 404).
-export async function errorOf(response: Response): Promise<Error> {
+// lacks gets Vite's plain 404). `status` is the HTTP status the API gave.
+export type ApiError = Error & { status?: number };
+
+export async function errorOf(response: Response): Promise<ApiError> {
   if (!isJson(response)) return new Error(STALE_SERVER);
   const body = (await response.json().catch(() => ({}))) as { error?: string };
-  return new Error(body.error ?? `HTTP ${String(response.status)}`);
+  return Object.assign(new Error(body.error ?? `HTTP ${String(response.status)}`), { status: response.status });
 }
+
+// A refusal that only says it is done already (409): a repeat of an answer
+// or a cancel another click or page sent first.
+export const isConflict = (reason: unknown) => reason instanceof Error && (reason as ApiError).status === 409;
 
 export async function readJson<T>(response: Response): Promise<T> {
   if (!isJson(response)) throw new Error(STALE_SERVER);

@@ -92,13 +92,43 @@ export type ConversationTotals = { conversations: number; costs: Record<string, 
 // agent's own, less any that would outlive the conversation.
 export type PermissionAsk = { id: string; toolCall: ToolCallUpdate; options: PermissionOption[] };
 
+// Lines of a note a person selected in the editor (1-based, inclusive):
+// `source` is the MDX of those lines, `text` the text selected there (in
+// Visual, lines are those of the blocks the selection touches). Both are
+// empty for a selection longer than SELECTION_MAX: the lines go alone.
+export const SELECTION_MAX = 40_000;
+// The largest document a message may carry (attachments.ts).
+export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+export type MessageSelection = { lines: [number, number]; source: string; text: string };
+
+// What may be mentioned in a message: a note, an asset, any other file of
+// the worktree.
+export type MentionKind = 'note' | 'asset' | 'file';
+export type Mention = { kind: MentionKind; path: string };
+
+// A document a person attached to a message, kept with the change
+// request's agents (attachments.ts), not in its worktree.
+export type Attachment = { id: string; name: string; size: number };
+
+// What goes with a message besides its text: the note open in the editor
+// (a worktree path), the selection in it or else the caret's line, and the
+// notes, assets, files and documents the person added.
+export type MessageContext = {
+  note: string | null;
+  selection: MessageSelection | null;
+  caret: number | null;
+  mentions: Mention[];
+  attachments: Attachment[];
+};
+
 // What a conversation records, in order, and what the event stream sends.
 export type ConversationEvent =
   | { type: 'start'; at: number; conversation: Conversation }
   // The summary changed: the model named, a cost reported, the process gone.
   | { type: 'summary'; at: number; conversation: Conversation }
-  // A message from a person: a turn begins.
-  | { type: 'turn'; at: number; prompt: string; by: string | null }
+  // A message from a person: a turn begins. `context`: what went with it
+  // (none on turns recorded before #86).
+  | { type: 'turn'; at: number; prompt: string; by: string | null; context?: MessageContext }
   // An agent process took up the session.
   | { type: 'session'; at: number; how: SessionStart; sessionId: string }
   | { type: 'update'; at: number; update: SessionUpdate }

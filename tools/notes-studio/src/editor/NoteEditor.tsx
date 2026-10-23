@@ -23,6 +23,7 @@ import { GraphTools } from '../graph/GraphTools';
 import { editorConfig } from '../plugins';
 import { decorationsPlugin, useEditorPlugin } from './decorations';
 import { NoteHeader } from './NoteHeader';
+import { useReportPlace } from './report-place';
 import type { RevealRequest } from './reveal';
 import { SourceEditor } from './SourceEditor';
 import { ConflictDialog, SaveStatus } from './SyncState';
@@ -148,8 +149,13 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
   const suggestions = useNoteSuggestions(review, opened ? source.value : '');
   const layer = useMemo(() => createSuggestionLayer(), []);
   useEditorPlugin(editor, layer.plugin);
+  // Where the person is, for the agent panel (#86).
+  const onSourceSelect = useReportPlace(editor, notePath, source.value, opened);
   const canDecide = !locked && !source.readOnly;
-  const sourceExtra = useMemo(() => (review === null || suggestions.placement.hunks.length === 0 ? null : sourceSuggestions(source.value, suggestions.placement.hunks, canDecide ? (hunk, op) => review.act(hunk.proposal.id, op, [hunk.hunk.id]) : null)), [review, source.value, suggestions.placement.hunks, canDecide]);
+  const { decide } = suggestions.decisions;
+  // Source offers what can still be decided: a landing hunk is accepted.
+  const { open: decidable } = suggestions;
+  const sourceExtra = useMemo(() => (review === null || decidable.length === 0 ? null : sourceSuggestions(source.value, decidable, canDecide ? (hunk, op) => decide([hunk], op).then(() => undefined) : null)), [review, source.value, decidable, canDecide, decide]);
   const stepTo = (by: number) => {
     const key = suggestions.step(by);
     if (key !== undefined && mode === 'visual') layer.element(key, 'studio-suggest-card').scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -221,7 +227,7 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
         </div>
         {review !== null && opened && (
           <>
-            <SuggestionBar review={review} placement={suggestions.placement} focus={suggestions.focus} onStep={stepTo} />
+            <SuggestionBar placement={suggestions.placement} focus={suggestions.focus} onStep={stepTo} decisions={suggestions.decisions} />
             <NoteComments placement={suggestions.placement} />
           </>
         )}
@@ -236,12 +242,12 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
                 reveal={field}
               />
               <MdxEditor.Visual className="studio-prose notes-prose" />
-              {review !== null && <VisualSuggestions layer={layer} review={review} placement={suggestions.placement} focus={suggestions.focus} readOnly={!canDecide} />}
+              {review !== null && <VisualSuggestions layer={layer} placement={suggestions.placement} focus={suggestions.focus} readOnly={!canDecide} decisions={suggestions.decisions} />}
               <GraphTools container={editor} graph={frontmatter.status === 'ok' ? frontmatter.data.graph : undefined} />
             </div>
           </div>
         ) : (
-          <SourceEditor reveal={reveal} completion={completion} extra={sourceExtra} />
+          <SourceEditor reveal={reveal} completion={completion} extra={sourceExtra} onSelect={onSourceSelect} />
         )}
         {unsaved.offer && <UnsavedNotice offer={unsaved.offer} writable={!locked} onRestore={unsaved.restore} onDiscard={unsaved.discard} />}
       </section>

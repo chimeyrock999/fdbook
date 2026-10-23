@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BranchPullRequest, Preview, PreviewClient } from '../../../src/api/preview';
 import { PreviewSection } from '../../../src/changes/PreviewSection';
+import { ToastStack } from '../../../src/actions/ToastStack';
 import { PublishDialog } from '../../../src/changes/PublishDialog';
 import { PullRequestSection } from '../../../src/changes/PullRequestSection';
 import type { Pusher } from '../../../src/changes/usePush';
@@ -92,7 +93,7 @@ describe('PublishDialog', () => {
   const setup = (preview: Preview, client: Partial<PreviewClient>) => {
     const onPublished = vi.fn();
     const onClose = vi.fn();
-    render(<PublishDialog client={client as PreviewClient} preview={preview} onPublished={onPublished} onClose={onClose} />);
+    render(<><PublishDialog client={client as PreviewClient} preview={preview} onPublished={onPublished} onClose={onClose} /><ToastStack /></>);
     return { onPublished, onClose };
   };
   const title = () => screen.getByRole<HTMLInputElement>('textbox', { name: 'Title' });
@@ -125,7 +126,7 @@ describe('PublishDialog', () => {
     if (dialog.parentElement) fireEvent.mouseDown(dialog.parentElement);
     expect(onClose).not.toHaveBeenCalled();
     refuse(new Error('Could not open the pull request: timed out'));
-    expect((await screen.findByRole('alert')).textContent).toBe('Could not open the pull request: timed out');
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not open the pull request: timed out');
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -151,14 +152,14 @@ describe('PublishDialog', () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it('keeps what the server refused in the dialog, and can try again', async () => {
+  it('says what the server refused in a toast, keeps the dialog, and can try again', async () => {
     const publish = vi.fn()
       .mockImplementationOnce(() => Promise.reject(new Error('Could not open the pull request: forbidden The branch is pushed; try again.')))
       .mockImplementationOnce(() => Promise.resolve(at({ pr: PR })));
     const { onPublished } = setup(pushed, { draft: () => Promise.resolve({ title: 'Driver notes', body: '' }), publish });
     await waitFor(() => { expect(title().value).toBe('Driver notes'); });
     await userEvent.click(screen.getByRole('button', { name: 'Publish' }));
-    expect((await screen.findByRole('alert')).textContent).toBe('Could not open the pull request: forbidden The branch is pushed; try again.');
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not open the pull request: forbidden The branch is pushed; try again.');
     expect(onPublished).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Publish' }));
     await waitFor(() => { expect(onPublished).toHaveBeenCalledTimes(1); });

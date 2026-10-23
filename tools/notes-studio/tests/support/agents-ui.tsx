@@ -1,15 +1,24 @@
 import { act } from '@testing-library/react';
+import { ToastStack } from '../../src/actions/ToastStack';
 import { vi } from 'vitest';
 import { AgentControl } from '../../src/agents/AgentControl';
 import { AgentPanel } from '../../src/agents/AgentPanel';
 import { useAgents } from '../../src/agents/useAgents';
-import type { AgentInfo, AgentsClient, Conversation, ConversationRead, StreamEvent, TurnChange } from '../../src/api/agents';
+import { useAsking } from '../../src/agents/useAsking';
+import type { AgentInfo, AgentsClient, Attachment, Conversation, ConversationRead, Mention, StreamEvent, TurnChange } from '../../src/api/agents';
 
 export const AGENTS: AgentInfo[] = [
   { id: 'claude', name: 'Claude Code', fencesReviewer: true, available: true, reason: null, note: null, version: '0.88.0' },
   { id: 'codex', name: 'Codex', fencesReviewer: true, available: true, reason: null, note: null, version: '2.2.2' },
   { id: 'omp', name: 'omp', fencesReviewer: false, available: true, reason: null, note: null, version: '18.5.1' },
   { id: 'hermes', name: 'Hermes Agent', fencesReviewer: false, available: false, reason: 'hermes is not installed: install Hermes Agent with its [acp] extra', note: null, version: null },
+];
+
+// What the fake client finds to mention.
+export const MENTIONS: Mention[] = [
+  { kind: 'note', path: 'content/notes/guide/first-look.mdx' },
+  { kind: 'asset', path: 'public/notes/guide/chart.png' },
+  { kind: 'file', path: 'lib/helper.ts' },
 ];
 
 export const summary = (change: Partial<Conversation> = {}): Conversation => ({
@@ -39,6 +48,8 @@ export function fakeClient(conversations: Conversation[] = [], changes: TurnChan
     // A revert of content/notes/late.mdx fails: a later edit changed it.
     decide: vi.fn((_id: string, _turn: number, path: string, op: 'keep' | 'revert') => (path === 'content/notes/late.mdx' && op === 'revert' ? Promise.reject(new Error('content/notes/late.mdx changed since the turn ended')) : Promise.resolve({ path, existed: true, decided: op === 'keep' ? 'kept' as const : 'reverted' as const, reason: null }))),
     compare: vi.fn(() => Promise.resolve({ before: 'Before.\n', after: 'After.\n' })),
+    mentions: vi.fn((query: string): Promise<Mention[]> => Promise.resolve(MENTIONS.filter((mention) => mention.path.includes(query)))),
+    attach: vi.fn((file: File): Promise<Attachment> => Promise.resolve({ id: `a${String(file.size)}`, name: file.name, size: file.size })),
     subscribe: vi.fn((next: (event: StreamEvent) => void, onOpen: () => void = () => undefined) => {
       listener = next;
       opened = onOpen;
@@ -59,10 +70,12 @@ export function fakeClient(conversations: Conversation[] = [], changes: TurnChan
 export function Harness({ client, inCr = true, canRun = true, onOpenDiff = () => undefined, onOpenNote = () => undefined }: { client: AgentsClient; inCr?: boolean; canRun?: boolean; onOpenDiff?: (path: string) => void; onOpenNote?: (path: string) => void }) {
   const agents = useAgents(client, inCr);
   const live = agents.conversations.filter((conversation) => conversation.status === 'running').length;
+  const { asking, asks } = useAsking(agents, canRun);
   return (
     <>
-      <AgentControl agents={agents} live={live} />
-      {agents.open && <AgentPanel agents={agents} inCr={inCr} canRun={canRun} canDecide onOpenDiff={onOpenDiff} onOpenNote={onOpenNote} />}
+      <AgentControl agents={agents} live={live} asks={asks} />
+      {agents.open && <AgentPanel agents={agents} inCr={inCr} canRun={canRun} canDecide asking={asking} onOpenDiff={onOpenDiff} onOpenNote={onOpenNote} />}
+      <ToastStack />
     </>
   );
 }

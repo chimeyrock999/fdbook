@@ -16,12 +16,14 @@
 //   mcp <tool> <json>   calls a tool of the MCP server it was given and says
 //                       `mcp:<text>`, or `mcp-error:<text>`
 //   mcp-servers         says how it was given the MCP servers (JSON)
+//   blocks              says the prompt's blocks other than text (JSON)
 // FAKE_AGENT=auth makes session/new ask for a sign-in; FAKE_AGENT=load
 // offers session/load (it replays the history first), FAKE_AGENT=resume
 // session/resume. With FAKE_AGENT_STORE, a session's prompts are kept in
 // that folder, so a new process can take the session up again.
 // FAKE_AGENT_MODEL=default reports a "default" model choice. FAKE_MCP=http
 // says it can reach MCP servers over HTTP (else it gets them over stdio).
+// It takes images and embedded resources, unless FAKE_PROMPT=text.
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -70,6 +72,7 @@ const agent = {
     const agentCapabilities = {
       ...(way === 'load' ? { loadSession: true } : way === 'resume' ? { sessionCapabilities: { resume: {} } } : {}),
       ...(process.env.FAKE_MCP === 'http' ? { mcpCapabilities: { http: true } } : {}),
+      ...(process.env.FAKE_PROMPT === 'text' ? {} : { promptCapabilities: { image: true, embeddedContext: true } }),
     };
     return { protocolVersion: PROTOCOL_VERSION, agentCapabilities, agentInfo: { name: 'fake-agent', version: '1.0.0' } };
   },
@@ -166,6 +169,11 @@ const agent = {
         } catch (error) {
           await say(sessionId, `mcp-error:${error.message}`);
         }
+      } else if (command === 'blocks') {
+        const others = prompt.filter((block) => block.type !== 'text').map((block) => (block.type === 'resource'
+          ? { type: 'resource', mimeType: block.resource.mimeType, text: block.resource.text, blob: block.resource.blob === undefined ? undefined : Buffer.from(block.resource.blob, 'base64').toString('latin1') }
+          : block.type === 'image' ? { type: 'image', mimeType: block.mimeType } : { type: block.type, name: block.name, uri: block.uri }));
+        await say(sessionId, `blocks:${JSON.stringify(others)}`);
       } else if (command === 'mcp-servers') {
         await say(sessionId, `servers:${JSON.stringify(session.mcpServers)}`);
       } else if (command === 'mode') {

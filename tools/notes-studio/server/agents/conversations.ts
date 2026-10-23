@@ -10,11 +10,14 @@ import { HttpError } from '../http.ts';
 import type { RunGrants } from '../mcp/grants.ts';
 import type { Viewer } from '../security/access.ts';
 import { classifyPath } from '../security/paths.ts';
+import type { AttachedFile } from './attachment-blocks.ts';
+import { sentIn, type Attachments } from './attachments.ts';
 import { connectAgent, type AgentHooks, type AgentSession } from './connection.ts';
+import { contextOf, promptWith } from './context.ts';
 import { writeForAgent } from './fs-policy.ts';
 import type { AgentProfile } from './profiles.ts';
 import { IDLE_MS, idlest, MAX_LIVE_AGENTS } from './sessions.ts';
-import { PERMISSION_TIMEOUT_MS, summaryOf, type Conversation, type ConversationEvent, type ConversationRead, type Cost, type PermissionAsk, type StreamEvent, type TurnEnd } from './shared.ts';
+import { PERMISSION_TIMEOUT_MS, summaryOf, type Conversation, type ConversationEvent, type ConversationRead, type Cost, type MessageContext, type PermissionAsk, type StreamEvent, type TurnEnd } from './shared.ts';
 import type { Transcripts } from './transcripts.ts';
 import { createTurnChanges } from './turn-changes.ts';
 import { watchRun, type RunWatch } from './watch.ts';
@@ -41,6 +44,8 @@ type Turn = {
   answered: boolean;
   costBefore: number;
   cost: Cost | null;
+  // What went with its message (context.ts).
+  context: MessageContext | null;
 };
 // A conversation held in memory: while its process is up or a turn runs.
 // `reported`: the cost the process reported last (it adds up over its
@@ -119,7 +124,12 @@ export type AgentConversationsOptions = {
   // instead of writing it; without it the write goes to disk. `runId`: the
   // conversation's id.
   propose?: ((input: { path: string; content: string; runId: string; agent: string; model: string | null }) => Promise<unknown>) | null;
+  // Documents attached to messages (attachments.ts); none without it.
+  attachments?: Attachments | null;
 };
+
+// A message's context, checked (context.ts), with its attachments' files.
+export type GivenContext = { context: MessageContext; attached: AttachedFile[] } | null;
 
 // The agent conversations of one change request's worktree. A conversation
 // is one ACP session over many turns (connection.ts); its agent process
@@ -128,7 +138,7 @@ export type AgentConversationsOptions = {
 // transcript and to every open event stream (GET /api/agents/events).
 export function createAgentConversations(
   root: string,
-  { slug, profiles, transcripts, lock = createKeyedLock(), pathLock = createKeyedLock(), permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, cancelGraceMs, mcp = null, propose = null }: AgentConversationsOptions,
+  { slug, profiles, transcripts, lock = createKeyedLock(), pathLock = createKeyedLock(), permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, cancelGraceMs, mcp = null, propose = null, attachments = null }: AgentConversationsOptions,
 ) {
   const live = new Map<string, Live>();
   const streams = new Map<ServerResponse, Viewer>();
@@ -365,15 +375,15 @@ export function createAgentConversations(
 
   // One turn: the message goes to the conversation's process, started (and
   // its session taken up again) when it is not up.
-  const turn = (conversation: Live, prompt: string, by: string | null) => {
+  const turn = (conversation: Live, prompt: string, by: string | null, given: GivenContext) => {
     clearTimeout(conversation.idle);
     const before = worktreeState(root);
     before.catch(() => undefined);
     conversation.turn = {
-      index: conversation.summary.turns + 1, before, watch: watchRun(root, before), writes: [], stopping: false, answered: false, costBefore: conversation.summary.cost?.amount ?? 0, cost: null,
+      index: conversation.summary.turns + 1, before, watch: watchRun(root, before), writes: [], stopping: false, answered: false, costBefore: conversation.summary.cost?.amount ?? 0, cost: null, context: given?.context ?? null,
     };
     const now = Date.now();
-    record(conversation, { type: 'turn', at: now, prompt, by });
+    record(conversation, given === null ? { type: 'turn', at: now, prompt, by } : { type: 'turn', at: now, prompt, by, context: given.context });
     changed(conversation, { status: 'running', error: null, endedMs: null, lastMs: now, turns: conversation.summary.turns + 1 });
     let agent = conversation.agent;
     try {
@@ -387,7 +397,7 @@ export function createAgentConversations(
     }
     conversation.base = conversation.reported;
     const current = conversation.turn;
-    conversation.ending = agent.prompt(prompt, current.watch.ready).then(
+    conversation.ending = agent.prompt(promptWith(prompt, given?.context ?? null), current.watch.ready, given?.attached).then(
       (response) => {
         current.answered = true;
         return finish(conversation, current.stopping || response.stopReason === 'cancelled' ? 'cancelled' : 'done', null, response.usage ?? null);
@@ -459,8 +469,11 @@ export function createAgentConversations(
   };
 
   return {
+    // A message's context as sent (context.ts), checked against this worktree.
+    context: (value: unknown): Promise<GivenContext> => contextOf(value, root, slug, attachments),
+
     // A new conversation, with its first message.
-    start({ agent, role, prompt, by }: { agent: unknown; role: unknown; prompt: unknown; by: string | null }): Conversation {
+    start({ agent, role, prompt, by, context = null }: { agent: unknown; role: unknown; prompt: unknown; by: string | null; context?: GivenContext }): Conversation {
       if (closed) throw new HttpError(409, 'this change request is closing');
       const profile = profileOf(agent);
       if (role !== 'author' && role !== 'reviewer') throw new HttpError(400, 'role must be author or reviewer');
@@ -474,12 +487,12 @@ export function createAgentConversations(
       const conversation: Live = { summary, events: [], count: 0, pending: new Map(), profile, agent: null, reported: 0, base: 0, turn: null, ending: Promise.resolve(), exiting: Promise.resolve(), drafts: new Map(), idle: undefined, deleted: false };
       live.set(summary.id, conversation);
       record(conversation, { type: 'start', at: now, conversation: summary });
-      turn(conversation, text, by);
+      turn(conversation, text, by, context);
       return conversation.summary;
     },
 
     // The next message of a conversation, in the same session.
-    async message(id: string, prompt: unknown, by: string | null): Promise<Conversation> {
+    async message(id: string, prompt: unknown, by: string | null, context: GivenContext = null): Promise<Conversation> {
       if (closed) throw new HttpError(409, 'this change request is closing');
       const text = promptOf(prompt);
       const conversation = live.get(id) ?? (await revive(id));
@@ -501,7 +514,7 @@ export function createAgentConversations(
           throw error;
         }
       }
-      turn(conversation, text, by);
+      turn(conversation, text, by, context);
       return conversation.summary;
     },
 
@@ -561,6 +574,12 @@ export function createAgentConversations(
       if (conversation !== undefined) await keepDraft(conversation, path, content);
     },
 
+    // The lines selected for the turn going on (propose_edit warns of edits elsewhere), or null.
+    selection(id: string) {
+      const context = live.get(id)?.turn?.context ?? null;
+      return context?.note == null || context.selection === null ? null : { path: context.note, lines: context.selection.lines, source: context.selection.source };
+    },
+
     // The model a conversation's agent says it runs (a proposal's author), or null.
     modelOf: (id: string) => live.get(id)?.summary.model ?? null,
 
@@ -589,9 +608,11 @@ export function createAgentConversations(
       if (conversation?.turn != null) throw new HttpError(409, 'the agent is still answering: cancel the turn first');
       removing.add(id);
       try {
+        let events = conversation?.events ?? null;
         if (conversation === undefined) {
           await transcripts.settled();
-          if ((await transcripts.read(slug, id)) === null) throw new HttpError(404, `no such conversation: ${id}`);
+          events = await transcripts.read(slug, id);
+          if (events === null) throw new HttpError(404, `no such conversation: ${id}`);
         } else {
           // Held in memory, and refused a message, until its files are gone.
           conversation.deleted = true;
@@ -600,6 +621,11 @@ export function createAgentConversations(
           if (agent !== null) await agent.exited;
         }
         await transcripts.removeOne(slug, id);
+        if (attachments !== null) {
+          // What the other conversations sent stays.
+          const others = await Promise.all((await transcripts.list(slug)).map((each) => transcripts.read(slug, each.id)));
+          await attachments.sweep(slug, new Set(others.flatMap((each) => sentIn(each ?? []))), new Set(sentIn(events ?? [])));
+        }
         if (conversation !== undefined && live.get(id) === conversation) live.delete(id);
       } finally {
         removing.delete(id);
