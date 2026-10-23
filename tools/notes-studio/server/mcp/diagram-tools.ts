@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { formatDiagramJson } from '../../../../lib/diagram/format.ts';
-import { addNode, connect, DiagramOpError, moveNode, removeNode, setNote } from '../../../../lib/diagram/ops.ts';
-import { EDGE_VARIANTS, type DiagramInput } from '../../../../lib/diagram/schema.ts';
+import { addNode, connect, DiagramOpError, moveNode, removeEdge, removeNode, setNote, updateEdge, updateGroup, updateNode } from '../../../../lib/diagram/ops.ts';
+import { EDGE_VARIANTS, SIDES, TONES, type DiagramInput } from '../../../../lib/diagram/schema.ts';
 import { diagramPathOf } from '../../../../lib/diagram/source.ts';
 import { checkSchema, validateDiagram, type DiagramIssue } from '../../../../lib/diagram/validate.ts';
 import { listEditableFiles } from '../files/store.ts';
@@ -156,7 +156,7 @@ export const diagramTools: StudioTool[] = [
   }),
   tool({
     name: 'diagram_create',
-    description: 'Creates a diagram from its content (title, kinds, nodes, edges, and optionally badges, groups, lanes, cards). Leave out layout: every node is placed automatically. Then check it with diagram_render_png.',
+    description: 'Creates a diagram from its content (title, kinds, nodes, edges, and optionally badges, groups, lanes, cards). Leave out layout.nodes: every node is placed automatically. Lanes are not: a diagram with lanes needs layout.lanes, a box per lane. Then check it with diagram_render_png.',
     access: 'write',
     input: z.object({
       src,
@@ -250,6 +250,65 @@ export const diagramTools: StudioTool[] = [
     input: z.object({ src, id, note: note.nullable() }),
     async run({ src: name, id: nodeId, note: value }, ctx) {
       return edit(ctx, name, (diagram) => setNote(diagram, nodeId, value), `Set the note of "${nodeId}"`);
+    },
+  }),
+  tool({
+    name: 'diagram_update',
+    description: 'Changes one node, edge or group, giving exactly one of them by id with the fields to change; null removes an optional field. A node: label, sublabel, tag, kind. An edge: label, detail, variant, bidirectional, and where it is pinned: fromSide/toSide, and labelDx/labelDy (shift the label) or labelAt (place it), the fix for a label/collision. A group: label, tone, dashed, and members (the full list).',
+    access: 'write',
+    input: z.object({
+      src,
+      node: z.object({
+        id,
+        label: z.string().min(1).optional(),
+        sublabel: z.string().min(1).nullable().optional(),
+        tag: z.string().min(1).nullable().optional(),
+        kind: id.optional(),
+      }).optional(),
+      edge: z.object({
+        id,
+        label: z.string().min(1).nullable().optional(),
+        detail: z.string().min(1).nullable().optional(),
+        variant: z.enum(EDGE_VARIANTS).optional(),
+        bidirectional: z.boolean().optional(),
+        fromSide: z.enum(SIDES).nullable().optional(),
+        toSide: z.enum(SIDES).nullable().optional(),
+        labelDx: z.number().nullable().optional(),
+        labelDy: z.number().nullable().optional(),
+        labelAt: z.tuple([z.number(), z.number()]).nullable().optional(),
+      }).optional(),
+      group: z.object({
+        id,
+        label: z.string().min(1).optional(),
+        tone: z.enum(TONES).optional(),
+        dashed: z.boolean().optional(),
+        members: z.array(id).optional(),
+      }).optional(),
+    }),
+    async run({ src: name, node, edge, group }, ctx) {
+      if ([node, edge, group].filter((each) => each !== undefined).length !== 1) {
+        throw new ToolError('diagram_update changes exactly one of node, edge and group');
+      }
+      if (node) {
+        const { id: nodeId, ...change } = node;
+        return edit(ctx, name, (diagram) => updateNode(diagram, nodeId, change), `Updated node "${nodeId}"`);
+      }
+      if (edge) {
+        const { id: edgeId, ...change } = edge;
+        return edit(ctx, name, (diagram) => updateEdge(diagram, edgeId, change), `Updated edge "${edgeId}"`);
+      }
+      if (!group) throw new ToolError('diagram_update changes exactly one of node, edge and group');
+      const { id: groupId, ...change } = group;
+      return edit(ctx, name, (diagram) => updateGroup(diagram, groupId, change), `Updated group "${groupId}"`);
+    },
+  }),
+  tool({
+    name: 'diagram_remove_edge',
+    description: 'Removes an edge and where it was pinned.',
+    access: 'write',
+    input: z.object({ src, id }),
+    async run({ src: name, id: edgeId }, ctx) {
+      return edit(ctx, name, (diagram) => removeEdge(diagram, edgeId), `Removed edge "${edgeId}"`);
     },
   }),
   tool({

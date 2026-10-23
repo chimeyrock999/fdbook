@@ -43,6 +43,8 @@ describe('diagram tools', () => {
       ['diagram_move', 'write'],
       ['diagram_connect', 'write'],
       ['diagram_set_note', 'write'],
+      ['diagram_update', 'write'],
+      ['diagram_remove_edge', 'write'],
       ['diagram_remove_node', 'write'],
       ['diagram_layout', 'write'],
     ]);
@@ -88,6 +90,25 @@ describe('diagram tools', () => {
     expect(after.layout.nodes.executors).toBeUndefined();
     expect(after.layout.edges.schedule).toBeUndefined();
     expect(errors(result)).toEqual([]);
+  });
+
+  it('updates a node, pins an edge label, changes a group and removes an edge', async () => {
+    await call('diagram_update', { src: SRC, node: { id: 'plan', label: 'Plan', sublabel: null } });
+    await call('diagram_update', { src: SRC, edge: { id: 'build', labelDy: 20, variant: 'dashed' } });
+    await call('diagram_update', { src: SRC, group: { id: 'spark-application-runtime-boundary', label: 'Spark application' } });
+    const removed = await call('diagram_remove_edge', { src: SRC, id: 'schedule' });
+    expect(errors(removed)).toEqual([]);
+    const after = await onDisk();
+    expect(nodeOf(after, 'plan')).toEqual({ id: 'plan', kind: 'backend', label: 'Plan' });
+    expect(after.edges.find((edge) => edge.id === 'build')).toMatchObject({ variant: 'dashed' });
+    expect(after.layout.edges.build).toEqual({ labelDy: 20 });
+    expect(after.groups?.[0].label).toBe('Spark application');
+    expect(after.edges.map((edge) => edge.id)).not.toContain('schedule');
+    expect(after.layout.edges.schedule).toBeUndefined();
+
+    const both = await call('diagram_update', { src: SRC, node: { id: 'plan', label: 'X' }, edge: { id: 'build', label: 'Y' } });
+    expect(both.isError).toBe(true);
+    expect(text(both)).toContain('exactly one');
   });
 
   it('answers an unknown id as an error result the agent can act on', async () => {
