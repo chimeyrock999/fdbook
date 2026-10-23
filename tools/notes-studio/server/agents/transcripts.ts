@@ -20,8 +20,8 @@ function eventOf(stored: Stored): ConversationEvent {
   if (!('run' in stored)) return stored;
   const conversation = conversationOf(stored.run);
   if (stored.type !== 'end') return { type: stored.type, at: stored.at, conversation };
-  const { status, error, cost, usage } = stored.run;
-  return { type: 'end', at: stored.at, conversation, turn: { status: status === 'running' ? 'failed' : status, error, cost, usage } };
+  const { status, error, cost, usage, writes } = stored.run;
+  return { type: 'end', at: stored.at, conversation, turn: { status: status === 'running' ? 'failed' : status, error, cost, usage, writes } };
 }
 
 // Where conversations are kept: <home>/agents/<slug>/, next to the
@@ -120,9 +120,12 @@ export function createTranscripts(home: string) {
       await mkdir(dirOf(slug), { recursive: true });
       await writeAtomic(join(dirOf(slug), `${id}.t${String(turn)}.changes.json`), `${JSON.stringify(changes)}\n`);
     },
+    // A run kept before conversations has its changes in <id>.changes.json:
+    // they are its one turn's, until a decision writes them as turn 1's.
     async readChanges(slug: string, id: string, turn: number): Promise<StoredChange[] | null> {
       if (!ID.test(id) || !Number.isInteger(turn)) return null;
-      const text = await readFile(join(dirOf(slug), `${id}.t${String(turn)}.changes.json`), 'utf8').catch(() => null);
+      const text = (await readFile(join(dirOf(slug), `${id}.t${String(turn)}.changes.json`), 'utf8').catch(() => null))
+        ?? (turn === 1 ? await readFile(join(dirOf(slug), `${id}.changes.json`), 'utf8').catch(() => null) : null);
       return text === null ? null : (JSON.parse(text) as StoredChange[]);
     },
 
@@ -134,7 +137,7 @@ export function createTranscripts(home: string) {
       if (!ID.test(id)) return;
       await settled();
       const turns = (await readdir(dirOf(slug)).catch(() => [])).filter((name) => name.startsWith(`${id}.t`) && name.endsWith('.changes.json'));
-      await Promise.all([`${id}.jsonl`, `${id}.json`, ...turns].map((name) => rm(join(dirOf(slug), name), { force: true })));
+      await Promise.all([`${id}.jsonl`, `${id}.json`, `${id}.changes.json`, ...turns].map((name) => rm(join(dirOf(slug), name), { force: true })));
     },
 
     remove: (slug: string) => rm(dirOf(slug), { recursive: true, force: true }),

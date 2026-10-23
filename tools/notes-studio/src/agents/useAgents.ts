@@ -136,6 +136,7 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
     setPanel,
     conversations: state.conversations,
     events: state.events,
+    decisions: state.decisions,
     error,
     clearError: () => { setError(null); },
     load,

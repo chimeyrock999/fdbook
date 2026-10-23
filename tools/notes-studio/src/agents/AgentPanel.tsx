@@ -110,6 +110,7 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, onOpenDiff, onOpen
             onOpenNote={onOpenNote}
             client={agents.client}
             canDecide={canDecide}
+            decisions={agents.decisions}
           />
           {canRun && (
             <Composer

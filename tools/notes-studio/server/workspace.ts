@@ -122,7 +122,7 @@ export function createWorkspace(
       pathLock,
       notesLock,
       beforeWrite: caller.kind === 'run' && conversations !== null ? (path, previous) => { conversations.beforeWrite(caller.runId, path, previous); } : undefined,
-      afterWrite: caller.kind === 'run' && conversations !== null ? (path, content) => { conversations.wrote(caller.runId, path, content); } : undefined,
+      afterWrite: caller.kind === 'run' && conversations !== null ? (path, content) => conversations.wrote(caller.runId, path, content) : undefined,
     }),
     handleUpgrade: (request: IncomingMessage, socket: Duplex, head: Buffer) => {
       sync.handleUpgrade(request, socket, head);

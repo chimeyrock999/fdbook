@@ -122,8 +122,11 @@ export type ConversationRead = { conversation: Conversation; events: Conversatio
 
 // The workspace's stream: each event with its conversation and its number
 // there (`seq`, from 1). Only on the stream: `deleted`, when a conversation
-// is deleted, and on connecting, a `snapshot` of each one with a turn going on.
+// is deleted, `decided` for Keep/Revert, and on connecting, a `snapshot` of
+// each one with a turn going on.
 export type StreamEvent =
   | (ConversationEvent & { conversationId: string; seq: number })
   | { type: 'deleted'; at: number; conversationId: string }
+  // A person kept or reverted a file a turn changed.
+  | { type: 'decided'; at: number; conversationId: string; turn: number; path: string; decided: 'kept' | 'reverted' }
   | ({ type: 'snapshot'; at: number; conversationId: string } & ConversationRead);

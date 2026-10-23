@@ -7,13 +7,16 @@ import { revertChange } from './watch.ts';
 
 // Keep/Revert of what one turn of a conversation changed (watch.ts keeps
 // what each file held when the turn began). `going`: whether that turn is
-// still going, so its changes are not settled yet.
-export function createTurnChanges(root: string, { slug, transcripts, lock, pathLock, going }: {
+// still going, so its changes are not settled yet. `decided` hears each
+// decision: a revert is a person's edit to the turns going on, and either
+// ends a note's life as the agent's own draft.
+export function createTurnChanges(root: string, { slug, transcripts, lock, pathLock, going, decided }: {
   slug: string;
   transcripts: Transcripts;
   lock: ReturnType<typeof createKeyedLock>;
   pathLock: ReturnType<typeof createKeyedLock>;
   going: (id: string, turn: number) => boolean;
+  decided: (id: string, turn: number, path: string, op: 'keep' | 'revert') => void;
 }) {
   // An ended turn's changes; none while it runs.
   const stored = async (id: string, turn: number) => {
@@ -56,6 +59,7 @@ export function createTurnChanges(root: string, { slug, transcripts, lock, pathL
         }
         change.decided = op === 'keep' ? 'kept' : 'reverted';
         await transcripts.writeChanges(slug, id, turn, changes);
+        decided(id, turn, path, op);
         return { path, existed: change.before !== null, decided: change.decided, reason: change.reason } satisfies TurnChange;
       });
     },

@@ -60,8 +60,9 @@ function Change({ client, of, change, canDecide, onDecided }: { client: AgentsCl
 
 // The files an ended turn changed itself (or wrote through the Studio
 // outside a proposal), to keep or put back as they were when it began.
-// `writes`: the files its end listed.
-export function TurnChanges({ client, id, turn, writes, canDecide }: { client: AgentsClient; id: string; turn: number; writes: string[]; canDecide: boolean }) {
+// `writes`: the files its end listed. `version` grows with each decision
+// made on another page, and the list is read again.
+export function TurnChanges({ client, id, turn, writes, version, canDecide }: { client: AgentsClient; id: string; turn: number; writes: string[]; version: number; canDecide: boolean }) {
   const [changes, setChanges] = useState<TurnChange[] | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const ready = writes.length > 0;
@@ -73,7 +74,7 @@ export function TurnChanges({ client, id, turn, writes, canDecide }: { client: A
       (reason: unknown) => { if (current) setFailed((reason as Error).message); },
     );
     return () => { current = false; };
-  }, [client, id, turn, ready]);
+  }, [client, id, turn, ready, version]);
   if (!ready || (changes !== null && changes.length === 0)) return null;
   return (
     <section className="studio-agent-changes" aria-label="Files this turn changed">

@@ -38,7 +38,7 @@ describe('run watch', () => {
     await watch.ready;
     watch.savedByPerson(note);
     await writeFile(join(root, note), 'By a person.\n');
-    expect(await watch.settle([note])).toMatchObject([{ path: note, before: null, reason: 'also saved by a person during the run: revert it by hand' }]);
+    expect(await watch.settle([note])).toMatchObject([{ path: note, before: null, reason: 'also saved by a person during the turn: revert it by hand' }]);
     await expect(revertChange(root, (await watch.settle([note]))[0])).rejects.toThrow('revert it by hand');
     expect(await readFile(join(root, note), 'utf8')).toBe('By a person.\n');
   });

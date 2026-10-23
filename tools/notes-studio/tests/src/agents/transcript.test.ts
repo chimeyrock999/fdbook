@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Conversation, ConversationEvent, StreamEvent } from '../../../src/api/agents';
-import { costLabel, durationLabel, EMPTY_CONVERSATIONS, firstAsk, openAsks, reading, transcriptOf, unheld, unread, withEvent, withList, withRead } from '../../../src/agents/transcript';
+import { costLabel, decisionKey, durationLabel, EMPTY_CONVERSATIONS, firstAsk, openAsks, reading, transcriptOf, unheld, unread, withEvent, withList, withRead } from '../../../src/agents/transcript';
 import { pickOf } from '../../../src/agents/useAgents';
 
 const summary = (change: Partial<Conversation> = {}): Conversation => ({
@@ -105,6 +105,13 @@ describe('agent transcripts', () => {
     expect(state.events.c).toHaveLength(4);
     state = unread(state, 'c');
     expect(state.events.c).toHaveLength(4);
+  });
+
+  it('counts Keep/Revert decisions per turn, so its list is read again', () => {
+    let state = withEvent(EMPTY_CONVERSATIONS, { type: 'decided', at: 1, conversationId: 'c', turn: 2, path: 'a.mdx', decided: 'kept' });
+    state = withEvent(state, { type: 'decided', at: 2, conversationId: 'c', turn: 2, path: 'b.mdx', decided: 'reverted' });
+    expect(state.decisions).toEqual({ [decisionKey('c', 2)]: 2 });
+    expect(unheld(state, { type: 'decided', at: 3, conversationId: 'x', turn: 1, path: 'a.mdx', decided: 'kept' })).toBe(false);
   });
 
   it('takes a snapshot on a reconnect as the whole chat, and forgets a deleted one', () => {

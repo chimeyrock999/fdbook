@@ -108,15 +108,20 @@ export function firstAsk(conversations: Conversation[], events: Record<string, C
 
 // The conversations, last active first; the events of those this page
 // holds (read, or followed from their start), with the `seq` of the last
-// one applied; and the stream's events for those being read meanwhile.
+// one applied; the stream's events for those being read meanwhile; and how
+// many Keep/Revert decisions each turn had (`<id>:<turn>`), so its list is
+// read again.
 export type ConversationsState = {
   conversations: Conversation[];
   events: Record<string, ConversationEvent[]>;
   seqs: Record<string, number>;
   waiting: Record<string, Extract<StreamEvent, { seq: number }>[]>;
+  decisions: Record<string, number>;
 };
 
-export const EMPTY_CONVERSATIONS: ConversationsState = { conversations: [], events: {}, seqs: {}, waiting: {} };
+export const EMPTY_CONVERSATIONS: ConversationsState = { conversations: [], events: {}, seqs: {}, waiting: {}, decisions: {} };
+
+export const decisionKey = (id: string, turn: number) => `${id}:${String(turn)}`;
 
 // An event of the stream as its conversation recorded it.
 function recordedOf(event: Extract<StreamEvent, { seq: number }>): ConversationEvent {
@@ -139,6 +144,7 @@ export function withRead(state: ConversationsState, id: string, read: Conversati
   const events = [...read.events, ...later.map(recordedOf)];
   const seq = later.at(-1)?.seq ?? read.seq;
   return {
+    ...state,
     conversations: withSummary(state.conversations, [...events].reverse().map(summaryOf).find((summary) => summary !== null) ?? read.conversation),
     events: { ...state.events, [id]: events },
     seqs: { ...state.seqs, [id]: seq },
@@ -157,7 +163,7 @@ export const unread = (state: ConversationsState, id: string): ConversationsStat
 // Whether the page should read a conversation the stream speaks of: it
 // neither holds it nor reads it, and the event is not one it can start from.
 export const unheld = (state: ConversationsState, event: StreamEvent) =>
-  event.type !== 'deleted' && event.type !== 'snapshot' && event.type !== 'start' && event.type !== 'summary' && !(event.conversationId in state.events) && !(event.conversationId in state.waiting);
+  event.type !== 'deleted' && event.type !== 'decided' && event.type !== 'snapshot' && event.type !== 'start' && event.type !== 'summary' && !(event.conversationId in state.events) && !(event.conversationId in state.waiting);
 
 // Folds one streamed event in. A start, or a snapshot on a reconnect,
 // begins the conversation's events afresh; an event it already has (by
@@ -165,7 +171,11 @@ export const unheld = (state: ConversationsState, event: StreamEvent) =>
 export function withEvent(state: ConversationsState, event: StreamEvent): ConversationsState {
   const id = event.conversationId;
   if (event.type === 'deleted') {
-    return { conversations: state.conversations.filter((each) => each.id !== id), events: without(state.events, id), seqs: without(state.seqs, id), waiting: without(state.waiting, id) };
+    return { ...state, conversations: state.conversations.filter((each) => each.id !== id), events: without(state.events, id), seqs: without(state.seqs, id), waiting: without(state.waiting, id) };
+  }
+  if (event.type === 'decided') {
+    const key = decisionKey(id, event.turn);
+    return { ...state, decisions: { ...state.decisions, [key]: (state.decisions[key] ?? 0) + 1 } };
   }
   if (event.type === 'snapshot') return withRead({ ...state, waiting: without(state.waiting, id) }, id, event);
   const { seq } = event;
@@ -183,7 +193,7 @@ export const withList = (state: ConversationsState, listed: Conversation[]): Con
   const going = state.conversations.filter((each) => each.status === 'running' && !listed.some((other) => other.id === each.id));
   const conversations = byActivity([...going, ...listed]);
   const kept = <T>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).filter(([id]) => conversations.some((each) => each.id === id)));
-  return { conversations, events: kept(state.events), seqs: kept(state.seqs), waiting: kept(state.waiting) };
+  return { ...state, conversations, events: kept(state.events), seqs: kept(state.seqs), waiting: kept(state.waiting) };
 };
 
 // What a conversation, or a turn, cost, as the agent reported it.

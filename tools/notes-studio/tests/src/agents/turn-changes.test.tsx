@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TurnChange } from '../../../src/api/agents';
@@ -21,9 +21,9 @@ describe('what a turn changed', () => {
       { path: 'content/notes/late.mdx', existed: true, decided: null, reason: null },
       // The server keeps no earlier version outside the notes (existed: false).
       { path: 'package.json', existed: false, decided: null, reason: 'outside the notes and their assets: revert it by hand' },
-      { path: 'content/notes/saved.mdx', existed: true, decided: null, reason: 'also saved by a person during the run: revert it by hand' },
+      { path: 'content/notes/saved.mdx', existed: true, decided: null, reason: 'also saved by a person during the turn: revert it by hand' },
     ];
-    const { client } = fakeClient([done], changes);
+    const { client, emit } = fakeClient([done], changes);
     client.read.mockResolvedValue({
       conversation: done,
       seq: 7,
@@ -68,5 +68,10 @@ describe('what a turn changed', () => {
     expect((await late.findByRole('alert')).textContent).toMatch(/changed since the turn ended/);
     await user.click(late.getByRole('button', { name: 'Keep' }));
     expect(await late.findByText('Kept')).toBeTruthy();
+
+    // A decision on another page reads the turn's list again.
+    expect(client.changes).toHaveBeenCalledTimes(1);
+    emit({ type: 'decided', at: 9, conversationId: 'c1', turn: 2, path: 'content/notes/saved.mdx', decided: 'kept' });
+    await waitFor(() => { expect(client.changes).toHaveBeenCalledTimes(2); });
   });
 });

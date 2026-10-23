@@ -5,7 +5,7 @@ import type { AgentsClient, Conversation, ConversationEvent } from '../api/agent
 import { AgentLogo } from './AgentLogo';
 import { Markdown } from './Markdown';
 import { TurnChanges } from './TurnChanges';
-import { costLabel, durationLabel, roleLabel, transcriptOf, whenLabel, type TranscriptItem } from './transcript';
+import { costLabel, decisionKey, durationLabel, roleLabel, transcriptOf, whenLabel, type TranscriptItem } from './transcript';
 
 const STATUS_LABELS: Record<Conversation['status'], string> = { running: 'Running', done: 'Done', cancelled: 'Cancelled', failed: 'Failed' };
 
@@ -32,6 +32,8 @@ type ItemContext = {
   onOpenNote: (path: string) => void;
   client: AgentsClient;
   canDecide: boolean;
+  // Keep/Revert decisions per turn (`decisionKey`), from the stream.
+  decisions: Record<string, number>;
 };
 
 function Item({ item, context }: { item: TranscriptItem; context: ItemContext }) {
@@ -59,7 +61,7 @@ function Item({ item, context }: { item: TranscriptItem; context: ItemContext })
       <>
         {item.turn.error !== null && <p role="alert" className="studio-tree-error">{item.turn.error}</p>}
         <span className="studio-agent-turn-foot">{parts.join(' · ')}</span>
-        <TurnChanges client={context.client} id={conversation.id} turn={item.index} writes={item.turn.writes ?? []} canDecide={context.canDecide} />
+        <TurnChanges client={context.client} id={conversation.id} turn={item.index} writes={item.turn.writes ?? []} version={context.decisions[decisionKey(conversation.id, item.index)] ?? 0} canDecide={context.canDecide} />
       </>
     );
   }
@@ -121,7 +123,7 @@ const FOLLOW_PX = 48;
 // `onCancel` is there while a turn runs and the viewer may stop it.
 // `client` reads and decides the files each turn changed (TurnChanges),
 // which `canDecide` allows.
-export function ConversationView({ conversation, events, onCancel, onOpenDiff, onOpenNote, client, canDecide }: {
+export function ConversationView({ conversation, events, onCancel, onOpenDiff, onOpenNote, client, canDecide, decisions }: {
   conversation: Conversation;
   events: ConversationEvent[] | undefined;
   onCancel: (() => void) | null;
@@ -129,8 +131,9 @@ export function ConversationView({ conversation, events, onCancel, onOpenDiff, o
   onOpenNote: (path: string) => void;
   client: AgentsClient;
   canDecide: boolean;
+  decisions: Record<string, number>;
 }) {
-  const context: ItemContext = { conversation, onOpenDiff, onOpenNote, client, canDecide };
+  const context: ItemContext = { conversation, onOpenDiff, onOpenNote, client, canDecide, decisions };
   const items = events === undefined ? null : transcriptOf(events);
   const thread = useRef<HTMLDivElement>(null);
   const following = useRef(true);

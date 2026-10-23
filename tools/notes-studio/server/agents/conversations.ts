@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import type { ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { RequestError, type RequestPermissionRequest } from '@agentclientprotocol/sdk';
@@ -57,6 +58,13 @@ type Live = {
   turn: Turn | null;
   // Until the turn's end is recorded.
   ending: Promise<void>;
+  // Until a process stopped here is gone: a new one waits for it, so two
+  // never hold the session at once.
+  exiting: Promise<void>;
+  // Notes this conversation created through the Studio, nobody has kept,
+  // reverted or saved since, with what it last wrote to them: still its
+  // own drafts in a later turn, written to instead of proposed.
+  drafts: Map<string, Buffer>;
   idle: NodeJS.Timeout | undefined;
   deleted: boolean;
 };
@@ -179,12 +187,27 @@ export function createAgentConversations(
     return fresh;
   };
 
-  // Files the agent changed with its own tools: one event, and the lists.
+  // Files the agent changed with its own tools: on the lists, and one
+  // event for those new to the turn.
   const touched = (conversation: Live, paths: string[]) => {
-    const fresh = paths.filter((path) => conversation.turn !== null && !conversation.turn.writes.includes(path));
-    if (fresh.length === 0) return;
-    record(conversation, { type: 'changed', at: Date.now(), paths: fresh });
-    listed(conversation, fresh);
+    const fresh = listed(conversation, paths);
+    if (fresh.length > 0) record(conversation, { type: 'changed', at: Date.now(), paths: fresh });
+  };
+
+  // Whether `path` is still the conversation's own draft: this turn created
+  // it, or an earlier one did and it holds what the conversation last wrote.
+  const ownDraft = async (conversation: Live, path: string) => {
+    if (await (conversation.turn?.watch.created(path) ?? Promise.resolve(false))) return true;
+    const last = conversation.drafts.get(path);
+    if (last === undefined) return false;
+    const now = await readFile(join(root, path)).catch(() => null);
+    return now?.equals(last) === true;
+  };
+
+  // After a write of the conversation through the Studio: a draft it
+  // created stays one, with its new text.
+  const keepDraft = async (conversation: Live, path: string, content: Buffer) => {
+    if (conversation.drafts.has(path) || (await (conversation.turn?.watch.created(path) ?? Promise.resolve(false)))) conversation.drafts.set(path, content);
   };
 
   const ask = (conversation: Live, request: RequestPermissionRequest) =>
@@ -222,21 +245,24 @@ export function createAgentConversations(
     },
     write: async (path, content) => {
       const { turn } = conversation;
+      // Between turns nobody follows its writes (Keep/Revert, the lists).
+      if (turn === null) throw RequestError.invalidParams(undefined, 'the Studio takes writes only while you answer a message');
       // A note that exists is never written over: the write becomes a
       // proposal, recorded when the store says it was made. A note this
       // turn created itself is still its own draft (on its Keep/Revert
       // list), so it is written. The agent is told, so it does not read the
       // note back expecting its text, nor write again.
       const at = worktreePathOf(root, path);
-      if (propose !== null && at !== null && classifyPath(at) === 'note' && existsSync(join(root, at)) && !(await (turn?.watch.created(at) ?? Promise.resolve(false)))) {
+      if (propose !== null && at !== null && classifyPath(at) === 'note' && existsSync(join(root, at)) && !(await ownDraft(conversation, at))) {
         const made = await propose({ path: at, content, runId: conversation.summary.id, agent: conversation.profile.id, model: conversation.summary.model }).then(
           (proposal) => `the Studio made this write a proposal (${(proposal as { id: string }).id}) for a person to accept: ${at} is unchanged until then. Make further edits to it with the propose_edit tool.`,
           (error: unknown) => `the Studio takes edits to ${at} as proposals, and this one was refused: ${(error as Error).message}`,
         );
         throw RequestError.invalidParams(undefined, made);
       }
-      const written = await lock('notes', () => pathLock(join(root, at ?? ''), () => writeForAgent(root, path, content, (where, previous) => { turn?.watch.beforeWrite(where, previous); })));
-      turn?.watch.wrote(written.path, Buffer.from(content));
+      const written = await lock('notes', () => pathLock(join(root, at ?? ''), () => writeForAgent(root, path, content, (where, previous) => { turn.watch.beforeWrite(where, previous); })));
+      turn.watch.wrote(written.path, Buffer.from(content));
+      await keepDraft(conversation, written.path, Buffer.from(content));
       record(conversation, { type: 'write', at: Date.now(), path: written.path, bytes: written.bytes });
       listed(conversation, [written.path]);
     },
@@ -257,6 +283,7 @@ export function createAgentConversations(
     clearTimeout(conversation.idle);
     if (agent === null) return;
     conversation.agent = null;
+    conversation.exiting = agent.exited.then(() => undefined);
     agent.kill();
   };
 
@@ -274,7 +301,8 @@ export function createAgentConversations(
   // with a token for the Studio's MCP server that ends with the process.
   const connect = (conversation: Live) => {
     const { id, role } = conversation.summary;
-    const grant = mcp?.grants.issue({ slug, runId: id, agent: conversation.profile.id, role }) ?? null;
+    // Its token acts only while a turn goes on (mcp/grants.ts).
+    const grant = mcp?.grants.issue({ slug, runId: id, agent: conversation.profile.id, role, active: () => conversation.turn !== null && !conversation.deleted }) ?? null;
     let agent: AgentSession;
     try {
       agent = connectAgent(conversation.profile, role, root, hooks(conversation), {
@@ -391,15 +419,33 @@ export function createAgentConversations(
     const held: ConversationEvent[] = [];
     for (const event of events) hold(held, event);
     const conversation: Live = {
-      summary, events: held, count: events.length, pending: new Map(), profile: profileOf(summary.agent), agent: null, reported: 0, base: 0, turn: null, ending: Promise.resolve(), idle: undefined, deleted: false,
+      summary, events: held, count: events.length, pending: new Map(), profile: profileOf(summary.agent), agent: null, reported: 0, base: 0, turn: null, ending: Promise.resolve(), exiting: Promise.resolve(), drafts: new Map(), idle: undefined, deleted: false,
     };
     live.set(id, conversation);
     return conversation;
   };
 
-  const turnChanges = createTurnChanges(root, { slug, transcripts, lock, pathLock, going: (id, index) => live.get(id)?.turn?.index === index });
-  // The turn going on of a conversation, if any.
-  const turnOf = (id: string) => live.get(id)?.turn ?? null;
+  // A person's save, or a revert, during turns going on: theirs to revert
+  // by hand, never to revert over; and no note is a draft of anyone's after it.
+  const savedByPerson = (path: string) => {
+    for (const conversation of live.values()) {
+      conversation.turn?.watch.savedByPerson(path);
+      conversation.drafts.delete(path);
+    }
+  };
+
+  const turnChanges = createTurnChanges(root, {
+    slug,
+    transcripts,
+    lock,
+    pathLock,
+    going: (id, index) => live.get(id)?.turn?.index === index,
+    decided: (id, turn, path, op) => {
+      live.get(id)?.drafts.delete(path);
+      if (op === 'revert') savedByPerson(path);
+      send({ type: 'decided', at: Date.now(), conversationId: id, turn, path, decided: op === 'keep' ? 'kept' : 'reverted' });
+    },
+  });
 
   const liveTurn = (id: string) => {
     const conversation = live.get(id);
@@ -420,7 +466,7 @@ export function createAgentConversations(
         id: newId(), agent: profile.id, agentName: profile.name, role, prompt: text, model: null, status: 'running', error: null,
         startedMs: now, endedMs: null, lastMs: now, turns: 0, sessionId: null, live: false, cost: null, usage: null, writes: [], by,
       };
-      const conversation: Live = { summary, events: [], count: 0, pending: new Map(), profile, agent: null, reported: 0, base: 0, turn: null, ending: Promise.resolve(), idle: undefined, deleted: false };
+      const conversation: Live = { summary, events: [], count: 0, pending: new Map(), profile, agent: null, reported: 0, base: 0, turn: null, ending: Promise.resolve(), exiting: Promise.resolve(), drafts: new Map(), idle: undefined, deleted: false };
       live.set(summary.id, conversation);
       record(conversation, { type: 'start', at: now, conversation: summary });
       turn(conversation, text, by);
@@ -432,6 +478,8 @@ export function createAgentConversations(
       if (closed) throw new HttpError(409, 'this change request is closing');
       const text = promptOf(prompt);
       const conversation = live.get(id) ?? (await revive(id));
+      // A process stopped a moment ago may still hold the session.
+      await conversation.exiting;
       // It may have begun closing, or the conversation been deleted, while
       // it was read from disk: then it is not left held in memory.
       if (closing() || conversation.deleted || removing.has(id)) {
@@ -496,11 +544,16 @@ export function createAgentConversations(
 
     // Whether the turn going on created `path` itself (mcp/note-tools.ts
     // writes to it directly instead of proposing).
-    created: (id: string, path: string) => turnOf(id)?.watch.created(path) ?? Promise.resolve(false),
+    created: (id: string, path: string) => {
+      const conversation = live.get(id);
+      return conversation === undefined ? Promise.resolve(false) : ownDraft(conversation, path);
+    },
 
     // What an MCP tool write of the turn put in a file (after beforeWrite).
-    wrote(id: string, path: string, content: Buffer) {
-      turnOf(id)?.watch.wrote(path, content);
+    async wrote(id: string, path: string, content: Buffer) {
+      const conversation = live.get(id);
+      conversation?.turn?.watch.wrote(path, content);
+      if (conversation !== undefined) await keepDraft(conversation, path, content);
     },
 
     // The model a conversation's agent says it runs (a proposal's author), or null.
@@ -517,9 +570,7 @@ export function createAgentConversations(
 
     // A person's save through the file API: every turn going on lists the
     // file as theirs to revert by hand, never to revert over their save.
-    savedByPerson(path: string) {
-      for (const conversation of live.values()) conversation.turn?.watch.savedByPerson(path);
-    },
+    savedByPerson,
 
     // Keep/Revert of an ended turn's changes (turn-changes.ts).
     changes: (id: string, turn: number) => turnChanges.changes(id, turn),

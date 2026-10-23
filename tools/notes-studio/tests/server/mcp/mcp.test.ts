@@ -208,14 +208,25 @@ describe('Studio MCP server', () => {
     expect(reviewer.said).toContain('mcp:{');
   }, 30_000);
 
-  it('keeps a chat\'s token between its turns, and ends it with the agent process', async () => {
+  it('lets a chat\'s token act only during its turns, and ends it with the agent process', async () => {
     const run = await runAgent('mcp-servers', 'author', 'codex');
     const token = /"value":"Bearer ([^"]+)"/.exec(run.said)?.[1] ?? '';
     expect(token).not.toBe('');
     const list = () => sender(studio.origin)('/api/mcp', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' });
-    // The process stays up for the next message, and its token with it.
-    expect((await list()).status).toBe(200);
-    // Deleting the chat stops the process.
+    // Between turns the process keeps its token, but it acts for nothing.
+    expect((await list()).status).toBe(401);
+    // The next turn uses it again.
+    const next = await send(`/cr/${cr.slug}/api/agents/conversations/${run.run.id}/messages`, 'POST', { prompt: 'mcp list_notes {"cr": "' + cr.slug + '"}' });
+    expect(next.status).toBe(200);
+    for (const deadline = Date.now() + 10_000; Date.now() < deadline;) {
+      const read = json(await send(`/cr/${cr.slug}/api/agents/conversations/${run.run.id}`)) as { conversation: Conversation; events: Parameters<typeof messagesOf>[0] };
+      if (read.conversation.status !== 'running') {
+        expect(messagesOf(read.events).join('\n')).toMatch(/^mcp:/m);
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    // Deleting the chat stops the process and drops the token.
     expect((await send(`/cr/${cr.slug}/api/agents/conversations/${run.run.id}`, 'DELETE')).status).toBe(200);
     expect((await list()).status).toBe(401);
   }, 20_000);
@@ -312,7 +323,7 @@ describe('Studio MCP server', () => {
     });
     const base = `/cr/${cr.slug}/api/agents/conversations/${run.id}/turns/1/changes`;
     const { changes } = json(await send(base)) as { changes: TurnChange[] };
-    expect(changes).toContainEqual({ path: page, existed: true, decided: null, reason: 'also saved by a person during the run: revert it by hand' });
+    expect(changes).toContainEqual({ path: page, existed: true, decided: null, reason: 'also saved by a person during the turn: revert it by hand' });
     expect(json(await send(`${base}/before?path=${page}`))).toEqual({ path: page, content: 'As found.\n' });
     expect((await send(base, 'POST', { path: page, op: 'revert' })).status).toBe(409);
     expect(await readFile(worktree(page), 'utf8')).toBe('By a person.\n');

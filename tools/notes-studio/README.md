@@ -912,12 +912,14 @@ are listed greyed, with how to install them (`GET /api/agents`).
   notes lock (`server/agents/fs-policy.ts`). A write to a note that exists
   is never made: it becomes a proposal (see Proposals), and the agent is
   answered that it did, so it does not read the note back expecting its
-  text; a new note, `meta.yaml` and assets are written. A note the turn
+  text; a new note, `meta.yaml` and assets are written. A note the chat
   created itself stays its own draft until a person keeps or reverts it:
-  the turn's later writes to it are written too, not proposed, so one new
-  note is reviewed once, on Keep/Revert. Once anyone else changed it (a
-  save, the live editor, any edit on disk), it is no longer only the
-  turn's, and later writes to it are proposals again. Claude Code has its
+  later writes to it, in that turn or a later one, are written too, not
+  proposed, so one new note is reviewed on Keep/Revert. Once anyone else
+  changed it (a save, a revert, the live editor, any edit on disk), it is
+  no longer only the chat's, and later writes to it are proposals again.
+  Between turns the Studio takes no write from the agent: nobody would
+  follow it. Claude Code has its
   own file tools denied on notes (`Edit(content/notes/**/*.mdx)`), so it
   proposes and creates notes through `propose_edit`. Codex, omp and Hermes
   write with their own tools inside the fences above: the Studio sees those
@@ -936,15 +938,17 @@ are listed greyed, with how to install them (`GET /api/agents`).
   nothing over a file changed again since the turn ended, a later turn's
   edit included, and does not touch files outside the notes and their
   assets, files over 25 MB, or files a person saved through the file API
-  during the turn (it says so: revert those by hand). Edits made in the
+  during the turn (it says so: revert those by hand). A revert made while
+  a later turn runs counts as such a save for that turn. Other pages read
+  the list again after each decision (`decided` on the event stream). Edits made in the
   editor during a turn go through the notes sync socket and are not
   marked (the sync server has no write hook yet): look at the diff before
   reverting a note you edited meanwhile.
 - **Tools.** Every session gets the Studio's MCP server (see MCP server),
   on a resume or a load too, over HTTP when the agent says it can
   (`mcpCapabilities.http`), else through the stdio bridge, with a token
-  for the chat's agent process that ends with it (MCP calls it the run's
-  `runId`: the chat's id).
+  for the chat's agent process that ends with it and acts only while a
+  turn goes on (MCP calls it the run's `runId`: the chat's id).
 - **Permission.** `session/request_permission` opens one dialog for every
   agent with the agent's own options, less "always" ones, which would
   outlive the chat. Closing it rejects; so does the server when nobody
@@ -1008,8 +1012,8 @@ Studio starts and your own agents in a terminal while the Studio is open.
   refused to a reviewer chat and to a reader; the others are open to anyone
   who may read. A reviewer comments instead of proposing.
 - **Who.** From the bearer token: a chat's (`server/mcp/grants.ts`, made
-  when its agent process starts, dropped when it stops; the grant's
-  `runId` is the chat's id), or with sign-in on, a
+  when its agent process starts, dropped when it stops, refused between
+  turns; the grant's `runId` is the chat's id), or with sign-in on, a
   person's agent token, made with `POST /api/mcp/tokens` and acting with
   their role until they clear it or their session ends. With sign-in off a
   request without a token acts for the one person of this machine, like

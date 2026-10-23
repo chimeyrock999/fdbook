@@ -26,11 +26,12 @@ const atCommit = (root: string, sha: string | null, path: string) =>
 const TOO_LARGE = Symbol('too large');
 
 const TOO_LARGE_REASON = 'too large to keep its earlier version';
-const PERSON_REASON = 'also saved by a person during the run: revert it by hand';
+const PERSON_REASON = 'also saved by a person during the turn: revert it by hand';
 
 // Git's empty tree: what a repository without a commit yet holds.
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
+// A run here is one turn of a conversation (conversations.ts).
 // Watches one run's worktree for Keep/Revert: what the files the Studio may
 // edit held when the run started (those that differed from HEAD then; the
 // others are as HEAD has them), and which files a person saved meanwhile.

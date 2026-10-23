@@ -19,7 +19,7 @@ describe('agent conversations over many turns', () => {
   const open: AgentConversations[] = [];
 
   // `way`: what the fake agent offers to take a session up again.
-  const make = (way: 'load' | 'resume' | 'none' = 'resume', options: { idleMs?: number; cancelGraceMs?: number } = {}) => {
+  const make = (way: 'load' | 'resume' | 'none' = 'resume', options: { idleMs?: number; cancelGraceMs?: number; propose?: (input: { path: string }) => Promise<unknown> } = {}) => {
     const env = { FAKE_AGENT: way, FAKE_AGENT_STORE: store };
     const made = createAgentConversations(root, { slug: 'turns', profiles: [fakeProfile(env)], transcripts: createTranscripts(home), ...options });
     open.push(made);
@@ -180,17 +180,21 @@ describe('agent conversations over many turns', () => {
     await mkdir(dir, { recursive: true });
     const run = {
       id: 'old-run', agent: 'claude', agentName: 'Fake Agent', role: 'author', prompt: 'Tighten the intro', model: 'Fake One', status: 'done', error: null,
-      startedMs: 1000, endedMs: 2000, cost: { amount: 0.3, currency: 'USD' }, usage: null, writes: [], by: 'octocat',
+      startedMs: 1000, endedMs: 2000, cost: { amount: 0.3, currency: 'USD' }, usage: null, writes: ['public/notes/old.svg'], by: 'octocat',
     };
     const say = { type: 'update', at: 1500, update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Shorter now.' } } };
     await writeFile(join(dir, 'old-run.jsonl'), [{ type: 'start', at: 1000, run: { ...run, status: 'running', endedMs: null } }, say, { type: 'end', at: 2000, run }].map((event) => JSON.stringify(event)).join('\n') + '\n');
     await writeFile(join(dir, 'old-run.json'), JSON.stringify(run));
+    // Its Keep/Revert list, as runs kept it.
+    await writeFile(join(dir, 'old-run.changes.json'), JSON.stringify([{ path: 'public/notes/old.svg', before: null, endMtimeMs: null, decided: null, reason: null }]));
     const conversations = make();
     expect((await conversations.list()).find((each) => each.id === 'old-run')).toMatchObject({ turns: 1, lastMs: 2000, sessionId: null, live: false, status: 'done' });
     const read = await conversations.read('old-run');
     expect(read.events.map((event) => event.type)).toEqual(['start', 'turn', 'update', 'end']);
     expect(read.events[1]).toMatchObject({ prompt: 'Tighten the intro', by: 'octocat' });
+    expect(read.events[3]).toMatchObject({ turn: { writes: ['public/notes/old.svg'] } });
     expect(read.events[3]).toMatchObject({ turn: { status: 'done', cost: { amount: 0.3 } } });
+    expect(await conversations.changes('old-run', 1)).toEqual([{ path: 'public/notes/old.svg', existed: false, decided: null, reason: null }]);
     // It kept no session: the next message starts one, marked.
     await conversations.message('old-run', 'recall', null);
     const done = await waitFor(conversations, 'old-run', ended);
@@ -260,6 +264,41 @@ describe('agent conversations over many turns', () => {
     await conversations.remove(conversation.id);
     expect(existsSync(join(home, 'agents', 'turns', `${conversation.id}.t1.changes.json`))).toBe(false);
     expect(existsSync(join(home, 'agents', 'turns', `${conversation.id}.t2.changes.json`))).toBe(false);
+  });
+
+  it('takes a revert during a later turn as a person\'s edit, never the agent\'s to revert', async () => {
+    const asset = 'public/notes/turns/later.svg';
+    await mkdir(join(root, 'public/notes/turns'), { recursive: true });
+    await writeFile(join(root, asset), 'zero');
+    const conversations = make();
+    const conversation = start(conversations, `edit ${join(root, asset)} one`);
+    await waitFor(conversations, conversation.id, ended);
+    await conversations.message(conversation.id, 'mode\nhang', null);
+    await waitFor(conversations, conversation.id, ({ events }) => messagesOf(events).join('').includes('mode:'));
+    await conversations.decide(conversation.id, 1, asset, 'revert');
+    conversations.cancel(conversation.id);
+    await waitFor(conversations, conversation.id, ended);
+    expect(readFileSync(join(root, asset), 'utf8')).toBe('zero');
+    expect(await conversations.changes(conversation.id, 2)).toEqual([{ path: asset, existed: true, decided: null, reason: 'also saved by a person during the turn: revert it by hand' }]);
+  });
+
+  it('writes again to a note an earlier turn created, until a person decides on it', async () => {
+    const proposed: string[] = [];
+    const conversations = make('resume', { propose: ({ path }) => { proposed.push(path); return Promise.resolve({ id: 'p1' }); } });
+    const note = join(root, 'content/notes/turns-draft.mdx');
+    const conversation = start(conversations, `write ${note} First draft.`);
+    await waitFor(conversations, conversation.id, ended);
+    await conversations.message(conversation.id, `write ${note} Second draft.`, null);
+    await waitFor(conversations, conversation.id, ended);
+    expect(readFileSync(note, 'utf8')).toBe('Second draft.');
+    expect(proposed).toEqual([]);
+    // Kept: from then on it is a person's note, and a write is a proposal.
+    await conversations.decide(conversation.id, 1, 'content/notes/turns-draft.mdx', 'keep');
+    await conversations.message(conversation.id, `write ${note} Third draft.`, null);
+    const done = await waitFor(conversations, conversation.id, ended);
+    expect(readFileSync(note, 'utf8')).toBe('Second draft.');
+    expect(proposed).toEqual(['content/notes/turns-draft.mdx']);
+    expect(messagesOf(done.events).join('')).toMatch(/made this write a proposal/);
   });
 
   it('numbers the events it records, so a read and the stream line up', async () => {
