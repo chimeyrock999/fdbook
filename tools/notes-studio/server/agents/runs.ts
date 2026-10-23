@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ServerResponse } from 'node:http';
 import type { RequestPermissionRequest } from '@agentclientprotocol/sdk';
@@ -6,6 +7,8 @@ import { atLeast } from '../auth/shared.ts';
 import { createKeyedLock } from '../files/store.ts';
 import { HttpError } from '../http.ts';
 import type { RunGrants } from '../mcp/grants.ts';
+import { classifyPath } from '../security/paths.ts';
+import { RequestError } from '@agentclientprotocol/sdk';
 import type { Viewer } from '../security/access.ts';
 import { startAgent, type AgentProcess } from './connection.ts';
 import { writeForAgent } from './fs-policy.ts';
@@ -51,13 +54,16 @@ export type AgentRunsOptions = {
   permissionTimeoutMs?: number;
   // The Studio's MCP server, given to every session with a token for the run.
   mcp?: { url: string; grants: RunGrants } | null;
+  // Turns a write to a note that exists into a proposal (proposals/store.ts)
+  // instead of writing it; without it the write goes to disk.
+  propose?: ((input: { path: string; content: string; runId: string; agent: string; model: string | null }) => Promise<unknown>) | null;
 };
 
 // The agent runs of one change request's worktree. A run starts one agent
 // process for one prompt (connection.ts); its events go to the transcript
 // and to every open event stream (GET /api/agents/events). A run left
 // "running" by a Studio that stopped reads as failed.
-export function createAgentRuns(root: string, { slug, profiles, transcripts, lock = createKeyedLock(), pathLock = createKeyedLock(), permissionTimeoutMs = PERMISSION_TIMEOUT_MS, mcp = null }: AgentRunsOptions) {
+export function createAgentRuns(root: string, { slug, profiles, transcripts, lock = createKeyedLock(), pathLock = createKeyedLock(), permissionTimeoutMs = PERMISSION_TIMEOUT_MS, mcp = null, propose = null }: AgentRunsOptions) {
   const live = new Map<string, Live>();
   const streams = new Map<ServerResponse, Viewer>();
   let closed = false;
@@ -189,7 +195,22 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
         model: (model) => { changed(run, { model }); },
         cost: (cost) => { changed(run, { cost }); },
         write: async (path, content) => {
+          // A note that exists is never written over: the write becomes a
+          // proposal, recorded when the store says it was made. A note this
+          // run created itself is still its own draft (on its Keep/Revert
+          // list), so it is written.
+          const at = worktreePathOf(root, path);
+          // The agent is told, so it does not read the note back expecting
+          // its text, nor write again.
+          if (propose !== null && at !== null && classifyPath(at) === 'note' && existsSync(join(root, at)) && !(await run.watch.created(at))) {
+            const made = await propose({ path: at, content, runId: run.summary.id, agent: profile.id, model: run.summary.model }).then(
+              (proposal) => `the Studio made this write a proposal (${(proposal as { id: string }).id}) for a person to accept: ${at} is unchanged until then. Make further edits to it with the propose_edit tool.`,
+              (error: unknown) => `the Studio takes edits to ${at} as proposals, and this one was refused: ${(error as Error).message}`,
+            );
+            throw RequestError.invalidParams(undefined, made);
+          }
           const written = await lock('notes', () => pathLock(join(root, worktreePathOf(root, path) ?? ''), () => writeForAgent(root, path, content, (at, previous) => { run.watch.beforeWrite(at, previous); })));
+          run.watch.wrote(written.path, Buffer.from(content));
           record(run, { type: 'write', at: Date.now(), path: written.path, bytes: written.bytes });
           if (!run.summary.writes.includes(written.path)) changed(run, { writes: [...run.summary.writes, written.path] });
         },
@@ -275,6 +296,21 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
 
     cancel(id: string) {
       liveRun(id).agent?.cancel();
+    },
+
+    // A proposal a run made (mcp/note-tools.ts, or a write above): in its transcript.
+    proposed(id: string, proposal: { id: string; path: string; hunks: unknown[] }) {
+      const run = live.get(id);
+      if (run !== undefined) record(run, { type: 'proposal', at: Date.now(), id: proposal.id, path: proposal.path, hunks: proposal.hunks.length });
+    },
+
+    // Whether a run going on created `path` itself (mcp/note-tools.ts writes
+    // to it directly instead of proposing).
+    created: (id: string, path: string) => live.get(id)?.watch.created(path) ?? Promise.resolve(false),
+
+    // What a run's MCP tool write put in a file (after beforeWrite).
+    wrote(id: string, path: string, content: Buffer) {
+      live.get(id)?.watch.wrote(path, content);
     },
 
     // The model a run going on says it runs (a proposal's author), or null.

@@ -66,7 +66,8 @@ function Composer({ agents, onStarted }: { agents: Agents; onStarted: (id: strin
 // The agent panel, at the right of the editor: start a run, follow it, and
 // go back to the change request's earlier runs. Agents run only in a change
 // request (`inCr`), and only for someone who may write (`canRun`).
-export function AgentPanel({ agents, inCr, canRun, onOpenDiff }: { agents: Agents; inCr: boolean; canRun: boolean; onOpenDiff: (path: string) => void }) {
+// `canDecide`: may keep or revert what a run changed (a writer).
+export function AgentPanel({ agents, inCr, canRun, canDecide, onOpenDiff, onOpenNote }: { agents: Agents; inCr: boolean; canRun: boolean; canDecide: boolean; onOpenDiff: (path: string) => void; onOpenNote: (path: string) => void }) {
   const [shown, setShown] = useState<string | null>(null);
   const current = agents.runs.find((run) => run.id === shown) ?? agents.runs.find((run) => run.status === 'running') ?? null;
   const open = (id: string) => {
@@ -101,6 +102,9 @@ export function AgentPanel({ agents, inCr, canRun, onOpenDiff }: { agents: Agent
                 events={agents.events[current.id]}
                 onCancel={canRun ? () => { void agents.cancel(current.id); } : null}
                 onOpenDiff={onOpenDiff}
+                onOpenNote={onOpenNote}
+                client={agents.client}
+                canDecide={canDecide}
               />
             )}
             <section className="studio-agent-history" aria-label="Runs in this change request">

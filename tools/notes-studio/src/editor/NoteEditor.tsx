@@ -28,6 +28,10 @@ import { SourceEditor } from './SourceEditor';
 import { ConflictDialog, SaveStatus } from './SyncState';
 import { useUnsaved } from './unsaved';
 import { UnsavedNotice } from './UnsavedNotice';
+import { NoteComments, SuggestionBar, VisualSuggestions, type NoteReview } from '../suggestions/Suggestions';
+import { useNoteSuggestions } from '../suggestions/useNoteSuggestions';
+import { sourceSuggestions } from '../suggestions/source';
+import { createSuggestionLayer } from '../suggestions/visual';
 import './drag-handle.css';
 
 // The sidebar's Issues view: the editor fills `issuesSlot` and reports the
@@ -56,11 +60,13 @@ export type SourcePlace = { line: number; column: number; length: number; seq: n
 // lists public/notes (useAssets), for the name check and Source. `onStatus`
 // follows the autosave state, so a rename can wait for it. `place` is
 // selected in Source once the note is open.
-export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
+export function NoteEditor({ path, assets, onStatus, place = null, review = null, ...rest }: {
   path: string;
   assets: readonly string[];
   onStatus?: (status: DocumentStatus) => void;
   place?: SourcePlace | null;
+  // The note's agent suggestions and comments (src/suggestions), in a change request.
+  review?: NoteReview | null;
 } & Panels & Clients) {
   const notePath = `${NOTES_PREFIX}${path}`;
   const uploads = useAssetUploads(rest.files, notePath, assets);
@@ -103,6 +109,7 @@ export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
         locked={locked}
         readOnly={writable === false}
         place={place}
+        review={review}
         {...rest}
       />
     </MdxEditor.Root>
@@ -112,11 +119,12 @@ export function NoteEditor({ path, assets, onStatus, place = null, ...rest }: {
 // The plugins' decorations, one ProseMirror plugin for every editor.
 const decorations = decorationsPlugin(editorConfig.decorators);
 
-function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, locked, readOnly, place, issuesSlot, onIssueCount, onShowIssues, onIssueShown, onShowHistory, files, lint }: {
+function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, locked, readOnly, place, review, issuesSlot, onIssueCount, onShowIssues, onIssueShown, onShowHistory, files, lint }: {
   path: string;
   notePath: string;
   disk: string | null;
   place: SourcePlace | null;
+  review: NoteReview | null;
   assets: readonly string[];
   uploads: ReturnType<typeof useAssetUploads>;
   opened: boolean;
@@ -136,6 +144,16 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
   const [field, setField] = useState<FieldReveal | null>(null);
   const editor = useRef<HTMLElement>(null);
   useEditorPlugin(editor, decorations);
+  // Agent suggestions: placed on the text as it is now (#85).
+  const suggestions = useNoteSuggestions(review, opened ? source.value : '');
+  const layer = useMemo(() => createSuggestionLayer(), []);
+  useEditorPlugin(editor, layer.plugin);
+  const canDecide = !locked && !source.readOnly;
+  const sourceExtra = useMemo(() => (review === null || suggestions.placement.hunks.length === 0 ? null : sourceSuggestions(source.value, suggestions.placement.hunks, canDecide ? (hunk, op) => review.act(hunk.proposal.id, op, [hunk.hunk.id]) : null)), [review, source.value, suggestions.placement.hunks, canDecide]);
+  const stepTo = (by: number) => {
+    const key = suggestions.step(by);
+    if (key !== undefined && mode === 'visual') layer.element(key, 'studio-suggest-card').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  };
   // The editor draws mermaid previews itself; mark the author's fills on
   // each one for the dark theme's label ink, as the site does.
   useEffect(() => (editor.current ? observeAuthorFills(editor.current) : undefined), []);
@@ -201,6 +219,12 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
             </Tab>
           </div>
         </div>
+        {review !== null && opened && (
+          <>
+            <SuggestionBar review={review} placement={suggestions.placement} focus={suggestions.focus} onStep={stepTo} />
+            <NoteComments placement={suggestions.placement} />
+          </>
+        )}
         {mode === 'visual' ? (
           <div className="studio-visual min-h-0 flex-1 overflow-auto">
             <div className="mx-auto w-full max-w-[52rem] px-[clamp(16px,5vw,56px)] py-7">
@@ -212,11 +236,12 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
                 reveal={field}
               />
               <MdxEditor.Visual className="studio-prose notes-prose" />
+              {review !== null && <VisualSuggestions layer={layer} review={review} placement={suggestions.placement} focus={suggestions.focus} readOnly={!canDecide} />}
               <GraphTools container={editor} graph={frontmatter.status === 'ok' ? frontmatter.data.graph : undefined} />
             </div>
           </div>
         ) : (
-          <SourceEditor reveal={reveal} completion={completion} />
+          <SourceEditor reveal={reveal} completion={completion} extra={sourceExtra} />
         )}
         {unsaved.offer && <UnsavedNotice offer={unsaved.offer} writable={!locked} onRestore={unsaved.restore} onDiscard={unsaved.discard} />}
       </section>

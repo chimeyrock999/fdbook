@@ -1,12 +1,12 @@
 // Client for the agents API (server/agents/api.ts), in the worktree the page
 // edits (src/api/workspace.ts). Types are server/agents/shared.ts.
 
-import type { AgentId, AgentInfo, AgentRole, RunEvent, RunSummary, RunTotals, StreamEvent } from '../../server/agents/shared';
+import type { AgentId, AgentInfo, AgentRole, RunChange, RunEvent, RunSummary, RunTotals, StreamEvent } from '../../server/agents/shared';
 import { errorOf, readJson } from './json';
 import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
-export type { AgentId, AgentInfo, AgentRole, RunEvent, RunSummary, RunTotals, StreamEvent };
+export type { AgentId, AgentInfo, AgentRole, RunChange, RunEvent, RunSummary, RunTotals, StreamEvent };
 export type Run = { run: RunSummary; events: RunEvent[] };
 
 // How long a refused event stream waits before it is opened again.
@@ -40,6 +40,22 @@ export function createAgentsClient(base = API_BASE) {
     },
     async cancel(id: string): Promise<void> {
       await answer(await postJson(`${base}/api/agents/runs/${id}/cancel`, {}));
+    },
+    // The files an ended run changed, to keep or revert.
+    async changes(id: string): Promise<RunChange[]> {
+      return (await answer<{ changes: RunChange[] }>(await studioFetch(`${base}/api/agents/runs/${id}/changes`))).changes;
+    },
+    async decide(id: string, path: string, op: 'keep' | 'revert'): Promise<RunChange> {
+      return (await answer<{ change: RunChange }>(await postJson(`${base}/api/agents/runs/${id}/changes`, { path, op }))).change;
+    },
+    // A file the run changed: as it was before the run, and as it is now
+    // (null where it is missing).
+    async compare(id: string, path: string): Promise<{ before: string | null; after: string | null }> {
+      const query = new URLSearchParams({ path }).toString();
+      const { content: before } = await answer<{ content: string | null }>(await studioFetch(`${base}/api/agents/runs/${id}/changes/before?${query}`));
+      const now = await studioFetch(`${base}/api/file?${query}`);
+      const after = now.status === 404 ? null : (await answer<{ content: string }>(now)).content;
+      return { before, after };
     },
     // `optionId` null rejects.
     async answer(id: string, ask: string, optionId: string | null): Promise<void> {

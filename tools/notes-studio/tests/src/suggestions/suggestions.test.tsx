@@ -1,0 +1,180 @@
+// @vitest-environment jsdom
+import { EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+import { act, cleanup, render, renderHook, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { useMemo, type RefObject } from 'react';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { hunksOf } from '../../../server/proposals/hunks';
+import type { NoteComment, ProposalHunk, ProposalsClient, ProposalView } from '../../../src/api/proposals';
+import { useEditorPlugin } from '../../../src/editor/decorations';
+import { placeAll } from '../../../src/suggestions/places';
+import { sourceSuggestions } from '../../../src/suggestions/source';
+import { SuggestionBar, VisualSuggestions, type NoteReview } from '../../../src/suggestions/Suggestions';
+import { failureOn, useProposals } from '../../../src/suggestions/useProposals';
+import { createSuggestionLayer } from '../../../src/suggestions/visual';
+import { mountVisual, stubLayout } from '../../support/visual-editor';
+
+const PATH = 'content/notes/guide.mdx';
+const NOTE = '---\ntitle: Guide\n---\n\n# Guide\n\nFirst paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n';
+
+// A proposal of `next` against NOTE, as the server would list it.
+function proposal(next: string, id = 'p1', base = NOTE): ProposalView {
+  const hunks = hunksOf(base, next).map((hunk, index): ProposalHunk => ({ id: String(index + 1), ...hunk, decided: null, state: 'open', from: null, to: null }));
+  return { id, path: PATH, by: { kind: 'run', runId: 'r1', agent: 'claude', model: 'Opus 5.5' }, summary: 'Tighten the guide', createdMs: 1, hunks, mtimeMs: 1, stale: false, done: false };
+}
+
+const comment = (block: { index: number; text: string } | null, body = 'Say more.'): NoteComment => ({ id: `c${String(body.length)}`, path: PATH, block, body, by: { kind: 'run', runId: 'r2', agent: 'codex', model: null }, createdMs: 2 });
+
+afterEach(cleanup);
+
+describe('placeAll', () => {
+  const edited = NOTE.replace('First paragraph.', 'First, tightened.').replace('Third paragraph.\n', 'Third paragraph.\n\nA new last one.\n');
+
+  it('places each hunk on its blocks: the frontmatter is block 0, an insertion holds none', () => {
+    const { hunks, lost, parsed } = placeAll(NOTE, [proposal(edited)]);
+    expect(parsed).toBe(true);
+    expect(lost).toEqual([]);
+    expect(hunks.map((hunk) => [hunk.first, hunk.count, hunk.stale])).toEqual([[2, 1, false], [5, 0, false]]);
+  });
+
+  it('follows the text as it is now, shows a changed hunk as stale where a rebase puts it, and loses one with no anchors', () => {
+    const now = NOTE.replace('First paragraph.', 'First, by a person.');
+    const { hunks } = placeAll(now, [proposal(edited)]);
+    expect(hunks.map((hunk) => [hunk.first, hunk.count, hunk.stale])).toEqual([[2, 1, true], [5, 0, false]]);
+    const gone = NOTE.replace('# Guide', '# X').replace('First paragraph.', 'Y.').replace('Second paragraph.', 'Z.');
+    expect(placeAll(gone, [proposal(edited)]).lost.map((each) => each.hunk.id)).toEqual(['1']);
+  });
+
+  it('leaves decided hunks out, places nothing in a note that does not parse, and finds comments by their block text', () => {
+    const decided = proposal(edited);
+    decided.hunks[0] = { ...decided.hunks[0], decided: 'accepted' };
+    expect(placeAll(NOTE, [decided]).hunks).toHaveLength(1);
+    expect(placeAll(`${NOTE}<Broken\n`, [decided]).parsed).toBe(false);
+    const moved = NOTE.replace('# Guide\n\n', '# Guide\n\nAn intro.\n\n');
+    const { comments } = placeAll(moved, [], [comment({ index: 3, text: 'Second paragraph.' }), comment(null, 'On the note.'), comment({ index: 9, text: 'Gone.' }, 'Lost one.')]);
+    expect(comments.map((each) => each.block)).toEqual([4, null, null]);
+  });
+});
+
+function review(proposals: ProposalView[], act = vi.fn(() => Promise.resolve())): NoteReview & { act: typeof act } {
+  return { proposals, comments: [], error: null, act };
+}
+
+describe('SuggestionBar', () => {
+  it('counts the suggestions and the stale ones, and accepts only the open ones, per proposal', async () => {
+    const user = userEvent.setup();
+    const first = proposal(NOTE.replace('First paragraph.', 'One.').replace('Third paragraph.', 'Three.'), 'p1');
+    const second = proposal(NOTE.replace('# Guide', '# The guide'), 'p2');
+    const now = NOTE.replace('Third paragraph.', 'Third, by a person.');
+    const placement = placeAll(now, [first, second]);
+    const decide = review([first, second]);
+    render(<SuggestionBar review={decide} placement={placement} focus={placement.hunks[0]?.key ?? null} onStep={() => undefined} />);
+    const bar = screen.getByRole('region', { name: 'Suggestions' });
+    expect(within(bar).getByText('3 suggestions')).toBeTruthy();
+    expect(within(bar).getByText('1 stale')).toBeTruthy();
+    expect(within(bar).getByText('2 proposals')).toBeTruthy();
+    await user.click(within(bar).getByRole('button', { name: /Accept all/ }));
+    expect(decide.act.mock.calls).toEqual([['p2', 'accept', ['1']], ['p1', 'accept', ['1']]]);
+    await user.click(within(bar).getByRole('button', { name: 'Reject all' }));
+    expect(decide.act.mock.calls.slice(2)).toEqual([['p2', 'reject', ['1']], ['p1', 'reject', ['1', '2']]]);
+  });
+
+  it('shows nothing once every suggestion is decided', () => {
+    const { container } = render(<SuggestionBar review={review([])} placement={placeAll(NOTE, [])} focus={null} onStep={() => undefined} />);
+    expect(container.innerHTML).toBe('');
+  });
+});
+
+describe('suggestions in Source', () => {
+  it('marks the lines a hunk replaces and puts what it adds under them, with its actions', () => {
+    const next = NOTE.replace('Second paragraph.', 'Second, rewritten.');
+    const placement = placeAll(NOTE, [proposal(next)]);
+    const act = vi.fn(() => Promise.resolve());
+    const view = new EditorView({ parent: document.body, state: EditorState.create({ doc: NOTE, extensions: [sourceSuggestions(NOTE, placement.hunks, act)] }) });
+    const removed = [...view.dom.querySelectorAll('.studio-suggest-line-removed')].map((line) => line.textContent);
+    expect(removed).toEqual(['Second paragraph.']);
+    const widget = view.dom.querySelector<HTMLElement>('.studio-suggest-source');
+    expect(widget?.querySelector('pre')?.textContent).toBe('Second, rewritten.');
+    widget?.querySelector<HTMLButtonElement>('[aria-label="Accept suggestion"]')?.click();
+    expect(act).toHaveBeenCalledWith(placement.hunks[0], 'accept');
+    view.destroy();
+  });
+
+  it('sends one request per click until it is answered, so a double click does not decide twice', async () => {
+    const placement = placeAll(NOTE, [proposal(NOTE.replace('Second paragraph.', 'Two.'))]);
+    let answer: () => void = () => undefined;
+    const act = vi.fn(() => new Promise<void>((resolve) => { answer = resolve; }));
+    const view = new EditorView({ parent: document.body, state: EditorState.create({ doc: NOTE, extensions: [sourceSuggestions(NOTE, placement.hunks, act)] }) });
+    const accept = view.dom.querySelector<HTMLButtonElement>('[aria-label="Accept suggestion"]');
+    const reject = view.dom.querySelector<HTMLButtonElement>('[aria-label="Reject suggestion"]');
+    accept?.click();
+    accept?.click();
+    reject?.click();
+    expect(act).toHaveBeenCalledTimes(1);
+    expect([accept?.disabled, reject?.disabled]).toEqual([true, true]);
+    answer();
+    await waitFor(() => { expect(accept?.disabled).toBe(false); });
+    view.destroy();
+  });
+
+  it('draws nothing while the editor holds other text', () => {
+    const placement = placeAll(NOTE, [proposal(NOTE.replace('Second paragraph.', 'Two.'))]);
+    const view = new EditorView({ parent: document.body, state: EditorState.create({ doc: `${NOTE}More.\n`, extensions: [sourceSuggestions(NOTE, placement.hunks, null)] }) });
+    expect(view.dom.querySelector('.studio-suggest-source')).toBeNull();
+    view.destroy();
+  });
+});
+
+// The real Visual editor with the suggestion layer, as NoteEditor mounts it.
+function Layer({ container, text, decide }: { container: RefObject<HTMLElement | null>; text: string; decide: NoteReview }) {
+  const layer = useMemo(createSuggestionLayer, []);
+  useEditorPlugin(container, layer.plugin);
+  const placement = placeAll(text, decide.proposals, decide.comments);
+  return <VisualSuggestions layer={layer} review={decide} placement={placement} focus={placement.hunks[0]?.key ?? null} readOnly={false} />;
+}
+
+describe('suggestions in Visual', () => {
+  beforeAll(stubLayout);
+
+  it('marks the replaced block in the editor, draws the proposed one after it, and decides it', async () => {
+    const next = NOTE.replace('Second paragraph.', 'Second, **rewritten**.');
+    const decide = review([proposal(next)]);
+    decide.comments = [comment({ index: 2, text: 'First paragraph.' })];
+    const { prose } = await mountVisual(NOTE, { extra: (container) => <Layer container={container} text={NOTE} decide={decide} /> });
+    await waitFor(() => { expect(prose.querySelector('.studio-suggest-removed')?.textContent).toBe('Second paragraph.'); });
+    const card = await waitFor(() => {
+      const found = prose.querySelector<HTMLElement>('.studio-suggest-card');
+      if (!found?.querySelector('strong')) throw new Error('no card yet');
+      return found;
+    });
+    expect(card.dataset.focus).toBe('true');
+    expect(card.querySelector('strong')?.textContent).toBe('rewritten');
+    // The card sits right after the block it replaces.
+    expect(prose.querySelector('.studio-suggest-removed')?.nextElementSibling).toBe(card);
+    expect(prose.querySelector('.studio-suggest-comment button')?.getAttribute('aria-label')).toBe('Comment from Codex');
+    await act(async () => { within(card).getByRole('button', { name: 'Accept suggestion' }).click(); await Promise.resolve(); });
+    expect(decide.act).toHaveBeenCalledWith('p1', 'accept', ['1']);
+  });
+});
+
+describe('useProposals', () => {
+  it('keeps a failed action on its own note, and a failed reload on every note', async () => {
+    const other = { ...proposal(NOTE.replace('First paragraph.', 'One.'), 'p2'), path: 'content/notes/other.mdx' };
+    let listing: () => Promise<ProposalView[]> = () => Promise.resolve([proposal(NOTE.replace('First paragraph.', 'One.')), other]);
+    const client = {
+      list: () => listing(),
+      comments: () => Promise.resolve([]),
+      subscribe: (_merge: unknown, reopened: () => void) => { reopened(); return () => undefined; },
+      act: () => Promise.reject(new Error('nothing left to decide in these hunks')),
+    } as unknown as ProposalsClient;
+    const { result } = renderHook(() => useProposals(client, true));
+    await waitFor(() => { expect(result.current.proposals).toHaveLength(2); });
+    await act(() => result.current.act('p2', 'accept', ['1']));
+    expect(failureOn(result.current.error, 'content/notes/other.mdx')).toBe('nothing left to decide in these hunks');
+    expect(failureOn(result.current.error, PATH)).toBeNull();
+    listing = () => Promise.reject(new Error('offline'));
+    const { result: again } = renderHook(() => useProposals(client, true));
+    await waitFor(() => { expect(failureOn(again.current.error, PATH)).toBe('offline'); });
+  });
+});
