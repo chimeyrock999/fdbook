@@ -2,6 +2,7 @@ import { appendFile, mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { writeAtomic } from '../files/store.ts';
 import type { RunEvent, RunSummary, RunTotals } from './shared.ts';
+import type { StoredChange } from './watch.ts';
 
 // Where runs are kept: <home>/agents/<slug>/, next to the worktrees and
 // outside the change request's branch, so a transcript never lands in a
@@ -29,7 +30,7 @@ export function createTranscripts(home: string) {
   const list = async (slug: string): Promise<RunSummary[]> => {
     const names = await readdir(dirOf(slug)).catch(() => []);
     const runs = await Promise.all(
-      names.filter((name) => name.endsWith('.json')).map((name) =>
+      names.filter((name) => name.endsWith('.json') && !name.endsWith('.changes.json')).map((name) =>
         readFile(join(dirOf(slug), name), 'utf8').then((text) => JSON.parse(text) as RunSummary, () => null),
       ),
     );
@@ -82,6 +83,17 @@ export function createTranscripts(home: string) {
         }),
       );
       return Object.fromEntries(entries.filter(([, totals]) => totals.runs > 0));
+    },
+
+    // A run's changes for Keep/Revert (watch.ts), in <id>.changes.json.
+    writeChanges: async (slug: string, runId: string, changes: StoredChange[]) => {
+      await mkdir(dirOf(slug), { recursive: true });
+      await writeAtomic(join(dirOf(slug), `${runId}.changes.json`), `${JSON.stringify(changes)}\n`);
+    },
+    async readChanges(slug: string, runId: string): Promise<StoredChange[] | null> {
+      if (!/^[a-z0-9-]+$/.test(runId)) return null;
+      const text = await readFile(join(dirOf(slug), `${runId}.changes.json`), 'utf8').catch(() => null);
+      return text === null ? null : (JSON.parse(text) as StoredChange[]);
     },
 
     // Waits for the appends in flight, so a read after it sees them.

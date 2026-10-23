@@ -1,16 +1,19 @@
 import { randomBytes } from 'node:crypto';
+import { join } from 'node:path';
 import type { ServerResponse } from 'node:http';
 import type { RequestPermissionRequest } from '@agentclientprotocol/sdk';
 import { atLeast } from '../auth/shared.ts';
 import { createKeyedLock } from '../files/store.ts';
 import { HttpError } from '../http.ts';
+import type { RunGrants } from '../mcp/grants.ts';
 import type { Viewer } from '../security/access.ts';
 import { startAgent, type AgentProcess } from './connection.ts';
 import { writeForAgent } from './fs-policy.ts';
 import type { AgentProfile } from './profiles.ts';
-import { PERMISSION_TIMEOUT_MS, type PermissionAsk, type RunEvent, type RunSummary, type StreamEvent } from './shared.ts';
+import { PERMISSION_TIMEOUT_MS, type PermissionAsk, type RunChange, type RunEvent, type RunSummary, type StreamEvent } from './shared.ts';
 import type { Transcripts } from './transcripts.ts';
 import { changedSince, worktreePathOf, worktreeState } from './worktree.ts';
+import { revertChange, watchRun, type RunWatch } from './watch.ts';
 
 // Runs at once in one change request: each is a process with its own model.
 export const MAX_LIVE_RUNS = 3;
@@ -23,7 +26,8 @@ const EDIT_KINDS = new Set(['edit', 'delete', 'move']);
 type Pending = { ask: PermissionAsk; resolve: (optionId: string | null) => void; timer: NodeJS.Timeout };
 // `stopping`: cancelled or killed, it may still be ending; `ending`: until
 // its end is recorded.
-type Live = { summary: RunSummary; events: RunEvent[]; pending: Map<string, Pending>; agent: AgentProcess | null; stopping: boolean; ending: Promise<void> };
+// `watch`: what the files held before the run (Keep/Revert).
+type Live = { summary: RunSummary; events: RunEvent[]; pending: Map<string, Pending>; agent: AgentProcess | null; stopping: boolean; ending: Promise<void>; watch: RunWatch };
 
 const newId = () => `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;
 
@@ -41,14 +45,19 @@ export type AgentRunsOptions = {
   transcripts: Transcripts;
   // The worktree's notes lock (workspace.ts): agent writes wait for renames and commits.
   lock?: ReturnType<typeof createKeyedLock>;
+  // The file API's lock per file (workspace.ts), so an agent's write or a
+  // revert never lands between a save's mtime check and its write.
+  pathLock?: ReturnType<typeof createKeyedLock>;
   permissionTimeoutMs?: number;
+  // The Studio's MCP server, given to every session with a token for the run.
+  mcp?: { url: string; grants: RunGrants } | null;
 };
 
 // The agent runs of one change request's worktree. A run starts one agent
 // process for one prompt (connection.ts); its events go to the transcript
 // and to every open event stream (GET /api/agents/events). A run left
 // "running" by a Studio that stopped reads as failed.
-export function createAgentRuns(root: string, { slug, profiles, transcripts, lock = createKeyedLock(), permissionTimeoutMs = PERMISSION_TIMEOUT_MS }: AgentRunsOptions) {
+export function createAgentRuns(root: string, { slug, profiles, transcripts, lock = createKeyedLock(), pathLock = createKeyedLock(), permissionTimeoutMs = PERMISSION_TIMEOUT_MS, mcp = null }: AgentRunsOptions) {
   const live = new Map<string, Live>();
   const streams = new Map<ServerResponse, Viewer>();
   let closed = false;
@@ -126,6 +135,10 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
       const [start, end] = await Promise.all([before.catch(() => null), worktreeState(root).catch(() => null)]);
       if (start !== null && end !== null) touched(run, changedSince(start, end));
     }
+    // What the run changed, with what each file held before, for Keep/Revert.
+    if (run.summary.writes.length > 0) {
+      await run.watch.settle(run.summary.writes).then((changes) => transcripts.writeChanges(slug, run.summary.id, changes)).catch(() => undefined);
+    }
     run.summary = { ...run.summary, status, error, endedMs: Date.now(), usage: usage ?? run.summary.usage };
     record(run, { type: 'end', at: Date.now(), run: run.summary });
     live.delete(run.summary.id);
@@ -156,11 +169,12 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
       writes: [],
       by,
     };
-    const run: Live = { summary, events: [], pending: new Map(), agent: null, stopping: false, ending: Promise.resolve() };
-    live.set(summary.id, run);
-    record(run, { type: 'start', at: summary.startedMs, run: summary });
     const before = worktreeState(root);
     before.catch(() => undefined);
+    const run: Live = { summary, events: [], pending: new Map(), agent: null, stopping: false, ending: Promise.resolve(), watch: watchRun(root, before) };
+    live.set(summary.id, run);
+    record(run, { type: 'start', at: summary.startedMs, run: summary });
+    const grant = mcp?.grants.issue({ slug, runId: summary.id, agent: profile.id, role: summary.role }) ?? null;
 
     try {
       run.agent = startAgent(profile, summary.role, root, prompt, {
@@ -174,15 +188,17 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
         model: (model) => { changed(run, { model }); },
         cost: (cost) => { changed(run, { cost }); },
         write: async (path, content) => {
-          const written = await lock('notes', () => writeForAgent(root, path, content));
+          const written = await lock('notes', () => pathLock(join(root, worktreePathOf(root, path) ?? ''), () => writeForAgent(root, path, content, (at, previous) => { run.watch.beforeWrite(at, previous); })));
           record(run, { type: 'write', at: Date.now(), path: written.path, bytes: written.bytes });
           if (!run.summary.writes.includes(written.path)) changed(run, { writes: [...run.summary.writes, written.path] });
         },
         ask: (request) => ask(run, request),
-      });
+        ready: run.watch.ready,
+      }, mcp === null || grant === null ? null : { url: mcp.url, token: grant.token });
     } catch (error) {
       // A profile that cannot even name its command (its package gone).
       const message = (error as Error).message;
+      grant?.revoke();
       run.ending = finish(run, 'failed', message, null, null);
       return { ...run.summary, status: 'failed', error: message };
     }
@@ -201,12 +217,21 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
       stopping();
       kill();
     };
-    run.ending = run.agent.done.then(
+    // The run's MCP token ends with its process.
+    const done = run.agent.done.finally(() => grant?.revoke());
+    run.ending = done.then(
       (response) => finish(run, run.stopping || response.stopReason === 'cancelled' ? 'cancelled' : 'done', null, response.usage ?? null, before),
       (error: unknown) => finish(run, run.stopping ? 'cancelled' : 'failed', run.stopping ? null : (error as Error).message, null, before),
     );
     return run.summary;
   }
+
+  // An ended run's changes; none while it runs.
+  const storedChanges = async (id: string) => {
+    if (live.has(id)) throw new HttpError(409, 'the run is still going: wait for its end');
+    await transcripts.settled();
+    return (await transcripts.readChanges(slug, id)) ?? [];
+  };
 
   const liveRun = (id: string) => {
     const run = live.get(id);
@@ -249,6 +274,54 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
 
     cancel(id: string) {
       liveRun(id).agent?.cancel();
+    },
+
+    // The model a run going on says it runs (a proposal's author), or null.
+    modelOf: (id: string) => live.get(id)?.summary.model ?? null,
+
+    // A write a run makes through the Studio's MCP tools (mcp/http.ts):
+    // what the file held, for Keep/Revert, and the file in the run's list.
+    beforeWrite(id: string, path: string, previous: Buffer | null) {
+      const run = live.get(id);
+      if (run === undefined) return;
+      run.watch.beforeWrite(path, previous);
+      if (!run.summary.writes.includes(path)) changed(run, { writes: [...run.summary.writes, path] });
+    },
+
+    // The files an ended run changed, for Keep/Revert.
+    async changes(id: string): Promise<RunChange[]> {
+      return (await storedChanges(id)).map(({ path, before, decided, reason }) => ({ path, existed: before !== null, decided, reason }));
+    },
+
+    // What `path` held before the run, as text (null: it did not exist).
+    async before(id: string, path: string) {
+      const change = (await storedChanges(id)).find((each) => each.path === path);
+      if (change === undefined) throw new HttpError(404, `the run did not change ${path}`);
+      return { path, content: change.before === null ? null : Buffer.from(change.before, 'base64').toString('utf8') };
+    },
+
+    // Keeps a change, or puts the file back as it was before the run. A
+    // file changed again since the run ended is not reverted (409).
+    decide(id: string, path: string, op: unknown) {
+      if (op !== 'keep' && op !== 'revert') throw new HttpError(400, 'op must be keep or revert');
+      return lock('notes', async () => {
+        const changes = await storedChanges(id);
+        const change = changes.find((each) => each.path === path);
+        if (change === undefined) throw new HttpError(404, `the run did not change ${path}`);
+        if (change.decided !== null) throw new HttpError(409, `${path} was already ${change.decided}`);
+        if (op === 'revert') {
+          let reverted;
+          try {
+            reverted = await pathLock(join(root, path), () => revertChange(root, change));
+          } catch (error) {
+            throw new HttpError(409, (error as Error).message);
+          }
+          if (!reverted) throw new HttpError(409, `${path} changed since the run ended: revert it by hand, or keep it`);
+        }
+        change.decided = op === 'keep' ? 'kept' : 'reverted';
+        await transcripts.writeChanges(slug, id, changes);
+        return { path, existed: change.before !== null, decided: change.decided, reason: change.reason } satisfies RunChange;
+      });
     },
 
     // GET /api/agents/events: every event of every run from now on, after

@@ -67,7 +67,12 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
     (see Diff), and reads, compares and restores a page's versions (see
     History).
   - `agents/` runs Claude Code, Codex, omp and Hermes Agent over ACP in a
-    change request, and keeps their transcripts (see Agents below).
+    change request, and keeps their transcripts and what each run changed
+    (see Agents below).
+  - `mcp/` is the Studio's MCP server, its tools and its stdio bridge (see
+    MCP server below).
+  - `proposals/` keeps the edits agents propose and the comments they
+    leave, per change request (see Proposals below).
 - `src/`: the React UI.
   - `api/` holds the clients for the server; `workspace.ts` says which
     worktree the page edits (`?cr=`).
@@ -164,6 +169,13 @@ without `changeRequests`, as the tests start it, edits the one worktree at
 | `POST /api/session/device`, `POST /api/session/device/poll` | The device flow: JSON `{}` answers `{ flow, userCode, verificationUri, expiresIn, interval }`; `{ flow }` answers `{ state: "pending", interval }` or `{ state: "done", session }` with the session cookie, `410` once the code expired, `403` when GitHub cancelled it or the person has no access. |
 | `GET /api/session/web`, `GET /api/session/callback` | The web flow: a redirect to GitHub, and GitHub's redirect back, which signs in and goes on to `/` (or `/?signin_error=…`). |
 | `POST /api/session/logout` | Takes JSON `{}` and the csrf header, ends the session. |
+| `GET /api/proposals[?path=…]`, `GET /api/proposals/<id>` | A change request's proposals (of one note), oldest first: `{ proposals }`, each `{ id, path, by, summary, createdMs, mtimeMs, stale, done, hunks: [{ id, removed, added, state, from, to }] }` (see Proposals); main answers `409` |
+| `POST /api/proposals/<id>` | Takes JSON `{ op: "accept" \| "reject" \| "rebase" \| "drop", hunks? }` (all undecided hunks by default) and answers `{ proposal }`. Accepting writes the hunks into the note; a stale hunk is refused (`409`) until rebased. |
+| `GET /api/comments[?path=…]` | Comments agents and people left on the notes: `{ comments: [{ id, path, block: { index, text } \| null, body, by, createdMs }] }` |
+| `GET /api/agents/runs/<id>/changes`, `POST` the same | The files an ended run changed, for Keep/Revert: `{ changes: [{ path, existed, decided, reason }] }`; `POST { path, op: "keep" \| "revert" }` decides one (writer). A file changed since the run ended is not reverted (`409`). |
+| `GET /api/agents/runs/<id>/changes/before?path=…` | What the file held before the run: `{ path, content }`, `null` when it did not exist |
+| `POST /api/mcp` | The Studio's MCP server, Streamable HTTP, stateless (see MCP server). `GET` and `DELETE` answer `405`. |
+| `POST /api/mcp/tokens`, `DELETE /api/mcp/tokens` | With sign-in on, makes an agent token for the signed-in person (`{ token }`), or ends all of theirs. Any role, with the csrf header; sign-in off answers `409`. |
 | `/cr/<slug>/api/…`, `/cr/<slug>/__fde_sync` | The endpoints above (but `/api/crs`) for the change request's worktree. An unknown slug answers `404`. |
 | any other `/api/…` | `404` with a JSON `{ error }`, never the app's page (see below) |
 | `/__fde_sync` (websocket) | The fumadocs-editor sync server for `content/notes`. It reads `.mdx` only, writes only notes that already exist (no page or folder creation; that goes through the file API), and merges changes made on disk into open documents. Known gap: its tree `delete` command still removes an existing note, without updating `meta.yaml` or checking the mtime, because the scope cannot tell it apart from a save on the same path. Don't wire the editor's tree delete until upstream can authorize tree commands separately (fuma-nama/fumadocs-editor#24). |
@@ -884,9 +896,20 @@ are listed greyed, with how to install them (`GET /api/agents`).
   those edits in their tool calls and, at the end of the run, in `git
   status` against the start (`server/agents/worktree.ts`), so a file
   edited by hand meanwhile is listed too. Every changed file is in the
-  run's list with **View diff**, and shows in Changes; until #85 turns
-  writes into suggestions, a note changed by a run going on carries a
-  notice over the editor.
+  run's list with **View diff**, and shows in Changes; until the editor
+  shows proposals (the second step of #85), a note changed by a run going
+  on carries a notice over the editor.
+- **Keep or revert.** When a run starts, the Studio keeps what each file
+  that differs from HEAD holds (the others are as HEAD has them), and what
+  a file held right before each write the run makes through it. Once the
+  run ended, each file it changed can be kept or put back as it was when
+  the run started (`/api/agents/runs/<id>/changes`, kept in
+  `<run>.changes.json` next to the transcript). Revert writes nothing over
+  a file changed again since the run ended, and does not touch files
+  outside the notes and their assets (it says so).
+- **Tools.** Every session gets the Studio's MCP server (see MCP server),
+  over HTTP when the agent says it can (`mcpCapabilities.http`), else
+  through the stdio bridge, with a token for the run that ends with it.
 - **Permission.** `session/request_permission` opens one dialog for every
   agent with the agent's own options, less "always" ones, which would
   outlive the run. Closing it rejects; so does the server when nobody
@@ -911,6 +934,68 @@ are listed greyed, with how to install them (`GET /api/agents`).
 each installed agent once through the Studio as a reviewer (it signs in
 with your logins and costs a model call each); the other agent tests use a
 stand-in ACP agent (`tests/support/fake-agent.mjs`).
+
+## MCP server
+
+The tools every agent gets (#85), at `POST /api/mcp` (Streamable HTTP,
+stateless; `server/mcp/http.ts`). The same server serves the runs the
+Studio starts and your own agents in a terminal while the Studio is open.
+
+| Tool | What it does |
+| --- | --- |
+| `list_crs`, `create_cr` | The change requests, and a new one (a person's agent only: a run works in its own) |
+| `list_notes` | Every note: path, title, description, tags, keywords |
+| `read_note` | A note's text, its top-level blocks (index, line, first line) and the proposals waiting on it |
+| `search_notes` | Notes with every word of the query in their title, description, tags or text, with matching lines |
+| `note_graph` | Links out and in, tags, keywords and graph keywords, notes that share a tag |
+| `propose_edit` | A proposal: the whole new text, or find/replace edits; answers its hunks and lint issues. Nothing is written (see Proposals). |
+| `add_comment` | A comment on a note, or on one of its blocks |
+| `list_assets` | The assets under `public/notes` and the notes that use them |
+
+- **Change request.** Every note tool takes `cr`, the change request's
+  slug; a run's token holds it to its own. Main (`_main`) is refused, as
+  is a change request that does not exist. Paths go through the path
+  policy (`server/files/studio-files.ts`, the file API's reads and writes).
+- **Roles.** A tool marked `write` (`propose_edit`, `create_cr`) is
+  refused to a reviewer run and to a reader; the others are open to anyone
+  who may read. A reviewer comments instead of proposing.
+- **Who.** From the bearer token: a run's (`server/mcp/grants.ts`, made
+  when the run starts, dropped when it ends), or with sign-in on, a
+  person's agent token, made with `POST /api/mcp/tokens` and acting with
+  their role until they clear it or their session ends. With sign-in off a
+  request without a token acts for the one person of this machine, like
+  the rest of the API.
+- **Terminal agents.** With the Studio open: `claude mcp add --transport
+  http notes-studio http://127.0.0.1:4310/api/mcp` (add `--header
+  "Authorization: Bearer <token>"` with sign-in on), or the stdio bridge,
+  `node tools/notes-studio/server/mcp/stdio.ts` with `STUDIO_MCP_URL` and
+  `STUDIO_MCP_TOKEN` set.
+- **More tools.** A tool is a `StudioTool` (`server/mcp/tool.ts`): a name,
+  a zod input, `read` or `write`, and `run(args, ctx)` with the change
+  request's worktree and its files. The diagram tools (#82) mount here.
+
+## Proposals
+
+An edit an agent proposes is kept against the change request, never
+written into the note until a person accepts it (`server/proposals/`, in
+`<STUDIO_HOME>/proposals/<slug>/`, outside the branch; a discarded change
+request's go with it).
+
+- **Hunks.** The note is split into blocks as the editor splits them (the
+  frontmatter first), the proposed text too, and the two are aligned
+  (`src/diff/align.ts`, shared with the diff view). Each stretch between
+  two unchanged blocks that differs is a hunk: what it removes, spacing
+  included, and what it adds. Accepting every hunk gives exactly the text
+  the agent sent.
+- **Stale.** A hunk applies where its own blocks still are, word for word,
+  even after edits elsewhere or to its neighbours (they only break a tie).
+  Once its own blocks changed it is stale: **Rebase** sets it on what is
+  now between its two neighbours (so it replaces that), **Drop** gives it
+  up.
+- **Accept.** Writes the hunks where they are now, under the notes lock,
+  from the mtime it read; the open editor merges the change like any edit
+  on disk. Hunks are accepted one by one or all at once; a set that would
+  leave the note unparsable is refused.
 
 ## Diff
 
@@ -1094,8 +1179,8 @@ it; with edits waiting, the page asks whether to load the disk's version or
 keep its own. On main, or for a reader, the editor only shows.
 
 Agents change diagrams through the Studio MCP server's `diagram_*` tools
-(`server/mcp/diagram-tools.ts`; the MCP host that mounts them,
-`server/mcp/registry.ts` at `/api/mcp`, comes with #85):
+(`server/mcp/diagram-tools.ts`, mounted at `/api/mcp` beside the note
+tools):
 `diagram_create`, `diagram_add_node`, `diagram_connect`, `diagram_move`,
 `diagram_set_note`, `diagram_remove_node` and `diagram_layout` write through
 `ctx.files` with the mtime they read, so a save made meanwhile is refused,

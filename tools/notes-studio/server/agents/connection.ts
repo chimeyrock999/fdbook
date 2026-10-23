@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { Readable, Writable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 import {
   client,
   methods,
@@ -7,6 +8,7 @@ import {
   PROTOCOL_VERSION,
   RequestError,
   type PromptResponse,
+  type McpServer,
   type RequestPermissionRequest,
   type SessionConfigOption,
   type SessionUpdate,
@@ -25,6 +27,8 @@ export type AgentHooks = {
   write: (path: string, content: string) => Promise<void>;
   // Resolves the option picked, or null to reject.
   ask: (request: RequestPermissionRequest) => Promise<string | null>;
+  // Settles when the prompt may go: the run's start is recorded (watch.ts).
+  ready?: Promise<void>;
 };
 
 export type AgentProcess = {
@@ -50,15 +54,34 @@ export function modelOf(options: SessionConfigOption[] | null | undefined): stri
   return choices.find((choice) => choice.value === model.currentValue)?.name ?? model.currentValue;
 }
 
+// The Studio's MCP server for one run: where it is and the run's token
+// (mcp/grants.ts).
+export type StudioMcp = { url: string; token: string };
+
+const STDIO_BRIDGE = fileURLToPath(new URL('../mcp/stdio.ts', import.meta.url));
+
+// How the agent reaches the Studio's MCP server: over HTTP when it says it
+// can, else through the stdio bridge, which every ACP agent can start.
+export function mcpServersFor(mcp: StudioMcp | null, http: boolean): McpServer[] {
+  if (mcp === null) return [];
+  if (http) return [{ type: 'http', name: 'notes-studio', url: mcp.url, headers: [{ name: 'Authorization', value: `Bearer ${mcp.token}` }] }];
+  return [{
+    name: 'notes-studio',
+    command: process.execPath,
+    args: ['--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', STDIO_BRIDGE],
+    env: [{ name: 'STUDIO_MCP_URL', value: mcp.url }, { name: 'STUDIO_MCP_TOKEN', value: mcp.token }],
+  }];
+}
+
 // "Always" answers outlive the run (the agent may write them to its own
 // settings), so the Studio does not offer them.
 export const runOptions = (options: PermissionOption[]) => options.filter((option) => option.kind !== 'allow_always');
 
 // Starts `profile` in `root`, opens a session and sends `prompt`. The
 // Studio is the ACP client: reads and writes go through fs-policy.ts, every
-// permission request through `hooks.ask`, and the process never outlives
-// the prompt.
-export function startAgent(profile: AgentProfile, role: AgentRole, root: string, prompt: string, hooks: AgentHooks): AgentProcess {
+// permission request through `hooks.ask`, the session gets the Studio's MCP
+// server (`mcp`), and the process never outlives the prompt.
+export function startAgent(profile: AgentProfile, role: AgentRole, root: string, prompt: string, hooks: AgentHooks, mcp: StudioMcp | null = null): AgentProcess {
   const { command, args, env } = profile.command(role);
   const child = spawn(command, args, { cwd: root, env: agentEnv(process.env, env), stdio: ['pipe', 'pipe', 'pipe'] });
   let stderr = '';
@@ -102,14 +125,15 @@ export function startAgent(profile: AgentProfile, role: AgentRole, root: string,
   let cancelTimer: NodeJS.Timeout | undefined;
 
   const talk = async () => {
-    await agent.request(methods.agent.initialize, {
+    const { agentCapabilities } = await agent.request(methods.agent.initialize, {
       protocolVersion: PROTOCOL_VERSION,
       clientCapabilities: { fs: { readTextFile: true, writeTextFile: role === 'author' }, terminal: false },
       clientInfo: { name: 'notes-studio', version: '0' },
     });
     let session;
     try {
-      session = await agent.request(methods.agent.session.new, { cwd: root, mcpServers: [], _meta: profile.sessionMeta?.(role) ?? null });
+      const mcpServers = mcpServersFor(mcp, agentCapabilities?.mcpCapabilities?.http === true);
+      session = await agent.request(methods.agent.session.new, { cwd: root, mcpServers, _meta: profile.sessionMeta?.(role) ?? null });
     } catch (error) {
       if (error instanceof RequestError && error.code === RequestError.authRequired().code) {
         throw new Error(`${profile.name} is not signed in: sign in once in a terminal, then run again`, { cause: error });
@@ -123,6 +147,7 @@ export function startAgent(profile: AgentProfile, role: AgentRole, root: string,
     }
     const model = modelOf(session.configOptions);
     if (model !== null) hooks.model(model);
+    await hooks.ready;
     return agent.request(methods.agent.session.prompt, { sessionId, prompt: [{ type: 'text', text: prompt }] });
   };
 

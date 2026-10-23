@@ -11,9 +11,16 @@ export function requiredRole(method: string, pathname: string): Role {
   const rest = /^\/cr\/[^/]+(\/.*)$/.exec(pathname)?.[1] ?? pathname;
   if (rest !== '/api' && !rest.startsWith('/api/')) return 'none';
   if (pathname === '/api/session' || pathname.startsWith('/api/session/')) return 'none';
+  // The Studio's MCP server takes a bearer token instead of a session
+  // (mcp/http.ts), and refuses a request without a good one itself.
+  if (pathname === '/api/mcp') return 'none';
+  // A token acts with its owner's role, so a reader may make one to read with.
+  if (pathname === '/api/mcp/tokens') return 'reader';
   if (method === 'GET' || method === 'HEAD') return 'reader';
   // Linting reads a draft and writes nothing.
   if (method === 'POST' && rest === '/api/lint') return 'reader';
+  // Keeping or reverting what a run changed is an edit like any other.
+  if (/^\/api\/agents\/runs\/[^/]+\/changes$/.test(rest)) return 'writer';
   // An agent runs commands as the person who started the Studio, with their
   // logins: starting one, answering it and stopping it is an admin's.
   if (rest.startsWith('/api/agents/')) return 'admin';

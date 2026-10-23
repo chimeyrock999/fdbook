@@ -25,6 +25,7 @@ try {
     auth,
   });
   console.log(`Notes Studio: ${studio.url}`);
+  console.log(`MCP server for agents: ${studio.url}api/mcp`);
   if (auth === null) console.log('Sign-in is off: anyone who can open this address can edit and publish.');
   else if (auth.config.flows.includes('web')) console.log(`GitHub sign-in: the OAuth App's callback URL must be ${studio.url}${CALLBACK_PATH.slice(1)}`);
 } catch (error) {

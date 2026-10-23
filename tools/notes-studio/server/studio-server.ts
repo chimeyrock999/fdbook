@@ -1,3 +1,4 @@
+import { rm } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { SYNC_ENDPOINT } from '@fumadocs-editor/core/sync';
@@ -9,13 +10,18 @@ import { createAuth, type AuthOptions } from './auth/auth.ts';
 import { DEFAULT_STUDIO_HOST, DEFAULT_STUDIO_PORT, repoRoot, studioRoot } from './config.ts';
 import { createChangeRequestsApi } from './cr/api.ts';
 import { openChangeRequests, type ChangeRequestOptions, type ChangeRequests } from './cr/manager.ts';
-import { apiNotFound, pathnameOf } from './http.ts';
+import { apiNotFound, HttpError, pathnameOf } from './http.ts';
+import { createRunGrants } from './mcp/grants.ts';
+import { createMcpApi } from './mcp/http.ts';
+import { diagramTools } from './mcp/diagram-tools.ts';
+import { createNoteTools } from './mcp/note-tools.ts';
+import type { StudioTool } from './mcp/tool.ts';
 import { createIconsApi } from './icons/api.ts';
 import { createBuildReader, ghCheckRun } from './preview/check-runs.ts';
 import { createBranchPullRequestReader, ghPullRequest } from './preview/pull-request.ts';
 import { createRequestListener, routeUpgrades } from './routing.ts';
 import { ownHosts } from './security/guard.ts';
-import { createWorkspace, createWorkspaceRouter } from './workspace.ts';
+import { commentsFileOf, createWorkspace, createWorkspaceRouter, proposalsDirOf } from './workspace.ts';
 export type StudioServer = {
   server: Server;
   url: string;
@@ -40,13 +46,15 @@ function closeServer(server: Server) {
 // access to the repository allows (auth/auth.ts). Agents (`agents`, the
 // Studio's profiles by default) run only in change requests, their
 // transcripts in the Studio home (agents/).
-export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEFAULT_STUDIO_PORT, root = repoRoot, changeRequests, auth: authOptions = null, agents = PROFILES }: {
+export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEFAULT_STUDIO_PORT, root = repoRoot, changeRequests, auth: authOptions = null, agents = PROFILES, tools = [] }: {
   host?: string;
   port?: number;
   root?: string;
   changeRequests?: ChangeRequestOptions;
   auth?: AuthOptions | null;
   agents?: AgentProfile[];
+  // MCP tools mounted beside the note tools (mcp/tool.ts).
+  tools?: StudioTool[];
 } = {}): Promise<StudioServer> {
   const server = createServer();
   // Bind first so a busy port fails before Vite starts its watcher.
@@ -90,15 +98,45 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
   const main = createWorkspace(crs?.mainRoot ?? root, hosts, { readOnly: crs !== null, preview });
   const transcripts = changeRequests ? createTranscripts(changeRequests.home) : null;
   const shared = [createIconsApi(), createAgentsInfoApi(createAgentInfo(agents), transcripts), apiNotFound];
-  const workspaces = createWorkspaceRouter(hosts, (slug) => crs?.worktreeOf(slug) ?? Promise.resolve(null), shared, preview, transcripts && { profiles: agents, transcripts });
+  // The Studio's MCP server (mcp/http.ts): each agent run gets a token for it.
+  const grants = createRunGrants();
+  const mcpUrl = `http://${hosts[0]}/api/mcp`;
+  const workspaces = createWorkspaceRouter(
+    hosts,
+    (slug) => crs?.worktreeOf(slug) ?? Promise.resolve(null),
+    shared,
+    preview,
+    transcripts && changeRequests ? { profiles: agents, transcripts, home: changeRequests.home, mcp: { url: mcpUrl, grants } } : null,
+  );
   // A discarded change request's agents, watchers and sync close before its
-  // worktree goes; its transcripts go with it, so a new one with the slug starts empty.
+  // worktree goes; its transcripts, proposals and comments go with it, so a
+  // new one with the slug starts empty.
   crs?.onDiscard(async (slug) => {
     await workspaces.close(slug);
     await transcripts?.remove(slug);
+    if (changeRequests) {
+      await rm(proposalsDirOf(changeRequests.home, slug), { recursive: true, force: true });
+      await rm(commentsFileOf(changeRequests.home, slug), { force: true });
+    }
+  });
+  const reviewOf = async (slug: string) => {
+    const review = (await workspaces.open(slug))?.review ?? null;
+    if (review === null) throw new HttpError(404, `no such change request: ${slug}`);
+    return review;
+  };
+  const mcp = createMcpApi({
+    tools: createNoteTools({
+      proposalsOf: async (slug) => (await reviewOf(slug)).proposals,
+      commentsOf: async (slug) => (await reviewOf(slug)).comments,
+      modelOf: (slug, runId) => workspaces.peek(slug)?.runs?.modelOf(runId) ?? null,
+    }).concat(diagramTools, tools),
+    grants,
+    auth,
+    crs,
+    workspace: async (slug) => (crs === null ? null : workspaces.open(slug)),
   });
 
-  server.on('request', createRequestListener(hosts, [workspaces.handle, createChangeRequestsApi(crs), ...main.handlers, ...shared], vite.middlewares, auth));
+  server.on('request', createRequestListener(hosts, [workspaces.handle, createChangeRequestsApi(crs), mcp, ...main.handlers, ...shared], vite.middlewares, auth));
   routeUpgrades(server, hosts, (viteHmr) => [
     {
       matches: (request) => pathnameOf(request) === SYNC_ENDPOINT,
