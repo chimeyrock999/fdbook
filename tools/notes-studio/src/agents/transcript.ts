@@ -15,7 +15,7 @@ export type TranscriptItem =
   | { kind: 'thought'; key: string; text: string }
   | { kind: 'tool'; key: string; call: ToolCallUpdate }
   | { kind: 'plan'; key: string; entries: PlanEntry[] }
-  | { kind: 'ask'; key: string; ask: PermissionAsk; answer: { optionId: string | null; by: string | null } | null }
+  | { kind: 'ask'; key: string; ask: PermissionAsk; at: number; answer: { optionId: string | null; by: string | null } | null }
   | { kind: 'write'; key: string; path: string }
   // A process took the session up after the first: only shown then.
   | { kind: 'session'; key: string; how: Exclude<SessionStart, 'new'> }
@@ -49,7 +49,7 @@ export function transcriptOf(events: ConversationEvent[]): TranscriptItem[] {
     } else if (event.type === 'end') {
       items.push({ kind: 'turn-end', key: key('turn-end'), turn: event.turn, index: turns, ms: event.at - turnAt });
     } else if (event.type === 'permission') {
-      const item = { kind: 'ask' as const, key: `ask-${event.ask.id}`, ask: event.ask, answer: null };
+      const item = { kind: 'ask' as const, key: `ask-${event.ask.id}`, ask: event.ask, at: event.at, answer: null };
       asks.set(event.ask.id, item);
       items.push(item);
     } else if (event.type === 'answer') {

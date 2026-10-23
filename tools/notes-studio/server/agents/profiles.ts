@@ -68,7 +68,7 @@ function installed(command: string, args: string[], install: string) {
 
 // Commands an author must not run: what reaches GitHub is a person's click.
 // Best effort: `git -C . push` or `sh -c "git push"` do not match, so the
-// permission dialog is the fence; these only spare it the obvious asks.
+// question in the chat is the fence; these only spare it the obvious asks.
 // Notes are not edited in place either: an author proposes (the Studio's
 // propose_edit), and a person accepts. An Edit rule covers every file tool
 // (Edit, MultiEdit, Write); the path is the worktree's, the session's cwd.

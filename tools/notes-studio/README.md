@@ -103,9 +103,11 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
   - `agents/` is the header's agent control, the agent panel (a chat, its
-    composer, what each turn changed with Keep/Revert, the chat history),
-    agent replies as markdown, the permission dialog and the Connect an
-    agent dialog (see Agents).
+    composer, an agent's questions, what each turn changed with
+    Keep/Revert, the chat history), agent replies as markdown and the
+    Connect an agent dialog (see Agents).
+  - `actions/` is what every button that writes to the server uses: its
+    busy state, its spinner and the toasts (see Write actions).
   - `suggestions/` shows agents' proposals in the editor, with their
     comments (see Proposals).
   - `plugins/` holds the editor plugins (see below).
@@ -866,7 +868,7 @@ without its own `STUDIO_*`, `GH_*` and `GITHUB_*` variables.
 
 | Agent | Started with | Fenced in by |
 | --- | --- | --- |
-| Claude Code | `@agentclientprotocol/claude-agent-acp`, pinned in `package.json` | the `default` mode (it asks before edits and commands, whatever your `permissions.defaultMode`); `git push` and `gh` denied to an author, best effort (`git -C . push` does not match: the dialog is the fence); edits and the shell denied to a reviewer; bypass mode off |
+| Claude Code | `@agentclientprotocol/claude-agent-acp`, pinned in `package.json` | the `default` mode (it asks before edits and commands, whatever your `permissions.defaultMode`); `git push` and `gh` denied to an author, best effort (`git -C . push` does not match: the question in the chat is the fence); edits and the shell denied to a reviewer; bypass mode off |
 | Codex | `@agentclientprotocol/codex-acp`, pinned | `workspace-write` sandbox (worktree only, no network) for an author, `read-only` for a reviewer |
 | omp | `omp acp` (installed by you) | its own permission prompts |
 | Hermes Agent | `hermes acp` (installed with its `[acp]` extra) | the toolsets in your `~/.hermes/config.yaml` (the Studio warns while `terminal` or `code_execution` is on) |
@@ -953,11 +955,15 @@ are listed greyed, with how to install them (`GET /api/agents`).
   (`mcpCapabilities.http`), else through the stdio bridge, with a token
   for the chat's agent process that ends with it and acts only while a
   turn goes on (MCP calls it the run's `runId`: the chat's id).
-- **Permission.** `session/request_permission` opens one dialog for every
-  agent with the agent's own options, less "always" ones, which would
-  outlive the chat. Closing it rejects; so does the server when nobody
-  answers within 5 minutes. Pushes, pull requests and GitHub replies are
-  never the agent's: they stay a person's click.
+- **Permission.** `session/request_permission` asks in the chat, with the
+  agent's own options, less "always" ones, which would outlive the chat:
+  a card in the thread, with what it would run or touch and the time
+  left. Nothing goes over the page. A new question opens the agent panel
+  on its chat; with another chat shown, a strip over it says where one
+  waits, and the header's Agent button counts the questions waiting. The
+  server rejects when nobody answers within 5 minutes. Pushes, pull
+  requests and GitHub replies are never the agent's: they stay a
+  person's click.
 - **Processes.** At most three agent processes at once per change request
   (`server/agents/sessions.ts`). One stays up between turns and stops
   after 10 minutes idle; when a fourth chat needs a place, the one idle
@@ -1061,7 +1067,10 @@ request's go with it).
   through them, and accepts or rejects them all (stale ones wait for a
   rebase). In Visual each hunk's blocks are struck through where they are
   and its card follows, drawn as the diff view draws added blocks, with
-  ✓ and ✕; a stale card offers Rebase and Drop. In Source the lines it
+  ✓ and ✕; a stale card offers Rebase and Drop. One decision at a time
+  per note, the bar's and the cards' alike; an accepted card stays,
+  marked Accepting, until its text is in the editor (or 3 seconds), so it
+  never goes before the text comes. In Source the lines it
   replaces are marked and what it puts there follows them. Hunks are
   placed on the text in the editor (the server's own placement, run in
   the page), so typing never waits for a save; a stale hunk is shown where
@@ -1364,6 +1373,37 @@ Plugins today:
   without a value, so write `plate="true"` to see it. `HtmlEmbed` shows no
   live page, since the file API serves HTML assets sandboxed without
   scripts.
+
+## Write actions
+
+Every button or dialog that writes to the server follows one pattern
+(`src/actions/`, #138), so nothing goes twice and nothing looks stuck:
+
+- **One at a time.** `useBusy()` runs a component's write: a second click,
+  Enter pressed again or Escape while it is out does nothing. Its `run`
+  holds a ref, so even two clicks before React renders send one request.
+  Actions that touch the same thing share one `useBusy` (the bar and the
+  cards of a note's suggestions, Keep and Revert of a file).
+- **It shows.** `PendingButton` is disabled at once, `aria-busy`, and
+  after 150 ms shows a spinner and what it is doing ("Sending…",
+  "Accepting…", "Creating…"); a request quicker than that never flashes.
+  An icon button's icon becomes the spinner.
+- **Dialogs wait.** `Dialog` takes `busy`: while the request is out it
+  neither closes (Escape, the backdrop, Cancel) nor sends again. It stays
+  open when the request fails, so it can be tried again.
+- **Errors are toasts.** A failed action says why in the toast stack at
+  the top right (`toast.error`, `ToastStack`): `role="alert"`, gone after
+  8 seconds or on Dismiss, one copy of a message while it is shown. The
+  stack sits on `<body>`, over a dialog, and a dialog leaves it out of
+  what it makes inert. What fails to load stays where the content would
+  be (a diff, a history, a list), since the pane has nothing else to show.
+- **Done already is not an error.** A repeat the server refuses as done
+  (409 on an answer or a cancel another click or page sent first) shows
+  nothing.
+- **The chat shows a message at once.** The composer empties as it
+  sends; the message shows in the thread, marked Sending, until the
+  stream brings it, and comes back to the box if it did not go. Until the
+  agent says or does anything after it, the thread says it is thinking.
 
 ## Checks
 

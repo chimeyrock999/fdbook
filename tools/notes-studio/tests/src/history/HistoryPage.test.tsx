@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { NOW, type Comparison, type HistoryClient, type PageHistory } from '../../../src/api/history';
+import { ToastStack } from '../../../src/actions/ToastStack';
 import { HistoryPage } from '../../../src/history/HistoryPage';
 
 afterEach(cleanup);
@@ -144,6 +145,7 @@ describe('HistoryPage', () => {
   it('keeps the page when a restore is refused, and says why', async () => {
     const user = userEvent.setup();
     const { onRestored } = setup({ restore: () => Promise.reject(new Error(`${PAGE} changed on disk since it was read`)) });
+    render(<ToastStack />);
     await user.click(await (await versions()).findByText('docs: first'));
     await user.click(screen.getByRole('button', { name: 'Restore' }));
     await user.click(screen.getByRole('button', { name: 'Restore aaaaaaa' }));

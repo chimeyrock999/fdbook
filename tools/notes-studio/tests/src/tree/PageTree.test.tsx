@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TreeAnswer, TreeClient, TreeFolder, TreeRequest } from '../../../src/api/tree';
 import { treeMarks } from '../../../src/changes/marks';
+import { ToastStack } from '../../../src/actions/ToastStack';
 import { PageTree } from '../../../src/tree/PageTree';
 
 const root: TreeFolder = {
@@ -47,7 +48,7 @@ const loaded = (ok = true) => vi.fn(() => Promise.resolve(ok));
 function setup(answer: Parameters<typeof fakeClient>[0] = () => ({ changes: [], open: null }), { readOnly = false } = {}) {
   const { client, change } = fakeClient(answer);
   const props = { onOpen: vi.fn(), onRenamed: vi.fn(), onChanged: loaded() };
-  render(<PageTree root={root} client={client} active="guide/two.mdx" readOnly={readOnly} {...props} />);
+  render(<><PageTree root={root} client={client} active="guide/two.mdx" readOnly={readOnly} {...props} /><ToastStack /></>);
   return { change, ...props };
 }
 
@@ -154,6 +155,21 @@ describe('PageTree', () => {
     expect(menu.textContent).toContain('no entry of its own in guide/meta.yaml');
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('waits for a move and the tree it reads after, so a second change cannot go on the old one', async () => {
+    let reloaded: (ok: boolean) => void = () => undefined;
+    const { change, onChanged } = setup();
+    onChanged.mockImplementationOnce(() => new Promise<boolean>((resolve) => { reloaded = resolve; }));
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for One' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Move down' }));
+    await waitFor(() => { expect(onChanged).toHaveBeenCalledTimes(1); });
+    const more = screen.getByRole<HTMLButtonElement>('button', { name: 'Actions for Two' });
+    expect(more.disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Actions for One' }).closest('[aria-busy="true"]')).not.toBeNull();
+    reloaded(true);
+    await waitFor(() => { expect(more.disabled).toBe(false); });
+    expect(change).toHaveBeenCalledTimes(1);
   });
 
   it('reports a move the server refused', async () => {

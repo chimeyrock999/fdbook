@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useBusy } from '../actions/busy';
+import { PendingButton } from '../actions/PendingButton';
 import { errorOf, readJson } from '../api/json';
 import { studioFetch } from '../api/session';
 import { useCopy } from '../clipboard';
@@ -26,31 +28,25 @@ export function ConnectDialog({ cr, onClose }: { cr: string | null; onClose: () 
   const url = `${window.location.origin}/api/mcp`;
   const [client, setClient] = useState<Client>('claude');
   const [token, setToken] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const action = useBusy();
   const [note, setNote] = useState<string | null>(null);
   const tokens = (method: 'POST' | 'DELETE') =>
     studioFetch('/api/mcp/tokens', { method, headers: { 'Content-Type': 'application/json' }, body: method === 'POST' ? '{}' : undefined });
   const mint = () => {
-    setBusy(true);
     setNote(null);
-    tokens('POST')
-      .then(async (response) => {
-        if (!response.ok) throw await errorOf(response);
-        setToken((await readJson<{ token: string }>(response)).token);
-      })
-      .catch((reason: unknown) => { setNote((reason as Error).message); })
-      .finally(() => { setBusy(false); });
+    void action.run(async () => {
+      const response = await tokens('POST');
+      if (!response.ok) throw await errorOf(response);
+      setToken((await readJson<{ token: string }>(response)).token);
+    }, 'mint');
   };
   const endAll = () => {
-    setBusy(true);
-    tokens('DELETE')
-      .then(async (response) => {
-        if (!response.ok) throw await errorOf(response);
-        setToken(null);
-        setNote('Every agent token of yours has ended.');
-      })
-      .catch((reason: unknown) => { setNote((reason as Error).message); })
-      .finally(() => { setBusy(false); });
+    void action.run(async () => {
+      const response = await tokens('DELETE');
+      if (!response.ok) throw await errorOf(response);
+      setToken(null);
+      setNote('Every agent token of yours has ended.');
+    }, 'end');
   };
 
   return (
@@ -66,7 +62,7 @@ export function ConnectDialog({ cr, onClose }: { cr: string | null; onClose: () 
         <div className="grid gap-1">
           <span className="studio-field-label">Agent token</span>
           {token === null ? (
-            <span><button type="button" className="studio-button studio-button-primary" disabled={busy} onClick={mint}>Create token</button></span>
+            <span><PendingButton className="studio-button studio-button-primary" pending={action.is('mint')} pendingLabel="Creating…" disabled={action.busy} onClick={mint}>Create token</PendingButton></span>
           ) : <CopyRow id="studio-connect-token" text={token} />}
           <span className="studio-cr-hint">It acts as you, with your access ({state.role ?? 'none'}), until you sign out or end it. It is shown once.</span>
         </div>
@@ -90,7 +86,7 @@ export function ConnectDialog({ cr, onClose }: { cr: string | null; onClose: () 
       </div>
       {note !== null && <p role="status" className="studio-cr-hint">{note}</p>}
       <div className="flex justify-end gap-2">
-        {signedIn && <button type="button" className="studio-button" data-tone="error" disabled={busy} onClick={endAll}>End all my tokens</button>}
+        {signedIn && <PendingButton className="studio-button" data-tone="error" pending={action.is('end')} pendingLabel="Ending…" disabled={action.busy} onClick={endAll}>End all my tokens</PendingButton>}
         <button type="submit" className="studio-button studio-button-primary">Done</button>
       </div>
     </Dialog>

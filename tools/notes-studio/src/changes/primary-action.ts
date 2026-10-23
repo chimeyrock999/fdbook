@@ -10,6 +10,8 @@ export type PrimaryAction = {
   disabled: boolean;
   // View PR: the pull request.
   href?: string;
+  // Its request is out (a push): it waits, and shows it.
+  pending?: boolean;
 };
 
 // The header's one main action for a change request (#20): Commit → Preview
@@ -30,7 +32,7 @@ export function primaryActionOf({ uncommitted, preview, unsaved, busy }: {
   const count = preview.unpushed.length;
   // A push waits for the open note to save, as a commit does.
   const waiting = (action: PrimaryAction): PrimaryAction => {
-    if (busy) return { ...action, label: 'Pushing…', disabled: true };
+    if (busy) return { ...action, label: 'Pushing…', disabled: true, pending: true };
     return unsaved === null ? action : { ...action, title: `Saving ${unsaved}…`, disabled: true };
   };
   const { pr } = preview;

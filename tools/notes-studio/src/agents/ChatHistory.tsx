@@ -1,5 +1,6 @@
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { Spinner } from '../actions/PendingButton';
 import type { Conversation } from '../api/agents';
 import { AgentLogo } from './AgentLogo';
 import { ConfirmPopover } from './ConfirmPopover';
@@ -11,7 +12,8 @@ type Confirming = { ids: string[]; anchor: HTMLElement };
 // The change request's chats, last active first, filtered by their first
 // message. One opens in the panel, to read and go on with. `onDelete` (an
 // admin's) deletes one, or several picked with Select; a chat whose agent
-// is answering is neither deleted nor picked.
+// is answering is neither deleted nor picked. A chat being deleted shows it
+// and waits: nothing else deletes it again.
 export function ChatHistory({ conversations, current, onOpen, onDelete }: {
   conversations: Conversation[];
   current: string | null;
@@ -22,8 +24,9 @@ export function ChatHistory({ conversations, current, onOpen, onDelete }: {
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState<Confirming | null>(null);
+  const [deleting, setDeleting] = useState<ReadonlySet<string>>(new Set());
   const shown = conversations.filter((conversation) => conversation.prompt.toLowerCase().includes(filter.trim().toLowerCase()));
-  const pickedNow = [...picked].filter((id) => conversations.some((conversation) => conversation.id === id && conversation.status !== 'running'));
+  const pickedNow = [...picked].filter((id) => !deleting.has(id) && conversations.some((conversation) => conversation.id === id && conversation.status !== 'running'));
 
   const pick = (id: string, on: boolean) => {
     setPicked((before) => {
@@ -39,7 +42,12 @@ export function ChatHistory({ conversations, current, onOpen, onDelete }: {
   };
   const remove = (ids: string[]) => {
     setConfirming(null);
-    void onDelete?.(ids).then(() => { if (ids.length > 1) stopSelecting(); });
+    if (onDelete === null) return;
+    setDeleting((before) => new Set([...before, ...ids]));
+    void onDelete(ids).finally(() => {
+      setDeleting((before) => new Set([...before].filter((id) => !ids.includes(id))));
+      if (ids.length > 1) stopSelecting();
+    });
   };
 
   return (
@@ -53,15 +61,16 @@ export function ChatHistory({ conversations, current, onOpen, onDelete }: {
       <ul>
         {shown.map((conversation) => {
           const running = conversation.status === 'running';
+          const gone = deleting.has(conversation.id);
           const cost = costLabel(conversation);
           return (
-            <li key={conversation.id} className="studio-agent-history-row" data-selecting={selecting || undefined} aria-current={conversation.id === current || undefined}>
+            <li key={conversation.id} className="studio-agent-history-row" data-selecting={selecting || undefined} data-busy={gone || undefined} aria-current={conversation.id === current || undefined}>
               {selecting && (
                 <input
                   type="checkbox"
                   aria-label={`Pick: ${conversation.prompt}`}
-                  checked={picked.has(conversation.id) && !running}
-                  disabled={running}
+                  checked={picked.has(conversation.id) && !running && !gone}
+                  disabled={running || gone}
                   title={running ? 'The agent is answering' : undefined}
                   onChange={(event) => { pick(conversation.id, event.target.checked); }}
                 />
@@ -82,11 +91,12 @@ export function ChatHistory({ conversations, current, onOpen, onDelete }: {
                   type="button"
                   className="studio-icon-button"
                   aria-label={`Delete: ${conversation.prompt}`}
-                  title={running ? 'Cancel the turn first' : 'Delete'}
-                  disabled={running}
+                  title={running ? 'Cancel the turn first' : gone ? 'Deleting…' : 'Delete'}
+                  disabled={running || gone}
+                  aria-busy={gone || undefined}
                   onClick={(event) => { setConfirming({ ids: [conversation.id], anchor: event.currentTarget }); }}
                 >
-                  <Trash2 size={14} />
+                  {gone ? <Spinner size={14} /> : <Trash2 size={14} />}
                 </button>
               )}
             </li>

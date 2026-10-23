@@ -28,9 +28,10 @@ function AgentItem({ agent, checked, onPick }: { agent: AgentInfo; checked: bool
 }
 
 // The header's agent control: a button that shows or hides the agent panel,
-// with the number of agents answering, joined to the picker of the agent each
-// role runs. Agents that cannot run here are listed, greyed, with why.
-export function AgentControl({ agents, live }: { agents: Agents; live: number }) {
+// with the number of agents answering (or of their questions waiting for an
+// answer, `asks`), joined to the picker of the agent each role runs. Agents
+// that cannot run here are listed, greyed, with why.
+export function AgentControl({ agents, live, asks = 0 }: { agents: Agents; live: number; asks?: number }) {
   const menu = useMenu();
   const [connecting, setConnecting] = useState(false);
   const author = pickOf(agents.agents, agents.picks, 'author');
@@ -47,7 +48,9 @@ export function AgentControl({ agents, live }: { agents: Agents; live: number })
       >
         <Bot size={15} aria-hidden />
         <span className="max-md:hidden">Agent</span>
-        {live > 0 && <span className="studio-agent-count" aria-label={`${String(live)} running`}>{live}</span>}
+        {asks > 0 ? (
+          <span className="studio-agent-count" data-tone="warning" aria-label={asks === 1 ? '1 question waiting' : `${String(asks)} questions waiting`}>{asks}</span>
+        ) : live > 0 && <span className="studio-agent-count" aria-label={`${String(live)} running`}>{live}</span>}
       </button>
       <button
         type="button"
@@ -72,7 +75,7 @@ export function AgentControl({ agents, live }: { agents: Agents; live: number })
       </button>
       {menu.anchor !== null && (
         <PopupMenu anchor={menu.anchor} label="Agents" onClose={menu.close}>
-          {agents.agents === null && <p className="studio-agent-menu-note">{agents.error ?? 'Looking for agents…'}</p>}
+          {agents.agents === null && <p className="studio-agent-menu-note">{agents.listError ?? 'Looking for agents…'}</p>}
           {agents.agents !== null && AGENT_ROLES.map((role, index) => (
             <div key={role} role="group" aria-label={ROLE_LABELS[role].name} className="studio-agent-menu-group">
               {index > 0 && <hr />}

@@ -3,6 +3,7 @@ import { act, cleanup, render, renderHook, screen } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Build, Preview, PreviewClient } from '../../../src/api/preview';
+import { ToastStack } from '../../../src/actions/ToastStack';
 import { PreviewSection } from '../../../src/changes/PreviewSection';
 import { usePreview } from '../../../src/changes/usePreview';
 import { usePush } from '../../../src/changes/usePush';
@@ -57,17 +58,13 @@ describe('PreviewSection', () => {
     expect(screen.getByRole('status').textContent).toBe('Pushed 3 commits. Cloudflare usually starts a build within a minute.');
   });
 
-  it("keeps the push's error until there is something new to push, and says first that a note is saving", async () => {
-    const { rerender } = setup(fresh, { push: vi.fn(() => Promise.reject(new Error('The remote has commits this change request does not: rejected'))) });
+  it('says why a push failed in a toast, and goes on saying what a push would do', async () => {
+    render(<ToastStack />);
+    setup(fresh, { push: vi.fn(() => Promise.reject(new Error('The remote has commits this change request does not: rejected'))) });
     await userEvent.click(pushButton());
-    expect(screen.getByRole('alert').textContent).toBe('The remote has commits this change request does not: rejected');
-    rerender(fresh, 'streaming/sinks.mdx');
-    expect(screen.getByRole('status').textContent).toBe('Saving streaming/sinks.mdx…');
-    rerender(fresh, null);
-    expect(screen.getByRole('alert').textContent).toMatch(/^The remote has commits/);
-    rerender({ ...fresh, unpushed: ['z9', ...fresh.unpushed] });
-    expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.getByRole('status').textContent).toBe('Pushes 4 commits to origin; Cloudflare builds the preview. No pull request is opened.');
+    expect((await screen.findByRole('alert')).textContent).toContain('The remote has commits this change request does not: rejected');
+    expect(screen.getByRole('status').textContent).toBe('Pushes 3 commits to origin; Cloudflare builds the preview. No pull request is opened.');
+    expect(pushButton().disabled).toBe(false);
   });
 
   it('says when the preview could not be read again, over the last one read', () => {

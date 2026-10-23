@@ -21,6 +21,7 @@
 @import './agents/agents.css';
 @import './agents/markdown.css';
 @import './suggestions/suggestions.css';
+@import './actions/actions.css';
 /* Site components whose classes the Studio draws with (src/plugins). */
 @source '../../../components/graph-objects.tsx';
 
