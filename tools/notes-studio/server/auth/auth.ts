@@ -65,6 +65,11 @@ export function createAuth(options: AuthOptions | null, port: number, host = `12
         return Promise.resolve(true);
       },
       gateUpgrade: (() => Promise.resolve(null)) as (request: IncomingMessage, needed: Role) => Promise<number | null>,
+      // Agent tokens are for a Studio with sign-in: without it an agent on
+      // this machine needs none, like any other client.
+      issueAgentToken: (() => Promise.reject(new HttpError(409, 'Sign-in is off in this Studio: agents need no token.'))) as (request: IncomingMessage) => Promise<string>,
+      clearAgentTokens: (() => Promise.reject(new HttpError(409, 'Sign-in is off in this Studio: agents need no token.'))) as (request: IncomingMessage) => Promise<void>,
+      viewerOfAgentToken: (() => Promise.resolve(null)) as (token: string) => Promise<Viewer | null>,
     };
   }
   const { config, github, repo, roles, sessions, checkEveryMs = CHECK_EVERY_MS } = options;
@@ -263,6 +268,27 @@ export function createAuth(options: AuthOptions | null, port: number, host = `12
 
   return {
     enabled: true,
+    // A bearer token for the signed-in person's own agents (the Studio's MCP
+    // server, mcp/http.ts): it acts as them, with their role read as for a
+    // session, and ends with their session or when they clear it.
+    async issueAgentToken(request: IncomingMessage) {
+      const token = await sessions.addAgentToken(sessionId(request));
+      if (token === null) throw new HttpError(401, 'Sign in to use the Studio.');
+      return token;
+    },
+    async clearAgentTokens(request: IncomingMessage) {
+      await sessions.clearAgentTokens(sessionId(request));
+    },
+    // Who an agent token acts for, or null when it is no token (any more).
+    // Throws when their role cannot be read, as a request would answer 503.
+    async viewerOfAgentToken(token: string): Promise<Viewer | null> {
+      const session = sessions.byAgentToken(token);
+      if (session === null) return null;
+      const { login } = session.user;
+      const role = await roles(login);
+      const current = () => (sessions.byAgentToken(token) === null ? 'none' : (roles.peek(login) ?? role));
+      return { user: session.user, role, current, watch: (onLost) => watch({ id: '', current, onLost }) };
+    },
     // After the Host/Origin guard: answers the sign-in API itself, refuses
     // what the session may not do, and returns false to pass the rest on.
     async gate(request: IncomingMessage, response: ServerResponse) {

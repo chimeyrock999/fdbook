@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { chmod, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import { ASSETS_DIR, NOTES_DIR, resolveWorktreePath, type PathKind } from '../security/paths.ts';
+import { EDITABLE_AREAS, resolveWorktreePath, type PathKind } from '../security/paths.ts';
 
 export type EditableFile = { path: string; kind: PathKind; mtimeMs: number; size: number };
 
@@ -18,7 +18,7 @@ export async function statOrNull(path: string) {
 // that vanish or cannot be read while listing are skipped.
 export async function listEditableFiles(root: string) {
   const paths: string[] = [];
-  for (const area of [NOTES_DIR, ASSETS_DIR]) {
+  for (const area of EDITABLE_AREAS) {
     const entries = await readdir(join(root, area), { recursive: true }).catch(() => []);
     for (const entry of entries) paths.push(`${area}/${entry.split('\\').join('/')}`);
   }

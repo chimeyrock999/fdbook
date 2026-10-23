@@ -14,6 +14,8 @@ describe('classifyPath', () => {
     ['public/notes/data-modeling/star.png', 'asset'],
     ['public/notes/x/diagram.HTML', 'asset'],
     ['public/notes/x/model.glb', 'asset'],
+    ['diagrams/flow.diagram.json', 'diagram'],
+    ['diagrams/data-platform/processing/spark.diagram.json', 'diagram'],
   ])('allows %s as %s', (path, kind) => {
     expect(classifyPath(path)).toBe(kind);
   });
@@ -52,6 +54,16 @@ describe('classifyPath', () => {
     'public/notes/a.constructor',
     'public/notes/a.__proto__',
     'public/notes/a.tostring',
+    // diagrams: only *.diagram.json, not the schema or other files
+    'diagrams/diagram.schema.json',
+    'diagrams/README.md',
+    'diagrams/a.json',
+    'diagrams/a.diagram.json.bak',
+    'diagrams/.diagram.json',
+    'diagrams/.cache/a.diagram.json',
+    'diagrams/../package.json',
+    'diagrams-old/a.diagram.json',
+    'content/notes/a.diagram.json',
   ])('rejects %j', (path) => {
     expect(classifyPath(path)).toBeNull();
   });
@@ -59,7 +71,7 @@ describe('classifyPath', () => {
 
 describe('isTextPath', () => {
   it('reads notes, meta.yaml, SVG and HTML as text, other assets and other paths not', () => {
-    for (const path of ['content/notes/a.mdx', 'content/notes/a/meta.yaml', 'public/notes/a/b.svg', 'public/notes/a/b.html']) expect(isTextPath(path)).toBe(true);
+    for (const path of ['content/notes/a.mdx', 'content/notes/a/meta.yaml', 'public/notes/a/b.svg', 'public/notes/a/b.html', 'diagrams/a/b.diagram.json']) expect(isTextPath(path)).toBe(true);
     for (const path of ['public/notes/a/b.png', 'public/notes/a/b.pdf', 'package.json', 'content/notes/../x.mdx']) expect(isTextPath(path)).toBe(false);
   });
 });

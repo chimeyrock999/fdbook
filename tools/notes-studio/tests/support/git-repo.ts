@@ -8,6 +8,7 @@ import { createBuildReader, type CheckRun } from '../../server/preview/check-run
 import { createBranchPullRequestReader, type BranchPullRequest, type NewPullRequest, type PullRequestGh } from '../../server/preview/pull-request';
 import type { AgentProfile } from '../../server/agents/profiles';
 import type { AuthOptions } from '../../server/auth/auth';
+import type { StudioTool } from '../../server/mcp/tool';
 import { startStudioServer } from '../../server/studio-server';
 
 const NOTES: Record<string, string> = {
@@ -79,7 +80,7 @@ export type GitRepo = Awaited<ReturnType<typeof makeGitRepo>>;
 // `agents` stands in for the Studio's agent profiles (support/agents.ts).
 export async function startCrStudio(
   repo: GitRepo,
-  { pagesProject = 'chimey', staleDays, auth = null, agents = [] }: { pagesProject?: string | null; staleDays?: number; auth?: AuthOptions | null; agents?: AgentProfile[] } = {},
+  { pagesProject = 'chimey', staleDays, auth = null, agents = [], tools = [] }: { pagesProject?: string | null; staleDays?: number; auth?: AuthOptions | null; agents?: AgentProfile[]; tools?: StudioTool[] } = {},
 ) {
   let clock = Date.now();
   const fake: {
@@ -120,6 +121,7 @@ export async function startCrStudio(
     port: 0,
     auth,
     agents,
+    tools,
     changeRequests: {
       repo: repo.repo,
       home: repo.home,

@@ -19,6 +19,7 @@ export type TranscriptItem =
   | { kind: 'write'; key: string; path: string }
   // A process took the session up after the first: only shown then.
   | { kind: 'session'; key: string; how: Exclude<SessionStart, 'new'> }
+  | { kind: 'proposal'; key: string; path: string; hunks: number }
   | { kind: 'turn-end'; key: string; turn: TurnEnd; index: number; ms: number };
 
 export function transcriptOf(events: ConversationEvent[]): TranscriptItem[] {
@@ -55,6 +56,7 @@ export function transcriptOf(events: ConversationEvent[]): TranscriptItem[] {
       const item = asks.get(event.id);
       if (item) item.answer = { optionId: event.optionId, by: event.by };
     } else if (event.type === 'write') items.push({ kind: 'write', key: key('write'), path: event.path });
+    else if (event.type === 'proposal') items.push({ kind: 'proposal', key: `proposal-${event.id}`, path: event.path, hunks: event.hunks });
     else if (event.type === 'changed') for (const path of event.paths) items.push({ kind: 'write', key: key('write'), path });
     else if (event.type === 'update') {
       const { update } = event;

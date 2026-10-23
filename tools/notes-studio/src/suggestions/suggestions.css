@@ -1,0 +1,241 @@
+/* Agent suggestions in the editor (#85): the bar over the note, the
+   blocks a hunk replaces, its card with what it puts there (drawn as the
+   diff view draws added and removed blocks, src/diff/diff.css), comment
+   bubbles, and the Source mode's lines. */
+@layer components {
+  .studio-suggest-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--fde-border);
+    background: color-mix(in srgb, var(--fde-info) 8%, var(--fde-background));
+    font-size: 12.5px;
+  }
+  .studio-suggest-who {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .studio-suggest-meta {
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-suggest-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--fde-muted);
+    color: var(--fde-muted-foreground);
+    font-size: 11.5px;
+  }
+  .studio-suggest-chip[data-tone='warning'] {
+    background: color-mix(in srgb, var(--fde-warning) 16%, transparent);
+    color: var(--fde-warning);
+  }
+  .studio-suggest-summary {
+    min-width: 0;
+    max-width: 36ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-suggest-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--fde-muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .studio-suggest-lost,
+  .studio-suggest-error {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: var(--fde-warning);
+  }
+  .studio-suggest-error {
+    color: var(--fde-error);
+  }
+  .studio-suggest-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--fde-border);
+    border-radius: 6px;
+    background: var(--fde-card);
+    color: var(--fde-foreground);
+  }
+  .studio-suggest-icon:hover:not(:disabled) {
+    background: var(--fde-accent);
+  }
+  .studio-suggest-icon:disabled {
+    opacity: 0.4;
+  }
+  .studio-suggest-icon[data-tone='success'] {
+    color: var(--fde-success);
+  }
+  .studio-suggest-icon[data-tone='error'],
+  .studio-button[data-tone='error'] {
+    color: var(--fde-error);
+  }
+
+  /* The blocks a hunk replaces, in place. */
+  .studio-visual .studio-suggest-removed {
+    margin-inline: -12px;
+    padding-inline: 12px;
+    border-left: 3px solid var(--fde-error);
+    background: color-mix(in srgb, var(--fde-error) 9%, transparent);
+    opacity: 0.85;
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--fde-error) 45%, transparent);
+  }
+  .studio-visual .studio-suggest-removed.studio-suggest-stale {
+    border-left-color: var(--fde-warning);
+  }
+
+  /* A hunk's card: what it puts there, with its actions. */
+  .studio-suggest-card {
+    position: relative;
+    margin: 4px -12px 14px;
+    padding: 6px 12px;
+    border-left: 3px solid var(--fde-success);
+    border-radius: 0 6px 6px 0;
+    background: color-mix(in srgb, var(--fde-success) 11%, transparent);
+    user-select: text;
+  }
+  .studio-suggest-card[data-stale='true'] {
+    border-left-color: var(--fde-warning);
+    background: color-mix(in srgb, var(--fde-warning) 10%, transparent);
+  }
+  .studio-suggest-card[data-focus='true'] {
+    outline: 2px solid color-mix(in srgb, var(--fde-info) 55%, transparent);
+    outline-offset: 2px;
+  }
+  .studio-suggest-acts {
+    position: absolute;
+    top: -12px;
+    right: 6px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    background: var(--fde-card);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+  }
+  .studio-suggest-stale-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: var(--fde-warning);
+  }
+
+  /* A comment on a block, in the right margin. */
+  .studio-suggest-comment {
+    position: relative;
+    float: right;
+    margin-right: -40px;
+    height: 0;
+  }
+  .studio-suggest-comment-pop {
+    position: absolute;
+    top: 28px;
+    right: 0;
+    z-index: 3;
+    width: min(260px, 70vw);
+    padding: 8px 10px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    background: var(--fde-card);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+    font-size: 12.5px;
+  }
+  .studio-suggest-comment-pop p {
+    margin: 4px 0 0;
+  }
+  .studio-suggest-notes {
+    margin: 0;
+    padding: 6px 16px;
+    list-style: none;
+    border-bottom: 1px solid var(--fde-border);
+    font-size: 12.5px;
+  }
+
+  /* Source: the lines a hunk replaces, and what it puts there. */
+  .studio-suggest-line-removed {
+    background: color-mix(in srgb, var(--fde-error) 10%, transparent);
+  }
+  .studio-suggest-line-removed.studio-suggest-line-stale {
+    background: color-mix(in srgb, var(--fde-warning) 12%, transparent);
+  }
+  .studio-suggest-source {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 2px 6px;
+    background: color-mix(in srgb, var(--fde-success) 12%, transparent);
+    white-space: pre-wrap;
+  }
+  .studio-suggest-source pre {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font: inherit;
+    white-space: pre-wrap;
+  }
+  .studio-suggest-source .studio-suggest-acts {
+    position: static;
+    box-shadow: none;
+  }
+
+  @media (max-width: 767px) {
+    .studio-suggest-acts {
+      position: static;
+      width: max-content;
+      margin-bottom: 6px;
+    }
+    .studio-suggest-comment {
+      float: none;
+      margin: 0 0 4px;
+      height: auto;
+    }
+    .studio-suggest-comment-pop {
+      position: static;
+      width: auto;
+      margin-top: 4px;
+    }
+  }
+}
+
+@layer components {
+  /* On the page tree: suggestions waiting on the note. */
+  .studio-suggest-mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: none;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--fde-info) 16%, transparent);
+    color: var(--fde-info);
+    font: 10.5px var(--font-mono);
+  }
+  .studio-suggest-mark::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+}

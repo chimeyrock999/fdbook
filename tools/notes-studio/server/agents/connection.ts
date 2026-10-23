@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { Readable, Writable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 import {
   client,
   methods,
@@ -8,6 +9,7 @@ import {
   RequestError,
   type AgentCapabilities,
   type PromptResponse,
+  type McpServer,
   type RequestPermissionRequest,
   type SessionConfigOption,
   type SessionModeState,
@@ -32,8 +34,10 @@ export type AgentHooks = {
 export type AgentSession = {
   // Once the agent holds a session: which one, and how it came to it.
   ready: Promise<{ sessionId: string; how: SessionStart }>;
-  // One turn: the agent's answer to `text`, in the same session as the last.
-  prompt: (text: string) => Promise<PromptResponse>;
+  // One turn: the agent's answer to `text`, in the same session as the
+  // last. It is sent once `ready` settles: the turn's start is recorded
+  // (watch.ts), so no file changes before its earlier version is kept.
+  prompt: (text: string, ready?: Promise<void>) => Promise<PromptResponse>;
   // Asks the agent to stop its turn; stops the process if it does not.
   cancel: () => void;
   // Stops the process now.
@@ -69,6 +73,25 @@ export function modelOf(options: SessionConfigOption[] | null | undefined): stri
 // its own settings), so the Studio does not offer them.
 export const turnOptions = (options: PermissionOption[]) => options.filter((option) => option.kind !== 'allow_always');
 
+// The Studio's MCP server for one conversation's process: where it is and
+// the token the process holds (mcp/grants.ts).
+export type StudioMcp = { url: string; token: string };
+
+const STDIO_BRIDGE = fileURLToPath(new URL('../mcp/stdio.ts', import.meta.url));
+
+// How the agent reaches the Studio's MCP server: over HTTP when it says it
+// can, else through the stdio bridge, which every ACP agent can start.
+export function mcpServersFor(mcp: StudioMcp | null, http: boolean): McpServer[] {
+  if (mcp === null) return [];
+  if (http) return [{ type: 'http', name: 'notes-studio', url: mcp.url, headers: [{ name: 'Authorization', value: `Bearer ${mcp.token}` }] }];
+  return [{
+    name: 'notes-studio',
+    command: process.execPath,
+    args: ['--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', STDIO_BRIDGE],
+    env: [{ name: 'STUDIO_MCP_URL', value: mcp.url }, { name: 'STUDIO_MCP_TOKEN', value: mcp.token }],
+  }];
+}
+
 // How a session is taken up again: resumed when the agent can (it replays
 // nothing), else loaded (it replays the history, which the transcript
 // already has), else none.
@@ -82,8 +105,15 @@ export function resumeWay(capabilities: AgentCapabilities | undefined): 'resume'
 // when given and the agent can, else a new one. The process stays up for
 // the turns that follow (`prompt`) until it is stopped. The Studio is the
 // ACP client: reads and writes go through fs-policy.ts, every permission
-// request through `hooks.ask`.
-export function connectAgent(profile: AgentProfile, role: AgentRole, root: string, hooks: AgentHooks, { resume = null, cancelGraceMs = CANCEL_GRACE_MS }: { resume?: string | null; cancelGraceMs?: number } = {}): AgentSession {
+// request through `hooks.ask`, and the session gets the Studio's MCP server
+// (`mcp`), on a resume or a load too.
+export function connectAgent(
+  profile: AgentProfile,
+  role: AgentRole,
+  root: string,
+  hooks: AgentHooks,
+  { resume = null, cancelGraceMs = CANCEL_GRACE_MS, mcp = null }: { resume?: string | null; cancelGraceMs?: number; mcp?: StudioMcp | null } = {},
+): AgentSession {
   const { command, args, env } = profile.command(role);
   const child = spawn(command, args, { cwd: root, env: agentEnv(process.env, env), stdio: ['pipe', 'pipe', 'pipe'] });
   let stderr = '';
@@ -143,11 +173,12 @@ export function connectAgent(profile: AgentProfile, role: AgentRole, root: strin
     });
 
   // The session again, or null when the agent cannot take it up.
+  let mcpServers: McpServer[] = [];
   const again = async (id: string, way: 'resume' | 'load'): Promise<{ modes?: SessionModeState | null; configOptions?: SessionConfigOption[] | null } | null> => {
     try {
-      if (way === 'resume') return await signedIn(agent.request(methods.agent.session.resume, { sessionId: id, cwd: root, mcpServers: [], _meta: meta }));
+      if (way === 'resume') return await signedIn(agent.request(methods.agent.session.resume, { sessionId: id, cwd: root, mcpServers, _meta: meta }));
       replaying = true;
-      return await signedIn(agent.request(methods.agent.session.load, { sessionId: id, cwd: root, mcpServers: [], _meta: meta }));
+      return await signedIn(agent.request(methods.agent.session.load, { sessionId: id, cwd: root, mcpServers, _meta: meta }));
     } catch (error) {
       if (error instanceof NotSignedIn) throw error;
       // A session the agent no longer has (its own files gone): a fresh one.
@@ -163,6 +194,7 @@ export function connectAgent(profile: AgentProfile, role: AgentRole, root: strin
       clientCapabilities: { fs: { readTextFile: true, writeTextFile: role === 'author' }, terminal: false },
       clientInfo: { name: 'notes-studio', version: '0' },
     });
+    mcpServers = mcpServersFor(mcp, agentCapabilities?.mcpCapabilities?.http === true);
     const way = resume === null ? null : resumeWay(agentCapabilities);
     let how: SessionStart = resume === null ? 'new' : 'fresh';
     let session = resume !== null && way !== null ? await again(resume, way) : null;
@@ -170,7 +202,7 @@ export function connectAgent(profile: AgentProfile, role: AgentRole, root: strin
       sessionId = resume;
       how = way === 'resume' ? 'resumed' : 'loaded';
     } else {
-      const created = await signedIn(agent.request(methods.agent.session.new, { cwd: root, mcpServers: [], _meta: meta }));
+      const created = await signedIn(agent.request(methods.agent.session.new, { cwd: root, mcpServers, _meta: meta }));
       sessionId = created.sessionId;
       session = created;
     }
@@ -215,10 +247,10 @@ export function connectAgent(profile: AgentProfile, role: AgentRole, root: strin
 
   return {
     ready,
-    prompt(text) {
+    prompt(text, start = Promise.resolve()) {
       turn = 'waiting';
       cancelled = false;
-      const answer = orDied(ready.then(({ sessionId: id }): Promise<PromptResponse> => {
+      const answer = orDied(Promise.all([ready, start]).then(([{ sessionId: id }]): Promise<PromptResponse> => {
         // Cancelled while the session opened: the message is never sent.
         if (cancelled) return Promise.resolve({ stopReason: 'cancelled' });
         turn = 'sent';

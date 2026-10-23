@@ -2,17 +2,20 @@ import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentControl } from './agents/AgentControl';
 import { AgentPanel } from './agents/AgentPanel';
-import { AgentWrote } from './agents/AgentWrote';
 import { PermissionDialog } from './agents/PermissionDialog';
 import { firstAsk } from './agents/transcript';
 import { useAgents } from './agents/useAgents';
 import { createAgentsClient, type ConversationTotals } from './api/agents';
+import { createProposalsClient } from './api/proposals';
+import type { NoteReview } from './suggestions/Suggestions';
+import { failureOn, useProposals } from './suggestions/useProposals';
 import type { AssetAnswer, AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
 import { createChangesClient, type ChangedFile } from './api/changes';
 import { assetChanged } from './api/asset-versions';
 import { createCrClient, type ChangeRequest, type Discard } from './api/crs';
 import { createFilesClient } from './api/files';
+import { classifyPath } from '../server/security/asset-types';
 import { createLintClient } from './api/lint';
 import { createPreviewClient, type Preview } from './api/preview';
 import { createTreeClient } from './api/tree';
@@ -110,6 +113,19 @@ export function App() {
   const agents = useAgents(agentsClient, crMode && CURRENT_CR !== null);
   const answering = agents.conversations.filter((conversation) => conversation.status === 'running');
   const asking = rights.agents ? firstAsk(answering, agents.events) : null;
+  // What agents proposed and commented (#85), as it comes.
+  const proposalsClient = useMemo(() => createProposalsClient(), []);
+  const proposals = useProposals(proposalsClient, crMode && CURRENT_CR !== null);
+  const { act: actOnProposal, proposals: allProposals, comments: allComments, error: proposalFailure } = proposals;
+  const review = useMemo<NoteReview | null>(() => {
+    if (active === null || CURRENT_CR === null) return null;
+    return {
+      proposals: allProposals.filter((proposal) => proposal.path === active && !proposal.done),
+      comments: allComments.filter((comment) => comment.path === active),
+      error: failureOn(proposalFailure, active),
+      act: actOnProposal,
+    };
+  }, [active, allProposals, allComments, proposalFailure, actOnProposal]);
   const [agentTotals, setAgentTotals] = useState<Record<string, ConversationTotals>>({});
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);
@@ -169,9 +185,13 @@ export function App() {
     return () => { query.removeEventListener('change', onChange); };
   }, []);
 
-  // An asset changed on disk: what shows it loads it again.
+  // An asset or a diagram changed on disk: what shows it loads it again. A
+  // deleted diagram gets a version of its own too, so its cards read it
+  // again and say it is gone.
   useEffect(() => files.subscribeFileEvents((event) => {
-    if (event.path.startsWith(ASSETS_PREFIX) && event.type !== 'unlink' && event.mtimeMs !== null) assetChanged(event.path, event.mtimeMs);
+    const diagram = classifyPath(event.path) === 'diagram';
+    if (diagram && event.type === 'unlink') assetChanged(event.path, -Date.now());
+    else if ((diagram || event.path.startsWith(ASSETS_PREFIX)) && event.type !== 'unlink' && event.mtimeMs !== null) assetChanged(event.path, event.mtimeMs);
   }), [files]);
 
   // Back and forward move between opened notes and assets.
@@ -361,6 +381,7 @@ export function App() {
                 onRenamed={renamed}
                 unsaved={unsaved}
                 marks={marks}
+                suggested={proposals.counts}
                 readOnly={readOnly}
                 onChanged={reload}
               />
@@ -383,6 +404,7 @@ export function App() {
               onIssueShown={closeDrawer}
               onShowHistory={() => { go({ kind: 'history', path: active }); }}
               place={place?.note === active ? place : null}
+              review={review}
             />
           </NoteGate>
         ) : asset ? (
@@ -447,8 +469,7 @@ export function App() {
         ) : (
           <p className="m-auto p-6 text-[13px] text-[var(--fde-muted-foreground)]">{readOnly ? 'Pick a note to read.' : 'Pick a note to edit.'}</p>
         )}
-        {active !== null && <AgentWrote conversations={answering} path={active} onOpenDiff={() => { openDiff(active); }} />}
-        {crMode && agents.open && <AgentPanel agents={agents} inCr={CURRENT_CR !== null} canRun={rights.agents} onOpenDiff={openDiff} />}
+        {crMode && agents.open && <AgentPanel agents={agents} inCr={CURRENT_CR !== null} canRun={rights.agents} canDecide={!readOnly} onOpenDiff={openDiff} onOpenNote={open} />}
         {left && <LeaveNotice notice={left} onBack={() => { switchTo(left.cr); }} onClose={dismissLeft} />}
       </div>
       {crDialog?.kind === 'new' && (

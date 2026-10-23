@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -73,15 +73,16 @@ describe('agent conversations over many turns', () => {
     const conversations = make();
     const conversation = start(conversations, 'env');
     await waitFor(conversations, conversation.id, ended);
-    await conversations.message(conversation.id, 'hang', null);
-    await waitFor(conversations, conversation.id, ({ events }) => events.filter((event) => event.type === 'turn').length === 2);
+    await conversations.message(conversation.id, 'mode\nhang', null);
+    // The agent is answering turn 2: it has said its mode and hangs.
+    await waitFor(conversations, conversation.id, ({ events }) => messagesOf(events).join('').includes('mode:'));
     conversations.cancel(conversation.id);
     const cancelled = await waitFor(conversations, conversation.id, ended);
     expect(cancelled.conversation).toMatchObject({ status: 'cancelled', live: true });
     expect(() => { conversations.cancel(conversation.id); }).toThrow(/no turn is going on/);
     await conversations.message(conversation.id, 'recall', null);
     const done = await waitFor(conversations, conversation.id, ended);
-    expect(messagesOf(done.events).at(-1)).toBe('recall:env|hang');
+    expect(messagesOf(done.events).join('')).toContain('recall:env|mode\nhang');
     expect(sessionsOf(done.events)).toHaveLength(1);
   });
 
@@ -232,6 +233,33 @@ describe('agent conversations over many turns', () => {
     expect(existsSync(join(home, 'agents', 'turns', `${conversation.id}.jsonl`))).toBe(false);
     expect(existsSync(join(home, 'agents', 'turns', `${conversation.id}.json`))).toBe(false);
     expect((await make().list()).map((each) => each.id)).not.toContain(conversation.id);
+  });
+
+  it('keeps or reverts what each turn changed, never over a later turn\'s edit', async () => {
+    const asset = 'public/notes/turns/shape.svg';
+    await mkdir(join(root, 'public/notes/turns'), { recursive: true });
+    await writeFile(join(root, asset), 'zero');
+    const conversations = make();
+    const conversation = start(conversations, `edit ${join(root, asset)} one`);
+    const first = await waitFor(conversations, conversation.id, ended);
+    expect(first.events.find((event) => event.type === 'end')).toMatchObject({ turn: { writes: [asset] } });
+    await conversations.message(conversation.id, `edit ${join(root, asset)} two\nhang`, null);
+    // Turn 2's changes are not settled while it runs.
+    await expect(conversations.changes(conversation.id, 2)).rejects.toThrow(/still going/);
+    await waitFor(conversations, conversation.id, () => existsSync(join(root, asset)) && readFileSync(join(root, asset), 'utf8') === 'two');
+    conversations.cancel(conversation.id);
+    await waitFor(conversations, conversation.id, ended);
+    expect(await conversations.changes(conversation.id, 1)).toEqual([{ path: asset, existed: true, decided: null, reason: null }]);
+    expect(await conversations.before(conversation.id, 2, asset)).toEqual({ path: asset, content: 'one' });
+    // Turn 1's revert would lose turn 2's edit.
+    await expect(conversations.decide(conversation.id, 1, asset, 'revert')).rejects.toThrow(/changed since the turn ended/);
+    expect(await conversations.decide(conversation.id, 2, asset, 'revert')).toMatchObject({ decided: 'reverted' });
+    expect(readFileSync(join(root, asset), 'utf8')).toBe('one');
+    expect(await conversations.decide(conversation.id, 1, asset, 'keep')).toMatchObject({ decided: 'kept' });
+    // Deleting the chat drops each turn's record too.
+    await conversations.remove(conversation.id);
+    expect(existsSync(join(home, 'agents', 'turns', `${conversation.id}.t1.changes.json`))).toBe(false);
+    expect(existsSync(join(home, 'agents', 'turns', `${conversation.id}.t2.changes.json`))).toBe(false);
   });
 
   it('numbers the events it records, so a read and the stream line up', async () => {

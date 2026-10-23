@@ -1,12 +1,12 @@
 // Client for the agents API (server/agents/api.ts), in the worktree the page
 // edits (src/api/workspace.ts). Types are server/agents/shared.ts.
 
-import type { AgentId, AgentInfo, AgentRole, Conversation, ConversationEvent, ConversationRead, ConversationTotals, StreamEvent } from '../../server/agents/shared';
+import type { AgentId, AgentInfo, AgentRole, Conversation, ConversationEvent, ConversationRead, ConversationTotals, StreamEvent, TurnChange } from '../../server/agents/shared';
 import { errorOf, readJson } from './json';
 import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
-export type { AgentId, AgentInfo, AgentRole, Conversation, ConversationEvent, ConversationRead, ConversationTotals, StreamEvent };
+export type { AgentId, AgentInfo, AgentRole, Conversation, ConversationEvent, ConversationRead, ConversationTotals, StreamEvent, TurnChange };
 
 // How long a refused event stream waits before it is opened again.
 const REOPEN_MS = 5000;
@@ -46,6 +46,22 @@ export function createAgentsClient(base = API_BASE) {
     },
     async cancel(id: string): Promise<void> {
       await answer(await postJson(`${one(id)}/cancel`, {}));
+    },
+    // The files an ended turn changed, to keep or revert.
+    async changes(id: string, turn: number): Promise<TurnChange[]> {
+      return (await answer<{ changes: TurnChange[] }>(await studioFetch(`${one(id)}/turns/${String(turn)}/changes`))).changes;
+    },
+    async decide(id: string, turn: number, path: string, op: 'keep' | 'revert'): Promise<TurnChange> {
+      return (await answer<{ change: TurnChange }>(await postJson(`${one(id)}/turns/${String(turn)}/changes`, { path, op }))).change;
+    },
+    // A file the turn changed: as it was before the turn, and as it is now
+    // (null where it is missing).
+    async compare(id: string, turn: number, path: string): Promise<{ before: string | null; after: string | null }> {
+      const query = new URLSearchParams({ path }).toString();
+      const { content: before } = await answer<{ content: string | null }>(await studioFetch(`${one(id)}/turns/${String(turn)}/changes/before?${query}`));
+      const now = await studioFetch(`${base}/api/file?${query}`);
+      const after = now.status === 404 ? null : (await answer<{ content: string }>(now)).content;
+      return { before, after };
     },
     // `optionId` null rejects.
     async answer(id: string, ask: string, optionId: string | null): Promise<void> {

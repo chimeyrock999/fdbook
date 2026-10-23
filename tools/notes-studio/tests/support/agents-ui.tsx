@@ -3,7 +3,7 @@ import { vi } from 'vitest';
 import { AgentControl } from '../../src/agents/AgentControl';
 import { AgentPanel } from '../../src/agents/AgentPanel';
 import { useAgents } from '../../src/agents/useAgents';
-import type { AgentInfo, AgentsClient, Conversation, ConversationRead, StreamEvent } from '../../src/api/agents';
+import type { AgentInfo, AgentsClient, Conversation, ConversationRead, StreamEvent, TurnChange } from '../../src/api/agents';
 
 export const AGENTS: AgentInfo[] = [
   { id: 'claude', name: 'Claude Code', fencesReviewer: true, available: true, reason: null, note: null, version: '0.88.0' },
@@ -21,7 +21,7 @@ export const summary = (change: Partial<Conversation> = {}): Conversation => ({
 type Emitted = StreamEvent extends infer Each ? (Each extends { seq: number } ? Omit<Each, 'seq'> & { seq?: number } : Each) : never;
 
 // A client whose stream the test drives (`emit`, `reconnect`).
-export function fakeClient(conversations: Conversation[] = []) {
+export function fakeClient(conversations: Conversation[] = [], changes: TurnChange[] = []) {
   let listener: ((event: StreamEvent) => void) | null = null;
   let seq = 0;
   let opened: () => void = () => undefined;
@@ -35,6 +35,10 @@ export function fakeClient(conversations: Conversation[] = []) {
     remove: vi.fn(() => Promise.resolve()),
     cancel: vi.fn(() => Promise.resolve()),
     answer: vi.fn(() => Promise.resolve()),
+    changes: vi.fn((): Promise<TurnChange[]> => Promise.resolve(changes)),
+    // A revert of content/notes/late.mdx fails: a later edit changed it.
+    decide: vi.fn((_id: string, _turn: number, path: string, op: 'keep' | 'revert') => (path === 'content/notes/late.mdx' && op === 'revert' ? Promise.reject(new Error('content/notes/late.mdx changed since the turn ended')) : Promise.resolve({ path, existed: true, decided: op === 'keep' ? 'kept' as const : 'reverted' as const, reason: null }))),
+    compare: vi.fn(() => Promise.resolve({ before: 'Before.\n', after: 'After.\n' })),
     subscribe: vi.fn((next: (event: StreamEvent) => void, onOpen: () => void = () => undefined) => {
       listener = next;
       opened = onOpen;
@@ -52,13 +56,13 @@ export function fakeClient(conversations: Conversation[] = []) {
   return { client, emit, reconnect };
 }
 
-export function Harness({ client, inCr = true, canRun = true, onOpenDiff = () => undefined }: { client: AgentsClient; inCr?: boolean; canRun?: boolean; onOpenDiff?: (path: string) => void }) {
+export function Harness({ client, inCr = true, canRun = true, onOpenDiff = () => undefined, onOpenNote = () => undefined }: { client: AgentsClient; inCr?: boolean; canRun?: boolean; onOpenDiff?: (path: string) => void; onOpenNote?: (path: string) => void }) {
   const agents = useAgents(client, inCr);
   const live = agents.conversations.filter((conversation) => conversation.status === 'running').length;
   return (
     <>
       <AgentControl agents={agents} live={live} />
-      {agents.open && <AgentPanel agents={agents} inCr={inCr} canRun={canRun} onOpenDiff={onOpenDiff} />}
+      {agents.open && <AgentPanel agents={agents} inCr={inCr} canRun={canRun} canDecide onOpenDiff={onOpenDiff} onOpenNote={onOpenNote} />}
     </>
   );
 }

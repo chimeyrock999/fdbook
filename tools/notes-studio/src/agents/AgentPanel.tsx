@@ -51,8 +51,16 @@ function NewChat({ agents, onStarted, onFailed }: { agents: Agents; onStarted: (
 // The agent panel, at the right of the editor: a chat with an agent over
 // many turns, a new chat, and the change request's earlier chats (History).
 // Agents work only in a change request (`inCr`), and only for someone who
-// may run them (`canRun`); others follow and read.
-export function AgentPanel({ agents, inCr, canRun, onOpenDiff }: { agents: Agents; inCr: boolean; canRun: boolean; onOpenDiff: (path: string) => void }) {
+// may run them (`canRun`); others follow and read. `canDecide`: may keep
+// or revert what a turn changed (a writer).
+export function AgentPanel({ agents, inCr, canRun, canDecide, onOpenDiff, onOpenNote }: {
+  agents: Agents;
+  inCr: boolean;
+  canRun: boolean;
+  canDecide: boolean;
+  onOpenDiff: (path: string) => void;
+  onOpenNote: (path: string) => void;
+}) {
   // NEW_CHAT: a new chat; null: the chat whose agent is answering, if any.
   const [shown, setShown] = useState<string | null>(null);
   const [history, setHistory] = useState(false);
@@ -99,6 +107,9 @@ export function AgentPanel({ agents, inCr, canRun, onOpenDiff }: { agents: Agent
             events={agents.events[current.id]}
             onCancel={canRun ? () => { void agents.cancel(current.id); } : null}
             onOpenDiff={onOpenDiff}
+            onOpenNote={onOpenNote}
+            client={agents.client}
+            canDecide={canDecide}
           />
           {canRun && (
             <Composer

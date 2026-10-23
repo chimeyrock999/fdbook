@@ -1,9 +1,10 @@
 import { FilePen, FileText, Search, ShieldCheck, ShieldQuestion, ShieldX, Square, Terminal, Wrench } from 'lucide-react';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { ToolCallUpdate } from '../../server/agents/shared';
-import type { Conversation, ConversationEvent } from '../api/agents';
+import type { AgentsClient, Conversation, ConversationEvent } from '../api/agents';
 import { AgentLogo } from './AgentLogo';
 import { Markdown } from './Markdown';
+import { TurnChanges } from './TurnChanges';
 import { costLabel, durationLabel, roleLabel, transcriptOf, whenLabel, type TranscriptItem } from './transcript';
 
 const STATUS_LABELS: Record<Conversation['status'], string> = { running: 'Running', done: 'Done', cancelled: 'Cancelled', failed: 'Failed' };
@@ -23,7 +24,19 @@ function toolIcon(call: ToolCallUpdate): ReactNode {
 const TOOL_STATES: Record<string, string> = { pending: 'Waiting', in_progress: 'Running', completed: 'Done', failed: 'Failed' };
 const TURN_ENDS: Record<string, string> = { done: '', cancelled: 'cancelled', failed: 'failed' };
 
-function Item({ item, agentName, onOpenDiff }: { item: TranscriptItem; agentName: string; onOpenDiff: (path: string) => void }) {
+// What an item needs besides itself: the conversation, the panel's
+// actions, and the client and right to keep or revert a turn's changes.
+type ItemContext = {
+  conversation: Conversation;
+  onOpenDiff: (path: string) => void;
+  onOpenNote: (path: string) => void;
+  client: AgentsClient;
+  canDecide: boolean;
+};
+
+function Item({ item, context }: { item: TranscriptItem; context: ItemContext }) {
+  const { conversation, onOpenDiff, onOpenNote } = context;
+  const agentName = conversation.agentName;
   if (item.kind === 'prompt') {
     return (
       <>
@@ -46,7 +59,18 @@ function Item({ item, agentName, onOpenDiff }: { item: TranscriptItem; agentName
       <>
         {item.turn.error !== null && <p role="alert" className="studio-tree-error">{item.turn.error}</p>}
         <span className="studio-agent-turn-foot">{parts.join(' · ')}</span>
+        <TurnChanges client={context.client} id={conversation.id} turn={item.index} writes={item.turn.writes ?? []} canDecide={context.canDecide} />
       </>
+    );
+  }
+  if (item.kind === 'proposal') {
+    return (
+      <div className="studio-agent-tool" data-status="proposal">
+        <FilePen size={14} aria-hidden />
+        <span className="studio-agent-tool-title" title={item.path}>{item.path}</span>
+        <span className="studio-agent-tool-state">{item.hunks === 1 ? '1 suggestion' : `${String(item.hunks)} suggestions`}</span>
+        <button type="button" className="studio-agent-link" onClick={() => { onOpenNote(item.path); }}>Review in editor</button>
+      </div>
     );
   }
   if (item.kind === 'plan') {
@@ -95,12 +119,18 @@ const FOLLOW_PX = 48;
 // its full name as a title, so the status stays on that line), and every
 // turn. The thread follows new text while it is scrolled to the bottom.
 // `onCancel` is there while a turn runs and the viewer may stop it.
-export function ConversationView({ conversation, events, onCancel, onOpenDiff }: {
+// `client` reads and decides the files each turn changed (TurnChanges),
+// which `canDecide` allows.
+export function ConversationView({ conversation, events, onCancel, onOpenDiff, onOpenNote, client, canDecide }: {
   conversation: Conversation;
   events: ConversationEvent[] | undefined;
   onCancel: (() => void) | null;
   onOpenDiff: (path: string) => void;
+  onOpenNote: (path: string) => void;
+  client: AgentsClient;
+  canDecide: boolean;
 }) {
+  const context: ItemContext = { conversation, onOpenDiff, onOpenNote, client, canDecide };
   const items = events === undefined ? null : transcriptOf(events);
   const thread = useRef<HTMLDivElement>(null);
   const following = useRef(true);
@@ -129,7 +159,7 @@ export function ConversationView({ conversation, events, onCancel, onOpenDiff }:
         }}
       >
         {items === null && <p className="studio-agent-meta">Loading the chat…</p>}
-        {items?.map((item) => <Item key={item.key} item={item} agentName={conversation.agentName} onOpenDiff={onOpenDiff} />)}
+        {items?.map((item) => <Item key={item.key} item={item} context={context} />)}
       </div>
     </section>
   );

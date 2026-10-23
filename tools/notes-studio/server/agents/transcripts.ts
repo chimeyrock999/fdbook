@@ -2,6 +2,7 @@ import { appendFile, mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { writeAtomic } from '../files/store.ts';
 import { summaryOf, type Conversation, type ConversationEvent, type ConversationTotals } from './shared.ts';
+import type { StoredChange } from './watch.ts';
 
 const ID = /^[a-z0-9-]+$/;
 
@@ -26,7 +27,8 @@ function eventOf(stored: Stored): ConversationEvent {
 // Where conversations are kept: <home>/agents/<slug>/, next to the
 // worktrees and outside the change request's branch, so a transcript never
 // lands in a diff or a pull request. Per conversation, <id>.jsonl holds
-// every event in order and <id>.json the summary as last known.
+// every event in order, <id>.json the summary as last known, and
+// <id>.t<n>.changes.json what turn n changed (watch.ts), for Keep/Revert.
 export function createTranscripts(home: string) {
   const dirOf = (slug: string) => join(home, 'agents', slug);
   // Events wait here per conversation, and go to disk in one append each
@@ -49,7 +51,7 @@ export function createTranscripts(home: string) {
   const list = async (slug: string): Promise<Conversation[]> => {
     const names = await readdir(dirOf(slug)).catch(() => []);
     const conversations = await Promise.all(
-      names.filter((name) => name.endsWith('.json')).map((name) =>
+      names.filter((name) => name.endsWith('.json') && !name.endsWith('.changes.json')).map((name) =>
         readFile(join(dirOf(slug), name), 'utf8').then((text) => conversationOf(JSON.parse(text) as Conversation), () => null),
       ),
     );
@@ -113,6 +115,17 @@ export function createTranscripts(home: string) {
       return Object.fromEntries(entries.filter(([, totals]) => totals.conversations > 0));
     },
 
+    // What a turn changed, for Keep/Revert (watch.ts).
+    writeChanges: async (slug: string, id: string, turn: number, changes: StoredChange[]) => {
+      await mkdir(dirOf(slug), { recursive: true });
+      await writeAtomic(join(dirOf(slug), `${id}.t${String(turn)}.changes.json`), `${JSON.stringify(changes)}\n`);
+    },
+    async readChanges(slug: string, id: string, turn: number): Promise<StoredChange[] | null> {
+      if (!ID.test(id) || !Number.isInteger(turn)) return null;
+      const text = await readFile(join(dirOf(slug), `${id}.t${String(turn)}.changes.json`), 'utf8').catch(() => null);
+      return text === null ? null : (JSON.parse(text) as StoredChange[]);
+    },
+
     // Waits for the appends in flight, so a read after it sees them.
     settled,
 
@@ -120,7 +133,8 @@ export function createTranscripts(home: string) {
     async removeOne(slug: string, id: string) {
       if (!ID.test(id)) return;
       await settled();
-      await Promise.all([`${id}.jsonl`, `${id}.json`].map((name) => rm(join(dirOf(slug), name), { force: true })));
+      const turns = (await readdir(dirOf(slug)).catch(() => [])).filter((name) => name.startsWith(`${id}.t`) && name.endsWith('.changes.json'));
+      await Promise.all([`${id}.jsonl`, `${id}.json`, ...turns].map((name) => rm(join(dirOf(slug), name), { force: true })));
     },
 
     remove: (slug: string) => rm(dirOf(slug), { recursive: true, force: true }),

@@ -45,6 +45,7 @@ type View = {
   openMenu: (menu: Menu) => void;
   readOnly: boolean;
   marks: TreeMarks | null;
+  suggested: ReadonlyMap<string, number> | null;
 };
 
 // The icon the site's sidebar shows. The server keeps only names the site's
@@ -53,7 +54,7 @@ type View = {
 const iconOf = (name: string | null): LucideIcon | undefined => (name === null ? undefined : (icons as Partial<Record<string, LucideIcon>>)[name]);
 
 function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; dim: boolean; view: View }) {
-  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu, readOnly, marks } = view;
+  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu, readOnly, marks, suggested } = view;
   const hidden = 'hidden' in node ? node.hidden : null;
   const note = noteOf(node);
   const open = node.kind === 'folder' && (filtering || isOpen(node));
@@ -62,6 +63,7 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
   // Its git status (#17): the note's, or a missing entry's deleted page.
   const change = marks === null ? null : node.kind === 'missing' ? missingStatus(marks, node) : note === null ? null : (marks.notes.get(note) ?? null);
   const dot = marks !== null && node.kind === 'folder' && folderMarked(marks, node, open);
+  const waiting = note === null ? 0 : (suggested?.get(note) ?? 0);
   const select = () => {
     if (node.kind === 'folder' && (node.index === null || note === active)) toggle(node);
     else if (note !== null) onOpen(note);
@@ -116,6 +118,7 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
         )}
         {dot && <span className="studio-tree-dot" title="Changes inside" />}
         {change !== null && <span className="studio-change-mark" data-change={change} title={CHANGE_NAME[change]}>{change}</span>}
+        {waiting > 0 && <span className="studio-suggest-mark" title={waiting === 1 ? '1 suggestion waiting' : `${String(waiting)} suggestions waiting`}>{waiting}</span>}
         {canMove ? (
           <span className="studio-tree-grip" aria-hidden="true"><GripVertical size={13} /></span>
         ) : !readOnly && node.entry === null && hidden !== 'unlisted' && node.kind !== 'missing' ? (
@@ -153,7 +156,7 @@ function Items({ folder, nested = false, dim, view }: { folder: TreeFolder; nest
 // site hides. Pages can be created, renamed, reordered, hidden and shown here; every change
 // goes through /api/tree. `active` and paths are relative to content/notes.
 // `readOnly` (main) shows the tree only: no new page, row menu or drag.
-export function PageTree({ root, client, active, unsaved = null, readOnly = false, marks = null, onOpen, onRenamed, onChanged }: {
+export function PageTree({ root, client, active, unsaved = null, readOnly = false, marks = null, suggested = null, onOpen, onRenamed, onChanged }: {
   root: TreeFolder | null;
   client: TreeClient;
   active: string | null;
@@ -163,6 +166,8 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
   readOnly?: boolean;
   // The worktree's git changes, marked on the rows (src/changes/marks.ts).
   marks?: TreeMarks | null;
+  // Agent suggestions waiting per note, by path relative to content/notes (#85).
+  suggested?: ReadonlyMap<string, number> | null;
   onOpen: (path: string) => void;
   onRenamed: (from: string, to: string) => void;
   // Reloads the tree; resolves whether the load set one.
@@ -241,7 +246,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
     setDrop(null);
   };
 
-  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu, readOnly, marks };
+  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu, readOnly, marks, suggested };
   const menuNode = menu?.node ?? null;
   const movesUnsaved =
     unsaved !== null && (menuNode?.kind === 'page' || menuNode?.kind === 'folder') && renamedPath(unsaved, menuNode.path, menuNode.path) !== null;

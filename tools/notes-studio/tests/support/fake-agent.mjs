@@ -7,21 +7,29 @@
 //   ask                 asks for permission and says the answer
 //   ask-edit            asks for permission to edit a file
 //   hang                waits for a cancel
+//   wait <path>         waits until the file <path> exists (a test's go-ahead)
 //   deaf                waits and ignores a cancel
 //   crash               prints to stderr and exits
 //   env                 says which of the Studio's variables it can see
 //   mode                says the session's mode (it starts in acceptEdits)
 //   recall              says the earlier prompts of the session, joined by |
+//   mcp <tool> <json>   calls a tool of the MCP server it was given and says
+//                       `mcp:<text>`, or `mcp-error:<text>`
+//   mcp-servers         says how it was given the MCP servers (JSON)
 // FAKE_AGENT=auth makes session/new ask for a sign-in; FAKE_AGENT=load
 // offers session/load (it replays the history first), FAKE_AGENT=resume
 // session/resume. With FAKE_AGENT_STORE, a session's prompts are kept in
 // that folder, so a new process can take the session up again.
-// FAKE_AGENT_MODEL=default reports a "default" model choice.
+// FAKE_AGENT_MODEL=default reports a "default" model choice. FAKE_MCP=http
+// says it can reach MCP servers over HTTP (else it gets them over stdio).
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import { AgentSideConnection, ndJsonStream, PROTOCOL_VERSION, RequestError } from '@agentclientprotocol/sdk';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 const sessions = new Map();
 const store = process.env.FAKE_AGENT_STORE;
@@ -46,10 +54,10 @@ const sessionState = () => ({
 });
 
 // A session kept by an earlier process, back in this one.
-const takeUp = (sessionId, cwd) => {
+const takeUp = (sessionId, cwd, mcpServers = []) => {
   const file = storeOf(sessionId);
   if (file === null || !existsSync(file)) throw RequestError.resourceNotFound(sessionId);
-  const session = { cwd, cancelled: false, cancel: null, mode: 'acceptEdits', history: JSON.parse(readFileSync(file, 'utf8')) };
+  const session = { cwd, cancelled: false, cancel: null, mode: 'acceptEdits', history: JSON.parse(readFileSync(file, 'utf8')), mcpServers, mcp: null };
   sessions.set(sessionId, session);
   return session;
 };
@@ -59,22 +67,25 @@ const say = (sessionId, text) =>
 
 const agent = {
   async initialize() {
-    const agentCapabilities = way === 'load' ? { loadSession: true } : way === 'resume' ? { sessionCapabilities: { resume: {} } } : {};
+    const agentCapabilities = {
+      ...(way === 'load' ? { loadSession: true } : way === 'resume' ? { sessionCapabilities: { resume: {} } } : {}),
+      ...(process.env.FAKE_MCP === 'http' ? { mcpCapabilities: { http: true } } : {}),
+    };
     return { protocolVersion: PROTOCOL_VERSION, agentCapabilities, agentInfo: { name: 'fake-agent', version: '1.0.0' } };
   },
-  async newSession({ cwd }) {
+  async newSession({ cwd, mcpServers }) {
     if (process.env.FAKE_AGENT === 'auth') throw RequestError.authRequired();
     const sessionId = `s-${randomBytes(4).toString('hex')}`;
-    sessions.set(sessionId, { cwd, cancelled: false, cancel: null, mode: 'acceptEdits', history: [] });
+    sessions.set(sessionId, { cwd, cancelled: false, cancel: null, mode: 'acceptEdits', history: [], mcpServers, mcp: null });
     return { sessionId, ...sessionState() };
   },
-  async loadSession({ sessionId, cwd }) {
-    const session = takeUp(sessionId, cwd);
+  async loadSession({ sessionId, cwd, mcpServers }) {
+    const session = takeUp(sessionId, cwd, mcpServers);
     for (const prompt of session.history) await say(sessionId, `replay:${prompt}`);
     return sessionState();
   },
-  async resumeSession({ sessionId, cwd }) {
-    takeUp(sessionId, cwd);
+  async resumeSession({ sessionId, cwd, mcpServers }) {
+    takeUp(sessionId, cwd, mcpServers);
     return sessionState();
   },
   async authenticate() {
@@ -134,6 +145,9 @@ const agent = {
           ],
         });
         await say(sessionId, `answer:${answer.outcome.outcome === 'selected' ? answer.outcome.optionId : 'cancelled'}`);
+      } else if (command === 'wait') {
+        const deadline = Date.now() + 10_000;
+        while (!existsSync(path) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
       } else if (command === 'hang' || command === 'deaf') {
         const cancelled = command === 'hang' && session.cancelled ? true : await new Promise((resolve) => {
           if (command === 'hang') session.cancel = () => { resolve(true); };
@@ -144,6 +158,16 @@ const agent = {
         process.exit(3);
       } else if (command === 'recall') {
         await say(sessionId, `recall:${earlier.join('|')}`);
+      } else if (command === 'mcp') {
+        try {
+          session.mcp ??= await connectMcp(session.mcpServers);
+          const result = await session.mcp.callTool({ name: path, arguments: JSON.parse(rest.join(' ') || '{}') });
+          await say(sessionId, `${result.isError ? 'mcp-error' : 'mcp'}:${result.content.map((part) => part.text ?? '').join('')}`);
+        } catch (error) {
+          await say(sessionId, `mcp-error:${error.message}`);
+        }
+      } else if (command === 'mcp-servers') {
+        await say(sessionId, `servers:${JSON.stringify(session.mcpServers)}`);
       } else if (command === 'mode') {
         await say(sessionId, `mode:${session.mode}`);
       } else if (command === 'env') {
@@ -156,5 +180,17 @@ const agent = {
     return { stopReason: 'end_turn', usage: { totalTokens: 30, inputTokens: 20, outputTokens: 10 } };
   },
 };
+
+// A client of the Studio's MCP server as the session was given it.
+async function connectMcp(servers) {
+  const server = servers.find((each) => each.name === 'notes-studio');
+  if (!server) throw new Error('no notes-studio MCP server');
+  const transport = server.type === 'http'
+    ? new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers: Object.fromEntries(server.headers.map((header) => [header.name, header.value])) } })
+    : new StdioClientTransport({ command: server.command, args: server.args, env: { ...process.env, ...Object.fromEntries(server.env.map((entry) => [entry.name, entry.value])) } });
+  const client = new Client({ name: 'fake-agent', version: '1.0.0' });
+  await client.connect(transport);
+  return client;
+}
 
 connection = new AgentSideConnection(() => agent, ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)));

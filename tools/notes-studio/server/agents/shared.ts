@@ -6,6 +6,8 @@ export type { PermissionOption, SessionUpdate, ToolCallUpdate, Usage };
 
 export type AgentId = 'claude' | 'codex' | 'omp' | 'hermes';
 
+export const AGENT_NAMES: Record<AgentId, string> = { claude: 'Claude Code', codex: 'Codex', omp: 'omp', hermes: 'Hermes Agent' };
+
 // An author may change the change request's files; a reviewer only reads.
 export type AgentRole = 'author' | 'reviewer';
 export const AGENT_ROLES: AgentRole[] = ['author', 'reviewer'];
@@ -74,8 +76,14 @@ export type Conversation = {
   by: string | null;
 };
 
-// How one turn ended.
-export type TurnEnd = { status: Exclude<TurnStatus, 'running'>; error: string | null; cost: Cost | null; usage: Usage | null };
+// How one turn ended, and the files it changed (`writes`: to keep or
+// revert, turn by turn).
+export type TurnEnd = { status: Exclude<TurnStatus, 'running'>; error: string | null; cost: Cost | null; usage: Usage | null; writes?: string[] };
+
+// A file a turn changed, for Keep/Revert: whether it existed before the
+// turn, whether a person kept or reverted the change, and why it cannot be
+// reverted here (outside the notes, too large), or null.
+export type TurnChange = { path: string; existed: boolean; decided: 'kept' | 'reverted' | null; reason: string | null };
 
 // A change request's conversations, and what they cost by currency.
 export type ConversationTotals = { conversations: number; costs: Record<string, number> };
@@ -100,6 +108,8 @@ export type ConversationEvent =
   | { type: 'write'; at: number; path: string; bytes: number }
   // Files the agent changed with its own tools.
   | { type: 'changed'; at: number; paths: string[] }
+  // An edit it proposed (propose_edit, or a write to a note): `hunks` wait for a person.
+  | { type: 'proposal'; at: number; id: string; path: string; hunks: number }
   // A turn ended.
   | { type: 'end'; at: number; conversation: Conversation; turn: TurnEnd };
 

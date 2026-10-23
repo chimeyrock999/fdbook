@@ -351,76 +351,6 @@
     color: var(--fde-muted-foreground);
   }
 
-  /* An agent's markdown (Markdown.tsx). */
-  .studio-md > :first-child {
-    margin-top: 0;
-  }
-  .studio-md > :last-child {
-    margin-bottom: 0;
-  }
-  .studio-md :is(p, ul, ol, blockquote, pre, .studio-md-table, h1, h2, h3, h4, h5, h6) {
-    margin: 0 0 6px;
-  }
-  .studio-md :is(h1, h2, h3, h4, h5, h6) {
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .studio-md :is(ul, ol) {
-    padding-left: 18px;
-  }
-  .studio-md ul {
-    list-style: disc;
-  }
-  .studio-md ol {
-    list-style: decimal;
-  }
-  .studio-md li > input[type='checkbox'] {
-    margin-right: 5px;
-    vertical-align: -1px;
-  }
-  .studio-md blockquote {
-    padding-left: 9px;
-    border-left: 2px solid var(--fde-border);
-    color: var(--fde-muted-foreground);
-  }
-  .studio-md code {
-    padding: 0 4px;
-    border-radius: 4px;
-    background: var(--fde-muted);
-    font: 11.5px var(--font-mono);
-  }
-  .studio-md pre {
-    overflow-x: auto;
-    padding: 8px 10px;
-    border: 1px solid var(--fde-border);
-    border-radius: 7px;
-    background: var(--fde-card);
-    font-style: normal;
-  }
-  .studio-md pre code {
-    padding: 0;
-    background: none;
-  }
-  .studio-md a {
-    color: var(--fde-primary);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-  .studio-md hr {
-    margin: 8px 0;
-    border-color: var(--fde-border);
-  }
-  .studio-md-table {
-    overflow-x: auto;
-  }
-  .studio-md table {
-    border-collapse: collapse;
-    font-size: 12px;
-  }
-  .studio-md :is(th, td) {
-    padding: 2px 6px;
-    border: 1px solid var(--fde-border);
-  }
   .studio-agent-plan {
     display: grid;
     gap: 2px;
@@ -618,29 +548,91 @@
     color: var(--fde-warning);
   }
 
-  /* Over the note an agent changed in a run going on. */
-  .studio-agent-wrote {
-    position: absolute;
-    top: 10px;
-    left: 50%;
-    z-index: 20;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    max-width: min(560px, calc(100% - 32px));
-    padding: 6px 8px 6px 10px;
-    border: 1px solid color-mix(in srgb, var(--fde-warning) 45%, var(--fde-border));
-    border-radius: 8px;
-    background: var(--fde-popover);
-    box-shadow: 0 6px 24px rgb(0 0 0 / 0.14);
-    font-size: 12.5px;
-    transform: translateX(-50%);
-  }
-
   /* On a change request's card. */
   .studio-cr-agents {
     display: inline-flex;
     align-items: center;
     gap: 5px;
+  }
+}
+
+@layer components {
+  /* The Connect an agent dialog. */
+  .studio-connect-copy {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+  }
+  .studio-connect-copy code {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    padding: 5px 8px;
+    border: 1px solid var(--fde-border);
+    border-radius: 7px;
+    background: var(--fde-background);
+    font: 12px var(--font-mono);
+    white-space: nowrap;
+  }
+  .studio-connect-clients {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .studio-connect-clients button {
+    padding: 1px 9px;
+    border: 1px solid var(--fde-border);
+    border-radius: 7px;
+    background: var(--fde-background);
+    font-size: 12px;
+  }
+  .studio-connect-clients button[aria-pressed='true'] {
+    background: var(--fde-accent);
+    font-weight: 600;
+  }
+
+  /* What a run changed itself, to keep or revert. */
+  .studio-agent-changes h4 {
+    margin: 8px 0 2px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-changes ul {
+    display: grid;
+    gap: 6px;
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .studio-agent-change {
+    display: grid;
+    gap: 6px;
+    padding: 7px 9px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    background: var(--fde-background);
+  }
+  .studio-agent-change-path {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    font: 12px var(--font-mono);
+    overflow-wrap: anywhere;
+  }
+  .studio-agent-change-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  .studio-agent-change-diff {
+    max-height: 320px;
+    overflow: auto;
+    border: 1px solid var(--fde-border);
+    border-radius: 6px;
   }
 }

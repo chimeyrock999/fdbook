@@ -4,7 +4,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { yamlFrontmatter } from '@codemirror/lang-yaml';
 import { syntaxHighlighting } from '@codemirror/language';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
-import { Compartment, EditorState, Transaction } from '@codemirror/state';
+import { Compartment, EditorState, Transaction, type Extension } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers } from '@codemirror/view';
 import { useSourceText } from '@fumadocs-editor/ui';
 import { useEffect, useLayoutEffect, useRef } from 'react';
@@ -16,12 +16,14 @@ const locked = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), Editor
 // The note's MDX in CodeMirror 6, bound to the editor's source text: typing
 // here parses back into the document once it parses; visual edits and disk
 // changes arrive as new text. `reveal` selects a range (a lint issue);
-// `completion` suggests values as they are typed (asset paths).
-export function SourceEditor({ reveal = null, completion = null }: { reveal?: RevealRequest | null; completion?: CompletionSource | null }) {
+// `completion` suggests values as they are typed (asset paths); `extra`
+// draws more over the text (agent suggestions, src/suggestions/source.ts).
+export function SourceEditor({ reveal = null, completion = null, extra = null }: { reveal?: RevealRequest | null; completion?: CompletionSource | null; extra?: Extension | null }) {
   const { value, onChange, error, readOnly } = useSourceText();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const editable = useRef(new Compartment());
+  const extras = useRef(new Compartment());
   const latest = useRef({ onChange, value, readOnly, completion });
   useLayoutEffect(() => {
     latest.current = { onChange, value, readOnly, completion };
@@ -48,6 +50,7 @@ export function SourceEditor({ reveal = null, completion = null }: { reveal?: Re
           EditorView.lineWrapping,
           theme,
           editable.current.of(locked(latest.current.readOnly)),
+          extras.current.of([]),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
             const text = update.state.doc.toString();
@@ -89,6 +92,11 @@ export function SourceEditor({ reveal = null, completion = null }: { reveal?: Re
   useEffect(() => {
     view.current?.dispatch({ effects: editable.current.reconfigure(locked(readOnly)) });
   }, [readOnly]);
+
+  // After the text effect above, so what it draws finds the text it is for.
+  useEffect(() => {
+    view.current?.dispatch({ effects: extras.current.reconfigure(extra ?? []) });
+  }, [extra]);
 
   // After the text effect above, so a freshly opened Source has the text.
   useEffect(() => {

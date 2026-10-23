@@ -5,8 +5,10 @@ import { dirname } from 'node:path';
 import type { GitHubUser } from './github.ts';
 
 // A signed-in person: who they are on GitHub and the token their writes
-// must carry (csrf). No GitHub token is kept.
-export type Session = { user: GitHubUser; csrf: string; expiresAt: number };
+// must carry (csrf). No GitHub token is kept. `agentTokens`: the hashes of
+// the bearer tokens they made for their own agents (the Studio's MCP
+// server), which end with the session.
+export type Session = { user: GitHubUser; csrf: string; expiresAt: number; agentTokens?: string[] };
 
 const hashOf = (id: string) => createHash('sha256').update(id).digest('hex');
 
@@ -39,6 +41,15 @@ export function createSessionStore(file: string, days: number) {
     return writing;
   };
 
+  const get = (id: string | null): Session | null => {
+    if (id === null) return null;
+    const session = sessions.get(hashOf(id));
+    if (session === undefined) return null;
+    if (session.expiresAt > Date.now()) return session;
+    sessions.delete(hashOf(id));
+    return null;
+  };
+
   return {
     maxAgeSeconds: days * 24 * 60 * 60,
     async create(user: GitHubUser) {
@@ -48,16 +59,32 @@ export function createSessionStore(file: string, days: number) {
       await save();
       return { id, session };
     },
-    get(id: string | null): Session | null {
-      if (id === null) return null;
-      const session = sessions.get(hashOf(id));
-      if (session === undefined) return null;
-      if (session.expiresAt > Date.now()) return session;
-      sessions.delete(hashOf(id));
-      return null;
-    },
+    get,
     async remove(id: string | null) {
       if (id !== null && sessions.delete(hashOf(id))) await save();
+    },
+    // A new agent token for the session `id`, or null without one.
+    async addAgentToken(id: string | null) {
+      const session = get(id);
+      if (session === null) return null;
+      const token = `studio-agent-${randomBytes(24).toString('base64url')}`;
+      session.agentTokens = [...(session.agentTokens ?? []), hashOf(token)];
+      await save();
+      return token;
+    },
+    // Ends every agent token of the session `id`.
+    async clearAgentTokens(id: string | null) {
+      const session = get(id);
+      if (session === null || (session.agentTokens ?? []).length === 0) return;
+      session.agentTokens = [];
+      await save();
+    },
+    // The session an agent token belongs to, while it lasts.
+    byAgentToken(token: string): Session | null {
+      const hash = hashOf(token);
+      const now = Date.now();
+      for (const session of sessions.values()) if (session.expiresAt > now && (session.agentTokens ?? []).includes(hash)) return session;
+      return null;
     },
     saved: () => writing,
   };

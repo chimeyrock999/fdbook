@@ -128,6 +128,7 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
   const failed = (reason: unknown) => { setError((reason as Error).message); };
 
   return {
+    client,
     agents,
     picks,
     pick,

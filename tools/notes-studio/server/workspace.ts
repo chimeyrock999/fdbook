@@ -1,4 +1,5 @@
 import type { IncomingMessage } from 'node:http';
+import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { createAgentConversationsApi } from './agents/api.ts';
 import { createAgentConversations, type AgentConversationsOptions } from './agents/conversations.ts';
@@ -16,6 +17,11 @@ import type { PreviewOptions } from './preview/preview.ts';
 import { createBranchPullRequestReader, ghPullRequest } from './preview/pull-request.ts';
 import { refuseUpgrade } from './routing.ts';
 import { createNotesSync } from './sync/notes-sync.ts';
+import { createStudioFiles } from './files/studio-files.ts';
+import type { ToolCaller } from './mcp/tool.ts';
+import { createProposalsApi, createProposalStream, type ProposalStream } from './proposals/api.ts';
+import { createComments, type Comments } from './proposals/comments.ts';
+import { createProposals, type Proposals } from './proposals/store.ts';
 import { createTreeApi } from './tree/api.ts';
 
 // Methods that change nothing, and the one POST that writes nothing.
@@ -36,8 +42,13 @@ const refuseWrites: Handler = (request, response) => {
 const defaultPreview = (): PreviewOptions => ({ builds: createBuildReader(ghCheckRun), pullRequests: createBranchPullRequestReader(ghPullRequest), pagesProject: null });
 
 // What agent conversations need besides the worktree: its change request's
-// slug, the profiles and where transcripts go (agents/conversations.ts).
-export type WorkspaceAgents = Omit<AgentConversationsOptions, 'slug'>;
+// slug, the profiles and where transcripts go (agents/conversations.ts); and
+// the Studio home, where the change request's proposals and comments are kept.
+export type WorkspaceAgents = Omit<AgentConversationsOptions, 'slug'> & { home: string };
+
+// Where a change request's proposals and comments are kept, outside its worktree.
+export const proposalsDirOf = (home: string, slug: string) => join(home, 'proposals', slug);
+export const commentsFileOf = (home: string, slug: string) => join(home, 'comments', `${slug}.jsonl`);
 
 // The handlers of one worktree: file API and events, lint, page tree,
 // assets, changes (git status, commit, history), page history, preview (push, build, publish),
@@ -46,19 +57,50 @@ export type WorkspaceAgents = Omit<AgentConversationsOptions, 'slug'>;
 export function createWorkspace(
   root: string,
   hosts: string[],
-  { readOnly = false, preview = defaultPreview(), agents = null }: { readOnly?: boolean; preview?: PreviewOptions; agents?: AgentConversationsOptions | null } = {},
+  { readOnly = false, preview = defaultPreview(), agents = null }: { readOnly?: boolean; preview?: PreviewOptions; agents?: (AgentConversationsOptions & { home: string }) | null } = {},
 ) {
   // Tree and asset changes both write notes: one at a time. A commit waits
   // for them too, so it never takes half of a rename. The lock is this
   // worktree's own: change requests never wait on each other.
   const notesLock = createKeyedLock();
+  // Saves to one file, one at a time, from the editor and from agents alike.
+  const pathLock = createKeyedLock();
   const fileEvents = createFileEvents(root);
   const sync = createNotesSync(root, hosts, { readOnly });
-  const conversations = agents === null || readOnly ? null : createAgentConversations(root, { ...agents, lock: notesLock });
+  // A change request's proposals and comments, and the stream of their changes.
+  let review: { proposals: Proposals; comments: Comments; stream: ProposalStream } | null = null;
+  const conversations = agents === null || readOnly
+    ? null
+    : createAgentConversations(root, {
+      ...agents,
+      lock: notesLock,
+      pathLock,
+      propose: ({ path, content, runId, agent, model }) => {
+        if (review === null) return Promise.reject(new Error('no proposals here'));
+        return review.proposals.propose({ path, content, by: { kind: 'run', runId, agent, model } });
+      },
+    });
+  if (agents !== null && !readOnly) {
+    const stream = createProposalStream();
+    review = {
+      stream,
+      comments: createComments(commentsFileOf(agents.home, agents.slug), stream.sendComment),
+      proposals: createProposals(root, {
+        dir: proposalsDirOf(agents.home, agents.slug),
+        notesLock,
+        pathLock,
+        onChange: (proposal, created) => {
+          if (created && proposal.by.kind === 'run') conversations?.proposed(proposal.by.runId, proposal);
+          stream.send(proposal);
+        },
+      }),
+    };
+  }
   const handlers: Handler[] = [
     ...(readOnly ? [refuseWrites] : []),
     fileEvents.handle,
-    createFilesApi(root),
+    // A person's save is never reverted by a turn going on (agents/watch.ts).
+    createFilesApi(root, pathLock, conversations === null ? undefined : (path) => { conversations.savedByPerson(path); }),
     createLintApi(root),
     createTreeApi(root, notesLock),
     createAssetsApi(root, notesLock),
@@ -66,15 +108,28 @@ export function createWorkspace(
     createPageHistoryApi(root, notesLock),
     createPreviewApi(root, preview, { readOnly, lock: notesLock }),
     createAgentConversationsApi(conversations),
+    createProposalsApi(review),
   ];
   return {
     root,
     handlers,
+    conversations,
+    review,
+    // The worktree's files for an MCP tool call (mcp/http.ts): under the
+    // notes lock, and on the turn's Keep/Revert list when an agent writes
+    // (a caller's `runId` is its conversation).
+    files: (caller: ToolCaller) => createStudioFiles(root, {
+      pathLock,
+      notesLock,
+      beforeWrite: caller.kind === 'run' && conversations !== null ? (path, previous) => { conversations.beforeWrite(caller.runId, path, previous); } : undefined,
+      afterWrite: caller.kind === 'run' && conversations !== null ? (path, content) => { conversations.wrote(caller.runId, path, content); } : undefined,
+    }),
     handleUpgrade: (request: IncomingMessage, socket: Duplex, head: Buffer) => {
       sync.handleUpgrade(request, socket, head);
     },
     close: async () => {
       await conversations?.close();
+      review?.stream.close();
       fileEvents.close();
       await sync.close();
     },
@@ -155,6 +210,10 @@ export function createWorkspaceRouter(hosts: string[], resolve: (slug: string) =
 
   return {
     handle,
+    // A change request's workspace, opened if it is not yet; null when there is no such one.
+    open: workspace,
+    // A workspace already open, without opening it.
+    peek: (slug: string) => open.get(slug)?.workspace ?? null,
     // The upgrade route for /cr/<slug>/__fde_sync.
     syncRoute: (endpoint: string) => ({
       matches: (request: IncomingMessage) => {

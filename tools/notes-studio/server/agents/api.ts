@@ -26,7 +26,7 @@ export function createAgentsInfoApi(info: () => Promise<AgentInfo[]>, transcript
 }
 
 const LIST = '/api/agents/conversations';
-const ONE = /^\/api\/agents\/conversations\/([a-z0-9-]+)(?:\/(messages|cancel|permissions\/([a-f0-9]+)))?$/;
+const ONE = /^\/api\/agents\/conversations\/([a-z0-9-]+)(?:\/(messages|cancel|permissions\/([a-f0-9]+)|turns\/([1-9][0-9]*)\/changes(\/before)?))?$/;
 
 // The conversations of one worktree (conversations.ts), or null where
 // agents may not work (main):
@@ -37,6 +37,9 @@ const ONE = /^\/api\/agents\/conversations\/([a-z0-9-]+)(?:\/(messages|cancel|pe
 // POST   /api/agents/conversations/<id>/messages { prompt } its next turn
 // POST   /api/agents/conversations/<id>/cancel {}          stops the turn going on
 // POST   /api/agents/conversations/<id>/permissions/<ask> { optionId } (null rejects)
+// GET    /api/agents/conversations/<id>/turns/<n>/changes  the files turn n changed, for Keep/Revert
+// POST   /api/agents/conversations/<id>/turns/<n>/changes { path, op: keep | revert }
+// GET    /api/agents/conversations/<id>/turns/<n>/changes/before?path=…  what the file held before it
 // GET    /api/agents/events                                server-sent events of every conversation
 export function createAgentConversationsApi(conversations: AgentConversations | null): Handler {
   async function answer(pathname: string, request: Parameters<Handler>[0]): Promise<unknown> {
@@ -56,6 +59,18 @@ export function createAgentConversationsApi(conversations: AgentConversations | 
       if (request.method !== 'DELETE') throw new HttpError(405, 'method not allowed');
       await conversations.remove(id);
       return { ok: true };
+    }
+    if (match?.[4] !== undefined) {
+      const turn = Number(match[4]);
+      if (match[5] === '/before') {
+        if (request.method !== 'GET') throw new HttpError(405, 'method not allowed');
+        return conversations.before(id, turn, new URL(request.url ?? '/', 'http://studio').searchParams.get('path') ?? '');
+      }
+      if (request.method === 'GET') return { changes: await conversations.changes(id, turn) };
+      if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
+      const body = await readJsonObject(request, MAX_BODY_BYTES, 'a decision');
+      if (typeof body.path !== 'string') throw new HttpError(400, 'path must be a worktree path');
+      return { change: await conversations.decide(id, turn, body.path, body.op) };
     }
     if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
     if (action === 'messages') {
