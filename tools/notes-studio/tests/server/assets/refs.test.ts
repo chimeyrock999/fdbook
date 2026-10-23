@@ -173,6 +173,17 @@ describe('findAssetRefs', () => {
     expect(findAssetRefs('<HtmlEmbed src="/notes/a.html"\n', 'a.mdx')).toBeNull();
   });
 
+  it('finds a <Diagram src> as its file under diagrams/, never to rewrite', () => {
+    const source = '<Diagram src="guide/flow" caption="x" />\n\n<Diagram src={"/guide/flow.diagram.json"} />\n\n<Diagram src="../outside" />\n';
+    const refs = findAssetRefs(source, 'guide/intro.mdx') ?? [];
+    expect(refs.map(({ asset, kind, line, exact }) => ({ asset, kind, line, exact }))).toEqual([
+      { asset: 'diagrams/guide/flow.diagram.json', kind: 'diagram', line: 1, exact: true },
+      { asset: 'diagrams/guide/flow.diagram.json', kind: 'diagram', line: 3, exact: true },
+    ]);
+    expect(source.slice(refs[0].start, refs[0].end)).toBe('guide/flow');
+    expect(rewriteAssetRefs(source, 'guide/intro.mdx', () => 'diagrams/other.diagram.json')).toEqual({ next: source, count: 0 });
+  });
+
   // One test per note, each well inside the default timeout; the last one
   // checks what they found together (tests in a file run in order).
   describe('on the real notes', () => {
@@ -188,7 +199,7 @@ describe('findAssetRefs', () => {
       // Diagrams are <Diagram> (diagrams/, not public/) since #80: the notes
       // keep their images and one <SvgDiagram>.
       expect(found.length).toBeGreaterThanOrEqual(8);
-      expect(new Set(found.map((ref) => ref.kind))).toEqual(new Set(['image', 'jsx']));
+      expect(new Set(found.map((ref) => ref.kind))).toEqual(new Set(['image', 'jsx', 'diagram']));
     });
   });
 });

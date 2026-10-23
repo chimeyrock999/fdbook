@@ -1,8 +1,10 @@
-import { ChevronRight, FileCode, Folder, Image, MoreHorizontal, PanelRight, Pencil, Trash2 } from 'lucide-react';
+import { ChevronRight, FileCode, Folder, Image, MoreHorizontal, PanelRight, Pencil, Trash2, Workflow } from 'lucide-react';
+import { DIAGRAM_SUFFIX } from '@site/lib/diagram/source';
 import { useEffect, useRef, useState } from 'react';
+import { classifyPath } from '../../server/security/asset-types';
 import type { AssetAnswer, AssetInfo, AssetsClient, AssetUsage } from '../api/assets';
 import { assetDirFor } from '../media/asset-names';
-import { buildAssetTree, foldersTo, nameOf, type AssetFolder } from './asset-tree';
+import { buildAssetTree, DIAGRAMS_PREFIX, foldersTo, nameOf, type AssetFolder } from './asset-tree';
 import { isImage } from './asset-facts';
 import { plural, said } from './asset-changes';
 import { DeleteAssetDialog, RenameAssetDialog } from './AssetDialogs';
@@ -24,9 +26,13 @@ type View = {
   openMenu: (menu: Menu) => void;
 };
 
+const isDiagram = (path: string) => classifyPath(path) === 'diagram';
+
 function FileRow({ asset, view }: { asset: AssetInfo; view: View }) {
   const name = nameOf(asset.path);
-  const dot = name.lastIndexOf('.');
+  const diagram = isDiagram(asset.path);
+  // A diagram's name ends at `.diagram.json`, as <Diagram src> writes it.
+  const dot = diagram ? name.length - DIAGRAM_SUFFIX.length : name.lastIndexOf('.');
   const used = asset.usages.length;
   const current = view.current === asset.path;
   return (
@@ -34,7 +40,7 @@ function FileRow({ asset, view }: { asset: AssetInfo; view: View }) {
       <div className="studio-tree-row" aria-current={current ? 'page' : undefined}>
         <span className="studio-tree-chevron" />
         <button type="button" className="studio-tree-label" title={asset.path} onClick={() => { view.open(asset.path); }}>
-          {isImage(name) ? <Image size={16} /> : <FileCode size={16} />}
+          {diagram ? <Workflow size={16} /> : isImage(name) ? <Image size={16} /> : <FileCode size={16} />}
           <span className="truncate">
             {name.slice(0, dot)}
             <span className="text-[var(--fde-muted-foreground)]">{name.slice(dot)}</span>
@@ -89,8 +95,9 @@ function FolderItems({ folder, nested = false, view }: { folder: AssetFolder; ne
   );
 }
 
-// The sidebar's Assets view: public/notes as folders, each file with how
-// many times notes use it. A file opens its asset page in the main pane
+// The sidebar's Assets view: public/notes as folders, then diagrams/, each
+// file with how many times notes use it (a diagram: the <Diagram> that draw
+// it; it opens the diagram editor and is not renamed or deleted here). A file opens its asset page in the main pane
 // (`onOpen`; `current` is the one open there); its menu renames it (every
 // reference follows) or deletes it (only once nothing uses it), and
 // `onChanged` hears what changed. `active` is the open note (a worktree
@@ -150,6 +157,7 @@ export function AssetsView({ client, list, active, current, unsaved, readOnly = 
       : <p role="alert" className="p-3 text-[12.5px] text-[var(--fde-error)]">Could not load the assets: {error}</p>;
   }
   const tree = buildAssetTree(assets, { query, unused });
+  const diagrams = buildAssetTree(assets, { query, unused, prefix: DIAGRAMS_PREFIX });
   const unusedCount = assets.filter((asset) => asset.usages.length === 0).length;
   const view: View = {
     filtering: query.trim() !== '' || unused,
@@ -173,7 +181,8 @@ export function AssetsView({ client, list, active, current, unsaved, readOnly = 
     onChanged(answer);
     reload();
   };
-  const empty = tree.folders.length === 0 && tree.files.length === 0;
+  const none = (folder: AssetFolder) => folder.folders.length === 0 && folder.files.length === 0;
+  const empty = none(tree) && none(diagrams);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 p-2.5">
@@ -186,7 +195,15 @@ export function AssetsView({ client, list, active, current, unsaved, readOnly = 
       {empty ? (
         <p className="px-2 text-[12.5px] text-[var(--fde-muted-foreground)]">{assets.length === 0 ? 'No files in public/notes yet.' : 'No asset matches.'}</p>
       ) : (
-        <div className="min-h-0 overflow-auto"><FolderItems folder={tree} view={view} /></div>
+        <div className="min-h-0 overflow-auto">
+          <FolderItems folder={tree} view={view} />
+          {!none(diagrams) && (
+            <>
+              <h3 className="studio-asset-area">Diagrams</h3>
+              <FolderItems folder={diagrams} view={view} />
+            </>
+          )}
+        </div>
       )}
       {status && (
         <p role={status.error ? 'alert' : 'status'} className={status.error ? 'studio-tree-error' : 'studio-tree-status'}>
@@ -198,7 +215,7 @@ export function AssetsView({ client, list, active, current, unsaved, readOnly = 
           <button type="button" role="menuitem" onClick={() => { setMenu(null); onOpen(menu.asset.path); }}>
             <PanelRight size={14} /> Open
           </button>
-          {!readOnly && (
+          {!readOnly && !isDiagram(menu.asset.path) && (
             <>
               <button type="button" role="menuitem" disabled={unsaved} onClick={() => { setMenu(null); setDialog({ kind: 'rename', asset: menu.asset }); }}>
                 <Pencil size={14} /> Rename…

@@ -120,10 +120,11 @@ export function usagesIn(scan: NoteScan, assets: Iterable<string>) {
   return usages;
 }
 
-// Every asset under public/notes with its usages, sorted by path. `scan`
-// keeps what was read of the notes between calls.
+// Every asset under public/notes, then every diagram under diagrams/ (the
+// Assets view lists both), with its usages, sorted by path. `scan` keeps
+// what was read of the notes between calls.
 export async function listAssets(root: string, scan: NoteScan = new Map()): Promise<AssetInfo[]> {
-  const files = (await listEditableFiles(root)).filter((file) => file.kind === 'asset');
+  const files = (await listEditableFiles(root)).filter((file) => file.kind === 'asset' || file.kind === 'diagram');
   const usages = usagesIn(await scanNotes(root, scan), files.map((file) => file.path));
   const sources = await findAssetSources(root);
   return files.map((file) => ({ path: file.path, mtimeMs: file.mtimeMs, size: file.size, usages: usages.get(file.path) ?? [], sources: sources.get(file.path) ?? [] }));

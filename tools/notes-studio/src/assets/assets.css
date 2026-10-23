@@ -19,6 +19,15 @@
     background: var(--fde-accent);
     color: var(--fde-foreground);
   }
+  /* The heading over the diagrams/ files, after public/notes. */
+  .studio-asset-area {
+    margin: 10px 8px 2px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
   .studio-asset-uses {
     flex: none;
     padding: 1px 5px;

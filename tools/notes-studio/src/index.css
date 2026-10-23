@@ -9,6 +9,7 @@
 @import './notes-prose.css';
 @import './assets/assets.css';
 @import './assets/asset-page.css';
+@import './diagrams/diagram-page.css';
 @import './changes/changes.css';
 @import './diff/diff.css';
 @import './history/history.css';

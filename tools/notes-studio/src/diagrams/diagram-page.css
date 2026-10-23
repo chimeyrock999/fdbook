@@ -1,0 +1,321 @@
+/* The diagram editor in the main pane (src/diagrams/DiagramPage.tsx). The
+   drawing's own colours come from the site's styles/diagram.css on `.dg`;
+   the editing layer on top (outlines, handles) uses the Studio's tokens.
+   Laid out like the asset page: a bar, then the body, which puts the JSON
+   and the properties beside the drawing on a wide pane and under it on a
+   phone. */
+@layer components {
+  .studio-dg-page {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+  .studio-dg-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--fde-border);
+    font-size: 12.5px;
+  }
+  .studio-dg-path {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-dg-status,
+  .studio-dg-count {
+    flex: none;
+    padding: 0 6px;
+    border: 1px solid var(--fde-border);
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-dg-status[data-status='conflict'],
+  .studio-dg-status[data-status='failed'],
+  .studio-dg-status[data-status='invalid'],
+  .studio-dg-count[data-error] {
+    border-color: color-mix(in srgb, var(--fde-error) 60%, transparent);
+    color: var(--fde-error);
+  }
+  .studio-dg-tools {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .studio-dg-tools .studio-icon-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+  .studio-dg-sep {
+    width: 1px;
+    height: 18px;
+    margin: 0 4px;
+    background: var(--fde-border);
+  }
+  .studio-dg-bar .studio-button[aria-pressed='true'] {
+    border-color: var(--fde-primary);
+    color: var(--fde-primary);
+  }
+  .studio-dg-conflict,
+  .studio-dg-error {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 16px 0;
+    padding: 6px 10px;
+    border: 1px solid var(--fde-error);
+    border-radius: 8px;
+    font-size: 12.5px;
+  }
+  .studio-dg-error {
+    color: var(--fde-error);
+  }
+  .studio-dg-body {
+    display: grid;
+    min-height: 0;
+    flex: 1;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    overflow: hidden;
+  }
+  .studio-dg-body[data-json] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) 280px;
+  }
+  .studio-dg-body[data-only-json] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .studio-dg-main {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    gap: 12px;
+    overflow: auto;
+    padding: 16px;
+  }
+
+  /* The drawing, and the layer that edits it, share one box: the overlay
+     has the scene's viewBox, so its handles sit on what they move. */
+  .studio-dg-canvas {
+    position: relative;
+    outline: none;
+    flex: none;
+    border: 1px solid var(--fde-border);
+    border-radius: 10px;
+    background: var(--dg-bg);
+    touch-action: none;
+    user-select: none;
+  }
+  .studio-dg-canvas .dg-canvas {
+    padding: 0;
+  }
+  .studio-dg-canvas svg.dg-svg,
+  .studio-dg-overlay {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .studio-dg-overlay {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+  .studio-dg-canvas [data-node-id],
+  .studio-dg-canvas [data-group-id] {
+    cursor: grab;
+  }
+  .studio-dg-canvas[data-dragging='move'],
+  .studio-dg-canvas[data-dragging='move'] * {
+    cursor: grabbing;
+  }
+  .studio-dg-canvas[data-dragging='connect'],
+  .studio-dg-canvas[data-dragging='connect'] * {
+    cursor: crosshair;
+  }
+  .studio-dg-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 10px;
+    pointer-events: stroke;
+    cursor: pointer;
+  }
+  .studio-dg-hit:hover,
+  .studio-dg-hit[data-selected] {
+    stroke: color-mix(in srgb, var(--fde-primary) 22%, transparent);
+  }
+  .studio-dg-outline {
+    fill: none;
+    stroke: var(--fde-primary);
+    stroke-width: 1.5px;
+    stroke-dasharray: 4 3;
+  }
+  .studio-dg-port,
+  .studio-dg-waypoint,
+  .studio-dg-insert {
+    fill: var(--fde-background);
+    stroke: var(--fde-primary);
+    stroke-width: 1.5px;
+    pointer-events: all;
+  }
+  .studio-dg-port {
+    cursor: crosshair;
+  }
+  .studio-dg-port:hover,
+  .studio-dg-waypoint:hover {
+    fill: var(--fde-primary);
+  }
+  .studio-dg-waypoint {
+    cursor: move;
+  }
+  .studio-dg-insert {
+    cursor: copy;
+    opacity: 0.7;
+  }
+  .studio-dg-wire {
+    stroke: var(--fde-primary);
+    stroke-width: 1.5px;
+    stroke-dasharray: 5 4;
+  }
+  .studio-dg-problem {
+    padding: 24px;
+    font-size: 13px;
+    color: var(--fde-muted-foreground);
+  }
+
+  .studio-dg-issues,
+  .studio-dg-usages {
+    font-size: 12.5px;
+  }
+  .studio-dg-issues summary,
+  .studio-dg-usages h3,
+  .studio-dg-section h3 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-dg-issues summary {
+    cursor: pointer;
+  }
+  .studio-dg-issues ul,
+  .studio-dg-usages ul {
+    display: grid;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .studio-dg-issues li[data-severity='error'] code {
+    color: var(--fde-error);
+  }
+  .studio-dg-usages button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--fde-primary);
+  }
+  .studio-dg-usages button:hover {
+    text-decoration: underline;
+  }
+  .studio-dg-muted {
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+
+  .studio-dg-json {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    border-left: 1px solid var(--fde-border);
+  }
+  .studio-dg-json-error {
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--fde-error);
+  }
+
+  .studio-dg-panel {
+    display: grid;
+    align-content: start;
+    gap: 16px;
+    min-height: 0;
+    overflow: auto;
+    padding: 16px;
+    border-left: 1px solid var(--fde-border);
+  }
+  .studio-dg-section {
+    display: grid;
+    gap: 8px;
+  }
+  .studio-dg-field {
+    display: grid;
+    gap: 3px;
+    font-size: 12px;
+  }
+  .studio-dg-field > span {
+    color: var(--fde-muted-foreground);
+  }
+  .studio-dg-field small {
+    font-size: 11px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-dg-field textarea {
+    resize: vertical;
+  }
+  .studio-dg-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+  }
+  .studio-dg-cards {
+    display: grid;
+    gap: 2px;
+  }
+  .studio-dg-cards button {
+    width: 100%;
+    padding: 4px 6px;
+    border-radius: 6px;
+    text-align: left;
+    font-size: 12.5px;
+  }
+  .studio-dg-cards button:hover {
+    background: var(--fde-muted);
+  }
+
+  /* A phone or a narrow pane: everything stacks and the page scrolls. */
+  @media (max-width: 1023px) {
+    .studio-dg-body,
+    .studio-dg-body[data-json] {
+      display: flex;
+      flex-direction: column;
+      overflow: auto;
+    }
+    .studio-dg-main {
+      overflow: visible;
+    }
+    .studio-dg-json {
+      min-height: 320px;
+      border-top: 1px solid var(--fde-border);
+      border-left: 0;
+    }
+    .studio-dg-panel {
+      overflow: visible;
+      border-top: 1px solid var(--fde-border);
+      border-left: 0;
+    }
+  }
+}

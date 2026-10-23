@@ -184,4 +184,30 @@ describe('AssetsView', () => {
     await userEvent.click(within(menu).getByRole('menuitem', { name: 'Open' }));
     expect(onOpen).toHaveBeenCalledWith('public/notes/guide/old_name.png');
   });
+
+  it('lists diagrams/ after public/notes, opening a diagram and offering only Open', async () => {
+    const diagram: AssetInfo = { path: 'diagrams/guide/flow.diagram.json', mtimeMs: 4, size: 900, usages: [usage('content/notes/guide/intro.mdx', 30)], sources: [] };
+    const onOpen = vi.fn();
+    render(
+      <AssetsView
+        client={{ listAssets: vi.fn(), change: vi.fn() } as unknown as AssetsClient}
+        list={{ assets: [...ASSETS, diagram], error: null, reload: vi.fn() }}
+        active={null}
+        current="diagrams/guide/flow.diagram.json"
+        unsaved={false}
+        onOpen={onOpen}
+        onOpenUsage={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Diagrams' })).toBeTruthy();
+    // The diagram's folder opens, as the open asset's does.
+    const diagramRow = row(/^flow\.diagram\.json/);
+    expect(diagramRow.getAttribute('aria-current')).toBe('page');
+    expect(within(diagramRow).getByText('1×')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: /^flow\.diagram\.json/ }));
+    expect(onOpen).toHaveBeenCalledWith('diagrams/guide/flow.diagram.json');
+    const menu = await openMenu('flow.diagram.json');
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent.trim())).toEqual(['Open']);
+  });
 });
