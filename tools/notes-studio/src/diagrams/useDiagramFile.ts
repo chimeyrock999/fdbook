@@ -1,5 +1,5 @@
 import { formatDiagramJson } from '@site/lib/diagram/format';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useAssetUrl } from '../api/asset-versions';
 import { FileConflictError, type createFilesClient } from '../api/files';
 import type { Input } from './edits';
@@ -35,14 +35,46 @@ const EMPTY: State = { doc: null, text: '', past: [], future: [], status: 'loadi
 // parse, a save still under way), by file client (one worktree) and path,
 // for the next page that opens the file in this tab: it shows them again,
 // saved or in conflict.
-type Left = Map<string, { text: string; base: number | null }>;
+type Kept = { text: string; base: number | null };
+type Left = { entries: Map<string, Kept>; listeners: Set<() => void> };
 const leftBy = new WeakMap<Files, Left>();
 function leftIn(files: Files): Left {
   const known = leftBy.get(files);
   if (known) return known;
-  const left: Left = new Map();
+  const left: Left = { entries: new Map(), listeners: new Set() };
   leftBy.set(files, left);
   return left;
+}
+function keep(left: Left, path: string, kept: Kept | null) {
+  if (kept) left.entries.set(path, kept);
+  else if (!left.entries.delete(path)) return;
+  for (const listener of [...left.listeners]) listener();
+}
+
+// Asks before the tab closes or reloads while `when` holds.
+function useLeaveWarning(when: boolean) {
+  useEffect(() => {
+    if (!when) return undefined;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener('beforeunload', warn);
+    return () => { window.removeEventListener('beforeunload', warn); };
+  }, [when]);
+}
+
+// A diagram whose edits a page left in this worktree before they were on
+// disk, or null: the App holds its unsaved lock for it (a reload or another
+// change request would drop them), and the tab asks before it closes.
+export function useLeftEdits(files: Files): string | null {
+  const left = leftIn(files);
+  const path = useSyncExternalStore(
+    (listener) => {
+      left.listeners.add(listener);
+      return () => { left.listeners.delete(listener); };
+    },
+    () => left.entries.keys().next().value ?? null,
+  );
+  useLeaveWarning(path !== null);
+  return path;
 }
 
 function parsed(text: string): Input | null {
@@ -97,7 +129,7 @@ export function useDiagramFile(files: Files, path: string, readOnly: boolean) {
     try {
       base.current = await files.writeFile(path, text, base.current);
       saved.current = text;
-      if (left.get(path)?.text === text) left.delete(path);
+      if (left.entries.get(path)?.text === text) keep(left, path, null);
       update((current) => ({ ...current, onDisk: text, status: current.text === text ? 'saved' : 'unsaved' }));
     } catch (error) {
       if (error instanceof FileConflictError) {
@@ -135,7 +167,7 @@ export function useDiagramFile(files: Files, path: string, readOnly: boolean) {
 
   // Edits an earlier page left for this file: on the disk's version they
   // were made from, they wait to be saved; on another, they are a conflict.
-  const restore = useCallback((kept: { text: string; base: number | null }, content: string, mtimeMs: number) => {
+  const restore = useCallback((kept: Kept, content: string, mtimeMs: number) => {
     const doc = parsed(kept.text);
     const conflict = kept.base !== mtimeMs;
     update((current) => ({
@@ -162,9 +194,9 @@ export function useDiagramFile(files: Files, path: string, readOnly: boolean) {
           return;
         }
         const first = !known.current;
-        const kept = first ? left.get(path) : undefined;
+        const kept = first ? left.entries.get(path) : undefined;
         if (kept) {
-          left.delete(path);
+          keep(left, path, null);
           loaded(content, mtimeMs, false);
           if (kept.text !== content) {
             restore(kept, content, mtimeMs);
@@ -189,7 +221,7 @@ export function useDiagramFile(files: Files, path: string, readOnly: boolean) {
   useLayoutEffect(() => {
     leave.current = () => {
       const { text, onDisk, status } = latest.current;
-      if (onDisk !== null && text !== onDisk) left.set(path, { text, base: base.current });
+      if (onDisk !== null && text !== onDisk) keep(left, path, { text, base: base.current });
       if (status === 'unsaved') void save();
     };
   });
@@ -258,10 +290,14 @@ export function useDiagramFile(files: Files, path: string, readOnly: boolean) {
     later();
   }, [loaded, later, update]);
 
+  // Edits not on disk yet: the App waits for them as for a note's, and the
+  // tab asks before it closes.
+  const waiting = state.onDisk !== null && state.text !== state.onDisk;
+  useLeaveWarning(waiting);
+
   return {
     ...state,
-    // Edits not on disk yet: the App waits for them as for a note's.
-    waiting: state.onDisk !== null && state.text !== state.onDisk,
+    waiting,
     canUndo: state.past.length > 0 && !readOnly,
     canRedo: state.future.length > 0 && !readOnly,
     apply,

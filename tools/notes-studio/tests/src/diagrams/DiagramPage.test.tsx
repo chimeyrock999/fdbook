@@ -9,6 +9,7 @@ import { assetChanged } from '../../../src/api/asset-versions';
 import type { AssetUsage } from '../../../src/api/assets';
 import { FileConflictError, type createFilesClient } from '../../../src/api/files';
 import { DiagramPage } from '../../../src/diagrams/DiagramPage';
+import { useLeftEdits } from '../../../src/diagrams/useDiagramFile';
 import { stubLayout } from '../../support/visual-editor';
 
 const PATH = 'diagrams/data-platform/processing/apache-spark/spark-logic-to-execution.diagram.json';
@@ -373,7 +374,6 @@ describe('DiagramPage', () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(writeFile).not.toHaveBeenCalled();
     expect((label as HTMLInputElement).value).toBe('Ti');
-    expect((label as HTMLInputElement).value).toBe('Ti');
   });
 
   it('holds no lock for a file that does not parse until it is edited', async () => {
@@ -403,6 +403,36 @@ describe('DiagramPage', () => {
     // Saved: nothing is kept for a third open.
     render(page());
     await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Saved'); });
+  });
+
+  it('holds the lock and asks before a reload while left edits wait, after the page is gone', async () => {
+    const fake = disk();
+    function Probe() {
+      return <span data-testid="left">{useLeftEdits(fake.files) ?? "none"}</span>;
+    }
+    const unload = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    render(<Probe />);
+    const page = () => <DiagramPage files={fake.files} path={PATH} readOnly={false} usages={[]} onOpenUsage={vi.fn()} />;
+    const first = render(page());
+    await waitFor(() => { expect(first.container.querySelector('svg.dg-svg')).not.toBeNull(); });
+    expect(unload()).toBe(false);
+    fake.state.mtimeMs = 99;
+    drag(node(first.container, 'plan'), [600, 150], [643, 150]);
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('changed on disk'); });
+    expect(unload()).toBe(true);
+    first.unmount();
+    expect(screen.getByTestId('left').textContent).toBe(PATH);
+    expect(unload()).toBe(true);
+    render(page());
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('changed on disk'); });
+    await userEvent.click(screen.getByRole('button', { name: 'Keep mine' }));
+    await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Saved'); });
+    expect(screen.getByTestId('left').textContent).toBe('none');
+    expect(unload()).toBe(false);
   });
 
   it('tells the App while edits are not on disk yet', async () => {

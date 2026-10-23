@@ -1217,8 +1217,10 @@ the CLI) loads while nothing waits to be saved, and undo can go back past
 it; with edits waiting, the page asks whether to load the disk's version or
 keep its own. A gesture under way applies to the version that loaded.
 Edits not on disk yet hold the same lock as a note's (switching change
-request, renames, Commit); left in a conflict or as JSON that does not
-parse, they show again the next time the file is opened in the tab. On
+request, renames, Commit), and the tab asks before it closes; left in a
+conflict or as JSON that does not parse, they keep holding both until they
+are saved, and show again the next time the file is opened in the tab
+(they last as long as the tab: a reload, after its prompt, drops them). On
 main, or for a reader, the editor only shows.
 
 Agents change diagrams through the Studio MCP server's `diagram_*` tools

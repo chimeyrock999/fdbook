@@ -43,6 +43,7 @@ import { CrNotice } from './cr/CrNotice';
 import { CrPicker, EditMenu } from './cr/CrMenus';
 import { useCrs } from './cr/useCrs';
 import { DiagramPage } from './diagrams/DiagramPage';
+import { useLeftEdits } from './diagrams/useDiagramFile';
 import { DiffPage } from './diff/DiffPage';
 import { createHistoryClient } from './api/history';
 import { DeletedPagesPage } from './history/DeletedPagesPage';
@@ -100,7 +101,9 @@ export function App() {
   const [saved, setSaved] = useState<{ path: string; status: DocumentStatus } | null>(null);
   // The open diagram's save state: edits not on disk yet hold the same lock.
   const [diagramWaits, setDiagramWaits] = useState<string | null>(null);
-  const unsaved = unsavedNote(active, saved) ?? (diagram !== null && diagramWaits === diagram ? diagram : null);
+  // Diagram edits a page left in a conflict or as JSON that does not parse.
+  const leftDiagram = useLeftEdits(files);
+  const unsaved = unsavedNote(active, saved) ?? (diagram !== null && diagramWaits === diagram ? diagram : null) ?? leftDiagram;
   const diagramWaiting = useCallback((waiting: boolean) => { setDiagramWaits(waiting ? diagram : null); }, [diagram]);
   const crs = useCrs(crClient, files, page?.kind === 'crs');
   // With change requests, main is read only until one is opened (`?cr=`); a

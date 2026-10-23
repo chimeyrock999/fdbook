@@ -93,8 +93,13 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&
 // holds its file name whole (`data.png` is not `ta.png`), as written or
 // percent-encoded; for a diagram, the `src` a <Diagram> names it with.
 function unsureUsage(note: string, lines: string[], asset: string): AssetUsage | null {
-  const name = classifyPath(asset) === 'diagram' ? asset.slice(DIAGRAMS_DIR.length + 1, -DIAGRAM_SUFFIX.length) : baseOf(asset);
-  const pattern = new RegExp(`(?<![\\w.%-])(${escapeRegExp(name)}|${escapeRegExp(encodeURIComponent(name))})(?![\\w-])`);
+  const diagram = classifyPath(asset) === 'diagram';
+  const name = diagram ? asset.slice(DIAGRAMS_DIR.length + 1, -DIAGRAM_SUFFIX.length) : baseOf(asset);
+  // A file name may follow a folder. A diagram's src is the whole path (a
+  // leading `/` allowed), so a folder before or after it makes another one.
+  const before = diagram ? '(?<![\\w.%-])(?<![\\w.%-]/)' : '(?<![\\w.%-])';
+  const after = diagram ? '(?![\\w/-])' : '(?![\\w-])';
+  const pattern = new RegExp(`${before}(${escapeRegExp(name)}|${escapeRegExp(encodeURIComponent(name))})${after}`);
   for (const [index, line] of lines.entries()) {
     const match = pattern.exec(line);
     if (match) return { note, line: index + 1, column: match.index + 1, length: match[0].length, text: lineText(lines, index + 1), unsure: true };
