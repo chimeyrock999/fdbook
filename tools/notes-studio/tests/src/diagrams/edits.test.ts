@@ -5,6 +5,7 @@ import { validateDiagram } from '@site/lib/diagram/validate';
 import { describe, expect, it } from 'vitest';
 import {
   addCard,
+  addKind,
   addGroup,
   addNodeAt,
   connectAt,
@@ -19,6 +20,7 @@ import {
   removeCard,
   removeEdge,
   removeGroup,
+  removeKind,
   setEdgeSides,
   setWaypoints,
   snap,
@@ -167,6 +169,16 @@ describe('diagram edits', () => {
     expect(twice.cards?.[1]).toEqual(real().cards?.[0]);
     expect(removeCard(twice, 1)).toEqual(real());
     draws(added);
+  });
+
+  it('adds a kind, for a node or alone, and removes only an unused one', () => {
+    const { diagram, id } = addKind(real(), 'plan');
+    expect(id).toBe('kind');
+    expect(diagram.kinds.at(-1)).toEqual({ id: 'kind', label: 'New kind', tone: 'blue' });
+    expect(diagram.nodes.find((node) => node.id === 'plan')?.kind).toBe('kind');
+    expect(draws(diagram).legend?.entries.map((entry) => entry.label)).toContain('New kind');
+    expect(removeKind(diagram, 'kind')).toBe(diagram);
+    expect(removeKind(addKind(real()).diagram, 'kind')).toEqual(real());
   });
 
   it('numbers an id that is taken', () => {

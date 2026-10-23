@@ -1,7 +1,10 @@
 import { EDGE_VARIANTS, ICONS, SIDES, TONES, type Side } from '@site/lib/diagram/schema';
+import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { Selection } from './DiagramCanvas';
 import {
+  addKind,
+  removeKind,
   setEdgeSides,
   setWaypoints,
   updateCard,
@@ -10,8 +13,12 @@ import {
   updateKind,
   updateNode,
   type Input,
+  type KindInput,
   type NodeInput,
 } from './edits';
+
+// The Kind choice that makes a new kind for the node.
+const NEW_KIND = '__new-kind';
 
 type Change = (next: Input) => void;
 
@@ -35,6 +42,8 @@ function TextField({ label, value, onCommit, multiline = false, readOnly, hint }
   };
   const props = {
     className: 'studio-input',
+    // The hint is not part of the name.
+    'aria-label': label,
     value: draft ?? value,
     readOnly,
     onChange: (event: { target: { value: string } }) => { setDraft(event.target.value); },
@@ -66,10 +75,13 @@ function Choice<T extends string>({ label, value, options, onChange, readOnly, n
   return (
     <label className="studio-dg-field">
       <span>{label}</span>
-      <select className="studio-input" value={value ?? ''} disabled={readOnly} onChange={(event) => { onChange(event.target.value === '' ? undefined : (event.target.value as T)); }}>
-        {none !== undefined && <option value="">{none}</option>}
-        {items.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-      </select>
+      <span className="studio-dg-select">
+        <select className="studio-input" value={value ?? ''} disabled={readOnly} onChange={(event) => { onChange(event.target.value === '' ? undefined : (event.target.value as T)); }}>
+          {none !== undefined && <option value="">{none}</option>}
+          {items.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </select>
+        <ChevronDown size={14} aria-hidden />
+      </span>
     </label>
   );
 }
@@ -92,6 +104,57 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+// A kind's legend name, tone and icon: every node of the kind follows.
+function KindFields({ doc, kind, onChange, readOnly, every }: { doc: Input; kind: KindInput; onChange: Change; readOnly: boolean; every?: boolean }) {
+  const set = (patch: Partial<KindInput>) => { onChange(updateKind(doc, kind.id, patch)); };
+  const of = every ? ` of every ${kind.label}` : '';
+  return (
+    <>
+      <TextField label={every ? `Name of every ${kind.label}` : 'Name'} value={kind.label} readOnly={readOnly} hint={every ? 'As the legend says it.' : undefined} onCommit={(label) => { if (label.trim()) set({ label }); }} />
+      <Choice label={`Tone${of}`} value={kind.tone} readOnly={readOnly} options={TONES} onChange={(tone) => { if (tone) set({ tone }); }} />
+      <Choice label={`Icon${of}`} value={kind.icon} readOnly={readOnly} options={ICONS} none="dot (default)" onChange={(icon) => { set({ icon }); }} />
+    </>
+  );
+}
+
+// Every kind the diagram lists, each with how many nodes are of it; one no
+// node is of can go.
+function KindsFields({ doc, onChange, readOnly }: { doc: Input; onChange: Change; readOnly: boolean }) {
+  return (
+    <Section title="Kinds">
+      {doc.kinds.map((kind) => {
+        const count = doc.nodes.filter((node) => node.kind === kind.id).length;
+        return (
+          <div key={kind.id} className="studio-dg-kind" aria-label={`Kind ${kind.label}`} role="group">
+            <div className="studio-dg-kind-head">
+              <code>{kind.id}</code>
+              <span className="studio-dg-muted">{count === 0 ? 'unused' : `${String(count)} node${count === 1 ? '' : 's'}`}</span>
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="studio-icon-button"
+                  aria-label={`Remove the kind ${kind.label}`}
+                  title={count > 0 ? 'Nodes are of this kind: give them another first' : 'Remove the kind'}
+                  disabled={count > 0 || doc.kinds.length <= 1}
+                  onClick={() => { onChange(removeKind(doc, kind.id)); }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+            <KindFields doc={doc} kind={kind} onChange={onChange} readOnly={readOnly} />
+          </div>
+        );
+      })}
+      {!readOnly && (
+        <button type="button" className="studio-button" onClick={() => { onChange(addKind(doc).diagram); }}>
+          <Plus size={14} aria-hidden /> Add a kind
+        </button>
+      )}
+    </Section>
+  );
+}
+
 function NodeFields({ doc, node, onChange, readOnly }: { doc: Input; node: NodeInput; onChange: Change; readOnly: boolean }) {
   const kind = doc.kinds.find((each) => each.id === node.kind);
   const set = (patch: Partial<NodeInput>) => { onChange(updateNode(doc, node.id, patch)); };
@@ -108,18 +171,22 @@ function NodeFields({ doc, node, onChange, readOnly }: { doc: Input; node: NodeI
         <TextField label="Label" value={node.label} readOnly={readOnly} onCommit={(label) => { if (label.trim()) set({ label }); }} />
         <TextField label="Sublabel" value={node.sublabel ?? ''} readOnly={readOnly} onCommit={(sublabel) => { set({ sublabel: sublabel.trim() || undefined }); }} />
         <TextField label="Tag" value={node.tag ?? ''} readOnly={readOnly} onCommit={(tag) => { set({ tag: tag.trim() || undefined }); }} />
-        <Choice label="Kind" value={node.kind} readOnly={readOnly} options={doc.kinds.map((each) => ({ value: each.id, label: each.label }))} onChange={(value) => { if (value) set({ kind: value }); }} />
-        {kind && (
-          <Choice
-            label={`Icon of every ${kind.label}`}
-            value={kind.icon}
-            readOnly={readOnly}
-            options={ICONS}
-            none="dot (default)"
-            onChange={(icon) => { onChange(updateKind(doc, kind.id, { icon })); }}
-          />
-        )}
+        <Choice
+          label="Kind"
+          value={node.kind}
+          readOnly={readOnly}
+          options={[...doc.kinds.map((each) => ({ value: each.id, label: each.label })), ...(readOnly ? [] : [{ value: NEW_KIND, label: 'New kind…' }])]}
+          onChange={(value) => {
+            if (value === NEW_KIND) onChange(addKind(doc, node.id).diagram);
+            else if (value) set({ kind: value });
+          }}
+        />
       </Section>
+      {kind && (
+        <Section title={`Kind ${kind.label}`}>
+          <KindFields doc={doc} kind={kind} onChange={onChange} readOnly={readOnly} every />
+        </Section>
+      )}
       <Section title="Note">
         <TextField label="Role" multiline value={note?.role ?? ''} readOnly={readOnly} hint="What the node does. MDX; empty removes the note." onCommit={(role) => { setNote({ role: role.trim() }); }} />
         {note && (
@@ -231,6 +298,7 @@ export function DiagramPanel({ doc, selection, onSelect, onChange, readOnly }: {
           }}
         />
       </Section>
+      <KindsFields doc={doc} onChange={onChange} readOnly={readOnly} />
       <Section title="Cards">
         {(doc.cards ?? []).length === 0 && <p className="studio-dg-muted">No cards. They show under the drawing once it is expanded.</p>}
         <ul className="studio-dg-cards">

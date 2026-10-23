@@ -149,6 +149,29 @@ describe('DiagramPage', () => {
     expect(container.querySelector('.dg-svg [data-node-id="plan"]')?.textContent).toContain('Logical plan v2');
   });
 
+  it('gives a node a new kind and edits the kind for every node of it', async () => {
+    const { container, last } = await open();
+    click(node(container, 'plan'));
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Kind' }), 'New kind…');
+    await waitFor(() => { expect(last().nodes.find((each) => each.id === 'plan')).toMatchObject({ kind: 'kind' }); });
+    const name = screen.getByRole('textbox', { name: 'Name of every New kind' });
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Plan stage{Enter}');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Tone of every Plan stage' }), 'gold');
+    await waitFor(() => { expect((last() as unknown as { kinds: unknown[] }).kinds.at(-1)).toEqual({ id: 'kind', label: 'Plan stage', tone: 'gold' }); });
+    expect(one(container, '.dg-svg [data-legend]').textContent).toContain('Plan stage');
+  });
+
+  it('lists the kinds with no selection; only an unused one can go', async () => {
+    const { container, last } = await open();
+    click(one(container, '.studio-dg-canvas'));
+    expect(screen.getByRole('button', { name: 'Remove the kind Backend' })).toHaveProperty('disabled', true);
+    await userEvent.click(screen.getByRole('button', { name: 'Add a kind' }));
+    await waitFor(() => { expect(screen.getByRole('group', { name: 'Kind New kind' })).toBeTruthy(); });
+    await userEvent.click(screen.getByRole('button', { name: 'Remove the kind New kind' }));
+    await waitFor(() => { expect((last() as unknown as { kinds: { id: string }[] }).kinds.map((kind) => kind.id)).toEqual(['backend', 'message-bus', 'external']); });
+  });
+
   it('adds, duplicates and deletes nodes from the toolbar and the keyboard', async () => {
     const { container, last } = await open();
     await userEvent.click(screen.getByRole('button', { name: 'Add a node' }));
@@ -213,6 +236,28 @@ describe('DiagramPage', () => {
     await waitFor(() => { expect(json()).toBe(real); });
     drag(node(container, 'plan'), [600, 150], [643, 150]);
     await waitFor(() => { expect(json()).toContain('"plan": { "x": 600, "y": 120'); });
+  });
+
+  it('resizes the JSON under the drawing, and keeps the height', async () => {
+    Element.prototype.setPointerCapture = vi.fn();
+    const { container } = await open();
+    await userEvent.click(screen.getByRole('button', { name: 'JSON' }));
+    const column = one(container, '.studio-dg-left') as HTMLElement;
+    vi.spyOn(column, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 800, 800));
+    const bar = screen.getByRole('separator', { name: 'Resize the JSON' });
+    const pane = () => (one(container, '.studio-dg-json-pane') as HTMLElement).style.height;
+    expect(pane()).toBe('');
+    fireEvent.pointerDown(bar, { button: 0, clientY: 500, pointerId: 1 });
+    fireEvent.pointerMove(bar, { clientY: 300, pointerId: 1 });
+    fireEvent.pointerUp(bar, { pointerId: 1 });
+    expect(pane()).toBe('600px');
+    // The drawing keeps its minimum.
+    fireEvent.keyDown(bar, { key: 'ArrowUp', shiftKey: true });
+    expect(pane()).toBe('680px');
+    expect(localStorage.getItem('studio-diagram-json-height')).toBe('680');
+    fireEvent.doubleClick(bar);
+    expect(pane()).toBe('');
+    expect(localStorage.getItem('studio-diagram-json-height')).toBeNull();
   });
 
   it('draws what is typed in the JSON once it parses, and saves it', async () => {

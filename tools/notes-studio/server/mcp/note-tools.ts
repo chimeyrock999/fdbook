@@ -10,7 +10,7 @@ import type { Comments } from '../proposals/comments.ts';
 import { blocksOf } from '../proposals/hunks.ts';
 import type { ProposalAuthor } from '../proposals/shared.ts';
 import type { Proposals } from '../proposals/store.ts';
-import { NOTES_DIR } from '../security/paths.ts';
+import { classifyPath, NOTES_DIR } from '../security/paths.ts';
 import { readNotesContent } from '../tree/build.ts';
 import type { StudioTool, StudioToolContext, ToolResult } from './tool.ts';
 
@@ -245,7 +245,8 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
     input: z.object({}),
     access: 'read',
     async run(_args, ctx) {
-      const assets = await listAssets(ctx.root);
+      // The list also holds the diagrams, which diagram_list answers for.
+      const assets = (await listAssets(ctx.root)).filter((asset) => classifyPath(asset.path) === 'asset');
       return json({ assets: assets.map((asset) => ({ path: asset.path, size: asset.size, usedBy: asset.usages.map((usage) => ({ note: usage.note, line: usage.line })) })) });
     },
   };

@@ -87,11 +87,18 @@
     grid-template-columns: minmax(0, 1fr) 280px;
     overflow: hidden;
   }
-  .studio-dg-body[data-json] {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) 280px;
-  }
   .studio-dg-body[data-only-json] {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* The drawing, and the JSON under it when shown: two halves of one column. */
+  .studio-dg-left {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+  }
+  .studio-dg-left > * {
+    flex: 1 1 0;
   }
   .studio-dg-main {
     display: flex;
@@ -234,12 +241,45 @@
     color: var(--fde-muted-foreground);
   }
 
+  .studio-dg-left > .studio-dg-split {
+    position: relative;
+    flex: none;
+    height: 8px;
+    margin: -4px 0;
+    z-index: 2;
+    cursor: row-resize;
+    touch-action: none;
+  }
+  .studio-dg-split::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    left: 0;
+    top: 3px;
+    height: 2px;
+    border-radius: 1px;
+  }
+  .studio-dg-split:hover::after,
+  .studio-dg-split:focus-visible::after,
+  .studio-dg-split[data-dragging]::after {
+    background: var(--fde-info);
+  }
+  .studio-dg-split:focus-visible {
+    outline: none;
+  }
+  .studio-dg-json-pane {
+    display: flex;
+    min-height: 0;
+  }
+  .studio-dg-json-pane > .studio-dg-json {
+    flex: 1;
+  }
   .studio-dg-json {
     display: flex;
     min-width: 0;
     min-height: 0;
     flex-direction: column;
-    border-left: 1px solid var(--fde-border);
+    border-top: 1px solid var(--fde-border);
   }
   .studio-dg-json-error {
     padding: 6px 12px;
@@ -272,6 +312,26 @@
     font-size: 11px;
     color: var(--fde-muted-foreground);
   }
+  /* Without the native look a select's text lines up with the inputs'. */
+  .studio-dg-select {
+    position: relative;
+    display: block;
+  }
+  .studio-dg-select select {
+    appearance: none;
+    padding-right: 28px;
+  }
+  .studio-dg-select svg {
+    position: absolute;
+    top: 50%;
+    right: 9px;
+    translate: 0 -50%;
+    pointer-events: none;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-dg-select select:disabled {
+    opacity: 0.7;
+  }
   .studio-dg-field textarea {
     resize: vertical;
   }
@@ -280,6 +340,29 @@
     align-items: center;
     gap: 6px;
     font-size: 12.5px;
+  }
+  .studio-dg-kind {
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+  }
+  .studio-dg-kind-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .studio-dg-kind-head code {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .studio-dg-kind-head .studio-icon-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
   }
   .studio-dg-cards {
     display: grid;
@@ -307,10 +390,14 @@
     .studio-dg-main {
       overflow: visible;
     }
-    .studio-dg-json {
-      min-height: 320px;
-      border-top: 1px solid var(--fde-border);
-      border-left: 0;
+    .studio-dg-left > * {
+      flex: none;
+    }
+    .studio-dg-json-pane {
+      height: 320px;
+    }
+    .studio-dg-split {
+      display: none;
     }
     .studio-dg-panel {
       overflow: visible;

@@ -1163,12 +1163,14 @@ drawing, so it looks as the note will, with an editing layer on top:
 - add a node (where it fits, or with a double click on the canvas), wrap the
   selection in a frame, add a card; duplicate (⌘D) and delete (Delete) what
   is selected; undo and redo (⌘Z, ⇧⌘Z) cover every edit, the JSON's too;
-- the panel edits what is selected: a node's label, sublabel, tag, kind,
-  its kind's icon and its note (role, evidence badge, points); an edge's
-  label, detail, variant, arrows and end sides; a frame's label, tone and
-  dashes; a card; or, with nothing selected, the title, legend and cards;
-- **JSON** shows the file beside the drawing; typing there draws once it
-  parses;
+- the panel edits what is selected: a node's label, sublabel, tag, kind
+  (or a **New kind…** for it), its kind's name, tone and icon, and its note
+  (role, evidence badge, points); an edge's label, detail, variant, arrows
+  and end sides; a frame's label, tone and dashes; a card; or, with nothing
+  selected, the title, legend, kinds (add one, remove one no node is of) and
+  cards;
+- **JSON** shows the file under the drawing (drag the bar between them to
+  resize, double-click it for halves); typing there draws once it parses;
 - under the drawing, the checks' findings and the notes that use it.
 
 Edits save a moment after each change (`src/diagrams/useDiagramFile.ts`)

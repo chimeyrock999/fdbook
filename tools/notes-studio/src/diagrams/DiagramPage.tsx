@@ -1,5 +1,5 @@
 import { Braces, Copy, FileText, Frame, Plus, Redo2, StickyNote, Trash2, Undo2, Workflow } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { Scene } from '@site/lib/diagram/scene';
 import { DIAGRAM_SUFFIX, DIAGRAMS_DIR } from '@site/lib/diagram/source';
 import type { AssetUsage } from '../api/assets';
@@ -7,6 +7,8 @@ import type { createFilesClient } from '../api/files';
 import { plural } from '../assets/asset-changes';
 import { DiagramCanvas, type Drawn, type Selection } from './DiagramCanvas';
 import { DiagramJson } from './DiagramJson';
+import { JsonSplit } from './JsonSplit';
+import { SPLIT_MIN, useJsonHeight } from './useJsonHeight';
 import { DiagramPanel } from './DiagramPanel';
 import {
   addCard,
@@ -82,6 +84,8 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
   useEffect(() => { onWaiting?.(waiting); }, [waiting, onWaiting]);
   useEffect(() => () => { onWaiting?.(false); }, [onWaiting]);
   const [drawn, setDrawn] = useState<Drawn>({ scene: null, issues: [] });
+  const split = useJsonHeight();
+  const column = useRef<HTMLDivElement>(null);
   const { doc, apply, undo, redo } = file;
   const selection = doc ? existing(doc, chosen) : null;
   const nodes = useMemo(() => (selection?.type === 'nodes' ? selection.ids : []), [selection]);
@@ -184,6 +188,7 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
       {file.error !== null && <p role="alert" className="studio-dg-error">{file.status === 'failed' && !doc ? 'Could not open the diagram: ' : 'Could not save: '}{file.error}</p>}
       {(doc !== null || file.status === 'invalid') && (
         <div className="studio-dg-body" data-json={json || undefined} data-only-json={!doc || undefined}>
+          <div className="studio-dg-left" ref={column}>
           {doc && <div className="studio-dg-main">
             <DiagramCanvas doc={doc} readOnly={readOnly} selection={selection} onSelect={setSelection} onChange={apply} onDrawn={setDrawn} />
             {issues.length > 0 && (
@@ -217,7 +222,13 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
               )}
             </section>
           </div>}
-          {json && <DiagramJson value={file.text} onChange={file.setText} readOnly={readOnly} invalid={file.status === 'invalid'} />}
+          {json && doc && <JsonSplit height={split.height} onResize={split.set} column={() => column.current} />}
+          {json && (
+            <div className="studio-dg-json-pane" style={doc && split.height !== null ? { flex: 'none', height: split.height, maxHeight: `calc(100% - ${String(SPLIT_MIN)}px)` } : undefined}>
+              <DiagramJson value={file.text} onChange={file.setText} readOnly={readOnly} invalid={file.status === 'invalid'} />
+            </div>
+          )}
+          </div>
           {doc && <DiagramPanel doc={doc} selection={selection} onSelect={setSelection} onChange={apply} readOnly={readOnly} />}
         </div>
       )}

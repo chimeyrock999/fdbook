@@ -250,6 +250,23 @@ export function updateKind(diagram: Input, id: string, patch: Partial<KindInput>
   return next;
 }
 
+// A new kind for the legend; `node`, when given, takes it.
+export function addKind(diagram: Input, node?: string): { diagram: Input; id: string } {
+  const next = structuredClone(diagram);
+  const id = freeId(next, 'kind');
+  next.kinds = [...next.kinds, { id, label: 'New kind', tone: 'blue' }];
+  if (node !== undefined) next.nodes = next.nodes.map((each) => (each.id === node ? { ...each, kind: id } : each));
+  return { diagram: next, id };
+}
+
+// Removes a kind no node is of; one still in use stays.
+export function removeKind(diagram: Input, id: string): Input {
+  if (diagram.nodes.some((node) => node.kind === id) || diagram.kinds.length <= 1) return diagram;
+  const next = structuredClone(diagram);
+  next.kinds = next.kinds.filter((kind) => kind.id !== id);
+  return next;
+}
+
 // An edge's end sides; undefined leaves the router to pick.
 export function setEdgeSides(diagram: Input, id: string, sides: { fromSide?: Side; toSide?: Side }): Input {
   const next = structuredClone(diagram);

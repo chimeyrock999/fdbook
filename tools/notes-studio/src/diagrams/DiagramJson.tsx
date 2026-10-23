@@ -1,10 +1,20 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { syntaxHighlighting } from '@codemirror/language';
+import { json } from '@codemirror/lang-json';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { search, searchKeymap } from '@codemirror/search';
 import { Compartment, EditorState, Transaction } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers } from '@codemirror/view';
+import { tags } from '@lezer/highlight';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { highlight, theme } from '../editor/source-theme';
+
+// JSON's own tokens on top of the Studio's highlight (keys and strings
+// already take its attribute and string colours).
+const values = HighlightStyle.define([
+  { tag: tags.number, color: 'var(--fde-hl-number)' },
+  { tag: [tags.bool, tags.null], color: 'var(--fde-hl-keyword)' },
+  { tag: [tags.brace, tags.squareBracket, tags.separator], color: 'var(--fde-muted-foreground)' },
+]);
 
 const locked = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
 
@@ -34,7 +44,10 @@ export function DiagramJson({ value, onChange, readOnly, invalid }: { value: str
           highlightActiveLine(),
           search({ top: true }),
           keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
+          json(),
           syntaxHighlighting(highlight),
+          syntaxHighlighting(values),
+          EditorView.lineWrapping,
           theme,
           editable.current.of(locked(latest.current.readOnly)),
           EditorView.updateListener.of((update) => {
