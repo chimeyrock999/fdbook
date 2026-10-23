@@ -5,6 +5,7 @@ import { PendingButton, Spinner } from '../actions/PendingButton';
 import type { AgentsClient, Conversation, ConversationEvent } from '../api/agents';
 import { AgentLogo } from './AgentLogo';
 import { AskCard, AskLine } from './AskCard';
+import { ContextChips } from './ContextChips';
 import { Markdown } from './Markdown';
 import { TurnChanges } from './TurnChanges';
 import { costLabel, decisionKey, durationLabel, roleLabel, transcriptOf, whenLabel, type TranscriptItem } from './transcript';
@@ -47,6 +48,7 @@ function Item({ item, context }: { item: TranscriptItem; context: ItemContext })
     return (
       <>
         <p className="studio-agent-prompt">{item.text}</p>
+        {item.context !== null && <ContextChips context={item.context} />}
         <span className="studio-agent-prompt-meta">{item.by === null ? '' : `${item.by} · `}{whenLabel(item.at)}</span>
       </>
     );

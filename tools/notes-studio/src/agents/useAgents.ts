@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '../actions/toasts';
 import { isConflict } from '../api/json';
-import type { AgentId, AgentInfo, AgentRole, AgentsClient } from '../api/agents';
+import type { AgentId, AgentInfo, AgentRole, AgentsClient, MessageContext } from '../api/agents';
 import { EMPTY_CONVERSATIONS, reading, unheld, unread, withEvent, withList, withRead, type ConversationsState } from './transcript';
 
 const PICKS_KEY = 'notes-studio:agents';
@@ -140,12 +140,12 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
     decisions: state.decisions,
     listError,
     load,
-    start: (role: AgentRole, prompt: string) => {
+    start: (role: AgentRole, prompt: string, context: MessageContext | null = null) => {
       const agent = pickOf(agents, picks, role);
       if (agent === null) return Promise.reject(new Error('No agent can run here: install one first.'));
-      return client.start(agent.id, role, prompt);
+      return client.start(agent.id, role, prompt, context);
     },
-    message: (id: string, prompt: string) => client.message(id, prompt),
+    message: (id: string, prompt: string, context: MessageContext | null = null) => client.message(id, prompt, context),
     // Deletes each in turn, off the list at once (the stream tells other
     // pages); one that fails says why and the others go on.
     remove: async (ids: string[]) => {

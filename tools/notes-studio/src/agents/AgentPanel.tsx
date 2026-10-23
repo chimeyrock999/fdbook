@@ -1,7 +1,7 @@
 import { History, Plus, ShieldQuestion, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from '../actions/toasts';
-import type { AgentInfo, AgentRole, Conversation, ConversationEvent } from '../api/agents';
+import type { AgentInfo, AgentRole, Conversation, ConversationEvent, MessageContext } from '../api/agents';
 import { AgentLogo } from './AgentLogo';
 import { ChatHistory } from './ChatHistory';
 import { Composer } from './Composer';
@@ -28,7 +28,7 @@ function hintOf(agent: AgentInfo | null, role: AgentRole) {
 // A new chat: pick the role (the agent is the one picked for it), then the
 // first message starts the conversation. While the agent starts, the
 // message shows on its way.
-function NewChat({ agents, sending, onSend }: { agents: Agents; sending: string | null; onSend: (role: AgentRole, text: string) => Promise<boolean> }) {
+function NewChat({ agents, sending, onSend }: { agents: Agents; sending: string | null; onSend: (role: AgentRole, text: string, context: MessageContext | null) => Promise<boolean> }) {
   const [role, setRole] = useState<AgentRole>('author');
   const agent = pickOf(agents.agents, agents.picks, role);
   return (
@@ -48,7 +48,8 @@ function NewChat({ agents, sending, onSend }: { agents: Agents; sending: string 
       <Composer
         placeholder={role === 'author' ? 'What should the agent write or change?' : 'What should the agent review?'}
         busy={agent === null}
-        onSend={(text) => onSend(role, text)}
+        onSend={(text, context) => onSend(role, text, context)}
+        client={agents.client}
       >
         <span className="studio-agent-roles" role="group" aria-label="Role">
           {(['author', 'reviewer'] as const).map((each) => (
@@ -100,10 +101,10 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
   const pendingIn = (conversation: Conversation) =>
     (outgoing !== null && outgoing.id === conversation.id && turnsOf(agents.events[conversation.id]) <= outgoing.turns ? outgoing.text : null);
 
-  const start = async (role: AgentRole, text: string) => {
+  const start = async (role: AgentRole, text: string, context: MessageContext | null) => {
     setOutgoing({ id: null, text, turns: 0 });
     try {
-      const chat = await agents.start(role, text);
+      const chat = await agents.start(role, text, context);
       setOutgoing({ id: chat.id, text, turns: 0 });
       setStarted(chat);
       setShown(chat.id);
@@ -116,10 +117,10 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
       return false;
     }
   };
-  const reply = async (conversation: Conversation, text: string) => {
+  const reply = async (conversation: Conversation, text: string, context: MessageContext | null) => {
     setOutgoing({ id: conversation.id, text, turns: turnsOf(agents.events[conversation.id]) });
     try {
-      await agents.message(conversation.id, text);
+      await agents.message(conversation.id, text, context);
       return true;
     } catch (reason) {
       setOutgoing(null);
@@ -192,7 +193,8 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
               key={current.id}
               placeholder="Reply to the agent…"
               busy={current.status === 'running'}
-              onSend={(text) => reply(current, text)}
+              onSend={(text, context) => reply(current, text, context)}
+              client={agents.client}
             >
               <span className="studio-agent-who"><AgentLogo id={current.agent} size={14} /> {current.agentName} · {roleLabel(current.role)}</span>
             </Composer>

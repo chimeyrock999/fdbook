@@ -56,7 +56,7 @@ describe('agent chat', () => {
     await user.click(screen.getByRole('button', { name: 'Author' }));
     const box = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Message' });
     await user.type(box, 'Tighten the intro{Enter}');
-    expect(client.start).toHaveBeenCalledWith('claude', 'author', 'Tighten the intro');
+    expect(client.start).toHaveBeenCalledWith('claude', 'author', 'Tighten the intro', null);
     await waitFor(() => { expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Message' }).value).toBe(''); });
 
     const started = summary({ id: 'new' });
@@ -88,7 +88,7 @@ describe('agent chat', () => {
     const box = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Message' });
     expect(screen.getByText('Claude Code · Author', { selector: '.studio-agent-who' })).toBeTruthy();
     await user.type(box, 'Shorter still{Enter}');
-    expect(client.message).toHaveBeenCalledWith('c1', 'Shorter still');
+    expect(client.message).toHaveBeenCalledWith('c1', 'Shorter still', null);
     await waitFor(() => { expect(box.value).toBe(''); });
     expect(document.activeElement).toBe(box);
 
@@ -128,7 +128,7 @@ describe('agent chat', () => {
     fireEvent.keyDown(box, { key: 'Enter', keyCode: 229 });
     expect(client.start).not.toHaveBeenCalled();
     fireEvent.keyDown(box, { key: 'Enter' });
-    expect(client.start).toHaveBeenCalledWith('claude', 'author', 'Line one\nline two');
+    expect(client.start).toHaveBeenCalledWith('claude', 'author', 'Line one\nline two', null);
   });
 
   it('marks where a new session took over without the earlier turns, and shows no model it was not told', async () => {

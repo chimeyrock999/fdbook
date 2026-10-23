@@ -900,6 +900,25 @@ are listed greyed, with how to install them (`GET /api/agents`).
   and an image is a link (`src/agents/Markdown.tsx`). The header names the
   model the agent reports; for Claude Code's "default" choice, the model it
   stands for.
+- **Context.** A message carries where you are in the editor (#86), with
+  no button to press: the note open, and the lines selected there, or
+  else the caret's line. The selection is the editor's last one: it stays
+  when you click into the chat and goes when it collapses to a caret. In
+  Source the lines are exact; in Visual they are those of the blocks the
+  selection touches, plus the text selected. The composer shows it as a
+  chip, `guide/first-look.mdx:L12-L18`; × leaves it out of that message.
+  `@` (or the @ button) mentions a note, an asset or any file of the
+  worktree (`GET /api/agents/mentions?q=`, from `git ls-files`), and the
+  paperclip, a drop or a paste attaches a document of up to 10 MB
+  (`POST /api/agents/attachments`, kept in
+  `<STUDIO_HOME>/agents/<slug>/attachments/`, deleted with its chat or the
+  change request, never in the worktree). The server checks every path
+  against the worktree (no `..`, `.git` or symlinks), keeps the context on
+  the turn (the thread shows its chips), and adds it to what the agent
+  receives below the message, with the selected MDX and the attachments'
+  paths (`server/agents/context.ts`). While that turn goes on,
+  `propose_edit` on the selected note answers `outsideSelection` for hunks
+  that change other lines.
 - **History.** Every chat of the change request, last active first, with
   its agent, role, turns, cost and last activity, filtered by its first
   message. One opens to read and go on with; an admin deletes one, or
@@ -1010,7 +1029,7 @@ Studio starts and your own agents in a terminal while the Studio is open.
 | `read_note` | A note's text, its top-level blocks (index, line, first line) and the proposals waiting on it |
 | `search_notes` | Notes with every word of the query in their title, description, tags or text, with matching lines |
 | `note_graph` | Links out and in, tags, keywords and graph keywords, notes that share a tag |
-| `propose_edit` | A proposal: the whole new text, or find/replace edits; answers its hunks and lint issues. Nothing is written (see Proposals). A note that does not exist yet is created with `content` (on the turn's Keep/Revert list); the same turn's later edits to a note it created are written too (`written: true`), until someone else changes it. |
+| `propose_edit` | A proposal: the whole new text, or find/replace edits; answers its hunks and lint issues, and `outsideSelection` when the message selected other lines of the note. Nothing is written (see Proposals). A note that does not exist yet is created with `content` (on the turn's Keep/Revert list); the same turn's later edits to a note it created are written too (`written: true`), until someone else changes it. |
 | `add_comment` | A comment on a note, or on one of its blocks |
 | `list_assets` | The assets under `public/notes` and the notes that use them |
 

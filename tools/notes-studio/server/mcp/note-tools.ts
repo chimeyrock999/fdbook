@@ -7,7 +7,7 @@ import { loadLintContext } from '../lint/context.ts';
 import { lintNote, parseNote } from '../lint/lint.ts';
 import { pageUrl, resolveHref } from '../lint/rules/links.ts';
 import type { Comments } from '../proposals/comments.ts';
-import { blocksOf } from '../proposals/hunks.ts';
+import { blocksOf, lineAt } from '../proposals/hunks.ts';
 import type { ProposalAuthor } from '../proposals/shared.ts';
 import { applyEdits, type Proposals } from '../proposals/store.ts';
 import { classifyPath, NOTES_DIR } from '../security/paths.ts';
@@ -22,7 +22,35 @@ export type NoteToolDeps = {
   modelOf: (slug: string, runId: string) => string | null;
   // Whether a run going on created the note itself (agents/watch.ts).
   createdBy: (slug: string, runId: string, path: string) => Promise<boolean>;
+  // The note, lines and their MDX a person selected for the run's turn going on, if any (agents/context.ts).
+  selectionOf?: (slug: string, runId: string) => { path: string; lines: [number, number]; source: string } | null;
 };
+
+// The selected lines as the note on disk has them: the editor's text may
+// hold edits not saved yet, so they are found by their MDX, nearest the
+// lines the editor named. Null when they are not on disk as selected (or
+// were too long to send), so nothing can be said of them.
+export function linesOnDisk(text: string, { lines, source }: { lines: [number, number]; source: string }): [number, number] | null {
+  if (source === '') return null;
+  let best: number | null = null;
+  for (let at = text.indexOf(source); at !== -1; at = text.indexOf(source, at + 1)) {
+    if (best === null || Math.abs(lineAt(text, at) - lines[0]) < Math.abs(lineAt(text, best) - lines[0])) best = at;
+  }
+  if (best === null) return null;
+  const first = lineAt(text, best);
+  return [first, first + lines[1] - lines[0]];
+}
+
+// The hunks of a proposal on `text` that touch none of `lines`, give or take
+// the blank line around them (a hunk holds the blank lines about its blocks).
+export function hunksOutside(text: string, hunks: { id: string; from: number | null; to: number | null }[], [first, last]: [number, number]) {
+  return hunks.filter((hunk) => {
+    if (hunk.from === null || hunk.to === null) return false;
+    const start = lineAt(text, hunk.from);
+    const end = hunk.to > hunk.from ? lineAt(text, hunk.to - 1) : start;
+    return end < first - 1 || start > last + 1;
+  }).map((hunk) => hunk.id);
+}
 
 const json = (value: unknown): ToolResult => ({ content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], structured: value as Record<string, unknown> });
 
@@ -192,7 +220,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
 
   const proposeEdit = {
     name: 'propose_edit',
-    description: 'Proposes an edit to a note. A note that does not exist yet is created with content (list it in its folder\'s meta.yaml); later edits by the same run to a note it created are written too (answer: written), until someone else changes that note. An edit to any other note is not written: a person sees it in the editor as suggestions, block by block, and accepts or rejects each one. Give either the whole new text (content) or exact find/replace edits on the note as it is now (each find must occur once). Answers the proposal, its hunks, and lint issues of the result to fix in a new proposal.',
+    description: 'Proposes an edit to a note. A note that does not exist yet is created with content (list it in its folder\'s meta.yaml); later edits by the same run to a note it created are written too (answer: written), until someone else changes that note. An edit to any other note is not written: a person sees it in the editor as suggestions, block by block, and accepts or rejects each one. Give either the whole new text (content) or exact find/replace edits on the note as it is now (each find must occur once). Answers the proposal, its hunks, lint issues of the result to fix in a new proposal, and, when the person selected lines for the message, the hunks that change other lines (outsideSelection).',
     input: z.object({
       path,
       content: z.string().optional().describe('The whole note as it should be, frontmatter included'),
@@ -230,13 +258,21 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
         return json({ written: true, path: at, lint: issues.map((issue) => ({ rule: issue.rule, severity: issue.severity, message: issue.message, line: issue.start.line })) });
       }
       const proposals = await deps.proposalsOf(ctx.slug);
+      const selection = ctx.caller.kind === 'run' ? (deps.selectionOf?.(ctx.slug, ctx.caller.runId) ?? null) : null;
+      const before = selection?.path === at ? await ctx.files.read(at) : null;
       const proposal = await proposals.propose({ path: at, content, edits, by: authorOf(ctx, deps), summary: summary ?? null });
       const issues = lintNote(proposal.text, await loadLintContext(ctx.root, at.slice(NOTES_DIR.length + 1)));
+      const onDisk = selection === null || before === null ? null : linesOnDisk(before.content, selection);
+      const outside = onDisk === null || before === null ? [] : hunksOutside(before.content, proposal.hunks, onDisk);
       return json({
         id: proposal.id,
         path: at,
         hunks: proposal.hunks.map((hunk) => ({ id: hunk.id, state: hunk.state, removed: hunk.removed, added: hunk.added })),
         lint: issues.map((issue) => ({ rule: issue.rule, severity: issue.severity, message: issue.message, line: issue.start.line })),
+        // The person selected lines for this message: say which hunks went elsewhere.
+        ...(outside.length > 0 && onDisk !== null
+          ? { outsideSelection: { lines: onDisk, hunks: outside, message: `hunks ${outside.join(', ')} change lines outside the selection (${String(onDisk[0])}-${String(onDisk[1])}); drop them with a new proposal unless the message asked for that` } }
+          : {}),
       });
     },
   } satisfies StudioTool<z.ZodObject<{ path: typeof path; content: z.ZodOptional<z.ZodString>; edits: z.ZodOptional<z.ZodArray<z.ZodObject<{ find: z.ZodString; replace: z.ZodString }>>>; summary: z.ZodOptional<z.ZodString> }>>;

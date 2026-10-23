@@ -17,7 +17,8 @@ const MAIN = '_main';
 const INSTRUCTIONS = `Tools of the Notes Studio, for the notes under content/notes of one change request (CR).
 - Every note tool takes \`cr\`, the change request's slug; an agent the Studio started has its CR already. Main is read only and refused: use list_crs, or create_cr for a new one.
 - Edits go through propose_edit: they are not written, but shown to a person as suggestions to accept or reject. Read a note with read_note first.
-- A reviewer reads and comments (add_comment); it does not propose.`;
+- A reviewer reads and comments (add_comment); it does not propose.
+- A message from the Studio may end with the context it adds: the note open in the editor, the lines selected there (edit those), mentioned files and attached documents.`;
 
 // What the host needs of a change request's workspace (workspace.ts).
 export type McpWorkspace = {

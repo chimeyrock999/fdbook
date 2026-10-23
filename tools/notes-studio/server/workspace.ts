@@ -2,6 +2,8 @@ import type { IncomingMessage } from 'node:http';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { createAgentConversationsApi } from './agents/api.ts';
+import { createAttachments } from './agents/attachments.ts';
+import { createAgentContextApi } from './agents/context-api.ts';
 import { createAgentConversations, type AgentConversationsOptions } from './agents/conversations.ts';
 import { createAssetsApi } from './assets/api.ts';
 import { createFilesApi } from './files/api.ts';
@@ -69,10 +71,12 @@ export function createWorkspace(
   const sync = createNotesSync(root, hosts, { readOnly });
   // A change request's proposals and comments, and the stream of their changes.
   let review: { proposals: Proposals; comments: Comments; stream: ProposalStream } | null = null;
+  const attachments = agents === null || readOnly ? null : createAttachments(agents.home);
   const conversations = agents === null || readOnly
     ? null
     : createAgentConversations(root, {
       ...agents,
+      attachments,
       lock: notesLock,
       pathLock,
       propose: ({ path, content, runId, agent, model }) => {
@@ -108,6 +112,7 @@ export function createWorkspace(
     createPageHistoryApi(root, notesLock),
     createPreviewApi(root, preview, { readOnly, lock: notesLock }),
     createAgentConversationsApi(conversations),
+    createAgentContextApi(root, agents?.slug ?? '', attachments),
     createProposalsApi(review),
   ];
   return {

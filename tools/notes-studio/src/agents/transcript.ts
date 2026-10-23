@@ -5,12 +5,12 @@
 // each turn ended.
 
 import { summaryOf, type PermissionAsk, type SessionStart, type StreamEvent, type ToolCallUpdate, type TurnEnd } from '../../server/agents/shared';
-import type { Conversation, ConversationEvent, ConversationRead } from '../api/agents';
+import type { Conversation, ConversationEvent, ConversationRead, MessageContext } from '../api/agents';
 
 export type PlanEntry = { content: string; status: 'pending' | 'in_progress' | 'completed' };
 
 export type TranscriptItem =
-  | { kind: 'prompt'; key: string; text: string; by: string | null; at: number }
+  | { kind: 'prompt'; key: string; text: string; by: string | null; at: number; context: MessageContext | null }
   | { kind: 'message'; key: string; text: string }
   | { kind: 'thought'; key: string; text: string }
   | { kind: 'tool'; key: string; call: ToolCallUpdate }
@@ -43,7 +43,7 @@ export function transcriptOf(events: ConversationEvent[]): TranscriptItem[] {
       turns += 1;
       turnAt = event.at;
       plan = null;
-      items.push({ kind: 'prompt', key: key('prompt'), text: event.prompt, by: event.by, at: event.at });
+      items.push({ kind: 'prompt', key: key('prompt'), text: event.prompt, by: event.by, at: event.at, context: event.context ?? null });
     } else if (event.type === 'session') {
       if (event.how !== 'new') items.push({ kind: 'session', key: key('session'), how: event.how });
     } else if (event.type === 'end') {
