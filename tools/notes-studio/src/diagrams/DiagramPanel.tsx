@@ -1,8 +1,8 @@
 import { EDGE_VARIANTS, ICONS, SIDES, TONES, type Side } from '@site/lib/diagram/schema';
-import { ChevronDown, Plus, Trash2 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
-import { composing } from '../keyboard';
+import { Plus, Trash2 } from 'lucide-react';
 import type { Selection } from './DiagramCanvas';
+import { Check, Choice, Section, TextField } from './panel-fields';
+import { ActivationsFields, MessageOrderFields, ParticipantOrderFields, SegmentsFields } from './SequencePanel';
 import {
   addKind,
   removeKind,
@@ -24,94 +24,6 @@ const NEW_KIND = '__new-kind';
 type Change = (next: Input) => void;
 
 const lines = (text: string) => text.split('\n').map((line) => line.trim()).filter(Boolean);
-
-// A text field that changes the diagram once it is left or Enter is
-// pressed, so one edit is one undo step. A change from elsewhere (undo, the
-// JSON view, an agent) shows as soon as the field is not being edited.
-function TextField({ label, value, onCommit, multiline = false, readOnly, hint }: {
-  label: string;
-  value: string;
-  onCommit: (value: string) => void;
-  multiline?: boolean;
-  readOnly: boolean;
-  hint?: string;
-}) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const commit = () => {
-    if (draft !== null && draft !== value) onCommit(draft);
-    setDraft(null);
-  };
-  const props = {
-    className: 'studio-input',
-    // The hint is not part of the name.
-    'aria-label': label,
-    value: draft ?? value,
-    readOnly,
-    onChange: (event: { target: { value: string } }) => { setDraft(event.target.value); },
-    onBlur: commit,
-  };
-  return (
-    <label className="studio-dg-field">
-      <span>{label}</span>
-      {multiline ? (
-        <textarea {...props} rows={3} />
-      ) : (
-        <input
-          {...props}
-          onKeyDown={(event) => {
-            // The Enter or Escape that ends an IME composition (Telex, VNI) is the IME's.
-            if (composing(event)) return;
-            if (event.key === 'Enter') commit();
-            else if (event.key === 'Escape') setDraft(null);
-          }}
-        />
-      )}
-      {hint && <small>{hint}</small>}
-    </label>
-  );
-}
-
-function Choice<T extends string>({ label, value, options, onChange, readOnly, none }: {
-  label: string;
-  value: T | undefined;
-  options: readonly T[] | readonly { value: T; label: string }[];
-  onChange: (value: T | undefined) => void;
-  readOnly: boolean;
-  // The empty choice's label; without one there is none.
-  none?: string;
-}) {
-  const items = options.map((option) => (typeof option === 'string' ? { value: option, label: option } : option));
-  return (
-    <label className="studio-dg-field">
-      <span>{label}</span>
-      <span className="studio-dg-select">
-        <select className="studio-input" value={value ?? ''} disabled={readOnly} onChange={(event) => { onChange(event.target.value === '' ? undefined : (event.target.value as T)); }}>
-          {none !== undefined && <option value="">{none}</option>}
-          {items.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </select>
-        <ChevronDown size={14} aria-hidden />
-      </span>
-    </label>
-  );
-}
-
-function Check({ label, checked, onChange, readOnly }: { label: string; checked: boolean; onChange: (checked: boolean) => void; readOnly: boolean }) {
-  return (
-    <label className="studio-dg-check">
-      <input type="checkbox" checked={checked} disabled={readOnly} onChange={(event) => { onChange(event.target.checked); }} />
-      {label}
-    </label>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="studio-dg-section">
-      <h3>{title}</h3>
-      {children}
-    </section>
-  );
-}
 
 // A kind's legend name, tone and icon: every node of the kind follows.
 function KindFields({ doc, kind, onChange, readOnly, every }: { doc: Input; kind: KindInput; onChange: Change; readOnly: boolean; every?: boolean }) {
@@ -174,12 +86,13 @@ function NodeFields({ doc, node, onChange, readOnly }: { doc: Input; node: NodeI
     if (!next.role) set({ note: undefined });
     else set({ note: { role: next.role, ...(next.badge ? { badge: next.badge } : {}), ...(next.points?.length ? { points: next.points } : {}) } });
   };
+  const sequence = doc.type === 'sequence';
   return (
     <>
-      <Section title={`Node ${node.id}`}>
+      <Section title={`${sequence ? 'Participant' : 'Node'} ${node.id}`}>
         <TextField label="Label" value={node.label} readOnly={readOnly} onCommit={(label) => { if (label.trim()) set({ label }); }} />
         <TextField label="Sublabel" value={node.sublabel ?? ''} readOnly={readOnly} onCommit={(sublabel) => { set({ sublabel: sublabel.trim() || undefined }); }} />
-        <TextField label="Tag" value={node.tag ?? ''} readOnly={readOnly} onCommit={(tag) => { set({ tag: tag.trim() || undefined }); }} />
+        {(!sequence || node.tag) && <TextField label="Tag" value={node.tag ?? ''} readOnly={readOnly} hint={sequence ? 'A participant box does not show it.' : undefined} onCommit={(tag) => { set({ tag: tag.trim() || undefined }); }} />}
         <Choice
           label="Kind"
           value={node.kind}
@@ -191,6 +104,7 @@ function NodeFields({ doc, node, onChange, readOnly }: { doc: Input; node: NodeI
           }}
         />
       </Section>
+      {sequence && <ParticipantOrderFields doc={doc} id={node.id} onChange={onChange} readOnly={readOnly} />}
       {kind && (
         <Section title={`Kind ${kind.label}`}>
           <KindFields doc={doc} kind={kind} onChange={onChange} readOnly={readOnly} every />
@@ -219,9 +133,21 @@ function NodeFields({ doc, node, onChange, readOnly }: { doc: Input; node: NodeI
 function EdgeFields({ doc, id, onChange, readOnly }: { doc: Input; id: string; onChange: Change; readOnly: boolean }) {
   const edge = (doc.edges ?? []).find((each) => each.id === id);
   if (!edge) return null;
-  const layout = doc.layout.edges?.[id];
+  const layout = doc.layout?.edges?.[id];
   const set = (patch: Parameters<typeof updateEdge>[2]) => { onChange(updateEdge(doc, id, patch)); };
   const side = (key: 'fromSide' | 'toSide') => (value: Side | undefined) => { onChange(setEdgeSides(doc, id, { ...layout, [key]: value })); };
+  if (doc.type === 'sequence') {
+    return (
+      <>
+        <Section title={`Message ${edge.from} → ${edge.to}`}>
+          <TextField label="Label" value={edge.label ?? ''} readOnly={readOnly} onCommit={(label) => { if (label.trim()) set({ label }); }} />
+          <TextField label="Note" value={edge.detail ?? ''} readOnly={readOnly} hint="Small text under the arrow." onCommit={(detail) => { set({ detail: detail.trim() || undefined }); }} />
+          <Choice label="Variant" value={edge.variant ?? 'default'} readOnly={readOnly} options={EDGE_VARIANTS} onChange={(variant) => { set({ variant: variant === 'default' ? undefined : variant }); }} />
+        </Section>
+        <MessageOrderFields doc={doc} id={id} onChange={onChange} readOnly={readOnly} />
+      </>
+    );
+  }
   return (
     <Section title={`Edge ${edge.from} → ${edge.to}`}>
       <TextField label="Label" value={edge.label ?? ''} readOnly={readOnly} onCommit={(label) => { set({ label: label.trim() || undefined }); }} />
@@ -308,6 +234,12 @@ export function DiagramPanel({ doc, selection, onSelect, onChange, readOnly }: {
         />
       </Section>
       <KindsFields doc={doc} onChange={onChange} readOnly={readOnly} />
+      {doc.type === 'sequence' && (
+        <>
+          <SegmentsFields doc={doc} onChange={onChange} readOnly={readOnly} />
+          <ActivationsFields doc={doc} onChange={onChange} readOnly={readOnly} />
+        </>
+      )}
       <Section title="Cards">
         {(doc.cards ?? []).length === 0 && <p className="studio-dg-muted">No cards. They show under the drawing once it is expanded.</p>}
         <ul className="studio-dg-cards">
@@ -318,7 +250,9 @@ export function DiagramPanel({ doc, selection, onSelect, onChange, readOnly }: {
           ))}
         </ul>
       </Section>
-      <p className="studio-dg-muted">Click a node, an edge or a frame to edit it. Double click the canvas to add a node.</p>
+      <p className="studio-dg-muted">{doc.type === 'sequence'
+        ? 'Click a participant or a message to edit it. Drag from the handle under a lifeline to another lifeline to add a message.'
+        : 'Click a node, an edge or a frame to edit it. Double click the canvas to add a node.'}</p>
     </div>
   );
 }

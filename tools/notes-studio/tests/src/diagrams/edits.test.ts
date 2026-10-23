@@ -62,7 +62,7 @@ function changedLines(before: Input, after: Input) {
 describe('diagram edits', () => {
   it('moves a node onto the grid, changing one line of the file', () => {
     const next = placeNode(real(), 'plan', 563, 131);
-    expect(next.layout.nodes.plan).toEqual({ x: 560, y: 128, w: 190, h: 68 });
+    expect(next.layout!.nodes.plan).toEqual({ x: 560, y: 128, w: 190, h: 68 });
     expect(changedLines(real(), next)).toEqual(['      "plan": { "x": 560, "y": 128, "w": 190, "h": 68 },']);
     draws(next);
   });
@@ -70,9 +70,9 @@ describe('diagram edits', () => {
   it('moves several nodes by the same snapped step, and the frame follows its members', () => {
     const before = draws(real()).frames[0];
     const next = moveNodes(real(), groupNodes(real(), FRAME), 37, 3);
-    expect(next.layout.nodes.ops).toMatchObject({ x: 336, y: 120 });
-    expect(next.layout.nodes.units).toMatchObject({ x: 856, y: 300 });
-    expect(next.layout.nodes.logic).toMatchObject({ x: 40 });
+    expect(next.layout!.nodes.ops).toMatchObject({ x: 336, y: 120 });
+    expect(next.layout!.nodes.units).toMatchObject({ x: 856, y: 300 });
+    expect(next.layout!.nodes.logic).toMatchObject({ x: 40 });
     const after = draws(next).frames[0];
     expect(after.x - before.x).toBe(36);
     expect(after.width).toBe(before.width);
@@ -82,7 +82,7 @@ describe('diagram edits', () => {
     const { diagram, id } = addNodeAt(real(), { x: 43, y: 357 });
     expect(id).toBe('node');
     expect(diagram.nodes.at(-1)).toEqual({ id: 'node', kind: 'backend', label: 'New node' });
-    expect(diagram.layout.nodes.node).toEqual({ x: 40, y: 360, w: 160, h: 64 });
+    expect(diagram.layout!.nodes.node).toEqual({ x: 40, y: 360, w: 160, h: 64 });
     expect(addNodeAt(diagram, { x: 0, y: 0 }).id).toBe('node-2');
     draws(diagram);
   });
@@ -103,9 +103,9 @@ describe('diagram edits', () => {
     const { diagram, ids } = duplicateNodes(real(), ['plan', 'physical'], placeCopy(real(), draws(real()), { nodes: ['plan', 'physical'] }));
     expect(ids).toEqual(['plan-2', 'physical-2']);
     expect(diagram.groups?.[0].members).toEqual(['ops', 'plan', 'physical', 'units', 'plan-2', 'physical-2']);
-    expect(diagram.layout.nodes['plan-2']).toMatchObject({ w: 190, h: 68 });
+    expect(diagram.layout!.nodes['plan-2']).toMatchObject({ w: 190, h: 68 });
     // The pair keeps its spacing.
-    expect(diagram.layout.nodes['physical-2'].x - diagram.layout.nodes['plan-2'].x).toBe(260);
+    expect(diagram.layout!.nodes['physical-2'].x - diagram.layout!.nodes['plan-2'].x).toBe(260);
     expect(diagram.edges?.at(-1)).toMatchObject({ from: 'plan-2', to: 'physical-2', label: real().edges?.find((edge) => edge.id === 'optimize')?.label });
     expect(diagram.nodes.find((node) => node.id === 'plan-2')?.note).toEqual(real().nodes.find((node) => node.id === 'plan')?.note);
     noNewErrors(real(), diagram);
@@ -134,7 +134,7 @@ describe('diagram edits', () => {
     expect(next.groups).toEqual([]);
     expect(next.nodes).toHaveLength(6);
     expect(next.edges?.some((edge) => edge.to === FRAME)).toBe(false);
-    expect(next.layout.edges?.['logic-spark-application-runtime-boundary']).toBeUndefined();
+    expect(next.layout!.edges?.['logic-spark-application-runtime-boundary']).toBeUndefined();
   });
 
   it('duplicates a frame around copies of its nodes, clear of the drawing', () => {
@@ -171,7 +171,7 @@ describe('diagram edits', () => {
     const { diagram, id } = connectAt(real(), 'logic', 'executors', 'bottom', 'left');
     expect(id).toBe('logic-executors');
     expect(diagram.edges?.at(-1)).toEqual({ id: 'logic-executors', from: 'logic', to: 'executors' });
-    expect(diagram.layout.edges?.[id]).toEqual({ fromSide: 'bottom', toSide: 'left' });
+    expect(diagram.layout!.edges?.[id]).toEqual({ fromSide: 'bottom', toSide: 'left' });
     const edge = draws(diagram).edges.find((each) => each.edge.id === id);
     expect(edge?.points[0]).toEqual([135, 188]);
     expect(removeEdge(diagram, id)).toEqual(real());
@@ -179,18 +179,18 @@ describe('diagram edits', () => {
 
   it('pins waypoints on the grid and clears them to route again', () => {
     const next = setWaypoints(real(), 'submit', [[251, 141], [251, 170]]);
-    expect(next.layout.edges?.submit).toEqual({ via: [[248, 144], [248, 168]] });
+    expect(next.layout!.edges?.submit).toEqual({ via: [[248, 144], [248, 168]] });
     const edge = draws(next).edges.find((each) => each.edge.id === 'submit');
     expect(edge?.points.slice(1, -1)).toEqual([[248, 144], [248, 168]]);
     expect(edge?.automatic).toBe(false);
     expect(setWaypoints(next, 'submit', null)).toEqual(real());
     // Other layout of the edge stays.
-    expect(setWaypoints(setWaypoints(real(), 'schedule', [[900, 400]]), 'schedule', null).layout.edges?.schedule).toEqual({ fromSide: 'bottom', toSide: 'top', labelDy: 24 });
+    expect(setWaypoints(setWaypoints(real(), 'schedule', [[900, 400]]), 'schedule', null).layout!.edges?.schedule).toEqual({ fromSide: 'bottom', toSide: 'top', labelDy: 24 });
   });
 
   it('sets and clears end sides', () => {
     const next = setEdgeSides(real(), 'submit', { fromSide: 'bottom' });
-    expect(next.layout.edges?.submit).toEqual({ fromSide: 'bottom' });
+    expect(next.layout!.edges?.submit).toEqual({ fromSide: 'bottom' });
     expect(setEdgeSides(next, 'submit', { fromSide: undefined })).toEqual(real());
   });
 

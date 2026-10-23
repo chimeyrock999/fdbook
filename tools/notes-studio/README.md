@@ -1251,6 +1251,17 @@ drawing, so it looks as the note will, with an editing layer on top:
   resize, double-click it for halves); typing there draws once it parses;
 - under the drawing, the checks' findings and the notes that use it.
 
+A sequence (`"type": "sequence"`) has no positions, so its canvas
+(`src/diagrams/SequenceCanvas.tsx`) edits the order instead: drag a
+participant's header sideways to change its column, drag a message's grip
+(in the left margin) up or down to move it in the timeline, and drag from
+the handle under a lifeline to another lifeline to add a message where it is
+dropped; the arrow keys move a selected participant a column or a message a
+step. The panel adds a participant's column, a message's ends and place, and,
+with nothing selected, the segments and activations, each set by its first
+and last message (`src/diagrams/SequencePanel.tsx`). Frames, waypoints and
+copies are not offered.
+
 Edits save a moment after each change (`src/diagrams/useDiagramFile.ts`)
 through the file API with the mtime they read, written by
 `formatDiagramJson` so a move changes one line. A change on disk (an agent,

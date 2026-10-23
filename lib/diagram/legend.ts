@@ -4,7 +4,7 @@
 // above them.
 
 import { rectsOverlap, segmentIntersectsRect, textUnits, type Rect, type Segment } from './geometry.ts';
-import type { Diagram, Tone } from './schema.ts';
+import type { Diagram, EdgeVariant, Tone } from './schema.ts';
 
 const FONT_SIZE = 8;
 const ITEM_GAP = 22;
@@ -19,9 +19,11 @@ export interface LegendEntry {
   kind: string;
   tone: Tone;
   label: string;
-  // How many nodes have this kind.
+  // How many nodes have this kind, or messages this variant.
   count: number;
   width: number;
+  // A sequence's legend lists message variants, each with a line swatch.
+  variant?: EdgeVariant;
 }
 
 export interface PlacedLegendEntry extends LegendEntry {
@@ -39,6 +41,19 @@ export interface SceneLegend {
 
 export const legendTextSize = (fontSize = FONT_SIZE) => (fontSize < 8 ? fontSize + 0.5 : fontSize + 2);
 export const LEGEND_SWATCH_OFFSET = SWATCH_WIDTH + SWATCH_GAP;
+export const LINE_SWATCH_WIDTH = 34;
+const LINE_SWATCH_GAP = 9;
+export const LINE_SWATCH_OFFSET = LINE_SWATCH_WIDTH + LINE_SWATCH_GAP;
+
+// A sequence legend's entries, in Archify's order: the variants its messages
+// use, named for what they mean in a sequence.
+const VARIANT_ORDER: [EdgeVariant, string][] = [
+  ['emphasis', 'main request'],
+  ['return', 'return'],
+  ['alert', 'alert'],
+  ['dashed', 'async trace'],
+  ['default', 'message'],
+];
 
 // The kinds in use, in the diagram's order.
 export function legendEntries(diagram: Diagram): LegendEntry[] {
@@ -49,6 +64,20 @@ export function legendEntries(diagram: Diagram): LegendEntry[] {
     const width = Math.ceil(SWATCH_WIDTH + SWATCH_GAP + textUnits(label) * legendTextSize() * TEXT_ADVANCE_EM + INTERACTIVE_BADGE_ALLOWANCE);
     return { kind: id, tone, label, count: counts.get(id)!, width };
   });
+}
+
+export function variantLegendEntries(diagram: Diagram): LegendEntry[] {
+  if (!diagram.legend) return [];
+  const counts = new Map<EdgeVariant, number>();
+  for (const edge of diagram.edges) counts.set(edge.variant, (counts.get(edge.variant) ?? 0) + 1);
+  return VARIANT_ORDER.filter(([variant]) => counts.has(variant)).map(([variant, label]) => ({
+    kind: variant,
+    tone: 'slate',
+    label,
+    count: counts.get(variant)!,
+    width: Math.ceil(LINE_SWATCH_OFFSET + textUnits(label) * legendTextSize() * TEXT_ADVANCE_EM),
+    variant,
+  }));
 }
 
 export function legendFootprint(entries: readonly LegendEntry[], width: number) {

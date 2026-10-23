@@ -9,6 +9,7 @@ import { ZodError } from 'zod';
 import { minimumReadableSourceTextPx, rectsOverlap, textUnits, type Rect } from './geometry.ts';
 import { buildScene, groupNodeIds, type Scene } from './scene.ts';
 import { diagramSchema, type Diagram } from './schema.ts';
+import { checkSequenceOnly, checkSequenceScene, checkSequenceStructure } from './validate-sequence.ts';
 
 export interface DiagramIssue {
   code: string;
@@ -69,7 +70,7 @@ export function checkStructure(diagram: Diagram): DiagramIssue[] {
         error('structure/unknown-endpoint', `Edge "${edge.id}" ends at "${edge[end]}", which is no node or group.`, `point the edge at an existing node or group id`, `edges[${index}].${end}`);
       }
     }
-    if (edge.from === edge.to) error('structure/self-loop', `Edge "${edge.id}" starts and ends at "${edge.from}".`, 'remove the edge, or say it in the node note', `edges[${index}]`);
+    if (edge.from === edge.to && diagram.type !== 'sequence') error('structure/self-loop', `Edge "${edge.id}" starts and ends at "${edge.from}".`, 'remove the edge, or say it in the node note', `edges[${index}]`);
     for (const [groupEnd, other] of [[edge.from, edge.to], [edge.to, edge.from]]) {
       const group = diagram.groups.find((candidate) => candidate.id === groupEnd);
       if (group && (groupNodeIds(diagram, group).includes(other) || other === groupEnd)) {
@@ -77,6 +78,8 @@ export function checkStructure(diagram: Diagram): DiagramIssue[] {
       }
     }
   });
+  if (diagram.type === 'sequence') return [...issues, ...checkSequenceStructure(diagram)];
+  issues.push(...checkSequenceOnly(diagram));
   for (const node of diagram.nodes) {
     if (!diagram.layout.nodes[node.id]) error('layout/missing-position', `Node "${node.id}" has no position in layout.nodes.`, `run layout, or add layout.nodes["${node.id}"] = { x, y, w, h }`, `layout.nodes.${node.id}`);
   }
@@ -96,6 +99,7 @@ export function checkStructure(diagram: Diagram): DiagramIssue[] {
 }
 
 export function checkScene(scene: Scene): DiagramIssue[] {
+  if (scene.sequence) return checkSequenceScene(scene);
   const issues: DiagramIssue[] = [];
   const error = (code: string, message: string, fix?: string, path?: string) => issues.push({ code, severity: 'error', message, fix, path });
   const canvas = { x: 0, y: 0, width: scene.width, height: scene.height };

@@ -1,10 +1,11 @@
-// Converts an Archify spec (architecture or dataflow) and its `.notes.json`
+// Converts an Archify spec (architecture, dataflow or sequence) and its `.notes.json`
 // sidecar into a diagram. Architecture specs map field for field; a dataflow
 // spec's stage/row grid becomes positions and its stages become lanes, with
 // the same layout constants Archify's dataflow compiler uses. Archify's fixed
 // component types become the diagram's own kinds, named as its legend named
 // them, and the sidecar's evidence levels become badges.
 
+import { importArchifySequence, type ArchifySequenceSpec } from './archify-sequence.ts';
 import { diagramSchema, type DiagramInput, type EdgeVariant, type ICONS, type Tone } from './schema.ts';
 
 type Pair = [number, number];
@@ -76,7 +77,7 @@ export interface ImportOptions {
 
 // Archify's component types, in its legend order, with the name, tone and
 // glyph each had there.
-const TYPES: Record<string, { label: string; tone: Tone; icon: (typeof ICONS)[number] }> = {
+export const ARCHIFY_TYPES: Record<string, { label: string; tone: Tone; icon: (typeof ICONS)[number] }> = {
   frontend: { label: 'Frontend', tone: 'blue', icon: 'window' },
   backend: { label: 'Backend', tone: 'green', icon: 'code' },
   database: { label: 'Database', tone: 'gold', icon: 'cylinder' },
@@ -102,7 +103,7 @@ const EVIDENCE: Record<ArchifyNote['evidence'], { label: string; tone: Tone }> =
   hypothesis: { label: 'Hypothesis', tone: 'red' },
 };
 // Card dots by the colour Archify painted them.
-const DOT_TONE: Record<string, Tone> = { cyan: 'blue', emerald: 'green', violet: 'gold', amber: 'orange', rose: 'red', orange: 'teal', slate: 'slate' };
+export const DOT_TONE: Record<string, Tone> = { cyan: 'blue', emerald: 'green', violet: 'gold', amber: 'orange', rose: 'red', orange: 'teal', slate: 'slate' };
 
 // Archify's dataflow compiler grid.
 const DATAFLOW = { leftX: 100, colGap: 215, stageW: 168, stageY: 46, stageBottomPad: 74, nodeW: 112, nodeH: 58, rowYs: [128, 242, 356, 470, 584] };
@@ -112,7 +113,7 @@ function slug(text: string) {
 }
 
 // A readable id for an unnamed boundary or stage, unique within the diagram.
-function uniqueId(label: string, prefix: string, taken: Set<string>) {
+export function uniqueId(label: string, prefix: string, taken: Set<string>) {
   const base = /^[a-z]/.test(slug(label)) ? slug(label).split('-').slice(0, 4).join('-') : `${prefix}-${slug(label) || 'x'}`;
   let id = base;
   for (let n = 2; taken.has(id); n += 1) id = `${base}-${n}`;
@@ -122,12 +123,13 @@ function uniqueId(label: string, prefix: string, taken: Set<string>) {
 
 // Archify notes are plain text; diagram notes are MDX. Escape what MDX reads
 // as a tag or an expression, so `spark-<uuid>` stays as written.
-const mdxText = (text: string) => text.replace(/[<{}]/g, (character) => `\\${character}`);
+export const mdxText = (text: string) => text.replace(/[<{}]/g, (character) => `\\${character}`);
 
-const defined = <T extends object>(value: T) => Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
+export const defined = <T extends object>(value: T) => Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 
 // The result is the file's content: defaults left out, checked against the schema.
-export function importArchify(spec: ArchifySpec, options: ImportOptions = {}): DiagramInput {
+export function importArchify(spec: ArchifySpec | ArchifySequenceSpec, options: ImportOptions = {}): DiagramInput {
+  if (spec.diagram_type === 'sequence') return importArchifySequence(spec, { schemaPath: options.schemaPath });
   const taken = new Set<string>();
   const dataflow = spec.diagram_type === 'dataflow';
   const sourceNodes = (dataflow ? spec.nodes : spec.components) ?? [];
@@ -168,7 +170,7 @@ export function importArchify(spec: ArchifySpec, options: ImportOptions = {}): D
   const legend = spec.meta.legend;
   const used = new Set(sourceNodes.map((node) => node.type));
   const kindIds = new Map<string, string>();
-  const kinds = Object.entries(TYPES).filter(([type]) => used.has(type)).map(([type, { label: name, tone, icon }]) => {
+  const kinds = Object.entries(ARCHIFY_TYPES).filter(([type]) => used.has(type)).map(([type, { label: name, tone, icon }]) => {
     const label = legend?.entries?.[type]?.label ?? (dataflow ? DATAFLOW_NAMES[type] : name);
     const id = uniqueId(label, 'kind', taken);
     kindIds.set(type, id);
@@ -242,8 +244,9 @@ export function importArchify(spec: ArchifySpec, options: ImportOptions = {}): D
     }),
   };
   for (const key of ['badges', 'groups', 'edges', 'lanes', 'cards'] as const) if (!input[key]?.length) delete input[key];
-  if (!Object.keys(input.layout.groups ?? {}).length) delete input.layout.groups;
-  if (!Object.keys(input.layout.edges ?? {}).length) delete input.layout.edges;
+  const layout = input.layout!;
+  if (!Object.keys(layout.groups ?? {}).length) delete layout.groups;
+  if (!Object.keys(layout.edges ?? {}).length) delete layout.edges;
   if (input.$schema === undefined) delete input.$schema;
   if (input.legend === undefined) delete input.legend;
   diagramSchema.parse(input);

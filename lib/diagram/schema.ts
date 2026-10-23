@@ -7,7 +7,12 @@ import { z } from 'zod';
 // The colours a kind, a badge or a card can take; styles/diagram.css gives
 // each one a light and a dark value.
 export const TONES = ['blue', 'green', 'gold', 'orange', 'red', 'teal', 'slate'] as const;
-export const EDGE_VARIANTS = ['default', 'emphasis', 'dashed', 'alert'] as const;
+// What a diagram draws: an architecture places its nodes where `layout` says;
+// a sequence lays its participants (nodes) out in columns and its messages
+// (edges) down the timeline in the order the file lists them.
+export const DIAGRAM_TYPES = ['architecture', 'sequence'] as const;
+// `return` is a reply, quieter than the call it answers; sequences use it.
+export const EDGE_VARIANTS = ['default', 'emphasis', 'dashed', 'alert', 'return'] as const;
 export const SIDES = ['top', 'right', 'bottom', 'left'] as const;
 // The small glyphs a kind can show in a node's corner.
 export const ICONS = [
@@ -75,6 +80,12 @@ const cardSchema = z.strictObject({
   items: z.array(text).min(1),
 });
 
+// A sequence's phase: a frame around the messages from `from` to `to`.
+const segmentSchema = z.strictObject({ label: text, from: id, to: id });
+
+// A sequence participant busy from message `from` to message `to`.
+const activationSchema = z.strictObject({ node: id, from: id, to: id });
+
 const box = z.strictObject({ x: z.number(), y: z.number(), w: z.number().positive(), h: z.number().positive() });
 
 const layoutSchema = z.strictObject({
@@ -102,6 +113,7 @@ const layoutSchema = z.strictObject({
 export const diagramSchema = z.strictObject({
   $schema: z.string().optional(),
   version: z.literal(1),
+  type: z.enum(DIAGRAM_TYPES).default('architecture'),
   title: text,
   kinds: z.array(kindSchema).min(1),
   badges: z.array(badgeSchema).default([]),
@@ -112,7 +124,11 @@ export const diagramSchema = z.strictObject({
   edges: z.array(edgeSchema).default([]),
   lanes: z.array(laneSchema).default([]),
   cards: z.array(cardSchema).default([]),
-  layout: layoutSchema,
+  // Sequence only.
+  segments: z.array(segmentSchema).default([]),
+  activations: z.array(activationSchema).default([]),
+  // Architecture only: a sequence is laid out from its order alone.
+  layout: layoutSchema.default({ nodes: {} }),
 });
 
 export type DiagramInput = z.input<typeof diagramSchema>;
@@ -122,6 +138,9 @@ export type DiagramGroup = Diagram['groups'][number];
 export type DiagramEdge = Diagram['edges'][number];
 export type DiagramLane = Diagram['lanes'][number];
 export type DiagramCard = Diagram['cards'][number];
+export type DiagramSegment = Diagram['segments'][number];
+export type DiagramActivation = Diagram['activations'][number];
+export type DiagramType = (typeof DIAGRAM_TYPES)[number];
 export type DiagramNote = NonNullable<DiagramNode['note']>;
 export type DiagramKind = Diagram['kinds'][number];
 export type DiagramBadge = Diagram['badges'][number];

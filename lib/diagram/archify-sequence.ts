@@ -1,0 +1,115 @@
+// Archify sequence specs (schema v1) both ways. importArchifySequence turns
+// one into a diagram: participants become nodes with the kinds of
+// import-archify.ts, messages become edges in their `y` order, a note
+// becomes the message's detail, and segment and activation pixel ranges
+// become the messages they span. sequenceSpecOf turns a laid-out sequence
+// back into a spec with the `y` the layout chose, which Archify then draws:
+// scripts/archify-fixtures.ts keeps that drawing as the parity fixture.
+
+import { diagramSchema, type DiagramInput, type EdgeVariant } from './schema.ts';
+import type { Scene } from './scene.ts';
+import { ARCHIFY_TYPES, DOT_TONE, defined, mdxText, uniqueId } from './import-archify.ts';
+
+export interface ArchifySequenceSpec {
+  schema_version?: 1;
+  diagram_type: 'sequence';
+  meta: { title: string; output?: string; quality_profile?: string; legend?: { entries?: Record<string, { label?: string }> } };
+  participants: { id: string; type: string; label: string; sublabel?: string }[];
+  segments?: { from: number; to: number; label: string }[];
+  messages: { id?: string; from: string; to: string; y: number; label: string; variant?: string; note?: string }[];
+  activations?: { participant: string; from: number; to: number; type?: string }[];
+  cards?: { dot?: string; title: string; items: string[] }[];
+}
+
+// The variant names that differ: Archify's security line is our alert.
+const VARIANT_IN: Record<string, EdgeVariant | undefined> = { security: 'alert', emphasis: 'emphasis', dashed: 'dashed', return: 'return' };
+const VARIANT_OUT: Record<EdgeVariant, string> = { default: 'default', emphasis: 'emphasis', alert: 'security', dashed: 'dashed', return: 'return' };
+
+export function importArchifySequence(spec: ArchifySequenceSpec, { schemaPath }: { schemaPath?: string } = {}): DiagramInput {
+  const taken = new Set<string>([...spec.participants.map((participant) => participant.id), ...spec.messages.flatMap((message) => (message.id ? [message.id] : []))]);
+  const used = new Set(spec.participants.map((participant) => participant.type));
+  const kindIds = new Map<string, string>();
+  const kinds = Object.entries(ARCHIFY_TYPES).filter(([type]) => used.has(type)).map(([type, { label, tone, icon }]) => {
+    const id = uniqueId(label, 'kind', taken);
+    kindIds.set(type, id);
+    return { id, label, tone, icon };
+  });
+  const messages = [...spec.messages].sort((a, b) => a.y - b.y).map((message) => ({
+    ...message,
+    id: message.id ?? uniqueId(message.label, 'message', taken),
+  }));
+  // The messages a pixel range holds, first and last.
+  const spanned = (from: number, to: number, participant?: string) => {
+    const inside = messages.filter((message) => message.y >= from && message.y <= to && (!participant || message.from === participant || message.to === participant));
+    return inside.length ? { from: inside[0].id, to: inside.at(-1)!.id } : null;
+  };
+  const input: DiagramInput = {
+    $schema: schemaPath,
+    version: 1,
+    type: 'sequence',
+    title: spec.meta.title,
+    kinds,
+    nodes: spec.participants.map((participant) => defined({
+      id: participant.id,
+      kind: kindIds.get(participant.type)!,
+      label: participant.label,
+      sublabel: participant.sublabel || undefined,
+    })),
+    edges: messages.map((message) => defined({
+      id: message.id,
+      from: message.from,
+      to: message.to,
+      label: message.label,
+      detail: message.note || undefined,
+      variant: VARIANT_IN[message.variant ?? 'default'],
+    })),
+    segments: (spec.segments ?? []).flatMap((segment) => {
+      const range = spanned(segment.from, segment.to);
+      return range ? [{ label: segment.label, ...range }] : [];
+    }),
+    activations: (spec.activations ?? []).flatMap((activation) => {
+      const range = spanned(activation.from, activation.to, activation.participant);
+      return range ? [{ node: activation.participant, ...range }] : [];
+    }),
+    cards: (spec.cards ?? []).map((card) => {
+      const tone = DOT_TONE[card.dot ?? 'cyan'];
+      return defined({ title: card.title, tone: tone === 'blue' ? undefined : tone, items: card.items.map(mdxText) });
+    }),
+  };
+  for (const key of ['segments', 'activations', 'cards'] as const) if (!input[key]?.length) delete input[key];
+  if (input.$schema === undefined) delete input.$schema;
+  diagramSchema.parse(input);
+  return input;
+}
+
+// A spec Archify draws as the scene does: the same participants, messages
+// at the scene's y, segments and activations at its pixel ranges, an
+// automatic canvas (no viewBox) and our legend names.
+export function sequenceSpecOf(scene: Scene): ArchifySequenceSpec {
+  const layer = scene.sequence;
+  if (!layer) throw new Error('sequenceSpecOf takes a sequence scene');
+  const { diagram } = scene;
+  const typeOf = (kind: string) => Object.entries(ARCHIFY_TYPES).find(([, { tone }]) => tone === diagram.kinds.find((each) => each.id === kind)?.tone)?.[0] ?? 'external';
+  return {
+    schema_version: 1,
+    diagram_type: 'sequence',
+    meta: {
+      title: diagram.title,
+      output: 'out.html',
+      quality_profile: 'showcase',
+      legend: { entries: Object.fromEntries((scene.legend?.entries ?? []).map((entry) => [VARIANT_OUT[entry.variant!], { label: entry.label }])) },
+    },
+    participants: diagram.nodes.map((node) => defined({ id: node.id, type: typeOf(node.kind), label: node.label, sublabel: node.sublabel })),
+    segments: layer.segments.map(({ segment, frame }) => ({ from: frame.y, to: frame.y + frame.height, label: segment.label })),
+    messages: layer.messages.map(({ edge, y }) => defined({
+      id: edge.id,
+      from: edge.from,
+      to: edge.to,
+      y,
+      label: edge.label!,
+      variant: edge.variant === 'default' ? undefined : VARIANT_OUT[edge.variant],
+      note: edge.detail,
+    })),
+    activations: layer.activations.map(({ activation, y, height }) => ({ participant: activation.node, from: y, to: y + height })),
+  };
+}

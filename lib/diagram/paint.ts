@@ -115,11 +115,17 @@ function paintOf(tag: string, classes: string[], tone: string | null, parent: Pa
     return { ...fill(mix(toneStroke(), 0.03, [0, 0, 0, 0])), ...stroke(mix(toneStroke(), 0.42, token('--lane-stroke'))) };
   }
   if (has('c-lane')) return { ...fill(token('--lane-fill')), ...stroke(token('--lane-stroke')), 'stroke-dasharray': '6 6' };
+  if (has('c-segment')) return { ...fill(token('--lane-fill')), ...stroke(token('--lane-stroke')), 'stroke-dasharray': '4 3' };
+  if (has('c-segment-pill')) return { ...fill(mask), ...stroke(token('--lane-stroke')), 'stroke-width': 0.75 };
+  if (has('c-lifeline')) return { fill: 'none', ...stroke(token('--arrow')), 'stroke-dasharray': '3 7' };
+  if (has('c-activation')) return { ...fill(mix(toneStroke(), 0.16, mask)), ...stroke(toneStroke()) };
+  if (has('m-return')) return { fill: 'none', ...stroke(token('--arrow')), 'stroke-width': 1.1 };
   const text: Record<string, () => Rgba> = {
     't-primary': () => token('--text'),
     't-muted': () => token('--text-muted'),
     't-dim': () => token('--text-dim'),
     't-tone': toneStroke,
+    't-segment': () => token('--text-muted'),
     't-edge-default': () => token('--arrow'),
     't-edge-emphasis': () => token('--arrow-emphasis'),
     't-edge-alert': () => token('--red-stroke'),
@@ -135,6 +141,7 @@ function paintOf(tag: string, classes: string[], tone: string | null, parent: Pa
     'a-emphasis': ['--arrow-emphasis', null],
     'a-alert': ['--red-stroke', '5 5'],
     'a-dashed': ['--gold-stroke', '4 4'],
+    'a-return': ['--arrow', '3 5'],
   };
   for (const name of classes) {
     if (!arrows[name]) continue;

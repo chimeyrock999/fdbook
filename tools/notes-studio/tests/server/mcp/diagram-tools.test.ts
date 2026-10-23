@@ -44,6 +44,7 @@ describe('diagram tools', () => {
       ['diagram_connect', 'write'],
       ['diagram_set_note', 'write'],
       ['diagram_update', 'write'],
+      ['diagram_reorder', 'write'],
       ['diagram_remove_edge', 'write'],
       ['diagram_remove_node', 'write'],
       ['diagram_layout', 'write'],

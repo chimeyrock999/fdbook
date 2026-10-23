@@ -1,5 +1,6 @@
-import { addNode, connect, moveNode, removeNode } from '@site/lib/diagram/ops';
+import { addNode, connect, moveNode, removeEdge as removeEdgeOp, removeNode, reorder } from '@site/lib/diagram/ops';
 import type { DiagramInput, Side } from '@site/lib/diagram/schema';
+import type { SequenceLayer } from '@site/lib/diagram/sequence';
 
 // What the diagram editor changes, on the file's input form (no schema
 // defaults filled in), so a save touches only the lines an edit changed.
@@ -20,6 +21,10 @@ export const GRID = 8;
 const NEW_NODE = { w: 160, h: 64 };
 
 export const snap = (value: number) => Math.round(value / GRID) * GRID;
+
+// An architecture's layout; one without it gets an empty one. A sequence
+// has none: these edits are not offered on one.
+const layoutOf = (diagram: Input) => (diagram.layout ??= { nodes: {} });
 
 // A record without `key`.
 const without = <T>(record: Record<string, T>, key: string) => Object.fromEntries(Object.entries(record).filter(([each]) => each !== key));
@@ -45,12 +50,12 @@ export function placeNode(diagram: Input, id: string, x: number, y: number): Inp
 // Every node in `ids` moved by `dx`, `dy`, keeping their spacing; the
 // first one lands on the grid.
 export function moveNodes(diagram: Input, ids: readonly string[], dx: number, dy: number): Input {
-  const first = ids.map((id) => diagram.layout.nodes[id]).find(Boolean);
+  const first = ids.map((id) => diagram.layout?.nodes[id]).find(Boolean);
   if (!first) return diagram;
   const sx = snap(first.x + dx) - first.x;
   const sy = snap(first.y + dy) - first.y;
   let next = diagram;
-  for (const id of ids) if (id in next.layout.nodes) next = moveNode(next, { id, dx: sx, dy: sy });
+  for (const id of ids) if (id in (next.layout?.nodes ?? {})) next = moveNode(next, { id, dx: sx, dy: sy });
   return next;
 }
 
@@ -97,8 +102,8 @@ export function addNodeAt(diagram: Input, at: { x: number; y: number }): { diagr
 export type Place = { dx: number; dy: number; join: readonly string[]; height?: number };
 
 function grown(diagram: Input, height: number | undefined) {
-  const canvas = diagram.layout.canvas;
-  if (canvas && height !== undefined && height > canvas[1]) diagram.layout.canvas = [canvas[0], height];
+  const layout = layoutOf(diagram);
+  if (layout.canvas && height !== undefined && height > layout.canvas[1]) layout.canvas = [layout.canvas[0], height];
 }
 
 // Copies of the nodes in `ids` at `place`, with their notes and the edges
@@ -112,8 +117,9 @@ export function duplicateNodes(diagram: Input, ids: readonly string[], place: Pl
     const copy = { ...structuredClone(node), id: freeId(next, node.id) };
     next.nodes.push(copy);
     for (const group of next.groups ?? []) if (place.join.includes(group.id)) group.members.push(copy.id);
-    const box = next.layout.nodes[id] as Box | undefined;
-    if (box) next.layout.nodes[copy.id] = { ...box, x: box.x + place.dx, y: box.y + place.dy };
+    const { nodes } = layoutOf(next);
+    const box = nodes[id] as Box | undefined;
+    if (box) nodes[copy.id] = { ...box, x: box.x + place.dx, y: box.y + place.dy };
     copies.push(copy.id);
   }
   grown(next, place.height);
@@ -158,7 +164,8 @@ export function removeGroup(diagram: Input, id: string): Input {
   }
   const gone = (next.edges ?? []).filter((edge) => edge.from === id || edge.to === id).map((edge) => edge.id);
   for (const edge of gone) removeEdgeIn(next, edge);
-  if (next.layout.groups) next.layout.groups = without(next.layout.groups, id);
+  const layout = layoutOf(next);
+  if (layout.groups) layout.groups = without(layout.groups, id);
   return next;
 }
 
@@ -183,8 +190,9 @@ export function duplicateGroup(diagram: Input, id: string, place: Place): { diag
   const copy: GroupInput = { ...structuredClone(group), id: freeId(next, group.id), members: ids };
   for (const each of next.groups ?? []) if (place.join.includes(each.id)) each.members.push(copy.id);
   next.groups = [...(next.groups ?? []), copy];
-  const pad = next.layout.groups?.[id];
-  if (pad) next.layout.groups = { ...next.layout.groups, [copy.id]: { ...pad } };
+  const layout = layoutOf(next);
+  const pad = layout.groups?.[id];
+  if (pad) layout.groups = { ...layout.groups, [copy.id]: { ...pad } };
   return { diagram: next, id: copy.id };
 }
 
@@ -193,28 +201,31 @@ export function connectAt(diagram: Input, from: string, to: string, fromSide: Si
   const next = connect(diagram, { from, to });
   const edge = next.edges?.at(-1);
   if (!edge) return { diagram, id: '' };
-  next.layout.edges = { ...next.layout.edges, [edge.id]: { fromSide, toSide } };
+  const layout = layoutOf(next);
+  layout.edges = { ...layout.edges, [edge.id]: { fromSide, toSide } };
   return { diagram: next, id: edge.id };
 }
 
 function removeEdgeIn(diagram: Input, id: string): Input {
   diagram.edges = (diagram.edges ?? []).filter((edge) => edge.id !== id);
-  if (diagram.layout.edges) diagram.layout.edges = without(diagram.layout.edges, id);
+  if (diagram.layout?.edges) diagram.layout.edges = without(diagram.layout.edges, id);
   return diagram;
 }
 
-export const removeEdge = (diagram: Input, id: string): Input => removeEdgeIn(structuredClone(diagram), id);
+// A sequence's segments and activations keep their ends (lib/diagram/ops.ts).
+export const removeEdge = (diagram: Input, id: string): Input => ((diagram.edges ?? []).some((edge) => edge.id === id) ? removeEdgeOp(diagram, id) : diagram);
 
 // An edge's waypoints, on the grid; null clears them, so the route is
 // planned again.
 export function setWaypoints(diagram: Input, id: string, via: Point[] | null): Input {
   const next = structuredClone(diagram);
-  const layout = { ...next.layout.edges?.[id] };
+  const all = layoutOf(next);
+  const layout = { ...all.edges?.[id] };
   if (via === null || via.length === 0) delete layout.via;
   else layout.via = via.map(([x, y]) => [snap(x), snap(y)] as Point);
-  next.layout.edges = { ...next.layout.edges, [id]: layout };
-  if (Object.keys(layout).length === 0) next.layout.edges = without(next.layout.edges, id);
-  if (Object.keys(next.layout.edges).length === 0) delete next.layout.edges;
+  all.edges = { ...all.edges, [id]: layout };
+  if (Object.keys(layout).length === 0) all.edges = without(all.edges, id);
+  if (Object.keys(all.edges).length === 0) delete all.edges;
   return next;
 }
 
@@ -272,10 +283,11 @@ export function removeKind(diagram: Input, id: string): Input {
 // An edge's end sides; undefined leaves the router to pick.
 export function setEdgeSides(diagram: Input, id: string, sides: { fromSide?: Side; toSide?: Side }): Input {
   const next = structuredClone(diagram);
-  const layout = patched({ ...next.layout.edges?.[id] }, sides);
-  next.layout.edges = { ...next.layout.edges, [id]: layout };
-  if (Object.keys(layout).length === 0) next.layout.edges = without(next.layout.edges, id);
-  if (Object.keys(next.layout.edges).length === 0) delete next.layout.edges;
+  const all = layoutOf(next);
+  const layout = patched({ ...all.edges?.[id] }, sides);
+  all.edges = { ...all.edges, [id]: layout };
+  if (Object.keys(layout).length === 0) all.edges = without(all.edges, id);
+  if (Object.keys(all.edges).length === 0) delete all.edges;
   return next;
 }
 
@@ -305,4 +317,35 @@ export function updateCard(diagram: Input, index: number, patch: Partial<CardInp
   const next = structuredClone(diagram);
   next.cards = (next.cards ?? []).map((card, at) => (at === index ? patched(card, patch) : card));
   return next;
+}
+
+// A sequence's edits: its order is its layout (lib/diagram/ops.ts reorder).
+
+// The column a participant dragged to `x` lands in.
+export function participantIndexAt(layer: SequenceLayer, id: string, x: number) {
+  return layer.lifelines.filter((line) => line.node !== id && line.x < x).length;
+}
+
+// The place in the timeline a message dragged to `y` lands in, among the
+// others; null when it stays where it is.
+export function messageIndexAt(layer: SequenceLayer, id: string, y: number): number | null {
+  const others = layer.messages.filter((message) => message.edge.id !== id);
+  const index = others.filter((message) => message.y < y).length;
+  return layer.messages.findIndex((message) => message.edge.id === id) === index ? null : index;
+}
+
+export const moveParticipant = (diagram: Input, id: string, index: number) => reorder(diagram, 'nodes', id, index);
+export const moveMessage = (diagram: Input, id: string, index: number) => reorder(diagram, 'edges', id, index);
+
+// A new message from `from` to `to`, after the last message above `y`.
+export function addMessage(diagram: Input, layer: SequenceLayer, from: string, to: string, y: number): { diagram: Input; id: string } {
+  const id = freeId(diagram, `${from}-${to}`);
+  const above = layer.messages.filter((message) => message.y < y).at(-1);
+  return { diagram: connect(diagram, { id, from, to, label: 'message', after: above ? above.edge.id : null }), id };
+}
+
+// A new participant, the last column.
+export function addParticipant(diagram: Input): { diagram: Input; id: string } {
+  const id = freeId(diagram, 'participant');
+  return { diagram: addNode(diagram, { id, kind: diagram.kinds[0].id, label: 'Participant' }), id };
 }
