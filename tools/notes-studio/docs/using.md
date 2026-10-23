@@ -64,7 +64,7 @@ Waiting to merge (In review) and To clean up (Merged, Closed). Each card
 shows the name, status, branch, the notes changed against `origin/main`
 (committed or not), how many files are not committed, when it was last
 updated (its last commit, an uncommitted file, or its creation), the
-preview link once it is pushed, the pull request, and its agent chats with
+preview link once it is pushed (with `STUDIO_PAGES_PROJECT` set), the pull request, and its agent chats with
 their reported cost. The card of the change request the page shows says
 Current instead of an Open button; Open is off while the open note has
 edits not saved yet. The list loads again when the window gets the focus

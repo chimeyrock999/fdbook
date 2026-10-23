@@ -40,8 +40,8 @@ to restart `npm run studio`.
 The server refuses to start when a direct dependency, at the root or here,
 is missing or installed at another version than its `package-lock.json`
 pins, and names the command to run and the packages (`server/deps.ts`).
-The Studio's tests (`tests/global-setup.ts`) and the root `npm test` stop
-the same way. A package put in place with `npm link` is skipped.
+The Studio's tests stop the same way (`tests/global-setup.ts`); the root
+`npm test` has no such check. A package put in place with `npm link` is skipped.
 
 ## Host and port
 
@@ -58,17 +58,19 @@ start until sign-in is set up (below).
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `STUDIO_HOME` | `~/.chimey-studio` | Where the Studio keeps what is not in the branch: the worktrees (`worktrees/_main`, `worktrees/<slug>`), sessions, agent transcripts and attachments, proposals and comments. |
-| `STUDIO_PAGES_PROJECT` | unset | The Cloudflare Pages project, for a change request's preview link `https://cr-<slug>.<project>.pages.dev` when the build check has not named one. Unset, a change request has a preview link only once its build check names one. |
-| `STUDIO_STALE_DAYS` | `30` | After how many days without an update an open change request is marked Stale. A whole number. |
+| `STUDIO_PAGES_PROJECT` | unset | The Cloudflare Pages project, for a change request's preview link `https://cr-<slug>.<project>.pages.dev` when the build check has not named one. Unset, the Changes view and Open preview use the alias the build check names once there is one, and the change request list shows no preview link. |
+| `STUDIO_STALE_DAYS` | `30` | After how many days without an update an open change request is marked Stale: a whole number, 1 or more. |
 
-The sign-in variables follow below; `STUDIO_MCP_URL` and `STUDIO_MCP_TOKEN`
+A value the server cannot read stops it at start with the reason. The
+sign-in variables follow below; `STUDIO_MCP_URL` and `STUDIO_MCP_TOKEN`
 are for the [stdio bridge](#connect-an-agent-from-a-terminal).
 
 ## Sign-in
 
 On `127.0.0.1` the Studio is one person's on one machine, and sign-in is
-off unless `STUDIO_AUTH=github`. With `STUDIO_HOST` it is always on:
-`STUDIO_AUTH=off` is refused there, and so is starting without a client ID,
+off unless `STUDIO_AUTH=github`. On any other host (`STUDIO_HOST` set to
+anything but `127.0.0.1`, `::1` included) it is always on: `STUDIO_AUTH=off`
+is refused there, and so is starting without a client ID,
 since anyone who reaches the address could edit, commit and publish.
 
 People sign in with GitHub. What they may do comes from their access to

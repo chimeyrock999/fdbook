@@ -83,7 +83,7 @@ drives a two-turn chat with each installed agent as a reviewer, restarting
 in between to take the session up again. It calls the chats' own module
 (`createAgentConversations`) rather than the HTTP server, signs in with
 your logins and costs two model calls per agent, so it is skipped unless
-`STUDIO_AGENT_LIVE` is set.
+`STUDIO_AGENT_LIVE` is exactly `1`.
 
 ## Known flakes
 

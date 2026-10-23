@@ -45,10 +45,11 @@ Callout types and accordion kinds come from `lib/notes-syntax.ts`, the same
 lists the site's components use. The directive names the lint knows come
 from there too (`CONTAINER_DIRECTIVES`, `LEAF_DIRECTIVES`,
 `TEXT_DIRECTIVES`), but the site's directive plugin
-(`lib/remark-notes-directives.ts`) names the directives it renders itself.
+(`lib/remark-notes-directives.ts`) reads only `CALLOUT_DIRECTIVES` from it
+and names the other directives it renders itself.
 The root test `tests/remark-notes-directives.test.mjs` checks that every
-listed directive renders; it cannot see a directive the plugin renders and
-the list lacks, so when the site gains one, add it to `lib/notes-syntax.ts`
+listed directive renders; it cannot see a non-callout directive the plugin
+renders and the list lacks, so when the site gains one, add it to `lib/notes-syntax.ts`
 too, or the lint reports it as unknown.
 
 ## Running it on every note

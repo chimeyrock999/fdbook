@@ -44,8 +44,10 @@ the other settings are in [docs/setup.md](docs/setup.md).
 tools/notes-studio/
   server/       one Node process: API, notes sync, Vite, MCP server
     index.ts    entry point (checks the dependencies first)
-    security/   Host/Origin guard, path policy, roles
+    security/   Host/Origin guard, path policy, the role each request needs
+    auth/       GitHub sign-in, roles read with gh, sessions
     cr/ git/    change requests, worktrees, commits, history
+    preview/    push, Cloudflare build check, pull requests
     agents/     chats with agents over ACP
     mcp/        the MCP server and its tools
     lint/       the lint rules and their CLI
