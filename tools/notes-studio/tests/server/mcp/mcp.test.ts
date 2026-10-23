@@ -79,7 +79,7 @@ describe('Studio MCP server', () => {
 
   it('lists the change request tools and the note tools, each note tool taking cr', async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((tool) => tool.name).filter((name) => !name.startsWith('diagram_')).sort()).toEqual(['add_comment', 'create_cr', 'list_assets', 'list_crs', 'list_notes', 'note_graph', 'propose_edit', 'read_note', 'search_notes', 'test_write']);
+    expect(tools.map((tool) => tool.name).filter((name) => !name.startsWith('diagram_')).sort()).toEqual(['add_comment', 'create_cr', 'list_assets', 'list_crs', 'list_notes', 'note_graph', 'note_vocabulary', 'propose_edit', 'read_note', 'related_notes', 'search_notes', 'test_write']);
     expect(tools.filter((tool) => tool.name.startsWith('diagram_'))).toHaveLength(14);
     expect(tools.find((tool) => tool.name === 'read_note')?.inputSchema.properties).toHaveProperty('cr');
     expect(tools.find((tool) => tool.name === 'list_crs')?.inputSchema.properties ?? {}).not.toHaveProperty('cr');

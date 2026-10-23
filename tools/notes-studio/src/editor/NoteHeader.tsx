@@ -1,4 +1,7 @@
+import { Sparkles } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, type KeyboardEvent, type RefObject } from 'react';
+import { PendingButton } from '../actions/PendingButton';
+import { askAgent, useAsk } from '../agents/agent-ask';
 import { FieldError } from '../frontmatter/fields';
 import { MetadataStrip, type FieldReveal } from '../frontmatter/MetadataStrip';
 import type { Frontmatter } from '../frontmatter/useFrontmatter';
@@ -18,6 +21,10 @@ export function NoteHeader({ frontmatter, readOnly, onOpenSource, onLeave, revea
 }) {
   const title = useRef<HTMLTextAreaElement>(null);
   const description = useRef<HTMLTextAreaElement>(null);
+  // An author agent may fill the description, tags and keywords (#86): as
+  // a suggestion, through the agent panel while it is open.
+  const ask = useAsk();
+  const canAsk = ask.can && !readOnly;
 
   // The strip handles every path but these two.
   useEffect(() => {
@@ -42,6 +49,11 @@ export function NoteHeader({ frontmatter, readOnly, onOpenSource, onLeave, revea
   const stripReveal = reveal && reveal.path !== 'title' && reveal.path !== 'description' ? reveal : null;
   return (
     <header className="studio-note-header">
+      {canAsk && (
+        <PendingButton className="studio-note-fill" title="Ask the agent to fill the description, tags and keywords: it suggests them" pending={ask.pending === 'frontmatter'} disabled={ask.pending !== null} onClick={() => { askAgent('frontmatter'); }}>
+          <Sparkles size={12} aria-hidden /> Fill
+        </PendingButton>
+      )}
       <Line
         ref={title}
         className="notes-title studio-note-title"

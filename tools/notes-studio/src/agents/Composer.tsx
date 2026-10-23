@@ -6,6 +6,7 @@ import { PendingButton } from '../actions/PendingButton';
 import { toast } from '../actions/toasts';
 import { composing } from '../keyboard';
 import type { Attachment, Mention, MessageContext, MessageSelection } from '../api/agents';
+import { NOTE_ACTIONS, SELECTION_ACTIONS } from './actions';
 import { AttachmentChip, CaretChip, MentionChip, SelectionChip } from './ContextChips';
 import { mentionAt } from './context-labels';
 import { useEditorPlace } from './editor-place';
@@ -18,6 +19,9 @@ export type ContextClient = {
   attach: (file: File) => Promise<Attachment>;
 };
 
+// The message being written: its text and its chips.
+export type Draft = { text: string; mentions: Mention[]; attachments: Attachment[] };
+
 // The message box at the bottom of the agent panel. Enter sends, as in
 // other chat panels; Shift+Enter adds a line; Enter that confirms an IME's
 // text (Telex) only confirms it. It grows with its text
@@ -29,18 +33,28 @@ export type ContextClient = {
 // With `client`, the message carries context (#86): the note open in the
 // editor and its selection (on its own, no button: × leaves it out of this
 // message), and the notes and files mentioned with @ or attached.
-export function Composer({ placeholder, busy, onSend, client = null, children }: {
+// `actions`: the one-click actions (actions.ts) for what is selected or
+// open, sent through `onAction` with the editor's place; the text typed,
+// mentions and attachments stay for the message being written (`draft`,
+// for a panel that moves to another chat). `sendEmpty`: the message may go
+// without text (the new note's form holds it). `initial`: the message being
+// written when it mounts.
+export function Composer({ placeholder, busy, onSend, client = null, actions = false, onAction, sendEmpty = false, initial = null, children }: {
   placeholder: string;
   busy: boolean;
   onSend: (text: string, context: MessageContext | null) => Promise<boolean>;
   client?: ContextClient | null;
+  actions?: boolean;
+  onAction?: (prompt: string, context: MessageContext | null, draft: Draft) => Promise<boolean>;
+  sendEmpty?: boolean;
+  initial?: Draft | null;
   children?: ReactNode;
 }) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initial?.text ?? '');
   const action = useBusy();
   const upload = useBusy();
-  const [mentions, setMentions] = useState<Mention[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [mentions, setMentions] = useState<Mention[]>(initial?.mentions ?? []);
+  const [attachments, setAttachments] = useState<Attachment[]>(initial?.attachments ?? []);
   // The selection taken off this message: another one shows, and after sending this one does too.
   const [dropped, setDropped] = useState<MessageSelection | null>(null);
   // The @ being typed, at `start` in the text, and what it matches.
@@ -50,7 +64,7 @@ export function Composer({ placeholder, busy, onSend, client = null, children }:
   const place = useEditorPlace();
   const withContext = client !== null;
   const selection = withContext && place?.selection != null && place.selection !== dropped ? place.selection : null;
-  const blocked = busy || action.busy || upload.busy || text.trim() === '';
+  const blocked = busy || action.busy || upload.busy || (!sendEmpty && text.trim() === '');
 
   // Where the caret goes once the text changed here (a mention picked, an @
   // put in): set as the new text is committed, before any key that follows.
@@ -75,6 +89,7 @@ export function Composer({ placeholder, busy, onSend, client = null, children }:
     return { note: place?.note ?? null, selection: sent, caret: selection === null ? (place?.caret ?? null) : null, mentions, attachments };
   };
 
+  // Sends what was typed with its chips, which go with it.
   const send = () => {
     if (blocked) return;
     const message = text;
@@ -93,8 +108,17 @@ export function Composer({ placeholder, busy, onSend, client = null, children }:
       setText((now) => (now === '' ? message : now));
       setMentions((now) => (now.length === 0 ? kept.mentions : now));
       setAttachments((now) => (now.length === 0 ? kept.attachments : now));
-    }).finally(() => { box.current?.focus(); });
+    }, 'send').finally(() => { box.current?.focus(); });
   };
+  // An action takes the editor's place only.
+  const act = (prompt: string, key: string) => {
+    if (onAction === undefined) return;
+    const context = contextOf();
+    void action.run(async () => {
+      if (await onAction(prompt, context === null ? null : { ...context, mentions: [], attachments: [] }, { text, mentions, attachments })) setDropped(null);
+    }, key);
+  };
+  const shown = actions && onAction !== undefined && place !== null ? (selection !== null ? SELECTION_ACTIONS : NOTE_ACTIONS) : [];
 
   const pick = (mention: Mention) => {
     if (query !== null) {
@@ -151,6 +175,21 @@ export function Composer({ placeholder, busy, onSend, client = null, children }:
           {attachments.map((attachment) => <AttachmentChip key={attachment.id} attachment={attachment} onRemove={() => { setAttachments((before) => before.filter((each) => each !== attachment)); }} />)}
         </div>
       )}
+      {shown.length > 0 && (
+        <div className="studio-agent-actions" role="group" aria-label={selection !== null ? 'Do with the selection' : 'Do with the note'}>
+          {shown.map((each) => (
+            <PendingButton
+              key={each.id}
+              pending={action.is(each.id)}
+              // A chat that is answering takes no action: the panel starts a new one for it.
+              disabled={action.busy || upload.busy}
+              onClick={() => { act(each.prompt, each.id); }}
+            >
+              {each.label}
+            </PendingButton>
+          ))}
+        </div>
+      )}
       <textarea
         ref={box}
         id="studio-agent-prompt"
@@ -198,7 +237,7 @@ export function Composer({ placeholder, busy, onSend, client = null, children }:
         )}
         {children}
         <span className="flex-1" />
-        <PendingButton type="submit" className="studio-agent-send" aria-label="Send" title="Send" pending={action.busy} pendingLabel={null} disabled={blocked}>
+        <PendingButton type="submit" className="studio-agent-send" aria-label="Send" title="Send" pending={action.is('send')} pendingLabel={null} disabled={blocked}>
           <ArrowUp size={14} aria-hidden />
         </PendingButton>
       </div>
