@@ -3,14 +3,12 @@
 
 import type { NoteComment } from '../../server/proposals/comments';
 import type { ProposalHunk, ProposalOp, ProposalView } from '../../server/proposals/shared';
+import { watchEvents } from './connection';
 import { errorOf, readJson } from './json';
 import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
 export type { NoteComment, ProposalHunk, ProposalOp, ProposalView };
-
-// How long a refused event stream waits before it is opened again.
-const REOPEN_MS = 5000;
 
 async function answer<T>(response: Response): Promise<T> {
   if (!response.ok) throw await errorOf(response);
@@ -32,26 +30,13 @@ export function createProposalsClient(base = API_BASE) {
     },
     // Each proposal as it is made or changes. `onOpen` runs on every
     // connect, so the caller reads again what changed while it was down.
-    // Comments come as `comment` events.
+    // Comments come as `comment` events. The stream opens again after a
+    // drop, under the page's connection watch (connection.ts).
     subscribe(listener: (proposal: ProposalView) => void, onOpen: () => void = () => undefined, onComment: (comment: NoteComment) => void = () => undefined): () => void {
-      let events: EventSource | null = null;
-      let retry: ReturnType<typeof setTimeout> | undefined;
-      const open = () => {
-        events = new EventSource(`${base}/api/proposals/events`);
-        events.onopen = onOpen;
+      return watchEvents(`${base}/api/proposals/events`, (events) => {
         events.onmessage = (message: MessageEvent<string>) => { listener(JSON.parse(message.data) as ProposalView); };
         events.addEventListener('comment', (message: MessageEvent<string>) => { onComment(JSON.parse(message.data) as NoteComment); });
-        events.onerror = () => {
-          if (events?.readyState !== EventSource.CLOSED) return;
-          onOpen();
-          retry = setTimeout(open, REOPEN_MS);
-        };
-      };
-      open();
-      return () => {
-        clearTimeout(retry);
-        events?.close();
-      };
+      }, onOpen);
     },
   };
 }

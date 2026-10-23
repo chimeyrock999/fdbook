@@ -11,6 +11,7 @@ does for the person using it is in [using.md](using.md).
 - [HTTP API](#http-api)
 - [Saving files](#saving-files)
 - [Notes sync](#notes-sync)
+- [Connection watch](#connection-watch)
 - [Change requests and git](#change-requests-and-git)
 - [Page tree and asset changes](#page-tree-and-asset-changes)
 - [Agents](#agents)
@@ -345,6 +346,30 @@ tree delete until upstream can authorize tree commands separately
 (fuma-nama/fumadocs-editor#24). The sync server has no write hook either,
 so edits typed during an agent turn are not marked for that turn.
 
+## Connection watch
+
+The page's event streams (`/api/events`, `/api/proposals/events`,
+`/api/agents/events`) and the notes sync are under one connection watch
+(`src/api/connection.ts`), so a stopped server ends in one clear state
+instead of every stream retrying forever.
+
+- A dropped stream opens again after a second. One that fails 3 times in a
+  row without staying open for 10 seconds, or is not open again 10 seconds
+  after it dropped, means the server is gone.
+- A stream the server refuses is asked again with a plain request to learn
+  why. `401` (or `403`) is the sign-in, and the stream waits for it: it
+  opens again once signed in, and meanwhile tries from 5 seconds, doubling
+  up to a minute. `409` or `404` means the change request is closing or
+  closed. A `5xx` counts as a failure (gh may be down only a moment), any
+  other answer is shown as the server gave it, and no answer within 5
+  seconds is a server that is gone.
+- The notes sync counts as gone once it was offline for 10 seconds and
+  `GET /api/session` does not answer either.
+- Then every stream and the sync are closed for good, so the page sends no
+  more requests, and `src/session/ServerDisconnected.tsx` covers the page.
+  A page leaving for another one shows nothing; one still there 10 seconds
+  later, or back from the browser's back-forward cache, is watched again.
+
 ## Change requests and git
 
 `server/cr/` keeps no state of its own: git holds everything.
@@ -468,8 +493,8 @@ agent is started in the change request's worktree without the Studio's own
   dropped: the transcript has it), else a new session.
 - **Transcripts** (`transcripts.ts`). Every event goes to `GET
   /api/agents/events` (numbered per chat; on connecting it sends a snapshot
-  of each chat whose agent is answering, and the page opens a refused
-  stream again after 5 seconds) and to
+  of each chat whose agent is answering; the page's stream is under the
+  [connection watch](#connection-watch)) and to
   `<STUDIO_HOME>/agents/<slug>/<chat>.jsonl`, with the summary (agent,
   model, role, status, turns, session, cost from `usage_update`, files
   written, who started it) in `<chat>.json`: next to the worktrees, never
@@ -500,11 +525,11 @@ the chats the Studio starts and your own agents in a terminal (see
 | `list_assets` | read | The assets under `public/notes` and the notes that use them |
 | `diagram_list`, `diagram_read`, `diagram_validate`, `diagram_render_png` | read | The diagrams; one as JSON with its checks; the checks alone; a PNG the agent can look at |
 | `diagram_create` | write | A new diagram file (refused when one exists) |
-| `diagram_add_node`, `diagram_connect`, `diagram_move`, `diagram_set_note` | write | Add a node, connect two, move one, set a node's note |
-| `diagram_update` | write | A node's, an edge's or a group's fields (an edge's label pin and end sides included), or a sequence's segments and activations |
-| `diagram_reorder` | write | A sequence's participant or message to a new place |
+| `diagram_add_node`, `diagram_connect`, `diagram_move`, `diagram_set_note` | write | Add a node, connect two, move one (not in a sequence or a lifecycle, which lay themselves out), set a node's note |
+| `diagram_update` | write | A node's, an edge's or a group's fields (an edge's label pin and end sides included), a sequence's segments and activations, or a lifecycle's `mainPath` |
+| `diagram_reorder` | write | A sequence's participant or message to a new place (a lifecycle's order is its `mainPath`) |
 | `diagram_remove_edge`, `diagram_remove_node` | write | Remove an edge, or a node with its edges |
-| `diagram_layout` | write | Lay out what has no position, or with `all` the whole diagram again (hand-placed positions, route pins and canvas size dropped) |
+| `diagram_layout` | write | Lay out what has no position, or with `all` the whole diagram again (hand-placed positions, route pins and canvas size dropped); a sequence or a lifecycle lays itself out |
 
 - **Change request.** Every note and diagram tool takes `cr`, the change
   request's slug; a chat's token holds it to its own. `main` and `_main`

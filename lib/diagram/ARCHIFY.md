@@ -23,26 +23,36 @@ from that commit.
 | `validate.ts` (text and overlap limits) | `renderers/architecture/render-architecture.mjs` validation, `renderers/shared/text-fit.mjs`, `desktop-readability.mjs` |
 | `import-archify.ts` (dataflow grid: `leftX`, `colGap`, `stageW`, `nodeW`, `nodeH`, `rowYs`) | `renderers/dataflow/dataflow-compiler.mjs` |
 | `sequence.ts`, `validate-sequence.ts` (layout checks), the variant legend in `legend.ts` | `renderers/sequence/render-sequence.mjs` (showcase profile, automatic canvas), `renderers/shared/text-fit.mjs` |
+| `lifecycle.ts`, `lifecycle-layout.ts`, `validate-lifecycle.ts` (layout checks), the lifecycle legend in `legend.ts`; the `hourglass`, `diamond`, `check`, `cross` and `stop` icons in `render.ts` | `renderers/lifecycle/render-lifecycle.mjs` (schema v3), `renderers/shared/text-fit.mjs` (`nodeLabelLayout`), `renderers/shared/utils.mjs` (sigils) |
 
 Archify's JSON IR, its HTML pipeline and its other renderers are not ported;
-`import-archify.ts` converts its architecture, dataflow and sequence specs
-(`archify-sequence.ts`). Archify's sequence takes each message's `y` from
-its author; `sequence.ts` derives it from the order (its `messageYs`), and
+`import-archify.ts` converts its architecture, dataflow, sequence and
+lifecycle specs (`archify-sequence.ts`, `archify-lifecycle.ts`).
+Archify's sequence takes each message's `y` from its author; `sequence.ts` derives it from the order (its `messageYs`), and
 the rest of the geometry is Archify's. Two deliberate differences: segments
 do not nest (Archify's phases may; the import refuses a spec whose segments
 share a message), and the header-clear fallback of Archify's
 `segmentLabelBox` is not ported, since `messageYs` keeps every segment title
 below the participant headers.
 
+The lifecycle's geometry is Archify's whole; what differs is around it. A
+state's colour and glyph come from its diagram-defined kind, not Archify's
+fixed state types (the importer makes a kind per type), so the legend lists
+kinds; a state has no `step` rail, brand mark or source badge; and a
+main-path transition is always emphasised unless it names another variant
+(Archify keeps an explicit `default` plain).
+
 ## Checking a release
 
 `tests/fixtures/archify` holds the Archify specs the diagrams were converted
 from, Archify's own layout of each architecture spec (`*.layout.json`, from
-`render-architecture.mjs --layout-json`), and, for every sequence in
-`diagrams/examples/`, Archify's drawing of it at the `y` our layout gives
-(`*.layout.json` with `"diagram_type": "sequence"`, read off the SVG
-`render-sequence.mjs` writes, as it has no layout report). The script sends
-Archify that sequence through `archify-sequence.ts` (`sequenceSpecOf`), and
+`render-architecture.mjs --layout-json`), and, for every sequence and
+lifecycle in `diagrams/examples/`, Archify's drawing of it (`*.layout.json`
+with `"diagram_type": "sequence"` or `"lifecycle"`, read off the SVG
+`render-sequence.mjs` or `render-lifecycle.mjs` writes, as neither has a
+layout report). The script sends Archify a sequence at the `y` our layout
+gives (`archify-sequence.ts`, `sequenceSpecOf`) and a lifecycle with its
+legend hidden (`archify-lifecycle.ts`, `lifecycleSpecOf`), and
 `tests/diagram-archify.test.ts` holds the port to every layout.
 
 1. Get the release: the installed skill (`~/.claude/skills/archify`, kept

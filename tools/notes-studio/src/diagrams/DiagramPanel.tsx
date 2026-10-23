@@ -1,7 +1,9 @@
 import { EDGE_VARIANTS, ICONS, SIDES, TONES, type Side } from '@site/lib/diagram/schema';
 import { Plus, Trash2 } from 'lucide-react';
+import type { Scene } from '@site/lib/diagram/scene';
 import type { Selection } from './DiagramCanvas';
 import { Check, Choice, Section, TextField } from './panel-fields';
+import { MainPathFields, StateMarksFields } from './LifecyclePanel';
 import { ActivationsFields, MessageOrderFields, ParticipantOrderFields, SegmentsFields } from './SequencePanel';
 import {
   addKind,
@@ -87,9 +89,10 @@ function NodeFields({ doc, node, onChange, readOnly }: { doc: Input; node: NodeI
     else set({ note: { role: next.role, ...(next.badge ? { badge: next.badge } : {}), ...(next.points?.length ? { points: next.points } : {}) } });
   };
   const sequence = doc.type === 'sequence';
+  const lifecycle = doc.type === 'lifecycle';
   return (
     <>
-      <Section title={`${sequence ? 'Participant' : 'Node'} ${node.id}`}>
+      <Section title={`${sequence ? 'Participant' : lifecycle ? 'State' : 'Node'} ${node.id}`}>
         <TextField label="Label" value={node.label} readOnly={readOnly} onCommit={(label) => { if (label.trim()) set({ label }); }} />
         <TextField label="Sublabel" value={node.sublabel ?? ''} readOnly={readOnly} onCommit={(sublabel) => { set({ sublabel: sublabel.trim() || undefined }); }} />
         {(!sequence || node.tag) && <TextField label="Tag" value={node.tag ?? ''} readOnly={readOnly} hint={sequence ? 'A participant box does not show it.' : undefined} onCommit={(tag) => { set({ tag: tag.trim() || undefined }); }} />}
@@ -105,6 +108,7 @@ function NodeFields({ doc, node, onChange, readOnly }: { doc: Input; node: NodeI
         />
       </Section>
       {sequence && <ParticipantOrderFields doc={doc} id={node.id} onChange={onChange} readOnly={readOnly} />}
+      {lifecycle && <StateMarksFields doc={doc} id={node.id} onChange={onChange} readOnly={readOnly} />}
       {kind && (
         <Section title={`Kind ${kind.label}`}>
           <KindFields doc={doc} kind={kind} onChange={onChange} readOnly={readOnly} every />
@@ -130,12 +134,36 @@ function NodeFields({ doc, node, onChange, readOnly }: { doc: Input; node: NodeI
   );
 }
 
-function EdgeFields({ doc, id, onChange, readOnly }: { doc: Input; id: string; onChange: Change; readOnly: boolean }) {
+function EdgeFields({ doc, id, scene, onChange, onSelect, readOnly }: { doc: Input; id: string; scene: Scene | null; onChange: Change; onSelect: (selection: Selection) => void; readOnly: boolean }) {
   const edge = (doc.edges ?? []).find((each) => each.id === id);
   if (!edge) return null;
   const layout = doc.layout?.edges?.[id];
   const set = (patch: Parameters<typeof updateEdge>[2]) => { onChange(updateEdge(doc, id, patch)); };
   const side = (key: 'fromSide' | 'toSide') => (value: Side | undefined) => { onChange(setEdgeSides(doc, id, { ...layout, [key]: value })); };
+  if (doc.type === 'lifecycle') {
+    const states = doc.nodes.map((node) => ({ value: node.id, label: node.label }));
+    // The exits the layout drew as one with this one (a frame's or a bus's):
+    // the others are picked from here.
+    const shared = (scene?.lifecycle?.shares.get(edge.id) ?? []).flatMap((other) => (doc.edges ?? []).filter((each) => each.id === other));
+    return (
+      <Section title={`Transition ${edge.from} → ${edge.to}`}>
+        <TextField label="Label" value={edge.label ?? ''} readOnly={readOnly} hint="The event, and a guard in [brackets]." onCommit={(label) => { set({ label: label.trim() || undefined }); }} />
+        <TextField label="Note" value={edge.detail ?? ''} readOnly={readOnly} hint="A second, smaller line, shown in the expanded view." onCommit={(detail) => { set({ detail: detail.trim() || undefined }); }} />
+        <Choice label="Variant" value={edge.variant ?? 'default'} readOnly={readOnly} options={EDGE_VARIANTS} onChange={(variant) => { set({ variant: variant === 'default' ? undefined : variant }); }} />
+        <Choice label="From" value={edge.from} options={states} readOnly={readOnly} onChange={(from) => { if (from) set({ from }); }} />
+        <Choice label="To" value={edge.to} options={states} readOnly={readOnly} onChange={(to) => { if (to) set({ to }); }} />
+        {edge.bidirectional && <Check label="Arrow at both ends (a lifecycle draws one)" checked readOnly={readOnly} onChange={() => { set({ bidirectional: undefined }); }} />}
+        {shared.length > 0 && (
+          <div className="studio-dg-shared">
+            <span className="studio-dg-muted">Drawn as one exit with:</span>
+            {shared.map((other) => (
+              <button key={other.id} type="button" className="studio-button" onClick={() => { onSelect({ type: 'edge', id: other.id }); }}>{other.from} → {other.to}</button>
+            ))}
+          </div>
+        )}
+      </Section>
+    );
+  }
   if (doc.type === 'sequence') {
     return (
       <>
@@ -194,8 +222,10 @@ function CardFields({ doc, index, onChange, readOnly }: { doc: Input; index: num
 
 // The properties of what is selected, or of the diagram (its title, the
 // legend and the cards, which the drawing does not show) when nothing is.
-export function DiagramPanel({ doc, selection, onSelect, onChange, readOnly }: {
+// `scene` is the drawing, for what only the layout knows (a lifecycle's shared exits).
+export function DiagramPanel({ doc, scene = null, selection, onSelect, onChange, readOnly }: {
   doc: Input;
+  scene?: Scene | null;
   selection: Selection;
   onSelect: (selection: Selection) => void;
   onChange: Change;
@@ -214,7 +244,7 @@ export function DiagramPanel({ doc, selection, onSelect, onChange, readOnly }: {
       );
     }
   }
-  if (selection?.type === 'edge') return <div className="studio-dg-panel"><EdgeFields key={selection.id} doc={doc} id={selection.id} onChange={onChange} readOnly={readOnly} /></div>;
+  if (selection?.type === 'edge') return <div className="studio-dg-panel"><EdgeFields key={selection.id} doc={doc} id={selection.id} scene={scene} onChange={onChange} onSelect={onSelect} readOnly={readOnly} /></div>;
   if (selection?.type === 'group') return <div className="studio-dg-panel"><GroupFields key={selection.id} doc={doc} id={selection.id} onChange={onChange} readOnly={readOnly} /></div>;
   if (selection?.type === 'card') return <div className="studio-dg-panel"><CardFields key={selection.index} doc={doc} index={selection.index} onChange={onChange} readOnly={readOnly} /></div>;
   return (
@@ -234,6 +264,7 @@ export function DiagramPanel({ doc, selection, onSelect, onChange, readOnly }: {
         />
       </Section>
       <KindsFields doc={doc} onChange={onChange} readOnly={readOnly} />
+      {doc.type === 'lifecycle' && <MainPathFields doc={doc} onChange={onChange} readOnly={readOnly} />}
       {doc.type === 'sequence' && (
         <>
           <SegmentsFields doc={doc} onChange={onChange} readOnly={readOnly} />
@@ -252,6 +283,8 @@ export function DiagramPanel({ doc, selection, onSelect, onChange, readOnly }: {
       </Section>
       <p className="studio-dg-muted">{doc.type === 'sequence'
         ? 'Click a participant or a message to edit it. Drag from the handle under a lifeline to another lifeline to add a message.'
+        : doc.type === 'lifecycle'
+          ? 'Click a state or a transition to edit it. Drag from the handle on a state to another state to add a transition.'
         : 'Click a node, an edge or a frame to edit it. Double click the canvas to add a node.'}</p>
     </div>
   );

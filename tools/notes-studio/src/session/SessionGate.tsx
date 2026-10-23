@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { createSessionClient, onSeatCheck, onSignedOut, setCsrf, type SessionState } from '../api/session';
+import { createSessionClient, onSeatCheck, onSignedOut, sessionBack, setCsrf, type SessionState } from '../api/session';
 import { NoAccessPage, SignInPage } from './SignInPage';
 import { rightsOf, SessionContext, type SessionValue } from './session';
 
@@ -83,6 +83,13 @@ export function SessionGate({ children }: { children: ReactNode }) {
   }, [client, apply]);
   const value = useMemo(() => (state === null ? null : { state, signOut }), [state, signOut]);
   const allowed = value !== null && allows(value.state);
+  // The event streams wait for the session to come back (src/api/connection.ts).
+  const wasEnded = useRef(false);
+  const ended = shown !== null && !allowed;
+  useEffect(() => {
+    if (wasEnded.current && !ended) sessionBack();
+    wasEnded.current = ended;
+  }, [ended]);
   if (allowed && shown !== value) {
     if (shown !== null && !sameSeat(shown.state, value.state)) setMount(mount + 1);
     setShown(value);
@@ -99,7 +106,6 @@ export function SessionGate({ children }: { children: ReactNode }) {
       </main>
     );
   }
-  const ended = shown !== null && !allowed;
   const gate = value === null || allowed ? null : value.state.user === null
     ? <SignInPage state={value.state} client={client} error={error} onSignedIn={apply} ended={ended} />
     : <NoAccessPage state={value.state} onSignOut={signOut} ended={ended} />;

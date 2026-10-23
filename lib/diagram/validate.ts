@@ -9,6 +9,7 @@ import { ZodError } from 'zod';
 import { minimumReadableSourceTextPx, rectsOverlap, textUnits, type Rect } from './geometry.ts';
 import { buildScene, groupNodeIds, type Scene } from './scene.ts';
 import { diagramSchema, type Diagram } from './schema.ts';
+import { checkLifecycleScene, checkLifecycleStructure } from './validate-lifecycle.ts';
 import { checkSequenceOnly, checkSequenceScene, checkSequenceStructure } from './validate-sequence.ts';
 
 export interface DiagramIssue {
@@ -70,7 +71,8 @@ export function checkStructure(diagram: Diagram): DiagramIssue[] {
         error('structure/unknown-endpoint', `Edge "${edge.id}" ends at "${edge[end]}", which is no node or group.`, `point the edge at an existing node or group id`, `edges[${index}].${end}`);
       }
     }
-    if (edge.from === edge.to && diagram.type !== 'sequence') error('structure/self-loop', `Edge "${edge.id}" starts and ends at "${edge.from}".`, 'remove the edge, or say it in the node note', `edges[${index}]`);
+    // A sequence says why itself; a lifecycle's state may transition to itself.
+    if (edge.from === edge.to && diagram.type === 'architecture') error('structure/self-loop', `Edge "${edge.id}" starts and ends at "${edge.from}".`, 'remove the edge, or say it in the node note', `edges[${index}]`);
     for (const [groupEnd, other] of [[edge.from, edge.to], [edge.to, edge.from]]) {
       const group = diagram.groups.find((candidate) => candidate.id === groupEnd);
       if (group && (groupNodeIds(diagram, group).includes(other) || other === groupEnd)) {
@@ -79,7 +81,9 @@ export function checkStructure(diagram: Diagram): DiagramIssue[] {
     }
   });
   if (diagram.type === 'sequence') return [...issues, ...checkSequenceStructure(diagram)];
+  if (diagram.type === 'lifecycle') return [...issues, ...checkLifecycleStructure(diagram)];
   issues.push(...checkSequenceOnly(diagram));
+  if (diagram.mainPath.length) error('structure/lifecycle-only', 'A main path belongs to a lifecycle.', 'set "type": "lifecycle", or remove mainPath', 'mainPath');
   for (const node of diagram.nodes) {
     if (!diagram.layout.nodes[node.id]) error('layout/missing-position', `Node "${node.id}" has no position in layout.nodes.`, `run layout, or add layout.nodes["${node.id}"] = { x, y, w, h }`, `layout.nodes.${node.id}`);
   }
@@ -100,6 +104,7 @@ export function checkStructure(diagram: Diagram): DiagramIssue[] {
 
 export function checkScene(scene: Scene): DiagramIssue[] {
   if (scene.sequence) return checkSequenceScene(scene);
+  if (scene.lifecycle) return checkLifecycleScene(scene);
   const issues: DiagramIssue[] = [];
   const error = (code: string, message: string, fix?: string, path?: string) => issues.push({ code, severity: 'error', message, fix, path });
   const canvas = { x: 0, y: 0, width: scene.width, height: scene.height };
@@ -236,14 +241,21 @@ function parseIssues(value: unknown): { diagram: Diagram } | { issues: DiagramIs
   }
 }
 
+// Errors a diagram still draws with, so the editor shows what to fix: a
+// lifecycle's main path is laid out from the states it names once.
+const DRAWS_ANYWAY = new Set([
+  'lifecycle/main-path-gap', 'lifecycle/main-path-too-short', 'lifecycle/unknown-main-path-state',
+  'lifecycle/repeated-main-path-state', 'lifecycle/two-way-transition', 'lifecycle/state-text-too-long',
+]);
+
 // Parses, checks and lays out a diagram file's content. The scene is only
-// built when the structure is sound.
+// built when the structure is sound, but for the errors above.
 export function validateDiagram(value: unknown): DiagramReport {
   const parsed = parseIssues(value);
   if (!('diagram' in parsed)) return { diagram: null, scene: null, issues: parsed.issues };
   const { diagram } = parsed;
   const issues = checkStructure(diagram);
-  if (issues.some((issue) => issue.severity === 'error')) return { diagram, scene: null, issues };
+  if (issues.some((issue) => issue.severity === 'error' && !DRAWS_ANYWAY.has(issue.code))) return { diagram, scene: null, issues };
   const scene = buildScene(diagram);
   return { diagram, scene, issues: [...issues, ...checkScene(scene)] };
 }

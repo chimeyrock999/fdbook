@@ -7,6 +7,7 @@ up is in [setup.md](setup.md); how each part is built is in
 
 - [Change requests](#change-requests)
 - [Signing in](#signing-in)
+- [When the server goes away](#when-the-server-goes-away)
 - [Editor](#editor)
 - [Sidebar](#sidebar)
 - [Page tree](#page-tree)
@@ -142,6 +143,20 @@ A commit from the UI has the signed-in person as its author, `Name
 committer stays the host's git identity. Pushes and pull requests run as
 the host's `gh`, so Publish ends the description with `Opened in Notes
 Studio by @login.`
+
+## When the server goes away
+
+When the Studio's server stops (it was stopped or restarted, the machine
+slept, the network dropped), the page notices within about 10 seconds and
+covers itself with **Server disconnected**, the reason and **Reload**. It
+cannot be dismissed, and the page behind it takes no edits and sends no
+more requests; unsaved note text is kept as under [Signing in](#signing-in),
+so the reload offers it back. A short drop (a stream that opens again
+within a second or two) shows nothing. A session that ended brings up the
+sign-in instead, and a change request that was discarded or cleaned up
+elsewhere says so. Leaving for another page (another change request, the
+list after a discard) shows nothing. How the page decides is in
+[architecture.md](architecture.md#connection-watch).
 
 ## Editor
 
@@ -475,6 +490,15 @@ move a selected participant a column or a message a step. The panel sets a
 message's ends and, with nothing selected, the segments and activations,
 each from its first and last message. Frames and waypoints are not offered,
 and only cards are copied.
+
+A lifecycle (`"type": "lifecycle"`) has no positions either: its layout
+places every state and route from the main path and the transitions (see
+`diagrams/README.md`). Its canvas selects a state or a transition, and
+dragging from the handle on a state's right side to another state, or back
+onto itself, adds a transition. The panel edits the main path (reorder, take
+a state off, add one), names a step left without a transition, and says of
+a state whether it is the initial one, a main-path step or final. As in a
+sequence, only cards are copied.
 
 Edits save a moment after each change, with the mtime they read, written so
 a move changes one line. A change on disk (an agent, the CLI) loads while

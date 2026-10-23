@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { ServerDisconnected } from './session/ServerDisconnected';
 import { SessionGate } from './session/SessionGate';
 import './index.css';
 
@@ -12,5 +13,6 @@ createRoot(root).render(
     <SessionGate>
       <App />
     </SessionGate>
+    <ServerDisconnected />
   </StrictMode>,
 );
