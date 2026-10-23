@@ -111,6 +111,17 @@ svg.dg-svg {
 .dg-svg .m-emphasis { fill: var(--arrow-emphasis); }
 .dg-svg .m-alert { fill: var(--red-stroke); }
 .dg-svg .m-dashed { fill: var(--gold-stroke); }
+/* A reply: a quiet dashed line with an open head. */
+.dg-svg .a-return { stroke: var(--arrow); fill: none; stroke-dasharray: 3 5; }
+.dg-svg .m-return { fill: none; stroke: var(--arrow); stroke-width: 1.1; }
+
+/* A sequence: dotted lifelines, activation bars in the participant's tone,
+   and segment frames with a pill title, as Archify draws them. */
+.dg-svg .c-lifeline { stroke: var(--arrow); fill: none; stroke-dasharray: 3 7; }
+.dg-svg .c-activation { fill: color-mix(in srgb, var(--tone-stroke) 16%, var(--mask)); stroke: var(--tone-stroke); }
+.dg-svg .c-segment { fill: var(--lane-fill); stroke: var(--lane-stroke); stroke-dasharray: 4 3; }
+.dg-svg .c-segment-pill { fill: var(--mask); stroke: var(--lane-stroke); stroke-width: 0.75px; }
+.dg-svg .t-segment { fill: var(--text-muted); }
 
 .dg-svg .semantic-sigil { color: var(--tone-stroke); fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; opacity: 0.76; pointer-events: none; }
 .dg-svg .semantic-sigil > * { vector-effect: non-scaling-stroke; }

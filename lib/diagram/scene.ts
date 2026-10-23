@@ -21,7 +21,8 @@ import {
 import { placeAutomaticLabels, reservedLabelRect, type LabelRect } from './labels.ts';
 import { legendEntries, legendFootprint, placeLegend, type SceneLegend } from './legend.ts';
 import { createRouter } from './router.ts';
-import type { Diagram, DiagramEdge, DiagramGroup, DiagramKind, DiagramLane, DiagramNode } from './schema.ts';
+import type { Diagram, DiagramEdge, DiagramGroup, DiagramKind, DiagramLane, DiagramNode, DiagramType } from './schema.ts';
+import { buildSequenceScene, type SequenceLayer } from './sequence.ts';
 
 const MARGIN = 40;
 const LEGEND_H = 28;
@@ -45,6 +46,8 @@ export interface SceneNode extends Box {
   tagFont: number;
   // The groups around the node, outermost first.
   context: string[];
+  // Where the label and sublabel baselines sit, when not centred in the box.
+  text?: { label: number; sublabel: number };
 }
 
 export interface FrameTitle extends Rect {
@@ -78,6 +81,7 @@ export interface SceneLane extends Frame {
 }
 
 export interface Scene {
+  type: DiagramType;
   diagram: Diagram;
   width: number;
   height: number;
@@ -88,6 +92,8 @@ export interface Scene {
   legend: SceneLegend | null;
   // The legend was asked for but does not fit its band.
   legendUnfit: boolean;
+  // A sequence's lifelines, messages, segments and activations.
+  sequence: SequenceLayer | null;
 }
 
 interface RawFrame extends Rect {
@@ -119,6 +125,7 @@ export function edgeLabelSize(edge: DiagramEdge) {
 }
 
 export function buildScene(diagram: Diagram): Scene {
+  if (diagram.type === 'sequence') return buildSequenceScene(diagram);
   const { layout } = diagram;
   const nodes = new Map<string, Box>(diagram.nodes.map((node) => {
     const at = layout.nodes[node.id];
@@ -308,6 +315,7 @@ export function buildScene(diagram: Diagram): Scene {
     .map((frame) => frame.group.label);
 
   return {
+    type: diagram.type,
     diagram,
     width,
     height,
@@ -341,5 +349,6 @@ export function buildScene(diagram: Diagram): Scene {
     }),
     legend,
     legendUnfit: entries.length > 0 && legend === null,
+    sequence: null,
   };
 }

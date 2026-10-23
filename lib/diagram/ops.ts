@@ -30,6 +30,14 @@ function freeId(diagram: Input, id: string) {
   if (allIds(diagram).has(id)) throw new DiagramOpError('op/id-taken', `The id "${id}" is already used in this diagram.`);
 }
 
+// What only an architecture has: positions, route pins. A sequence is laid
+// out from its order (`reorder` below moves it).
+function placedOnly(diagram: Input, what: string) {
+  if (diagram.type === 'sequence') throw new DiagramOpError('op/sequence-has-no-layout', `A sequence lays itself out from its order, so it takes no ${what}; reorder its participants or messages instead.`);
+  diagram.layout ??= { nodes: {} };
+  return diagram.layout;
+}
+
 function nodeOf(diagram: Input, id: string) {
   const node = diagram.nodes.find((candidate) => candidate.id === id);
   if (!node) throw new DiagramOpError('op/unknown-node', `No node has the id "${id}".`);
@@ -93,7 +101,7 @@ export function addNode(diagram: Input, { id, kind, label, sublabel, tag, note, 
     target.members.push(id);
   }
   next.nodes.push(node);
-  if (at) next.layout.nodes[id] = { x: at.x, y: at.y, w: at.w, h: at.h };
+  if (at) placedOnly(next, 'position').nodes[id] = { x: at.x, y: at.y, w: at.w, h: at.h };
   return next;
 }
 
@@ -110,18 +118,22 @@ export interface NodeMove {
 export function moveNode(diagram: Input, { id, x, y, dx = 0, dy = 0, w, h }: NodeMove): Input {
   const next = structuredClone(diagram);
   nodeOf(next, id);
-  const at = next.layout.nodes[id];
+  const layout = placedOnly(next, 'position');
+  const at = layout.nodes[id];
   if (!at && (x === undefined || y === undefined || w === undefined || h === undefined)) {
     throw new DiagramOpError('op/unplaced-node', `Node "${id}" has no position yet: give x, y, w and h, or run layout first.`);
   }
   const box = at ?? { x: 0, y: 0, w: 0, h: 0 };
-  next.layout.nodes[id] = { x: (x ?? box.x) + dx, y: (y ?? box.y) + dy, w: w ?? box.w, h: h ?? box.h };
+  layout.nodes[id] = { x: (x ?? box.x) + dx, y: (y ?? box.y) + dy, w: w ?? box.w, h: h ?? box.h };
   return next;
 }
 
 export interface NewEdge {
   // Defaults to "<from>-<to>", numbered when that is taken.
   id?: string;
+  // In a sequence, the message the new one follows (null: it comes first);
+  // without one it comes last.
+  after?: string | null;
   from: string;
   to: string;
   label?: string;
@@ -130,7 +142,7 @@ export interface NewEdge {
   bidirectional?: boolean;
 }
 
-export function connect(diagram: Input, { id, from, to, label, detail, variant, bidirectional }: NewEdge): Input {
+export function connect(diagram: Input, { id, after, from, to, label, detail, variant, bidirectional }: NewEdge): Input {
   const next = structuredClone(diagram);
   const ends = new Set([...next.nodes, ...(next.groups ?? [])].map((item) => item.id));
   for (const end of [from, to]) {
@@ -147,7 +159,13 @@ export function connect(diagram: Input, { id, from, to, label, detail, variant, 
   if (detail !== undefined) edge.detail = detail;
   if (variant !== undefined && variant !== 'default') edge.variant = variant;
   if (bidirectional) edge.bidirectional = true;
-  next.edges = [...(next.edges ?? []), edge];
+  const edges = next.edges ?? [];
+  if (after === undefined) next.edges = [...edges, edge];
+  else {
+    const index = after === null ? 0 : edges.findIndex((candidate) => candidate.id === after) + 1;
+    if (index === 0 && after !== null) throw new DiagramOpError('op/unknown-edge', `No message has the id "${after}".`);
+    next.edges = [...edges.slice(0, index), edge, ...edges.slice(index)];
+  }
   return next;
 }
 
@@ -178,14 +196,16 @@ export function removeNode(diagram: Input, id: string): Input {
     }
   }
   if (next.groups) next.groups = next.groups.filter((group) => !gone.has(group.id));
-  const edges = (next.edges ?? []).filter((edge) => gone.has(edge.from) || gone.has(edge.to));
-  if (next.edges) next.edges = next.edges.filter((edge) => !edges.includes(edge));
+  dropEdges(next, new Set((next.edges ?? []).filter((edge) => gone.has(edge.from) || gone.has(edge.to)).map((edge) => edge.id)));
+  if (next.activations) {
+    next.activations = next.activations.filter((activation) => activation.node !== id);
+    if (!next.activations.length) delete next.activations;
+  }
   const { layout } = next;
-  for (const key of gone) {
+  if (layout) for (const key of gone) {
     delete layout.nodes[key];
     if (layout.groups) delete layout.groups[key];
   }
-  for (const edge of edges) if (layout.edges) delete layout.edges[edge.id];
   return next;
 }
 
@@ -244,17 +264,20 @@ export function updateEdge(diagram: Input, id: string, change: EdgeChange): Inpu
     if (change.bidirectional) edge.bidirectional = true;
     else delete edge.bidirectional;
   }
-  const pins = { ...(next.layout.edges?.[id] ?? {}) } as Record<string, unknown>;
-  for (const field of ['fromSide', 'toSide', 'labelDx', 'labelDy', 'labelAt'] as const) {
+  const pinning = (['fromSide', 'toSide', 'labelDx', 'labelDy', 'labelAt'] as const).filter((field) => change[field] !== undefined);
+  if (!pinning.length) return next;
+  const layout = placedOnly(next, `${pinning.join(', ')}`);
+  const pins = { ...(layout.edges?.[id] ?? {}) } as Record<string, unknown>;
+  for (const field of pinning) {
     const value = change[field];
     if (value === null) delete pins[field];
-    else if (value !== undefined) pins[field] = value;
+    else pins[field] = value;
   }
-  const edges = { ...(next.layout.edges ?? {}) };
+  const edges = { ...(layout.edges ?? {}) };
   if (Object.keys(pins).length) edges[id] = pins;
   else delete edges[id];
-  if (Object.keys(edges).length) next.layout.edges = edges;
-  else delete next.layout.edges;
+  if (Object.keys(edges).length) layout.edges = edges;
+  else delete layout.edges;
   return next;
 }
 
@@ -285,14 +308,83 @@ export function updateGroup(diagram: Input, id: string, change: GroupChange): In
   return next;
 }
 
+type Range = { from: string; to: string };
+
+// A sequence's segments and activations once its message order went from
+// `before` to `after`: each keeps the messages it held that are still there,
+// from the first to the last of them in the new order (so a message moved
+// inside its span joins it). One that held only `moved` follows it, unless
+// it then shares messages with another range (of the same participant, for
+// activations): the message now belongs to the range it landed in. One left
+// with nothing goes. A range naming an unknown message stays as it is.
+function rangesAfter<T extends Range>(ranges: T[], before: readonly string[], after: readonly string[], moved?: string, apart: (a: T, b: T) => boolean = () => false): T[] {
+  const was = new Map(before.map((id, at) => [id, at]));
+  const now = new Map(after.map((id, at) => [id, at]));
+  const placed = ranges.flatMap((range) => {
+    const first = was.get(range.from);
+    const last = was.get(range.to);
+    if (first === undefined || last === undefined) return [{ range, follows: false }];
+    const held = before.slice(Math.min(first, last), Math.max(first, last) + 1);
+    let kept = held.filter((id) => now.has(id) && id !== moved);
+    const follows = !kept.length && moved !== undefined && held.includes(moved);
+    if (follows) kept = [moved];
+    if (!kept.length) return [];
+    kept.sort((x, y) => (now.get(x) ?? 0) - (now.get(y) ?? 0));
+    return [{ range: { ...range, from: kept[0], to: kept[kept.length - 1] }, follows }];
+  });
+  const span = (range: T) => [now.get(range.from) ?? -1, now.get(range.to) ?? -1] as const;
+  const overlaps = (a: T, b: T) => !apart(a, b) && span(a)[0] <= span(b)[1] && span(b)[0] <= span(a)[1];
+  return placed.filter(({ range, follows }) => !follows || !placed.some((other) => other.range !== range && overlaps(range, other.range))).map(({ range }) => range);
+}
+
+function setRanges(diagram: Input, before: readonly string[], moved?: string) {
+  const after = (diagram.edges ?? []).map((edge) => edge.id);
+  if (diagram.segments) {
+    diagram.segments = rangesAfter(diagram.segments, before, after, moved);
+    if (!diagram.segments.length) delete diagram.segments;
+  }
+  if (diagram.activations) {
+    diagram.activations = rangesAfter(diagram.activations, before, after, moved, (a, b) => a.node !== b.node);
+    if (!diagram.activations.length) delete diagram.activations;
+  }
+}
+
+// Drops edges from `diagram` in place, with their pins and their messages'
+// places in the segments and activations.
+function dropEdges(diagram: Input, ids: ReadonlySet<string>) {
+  const before = (diagram.edges ?? []).map((edge) => edge.id);
+  if (diagram.edges) diagram.edges = diagram.edges.filter((edge) => !ids.has(edge.id));
+  setRanges(diagram, before);
+  const pins = diagram.layout?.edges;
+  if (pins && diagram.layout) {
+    const rest = Object.fromEntries(Object.entries(pins).filter(([id]) => !ids.has(id)));
+    if (Object.keys(rest).length) diagram.layout.edges = rest;
+    else delete diagram.layout.edges;
+  }
+}
+
+// Removes an edge and where it was pinned. A segment or activation that
+// started or ended at a removed message now starts or ends at its neighbour
+// within the range, and goes when the range had nothing else.
 export function removeEdge(diagram: Input, id: string): Input {
   const next = structuredClone(diagram);
   if (!(next.edges ?? []).some((edge) => edge.id === id)) throw new DiagramOpError('op/unknown-edge', `No edge has the id "${id}".`);
-  next.edges = (next.edges ?? []).filter((edge) => edge.id !== id);
-  if (next.layout.edges) {
-    const { [id]: _removed, ...rest } = next.layout.edges;
-    if (Object.keys(rest).length) next.layout.edges = rest;
-    else delete next.layout.edges;
-  }
+  dropEdges(next, new Set([id]));
+  return next;
+}
+
+// Moves a sequence's participant (a node) or message (an edge) to `index`
+// in its list: columns run in node order, the timeline in edge order. A
+// segment or activation keeps the other messages it held; the moved one is
+// in it when it lands inside its span.
+export function reorder(diagram: Input, list: 'nodes' | 'edges', id: string, index: number): Input {
+  const next = structuredClone(diagram);
+  const items: { id: string }[] = list === 'nodes' ? next.nodes : (next.edges ?? []);
+  const from = items.findIndex((item) => item.id === id);
+  if (from < 0) throw new DiagramOpError(list === 'nodes' ? 'op/unknown-node' : 'op/unknown-edge', `No ${list === 'nodes' ? 'node' : 'edge'} has the id "${id}".`);
+  const before = items.map((item) => item.id);
+  const [item] = items.splice(from, 1);
+  items.splice(Math.max(0, Math.min(index, items.length)), 0, item);
+  if (list === 'edges') setRanges(next, before, id);
   return next;
 }

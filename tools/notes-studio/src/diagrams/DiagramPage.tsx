@@ -9,17 +9,21 @@ import { DiagramJson } from './DiagramJson';
 import { JsonSplit } from './JsonSplit';
 import { SPLIT_MIN, useJsonHeight } from './useJsonHeight';
 import { DiagramPanel } from './DiagramPanel';
+import { SequenceCanvas } from './SequenceCanvas';
 import { legendBand, placeCopy } from './placement';
 import {
   addCard,
   addGroup,
   addNodeAt,
+  addParticipant,
   duplicateCard,
   duplicateGroup,
   duplicateNodes,
   freeSpot,
   GRID,
+  moveMessage,
   moveNodes,
+  moveParticipant,
   removeCard,
   removeEdge,
   removeGroup,
@@ -85,6 +89,8 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
   const column = useRef<HTMLDivElement>(null);
   const { doc, apply, undo, redo } = file;
   const selection = doc ? existing(doc, chosen) : null;
+  // A sequence is laid out from its order: no positions, frames or copies.
+  const sequence = doc?.type === 'sequence';
   const nodes = useMemo(() => (selection?.type === 'nodes' ? selection.ids : []), [selection]);
 
   const remove = useCallback(() => {
@@ -99,7 +105,8 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
 
   const { scene } = drawn;
   const duplicate = useCallback(() => {
-    if (!doc || !selection) return;
+    // A sequence copies only its cards (the button says so too).
+    if (!doc || !selection || (sequence && selection.type !== 'card')) return;
     if (selection.type === 'nodes') {
       if (!scene) return;
       const made = duplicateNodes(doc, nodes, placeCopy(doc, scene, { nodes }));
@@ -114,7 +121,7 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
       apply(duplicateCard(doc, selection.index));
       setSelection({ type: 'card', index: selection.index + 1 });
     }
-  }, [doc, scene, selection, nodes, apply]);
+  }, [doc, scene, selection, nodes, apply, sequence]);
 
   // Keys act while the focus is on the page (the canvas takes it on a
   // click), not in its fields or elsewhere in the Studio.
@@ -127,7 +134,21 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
       else if (mod && key === 'd') duplicate();
       else if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) remove();
       else if (event.key === 'Escape') setSelection(null);
-      else if (event.key.startsWith('Arrow') && nodes.length && !readOnly) {
+      else if (sequence && event.key.startsWith('Arrow') && !readOnly) {
+        // The arrows move a participant a column, a message a step in the timeline.
+        const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -1, ArrowDown: 1 }[event.key] ?? 0;
+        const sideways = event.key === 'ArrowLeft' || event.key === 'ArrowRight';
+        if (sideways && nodes.length === 1) {
+          const index = doc.nodes.findIndex((node) => node.id === nodes[0]);
+          if (index + step < 0 || index + step >= doc.nodes.length) return;
+          apply(moveParticipant(doc, nodes[0], index + step));
+        } else if (!sideways && selection?.type === 'edge') {
+          const edges = doc.edges ?? [];
+          const index = edges.findIndex((edge) => edge.id === selection.id);
+          if (index + step < 0 || index + step >= edges.length) return;
+          apply(moveMessage(doc, selection.id, index + step));
+        } else return;
+      } else if (event.key.startsWith('Arrow') && nodes.length && !readOnly) {
         const step = event.shiftKey ? 4 * GRID : GRID;
         const [dx, dy] = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[event.key] ?? [0, 0];
         apply(moveNodes(doc, nodes, dx, dy));
@@ -151,22 +172,28 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
         <span className="flex-1" />
         {!readOnly && doc && (
           <div className="studio-dg-tools" role="toolbar" aria-label="Diagram tools">
-            <button type="button" className="studio-icon-button" title="Add a node" aria-label="Add a node" onClick={() => {
+            <button type="button" className="studio-icon-button" title={sequence ? 'Add a participant' : 'Add a node'} aria-label={sequence ? 'Add a participant' : 'Add a node'} onClick={() => {
+              if (sequence) {
+                const made = addParticipant(doc);
+                apply(made.diagram);
+                setSelection({ type: 'nodes', ids: [made.id] });
+                return;
+              }
               const spot = scene ? freeSpot([...scene.nodes, ...scene.frames, ...(scene.legend ? [legendBand(scene)] : [])], scene.width, scene.height) : { x: 40, y: 40 };
               const made = addNodeAt(doc, spot);
               apply(made.diagram);
               setSelection({ type: 'nodes', ids: [made.id] });
             }}><Plus size={16} /></button>
-            <button type="button" className="studio-icon-button" title="Wrap the selected nodes in a frame" aria-label="Add a frame" disabled={nodes.length === 0} onClick={() => {
+            {!sequence && <button type="button" className="studio-icon-button" title="Wrap the selected nodes in a frame" aria-label="Add a frame" disabled={nodes.length === 0} onClick={() => {
               const made = addGroup(doc, nodes);
               apply(made.diagram);
               setSelection({ type: 'group', id: made.id });
-            }}><Frame size={16} /></button>
+            }}><Frame size={16} /></button>}
             <button type="button" className="studio-icon-button" title="Add a card" aria-label="Add a card" onClick={() => {
               apply(addCard(doc));
               setSelection({ type: 'card', index: doc.cards?.length ?? 0 });
             }}><StickyNote size={16} /></button>
-            <button type="button" className="studio-icon-button" title="Duplicate (⌘D)" aria-label="Duplicate" disabled={!selection || selection.type === 'edge'} onClick={duplicate}><Copy size={16} /></button>
+            <button type="button" className="studio-icon-button" title="Duplicate (⌘D)" aria-label="Duplicate" disabled={!selection || selection.type === 'edge' || (sequence && selection.type !== 'card')} onClick={duplicate}><Copy size={16} /></button>
             <button type="button" className="studio-icon-button" title="Delete (Delete)" aria-label="Delete" disabled={!canDelete} onClick={remove}><Trash2 size={16} /></button>
             <span className="studio-dg-sep" />
             <button type="button" className="studio-icon-button" title="Undo (⌘Z)" aria-label="Undo" disabled={!file.canUndo} onClick={undo}><Undo2 size={16} /></button>
@@ -189,7 +216,9 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
         <div className="studio-dg-body" data-json={json || undefined} data-only-json={!doc || undefined}>
           <div className="studio-dg-left" ref={column}>
           {doc && <div className="studio-dg-main">
-            <DiagramCanvas doc={doc} readOnly={readOnly} selection={selection} onSelect={setSelection} onChange={apply} onDrawn={setDrawn} />
+            {sequence
+              ? <SequenceCanvas doc={doc} readOnly={readOnly} selection={selection} onSelect={setSelection} onChange={apply} onDrawn={setDrawn} />
+              : <DiagramCanvas doc={doc} readOnly={readOnly} selection={selection} onSelect={setSelection} onChange={apply} onDrawn={setDrawn} />}
             {issues.length > 0 && (
               <details className="studio-dg-issues" open={errors.length > 0}>
                 <summary>{plural(issues.length, 'issue')} from the checks</summary>

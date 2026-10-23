@@ -50,5 +50,5 @@ export function placeCopy(doc: Input, scene: Scene, copied: { nodes: readonly st
   const spot = freeSpot([...scene.nodes, ...scene.frames, ...legend], scene.width, scene.height, size);
   // Below the drawing, a fixed canvas grows to hold the copy, the legend under it.
   const bottom = spot.y + size.h + (legend.length ? LEGEND_ROOM : MARGIN);
-  return { dx: spot.x - box.x, dy: spot.y - box.y, join: [], ...(doc.layout.canvas && bottom > scene.height ? { height: Math.ceil(bottom) } : {}) };
+  return { dx: spot.x - box.x, dy: spot.y - box.y, join: [], ...(doc.layout?.canvas && bottom > scene.height ? { height: Math.ceil(bottom) } : {}) };
 }
