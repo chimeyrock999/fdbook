@@ -1,8 +1,8 @@
 import type { IncomingMessage } from 'node:http';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
-import { createAgentRunsApi } from './agents/api.ts';
-import { createAgentRuns, type AgentRunsOptions } from './agents/runs.ts';
+import { createAgentConversationsApi } from './agents/api.ts';
+import { createAgentConversations, type AgentConversationsOptions } from './agents/conversations.ts';
 import { createAssetsApi } from './assets/api.ts';
 import { createFilesApi } from './files/api.ts';
 import { createFileEvents } from './files/events.ts';
@@ -41,10 +41,10 @@ const refuseWrites: Handler = (request, response) => {
 // gh and has no Pages project to name its preview after.
 const defaultPreview = (): PreviewOptions => ({ builds: createBuildReader(ghCheckRun), pullRequests: createBranchPullRequestReader(ghPullRequest), pagesProject: null });
 
-// What agent runs need besides the worktree: its change request's slug, the
-// profiles and where transcripts go (agents/runs.ts); and the Studio home,
-// where the change request's proposals and comments are kept.
-export type WorkspaceAgents = Omit<AgentRunsOptions, 'slug'> & { home: string };
+// What agent conversations need besides the worktree: its change request's
+// slug, the profiles and where transcripts go (agents/conversations.ts); and
+// the Studio home, where the change request's proposals and comments are kept.
+export type WorkspaceAgents = Omit<AgentConversationsOptions, 'slug'> & { home: string };
 
 // Where a change request's proposals and comments are kept, outside its worktree.
 export const proposalsDirOf = (home: string, slug: string) => join(home, 'proposals', slug);
@@ -52,12 +52,12 @@ export const commentsFileOf = (home: string, slug: string) => join(home, 'commen
 
 // The handlers of one worktree: file API and events, lint, page tree,
 // assets, changes (git status, commit, history), page history, preview (push, build, publish),
-// agent runs, and the notes sync socket. Agents run only with `agents`: in a
+// agent conversations, and the notes sync socket. Agents work only with `agents`: in a
 // change request, never on main.
 export function createWorkspace(
   root: string,
   hosts: string[],
-  { readOnly = false, preview = defaultPreview(), agents = null }: { readOnly?: boolean; preview?: PreviewOptions; agents?: (AgentRunsOptions & { home: string }) | null } = {},
+  { readOnly = false, preview = defaultPreview(), agents = null }: { readOnly?: boolean; preview?: PreviewOptions; agents?: (AgentConversationsOptions & { home: string }) | null } = {},
 ) {
   // Tree and asset changes both write notes: one at a time. A commit waits
   // for them too, so it never takes half of a rename. The lock is this
@@ -69,9 +69,9 @@ export function createWorkspace(
   const sync = createNotesSync(root, hosts, { readOnly });
   // A change request's proposals and comments, and the stream of their changes.
   let review: { proposals: Proposals; comments: Comments; stream: ProposalStream } | null = null;
-  const runs = agents === null || readOnly
+  const conversations = agents === null || readOnly
     ? null
-    : createAgentRuns(root, {
+    : createAgentConversations(root, {
       ...agents,
       lock: notesLock,
       pathLock,
@@ -90,7 +90,7 @@ export function createWorkspace(
         notesLock,
         pathLock,
         onChange: (proposal, created) => {
-          if (created && proposal.by.kind === 'run') runs?.proposed(proposal.by.runId, proposal);
+          if (created && proposal.by.kind === 'run') conversations?.proposed(proposal.by.runId, proposal);
           stream.send(proposal);
         },
       }),
@@ -99,35 +99,36 @@ export function createWorkspace(
   const handlers: Handler[] = [
     ...(readOnly ? [refuseWrites] : []),
     fileEvents.handle,
-    // A person's save is never reverted by a run going on (agents/watch.ts).
-    createFilesApi(root, pathLock, runs === null ? undefined : (path) => { runs.savedByPerson(path); }),
+    // A person's save is never reverted by a turn going on (agents/watch.ts).
+    createFilesApi(root, pathLock, conversations === null ? undefined : (path) => { conversations.savedByPerson(path); }),
     createLintApi(root),
     createTreeApi(root, notesLock),
     createAssetsApi(root, notesLock),
     createChangesApi(root, notesLock),
     createPageHistoryApi(root, notesLock),
     createPreviewApi(root, preview, { readOnly, lock: notesLock }),
-    createAgentRunsApi(runs),
+    createAgentConversationsApi(conversations),
     createProposalsApi(review),
   ];
   return {
     root,
     handlers,
-    runs,
+    conversations,
     review,
     // The worktree's files for an MCP tool call (mcp/http.ts): under the
-    // notes lock, and on the run's Keep/Revert list when a run writes.
+    // notes lock, and on the turn's Keep/Revert list when an agent writes
+    // (a caller's `runId` is its conversation).
     files: (caller: ToolCaller) => createStudioFiles(root, {
       pathLock,
       notesLock,
-      beforeWrite: caller.kind === 'run' && runs !== null ? (path, previous) => { runs.beforeWrite(caller.runId, path, previous); } : undefined,
-      afterWrite: caller.kind === 'run' && runs !== null ? (path, content) => { runs.wrote(caller.runId, path, content); } : undefined,
+      beforeWrite: caller.kind === 'run' && conversations !== null ? (path, previous) => { conversations.beforeWrite(caller.runId, path, previous); } : undefined,
+      afterWrite: caller.kind === 'run' && conversations !== null ? (path, content) => conversations.wrote(caller.runId, path, content) : undefined,
     }),
     handleUpgrade: (request: IncomingMessage, socket: Duplex, head: Buffer) => {
       sync.handleUpgrade(request, socket, head);
     },
     close: async () => {
-      await runs?.close();
+      await conversations?.close();
       review?.stream.close();
       fileEvents.close();
       await sync.close();

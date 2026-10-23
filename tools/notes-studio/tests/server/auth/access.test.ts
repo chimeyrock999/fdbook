@@ -28,14 +28,16 @@ describe('requiredRole', () => {
     ['PATCH', '/api/tree', 'writer'],
     // An agent runs commands as the host's user.
     ['GET', '/api/agents', 'reader'],
-    ['GET', '/cr/x/api/agents/runs', 'reader'],
+    ['GET', '/cr/x/api/agents/conversations', 'reader'],
     ['GET', '/cr/x/api/agents/events', 'reader'],
-    ['POST', '/cr/x/api/agents/runs', 'admin'],
-    ['POST', '/cr/x/api/agents/runs/r1/cancel', 'admin'],
-    ['POST', '/cr/x/api/agents/runs/r1/permissions/a1', 'admin'],
-    // Keeping or reverting what a run changed is an edit.
-    ['GET', '/cr/x/api/agents/runs/r1/changes', 'reader'],
-    ['POST', '/cr/x/api/agents/runs/r1/changes', 'writer'],
+    ['POST', '/cr/x/api/agents/conversations', 'admin'],
+    ['POST', '/cr/x/api/agents/conversations/r1/cancel', 'admin'],
+    ['POST', '/cr/x/api/agents/conversations/r1/permissions/a1', 'admin'],
+    ['POST', '/cr/x/api/agents/conversations/r1/messages', 'admin'],
+    ['DELETE', '/cr/x/api/agents/conversations/r1', 'admin'],
+    // Keeping or reverting what a turn changed is an edit.
+    ['GET', '/cr/x/api/agents/conversations/r1/turns/2/changes', 'reader'],
+    ['POST', '/cr/x/api/agents/conversations/r1/turns/2/changes', 'writer'],
     // The MCP server checks its own bearer token; its token API is a write.
     ['POST', '/api/mcp', 'none'],
     ['POST', '/api/mcp/tokens', 'reader'],

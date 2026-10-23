@@ -1,0 +1,73 @@
+/* An agent's reply as markdown (Markdown.tsx), in the agent panel's
+   thread. Same tokens as agents.css. */
+@layer components {
+  .studio-md > :first-child {
+    margin-top: 0;
+  }
+  .studio-md > :last-child {
+    margin-bottom: 0;
+  }
+  .studio-md :is(p, ul, ol, blockquote, pre, .studio-md-table, h1, h2, h3, h4, h5, h6) {
+    margin: 0 0 6px;
+  }
+  .studio-md :is(h1, h2, h3, h4, h5, h6) {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .studio-md :is(ul, ol) {
+    padding-left: 18px;
+  }
+  .studio-md ul {
+    list-style: disc;
+  }
+  .studio-md ol {
+    list-style: decimal;
+  }
+  .studio-md li > input[type='checkbox'] {
+    margin-right: 5px;
+    vertical-align: -1px;
+  }
+  .studio-md blockquote {
+    padding-left: 9px;
+    border-left: 2px solid var(--fde-border);
+    color: var(--fde-muted-foreground);
+  }
+  .studio-md code {
+    padding: 0 4px;
+    border-radius: 4px;
+    background: var(--fde-muted);
+    font: 11.5px var(--font-mono);
+  }
+  .studio-md pre {
+    overflow-x: auto;
+    padding: 8px 10px;
+    border: 1px solid var(--fde-border);
+    border-radius: 7px;
+    background: var(--fde-card);
+    font-style: normal;
+  }
+  .studio-md pre code {
+    padding: 0;
+    background: none;
+  }
+  .studio-md a {
+    color: var(--fde-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .studio-md hr {
+    margin: 8px 0;
+    border-color: var(--fde-border);
+  }
+  .studio-md-table {
+    overflow-x: auto;
+  }
+  .studio-md table {
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .studio-md :is(th, td) {
+    padding: 2px 6px;
+    border: 1px solid var(--fde-border);
+  }
+}

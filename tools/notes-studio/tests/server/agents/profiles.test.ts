@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { modelOf, runOptions } from '../../../server/agents/connection';
+import { modelOf, resumeWay, turnOptions } from '../../../server/agents/connection';
 import { agentEnv, hermesShellNote, PROFILES, versionOf } from '../../../server/agents/profiles';
 
 const profile = (id: string) => {
@@ -83,8 +83,24 @@ describe('agent profiles', () => {
     expect(modelOf([{ id: 'm', name: 'Model', category: 'model', type: 'select', currentValue: 'raw-id', options: [] }])).toBe('raw-id');
   });
 
-  it('drops "always" options, which would outlive the run', () => {
-    expect(runOptions([
+  it('names the model a "default" choice stands for, or none, never "Default (recommended)"', () => {
+    const choose = (description?: string) => modelOf([
+      { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'default', options: [{ value: 'default', name: 'Default (recommended)', description }, { value: 'opus', name: 'Opus' }] },
+    ]);
+    expect(choose('Opus 4.7 (1M context)')).toBe('Opus 4.7 (1M context)');
+    expect(choose(undefined)).toBeNull();
+    expect(choose('  ')).toBeNull();
+  });
+
+  it('takes a session up again by resume first, then load, else not at all', () => {
+    expect(resumeWay({ loadSession: true, sessionCapabilities: { resume: {} } })).toBe('resume');
+    expect(resumeWay({ loadSession: true })).toBe('load');
+    expect(resumeWay({ loadSession: false, sessionCapabilities: {} })).toBeNull();
+    expect(resumeWay(undefined)).toBeNull();
+  });
+
+  it('drops "always" options, which would outlive the conversation', () => {
+    expect(turnOptions([
       { optionId: 'a', name: 'Allow', kind: 'allow_once' },
       { optionId: 'b', name: 'Always', kind: 'allow_always' },
       { optionId: 'c', name: 'Reject', kind: 'reject_once' },

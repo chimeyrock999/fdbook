@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import type { AgentsClient, RunChange, RunSummary } from '../api/agents';
+import type { AgentsClient, TurnChange } from '../api/agents';
 import { SourceDiff } from '../diff/SourceDiff';
 
-// One file the run changed with its own tools: its diff from before the run
-// (opened on demand), and Keep or Revert.
-function Change({ client, run, change, canDecide, onDecided }: { client: AgentsClient; run: RunSummary; change: RunChange; canDecide: boolean; onDecided: (change: RunChange) => void }) {
+// Which turn of which conversation.
+type Of = { id: string; turn: number };
+
+// One file the turn changed with the agent's own tools: its diff from
+// before the turn (opened on demand), and Keep or Revert.
+function Change({ client, of, change, canDecide, onDecided }: { client: AgentsClient; of: Of; change: TurnChange; canDecide: boolean; onDecided: (change: TurnChange) => void }) {
   const [diff, setDiff] = useState<{ before: string | null; after: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -13,12 +16,12 @@ function Change({ client, run, change, canDecide, onDecided }: { client: AgentsC
       setDiff(null);
       return;
     }
-    client.compare(run.id, change.path).then(setDiff, (reason: unknown) => { setFailed((reason as Error).message); });
+    client.compare(of.id, of.turn, change.path).then(setDiff, (reason: unknown) => { setFailed((reason as Error).message); });
   };
   const decide = (op: 'keep' | 'revert') => {
     setBusy(true);
     setFailed(null);
-    client.decide(run.id, change.path, op).then(onDecided, (reason: unknown) => { setFailed((reason as Error).message); }).finally(() => { setBusy(false); });
+    client.decide(of.id, of.turn, change.path, op).then(onDecided, (reason: unknown) => { setFailed((reason as Error).message); }).finally(() => { setBusy(false); });
   };
   const viewDiff = <button type="button" className="studio-agent-link" aria-expanded={diff !== null} onClick={toggleDiff}>{diff === null ? 'View diff' : 'Hide diff'}</button>;
   return (
@@ -55,26 +58,28 @@ function Change({ client, run, change, canDecide, onDecided }: { client: AgentsC
   );
 }
 
-// The files an ended run changed itself (or wrote through the Studio
-// outside a proposal), to keep or put back as they were when it started.
-export function RunChanges({ client, run, canDecide }: { client: AgentsClient; run: RunSummary; canDecide: boolean }) {
-  const [changes, setChanges] = useState<RunChange[] | null>(null);
+// The files an ended turn changed itself (or wrote through the Studio
+// outside a proposal), to keep or put back as they were when it began.
+// `writes`: the files its end listed. `version` grows with each decision
+// made on another page, and the list is read again.
+export function TurnChanges({ client, id, turn, writes, version, canDecide }: { client: AgentsClient; id: string; turn: number; writes: string[]; version: number; canDecide: boolean }) {
+  const [changes, setChanges] = useState<TurnChange[] | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
-  const ready = run.status !== 'running' && run.writes.length > 0;
+  const ready = writes.length > 0;
   useEffect(() => {
     if (!ready) return undefined;
     let current = true;
-    client.changes(run.id).then(
+    client.changes(id, turn).then(
       (list) => { if (current) setChanges(list); },
       (reason: unknown) => { if (current) setFailed((reason as Error).message); },
     );
     return () => { current = false; };
-  }, [client, run.id, ready]);
+  }, [client, id, turn, ready, version]);
   if (!ready || (changes !== null && changes.length === 0)) return null;
   return (
-    <section className="studio-agent-changes" aria-label="Files this run changed">
-      <h4>Files this run changed</h4>
-      <p className="studio-agent-meta">Keep each change, or put the file back as it was when the run started.</p>
+    <section className="studio-agent-changes" aria-label="Files this turn changed">
+      <h4>Files this turn changed</h4>
+      <p className="studio-agent-meta">Keep each change, or put the file back as it was when the turn began.</p>
       {failed !== null && <p role="alert" className="studio-tree-error">{failed}</p>}
       {changes === null && failed === null && <p className="studio-agent-meta">Loading…</p>}
       <ul>
@@ -82,7 +87,7 @@ export function RunChanges({ client, run, canDecide }: { client: AgentsClient; r
           <Change
             key={change.path}
             client={client}
-            run={run}
+            of={{ id, turn }}
             change={change}
             canDecide={canDecide}
             onDecided={(next) => { setChanges((list) => list?.map((each) => (each.path === next.path ? next : each)) ?? null); }}

@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { git } from '../../../server/cr/git';
 import type { StudioTool } from '../../../server/mcp/tool';
-import type { RunChange, RunSummary } from '../../../server/agents/shared';
+import type { Conversation, TurnChange } from '../../../server/agents/shared';
 import type { ChangeRequest } from '../../../server/cr/manager';
 import type { NoteComment } from '../../../server/proposals/comments';
 import type { ProposalView } from '../../../server/proposals/shared';
@@ -51,13 +51,13 @@ describe('Studio MCP server', () => {
   const send = (path: string, method = 'GET', body?: unknown) => sender(studio.origin)(path, { method, body });
   const worktree = (path: string) => join(cr.worktree ?? '', path);
 
-  // Starts a run of the fake agent and waits for its end.
+  // Starts a conversation with the fake agent and waits for its first turn's end.
   async function runAgent(prompt: string, role = 'author', agent = 'claude') {
-    const { run } = json(await send(`/cr/${cr.slug}/api/agents/runs`, 'POST', { agent, role, prompt })) as { run: RunSummary };
+    const { conversation: run } = json(await send(`/cr/${cr.slug}/api/agents/conversations`, 'POST', { agent, role, prompt })) as { conversation: Conversation };
     const deadline = Date.now() + 15_000;
     for (;;) {
-      const read = json(await send(`/cr/${cr.slug}/api/agents/runs/${run.id}`)) as { run: RunSummary; events: Parameters<typeof messagesOf>[0] };
-      if (read.run.status !== 'running') return { ...read, said: messagesOf(read.events).join('\n') };
+      const read = json(await send(`/cr/${cr.slug}/api/agents/conversations/${run.id}`)) as { conversation: Conversation; events: Parameters<typeof messagesOf>[0] };
+      if (read.conversation.status !== 'running') return { run: read.conversation, events: read.events, said: messagesOf(read.events).join('\n') };
       if (Date.now() > deadline) throw new Error('the run did not end');
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
@@ -167,7 +167,7 @@ describe('Studio MCP server', () => {
     expect(await readFile(worktree(page), 'utf8')).toBe('---\ntitle: Created\n---\n\nNewer.\n');
     const { proposals } = json(await send(`/cr/${cr.slug}/api/proposals?path=${page}`)) as { proposals: ProposalView[] };
     expect(proposals).toEqual([]);
-    const { changes } = json(await send(`/cr/${cr.slug}/api/agents/runs/${run.run.id}/changes`)) as { changes: RunChange[] };
+    const { changes } = json(await send(`/cr/${cr.slug}/api/agents/conversations/${run.run.id}/turns/1/changes`)) as { changes: TurnChange[] };
     expect(changes).toEqual([{ path: page, existed: false, decided: null, reason: null }]);
   }, 20_000);
 
@@ -208,12 +208,27 @@ describe('Studio MCP server', () => {
     expect(reviewer.said).toContain('mcp:{');
   }, 30_000);
 
-  it('ends a run\'s token with the run', async () => {
+  it('lets a chat\'s token act only during its turns, and ends it with the agent process', async () => {
     const run = await runAgent('mcp-servers', 'author', 'codex');
     const token = /"value":"Bearer ([^"]+)"/.exec(run.said)?.[1] ?? '';
     expect(token).not.toBe('');
-    const response = await sender(studio.origin)('/api/mcp', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' });
-    expect(response.status).toBe(401);
+    const list = () => sender(studio.origin)('/api/mcp', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' });
+    // Between turns the process keeps its token, but it acts for nothing.
+    expect((await list()).status).toBe(401);
+    // The next turn uses it again.
+    const next = await send(`/cr/${cr.slug}/api/agents/conversations/${run.run.id}/messages`, 'POST', { prompt: 'mcp list_notes {"cr": "' + cr.slug + '"}' });
+    expect(next.status).toBe(200);
+    for (const deadline = Date.now() + 10_000; Date.now() < deadline;) {
+      const read = json(await send(`/cr/${cr.slug}/api/agents/conversations/${run.run.id}`)) as { conversation: Conversation; events: Parameters<typeof messagesOf>[0] };
+      if (read.conversation.status !== 'running') {
+        expect(messagesOf(read.events).join('\n')).toMatch(/^mcp:/m);
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    // Deleting the chat stops the process and drops the token.
+    expect((await send(`/cr/${cr.slug}/api/agents/conversations/${run.run.id}`, 'DELETE')).status).toBe(200);
+    expect((await list()).status).toBe(401);
   }, 20_000);
 
   it('puts a tool\'s write through ctx.files on the run\'s Keep/Revert list', async () => {
@@ -223,25 +238,25 @@ describe('Studio MCP server', () => {
     expect(run.said).toMatch(/^mcp:\d/);
     expect(run.said).toContain('mcp-error:not an editable path: ../outside.txt');
     expect(run.run.writes).toContain(meta);
-    expect(json(await send(`/cr/${cr.slug}/api/agents/runs/${run.run.id}/changes/before?path=${meta}`))).toEqual({ path: meta, content: before });
-    expect((await send(`/cr/${cr.slug}/api/agents/runs/${run.run.id}/changes`, 'POST', { path: meta, op: 'revert' })).status).toBe(200);
+    expect(json(await send(`/cr/${cr.slug}/api/agents/conversations/${run.run.id}/turns/1/changes/before?path=${meta}`))).toEqual({ path: meta, content: before });
+    expect((await send(`/cr/${cr.slug}/api/agents/conversations/${run.run.id}/turns/1/changes`, 'POST', { path: meta, op: 'revert' })).status).toBe(200);
     expect(await readFile(worktree(meta), 'utf8')).toBe(before);
   }, 20_000);
 
   it('reverts to the file as the run found it, even after a commit during the run', async () => {
     const page = 'content/notes/index.mdx';
     const before = await readFile(worktree(page), 'utf8');
-    const { run } = json(await send(`/cr/${cr.slug}/api/agents/runs`, 'POST', { agent: 'claude', role: 'author', prompt: `edit ${worktree(page)} by the agent\nhang` })) as { run: RunSummary };
+    const { conversation: run } = json(await send(`/cr/${cr.slug}/api/agents/conversations`, 'POST', { agent: 'claude', role: 'author', prompt: `edit ${worktree(page)} by the agent\nhang` })) as { conversation: Conversation };
     const deadline = Date.now() + 10_000;
     while ((await readFile(worktree(page), 'utf8')) === before && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
     await git(cr.worktree ?? '', 'commit', '--quiet', '-am', 'during the run');
-    await send(`/cr/${cr.slug}/api/agents/runs/${run.id}/cancel`, 'POST', {});
+    await send(`/cr/${cr.slug}/api/agents/conversations/${run.id}/cancel`, 'POST', {});
     for (;;) {
-      const read = json(await send(`/cr/${cr.slug}/api/agents/runs/${run.id}`)) as { run: RunSummary };
-      if (read.run.status !== 'running') break;
+      const read = json(await send(`/cr/${cr.slug}/api/agents/conversations/${run.id}`)) as { conversation: Conversation };
+      if (read.conversation.status !== 'running') break;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    expect(json(await send(`/cr/${cr.slug}/api/agents/runs/${run.id}/changes/before?path=${page}`))).toEqual({ path: page, content: before });
+    expect(json(await send(`/cr/${cr.slug}/api/agents/conversations/${run.id}/turns/1/changes/before?path=${page}`))).toEqual({ path: page, content: before });
   }, 20_000);
 
   // A note committed as `content`, so the run finds it clean.
@@ -254,12 +269,12 @@ describe('Studio MCP server', () => {
   // Starts a run that ends with `hang`, does `during` while it waits, then
   // cancels it and waits for its end.
   async function hangingRun(prompt: string, during: () => Promise<void>) {
-    const { run } = json(await send(`/cr/${cr.slug}/api/agents/runs`, 'POST', { agent: 'claude', role: 'author', prompt: `${prompt}\nhang` })) as { run: RunSummary };
+    const { conversation: run } = json(await send(`/cr/${cr.slug}/api/agents/conversations`, 'POST', { agent: 'claude', role: 'author', prompt: `${prompt}\nhang` })) as { conversation: Conversation };
     await during();
-    await send(`/cr/${cr.slug}/api/agents/runs/${run.id}/cancel`, 'POST', {});
+    await send(`/cr/${cr.slug}/api/agents/conversations/${run.id}/cancel`, 'POST', {});
     for (;;) {
-      const read = json(await send(`/cr/${cr.slug}/api/agents/runs/${run.id}`)) as { run: RunSummary };
-      if (read.run.status !== 'running') return read.run;
+      const read = json(await send(`/cr/${cr.slug}/api/agents/conversations/${run.id}`)) as { conversation: Conversation };
+      if (read.conversation.status !== 'running') return read.conversation;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
@@ -277,7 +292,7 @@ describe('Studio MCP server', () => {
       await git(cr.worktree ?? '', 'commit', '--quiet', '-am', 'the agent commits');
     });
     expect(run.writes).toContain(page);
-    const base = `/cr/${cr.slug}/api/agents/runs/${run.id}/changes`;
+    const base = `/cr/${cr.slug}/api/agents/conversations/${run.id}/turns/1/changes`;
     expect(json(await send(`${base}/before?path=${page}`))).toEqual({ path: page, content: 'As found.\n' });
     expect((await send(base, 'POST', { path: page, op: 'revert' })).status).toBe(200);
     expect(await readFile(worktree(page), 'utf8')).toBe('As found.\n');
@@ -290,7 +305,7 @@ describe('Studio MCP server', () => {
     await committed(page, 'As found.\n');
     const run = await runAgent(`sneak ${worktree(page)} first\nwrite ${worktree(page)} second`);
     expect(await readFile(worktree(page), 'utf8')).toBe('second');
-    const base = `/cr/${cr.slug}/api/agents/runs/${run.run.id}/changes`;
+    const base = `/cr/${cr.slug}/api/agents/conversations/${run.run.id}/turns/1/changes`;
     expect(json(await send(`${base}/before?path=${page}`))).toEqual({ path: page, content: 'As found.\n' });
     expect((await send(base, 'POST', { path: page, op: 'revert' })).status).toBe(200);
     expect(await readFile(worktree(page), 'utf8')).toBe('As found.\n');
@@ -306,9 +321,9 @@ describe('Studio MCP server', () => {
       const { mtimeMs } = json(await send(`/cr/${cr.slug}/api/file?path=${page}`)) as { mtimeMs: number };
       expect((await send(`/cr/${cr.slug}/api/file?path=${page}`, 'PUT', { content: 'By a person.\n', baseMtime: mtimeMs })).status).toBe(200);
     });
-    const base = `/cr/${cr.slug}/api/agents/runs/${run.id}/changes`;
-    const { changes } = json(await send(base)) as { changes: RunChange[] };
-    expect(changes).toContainEqual({ path: page, existed: true, decided: null, reason: 'also saved by a person during the run: revert it by hand' });
+    const base = `/cr/${cr.slug}/api/agents/conversations/${run.id}/turns/1/changes`;
+    const { changes } = json(await send(base)) as { changes: TurnChange[] };
+    expect(changes).toContainEqual({ path: page, existed: true, decided: null, reason: 'also saved by a person during the turn: revert it by hand' });
     expect(json(await send(`${base}/before?path=${page}`))).toEqual({ path: page, content: 'As found.\n' });
     expect((await send(base, 'POST', { path: page, op: 'revert' })).status).toBe(409);
     expect(await readFile(worktree(page), 'utf8')).toBe('By a person.\n');
@@ -364,8 +379,8 @@ describe('Studio MCP server', () => {
     const noteBefore = await readFile(worktree(NOTE), 'utf8');
     const added = 'content/notes/guide/new.mdx';
     const run = await runAgent(`sneak ${worktree(NOTE)} rewritten\nwrite ${worktree(meta)} title: Changed\nsneak ${worktree(added)} new`);
-    const base = `/cr/${cr.slug}/api/agents/runs/${run.run.id}/changes`;
-    const { changes } = json(await send(base)) as { changes: RunChange[] };
+    const base = `/cr/${cr.slug}/api/agents/conversations/${run.run.id}/turns/1/changes`;
+    const { changes } = json(await send(base)) as { changes: TurnChange[] };
     expect(changes).toEqual(expect.arrayContaining([
       { path: NOTE, existed: true, decided: null, reason: null },
       { path: meta, existed: true, decided: null, reason: null },

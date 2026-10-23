@@ -28,8 +28,9 @@ export type StudioFilesOptions = {
   // Told the path and what it held (null: missing) just before a write
   // replaces it: a run's Keep/Revert list (agents/watch.ts).
   beforeWrite?: (path: string, previous: Buffer | null) => void;
-  // Told the path and its new content once a write replaced it.
-  afterWrite?: (path: string, content: Buffer) => void;
+  // Told the path and its new content once a write replaced it; the write
+  // answers once it is done.
+  afterWrite?: (path: string, content: Buffer) => void | Promise<void>;
   // Told the path just before a person's save replaces it (the file API):
   // the runs going on must not revert it (agents/watch.ts).
   beforeSave?: (path: string) => void;
@@ -70,7 +71,7 @@ export function createStudioFiles(root: string, { pathLock = createKeyedLock(), 
         beforeWrite?.(path, info === null ? null : await readFile(absolute));
         beforeSave?.(path);
         const mtimeMs = await writeAtomic(absolute, content, info?.mode);
-        afterWrite?.(path, typeof content === 'string' ? Buffer.from(content) : content);
+        await afterWrite?.(path, typeof content === 'string' ? Buffer.from(content) : content);
         return { mtimeMs };
       }));
     },

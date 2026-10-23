@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
+import type { AgentConversations } from '../../server/agents/conversations';
 import type { AgentProfile } from '../../server/agents/profiles';
-import type { AgentRuns } from '../../server/agents/runs';
-import type { RunSummary } from '../../server/agents/shared';
+import type { Conversation } from '../../server/agents/shared';
 
 const FAKE_AGENT = fileURLToPath(new URL('./fake-agent.mjs', import.meta.url));
 
@@ -17,21 +17,24 @@ export function fakeProfile(env: Record<string, string> = {}, id: AgentProfile['
   };
 }
 
-// Waits until `test` holds for the run, or fails after `ms`.
-export async function waitForRun(runs: Pick<AgentRuns, 'read'>, id: string, test: (run: Awaited<ReturnType<AgentRuns['read']>>) => boolean, ms = 10_000) {
+type Read = Awaited<ReturnType<AgentConversations['read']>>;
+
+// Waits until `test` holds for the conversation, or fails after `ms`.
+export async function waitFor(conversations: Pick<AgentConversations, 'read'>, id: string, test: (read: Read) => boolean, ms = 10_000) {
   const deadline = Date.now() + ms;
   for (;;) {
-    const run = await runs.read(id);
-    if (test(run)) return run;
-    if (Date.now() > deadline) throw new Error(`run ${id} did not get there: ${JSON.stringify(run.run)}`);
+    const read = await conversations.read(id);
+    if (test(read)) return read;
+    if (Date.now() > deadline) throw new Error(`conversation ${id} did not get there: ${JSON.stringify(read.conversation)}`);
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
 
-export const ended = (run: { run: RunSummary }) => run.run.status !== 'running';
+// The turn going on has ended.
+export const ended = (read: { conversation: Conversation }) => read.conversation.status !== 'running';
 
 // What the agent said, in order.
-export function messagesOf(events: Awaited<ReturnType<AgentRuns['read']>>['events']) {
+export function messagesOf(events: Read['events']) {
   return events.flatMap((event) =>
     event.type === 'update' && event.update.sessionUpdate === 'agent_message_chunk' && event.update.content.type === 'text' ? [event.update.content.text] : [],
   );

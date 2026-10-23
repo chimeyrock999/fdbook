@@ -2,8 +2,10 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { AgentRole } from '../agents/shared.ts';
 
 // What an agent run may do through the Studio's MCP server: its change
-// request and its role, nothing else.
-export type RunGrant = { slug: string; runId: string; agent: string; role: AgentRole };
+// request and its role, nothing else. A chat's agent (`runId`: the chat's
+// id) holds its token between turns, but it acts only while `active` says
+// a turn is going on.
+export type RunGrant = { slug: string; runId: string; agent: string; role: AgentRole; active?: () => boolean };
 
 const hashOf = (token: string) => createHash('sha256').update(token).digest('hex');
 
@@ -18,7 +20,10 @@ export function createRunGrants() {
       grants.set(hashOf(token), grant);
       return { token, revoke: () => { grants.delete(hashOf(token)); } };
     },
-    resolve: (token: string) => grants.get(hashOf(token)) ?? null,
+    resolve: (token: string) => {
+      const grant = grants.get(hashOf(token)) ?? null;
+      return grant !== null && (grant.active?.() ?? true) ? grant : null;
+    },
   };
 }
 

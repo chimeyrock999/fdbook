@@ -128,8 +128,9 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
     tools: createNoteTools({
       proposalsOf: async (slug) => (await reviewOf(slug)).proposals,
       commentsOf: async (slug) => (await reviewOf(slug)).comments,
-      modelOf: (slug, runId) => workspaces.peek(slug)?.runs?.modelOf(runId) ?? null,
-      createdBy: (slug, runId, path) => workspaces.peek(slug)?.runs?.created(runId, path) ?? Promise.resolve(false),
+      // An MCP caller's `runId` is its conversation (agents/conversations.ts).
+      modelOf: (slug, runId) => workspaces.peek(slug)?.conversations?.modelOf(runId) ?? null,
+      createdBy: (slug, runId, path) => workspaces.peek(slug)?.conversations?.created(runId, path) ?? Promise.resolve(false),
     }).concat(diagramTools, tools),
     grants,
     auth,

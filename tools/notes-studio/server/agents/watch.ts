@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { statOrNull, writeAtomic } from '../files/store.ts';
 import { runGitBytes } from '../git/git.ts';
 import { classifyPath, resolveWorktreePath } from '../security/paths.ts';
-import type { RunChange } from './shared.ts';
+import type { TurnChange } from './shared.ts';
 
 // The largest file whose earlier content a run keeps for a revert.
 const MAX_BEFORE_BYTES = 25 * 1024 * 1024;
@@ -11,7 +11,7 @@ const MAX_BEFORE_BYTES = 25 * 1024 * 1024;
 // What a file held before a run changed it: its bytes, or null when it did
 // not exist. Kept per run next to its transcript, so Revert works after a
 // restart too.
-export type StoredChange = { path: string; before: string | null; endMtimeMs: number | null; decided: RunChange['decided']; reason: string | null };
+export type StoredChange = { path: string; before: string | null; endMtimeMs: number | null; decided: TurnChange['decided']; reason: string | null };
 
 async function readOrNull(path: string) {
   const info = await statOrNull(path);
@@ -26,11 +26,12 @@ const atCommit = (root: string, sha: string | null, path: string) =>
 const TOO_LARGE = Symbol('too large');
 
 const TOO_LARGE_REASON = 'too large to keep its earlier version';
-const PERSON_REASON = 'also saved by a person during the run: revert it by hand';
+const PERSON_REASON = 'also saved by a person during the turn: revert it by hand';
 
 // Git's empty tree: what a repository without a commit yet holds.
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
+// A run here is one turn of a conversation (conversations.ts).
 // Watches one run's worktree for Keep/Revert: what the files the Studio may
 // edit held when the run started (those that differed from HEAD then; the
 // others are as HEAD has them), and which files a person saved meanwhile.
