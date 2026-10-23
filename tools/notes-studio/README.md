@@ -894,19 +894,23 @@ are listed greyed, with how to install them (`GET /api/agents`).
   notes lock (`server/agents/fs-policy.ts`). Claude Code and Codex write
   with their own tools instead, inside the fences above: the Studio sees
   those edits in their tool calls and, at the end of the run, in `git
-  status` against the start (`server/agents/worktree.ts`), so a file
-  edited by hand meanwhile is listed too. Every changed file is in the
+  status` against the start (`server/agents/worktree.ts`), plus the files
+  of any commit made during the run, so a file edited by hand meanwhile is
+  listed too. Every changed file is in the
   run's list with **View diff**, and shows in Changes; until the editor
   shows proposals (the second step of #85), a note changed by a run going
   on carries a notice over the editor.
 - **Keep or revert.** When a run starts, the Studio keeps what each file
-  that differs from HEAD holds (the others are as HEAD has them), and what
-  a file held right before each write the run makes through it. Once the
-  run ended, each file it changed can be kept or put back as it was when
-  the run started (`/api/agents/runs/<id>/changes`, kept in
+  that differs from HEAD holds (the others are as HEAD has them at the
+  start). Once the run ended, each file it changed can be kept or put back
+  as it was when the run started (`/api/agents/runs/<id>/changes`, kept in
   `<run>.changes.json` next to the transcript). Revert writes nothing over
   a file changed again since the run ended, and does not touch files
-  outside the notes and their assets (it says so).
+  outside the notes and their assets, files over 25 MB, or files a person
+  saved through the file API during the run (it says so: revert those by
+  hand). Edits made in the editor during the run go through the notes sync
+  socket and are not marked (the sync server has no write hook yet): look
+  at the diff before reverting a note you edited meanwhile.
 - **Tools.** Every session gets the Studio's MCP server (see MCP server),
   over HTTP when the agent says it can (`mcpCapabilities.http`), else
   through the stdio bridge, with a token for the run that ends with it.

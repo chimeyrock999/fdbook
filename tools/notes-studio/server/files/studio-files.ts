@@ -28,12 +28,15 @@ export type StudioFilesOptions = {
   // Told the path and what it held (null: missing) just before a write
   // replaces it: a run's Keep/Revert list (agents/watch.ts).
   beforeWrite?: (path: string, previous: Buffer | null) => void;
+  // Told the path just before a person's save replaces it (the file API):
+  // the runs going on must not revert it (agents/watch.ts).
+  beforeSave?: (path: string) => void;
 };
 
 // Reads and writes of the worktree at `root` through the path policy, with
 // the mtime check of the file API: what the file API and the Studio's MCP
 // tools both use.
-export function createStudioFiles(root: string, { pathLock = createKeyedLock(), notesLock = null, beforeWrite }: StudioFilesOptions = {}): StudioFiles {
+export function createStudioFiles(root: string, { pathLock = createKeyedLock(), notesLock = null, beforeWrite, beforeSave }: StudioFilesOptions = {}): StudioFiles {
   const resolve = (path: string) => {
     const resolved = resolveWorktreePath(root, path);
     if (resolved === null) throw new PathRefusedError(`not an editable path: ${path}`);
@@ -63,6 +66,7 @@ export function createStudioFiles(root: string, { pathLock = createKeyedLock(), 
           throw new FileConflictError(path, info && kind !== 'asset' ? await readFile(absolute, 'utf8') : null, diskMtime);
         }
         beforeWrite?.(path, info === null ? null : await readFile(absolute));
+        beforeSave?.(path);
         return { mtimeMs: await writeAtomic(absolute, content, info?.mode) };
       }));
     },
