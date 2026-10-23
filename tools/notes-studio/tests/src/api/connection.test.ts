@@ -4,7 +4,7 @@ import { createAgentsClient } from '../../../src/api/agents';
 import { disconnected, leavePage, onDisconnect, resetConnection, watchEvents, watchSync, WINDOW_MS } from '../../../src/api/connection';
 import { createFilesClient } from '../../../src/api/files';
 import { createProposalsClient } from '../../../src/api/proposals';
-import { onSignedOut } from '../../../src/api/session';
+import { onSignedOut, sessionBack } from '../../../src/api/session';
 
 // An EventSource the test opens, drops and refuses by hand. `drop` is a
 // network error (the browser would reconnect: CONNECTING), `refuse` a
@@ -220,14 +220,51 @@ describe('the connection watch', () => {
     const signedOut = vi.fn();
     const stop = onSignedOut(signedOut);
     watchEvents('/api/events', () => undefined);
-    for (let round = 0; round < 4; round += 1) {
-      last().refuse();
-      await vi.advanceTimersByTimeAsync(5000);
-    }
+    last().refuse();
+    await vi.advanceTimersByTimeAsync(WINDOW_MS * 2);
     expect(disconnected()).toBeNull();
     expect(signedOut).toHaveBeenCalled();
     expect(live()).toHaveLength(1);
     stop();
+  });
+
+  it('keeps a signed-out page quiet: an hour on the sign-in sends a bounded number of requests', async () => {
+    const probe = answerProbe(401, { error: 'Sign in to use the Studio.' });
+    const signedOut = vi.fn();
+    const stop = onSignedOut(signedOut);
+    // Every stream the server sees is refused at once, for an hour.
+    watchEvents('/api/events', () => undefined);
+    const end = Date.now() + 3600_000;
+    while (Date.now() < end) {
+      const events = last();
+      if (!events.closed) events.refuse();
+      await vi.advanceTimersToNextTimerAsync();
+    }
+    // 5, 10, 20, 40 s, then a minute: about 64 tries an hour, not 720.
+    expect(FakeEventSource.opened.length).toBeLessThan(70);
+    expect(probe.mock.calls.length).toBeLessThan(70);
+    expect(signedOut.mock.calls.length).toBeLessThan(70);
+    expect(disconnected()).toBeNull();
+    stop();
+  });
+
+  it('opens a signed-out stream again as soon as the session is back, and forgets the backoff', async () => {
+    answerProbe(401, { error: 'Sign in to use the Studio.' });
+    watchEvents('/api/events', () => undefined);
+    last().refuse();
+    await vi.advanceTimersByTimeAsync(5000);
+    last().refuse();
+    await vi.advanceTimersByTimeAsync(1000);
+    // Waiting 10 s now.
+    const count = FakeEventSource.opened.length;
+    expect(count).toBe(2);
+    sessionBack();
+    expect(FakeEventSource.opened).toHaveLength(count + 1);
+    last().open();
+    expect(live()).toHaveLength(1);
+    // The backoff timer that was waiting opens nothing more.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(FakeEventSource.opened).toHaveLength(count + 1);
   });
 
   it('counts a refused stream that answers on the probe as one failure', async () => {
@@ -248,6 +285,15 @@ describe('the connection watch', () => {
       await vi.advanceTimersByTimeAsync(1000);
     }
     expect(disconnected()).toBeNull();
+  });
+
+  it('keeps why a stream was refused while leaving, for a page that stayed after all', async () => {
+    answerProbe(409, { error: 'this change request is closing' });
+    watchEvents('/api/events', () => undefined);
+    leavePage();
+    last().refuse();
+    await vi.advanceTimersByTimeAsync(WINDOW_MS * 3);
+    expect(disconnected()).toEqual({ reason: 'cr-closed' });
   });
 
   it('judges the streams again when the page stayed after all', async () => {

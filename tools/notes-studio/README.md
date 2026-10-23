@@ -312,7 +312,8 @@ second; one that fails 3 times in a row without staying open for 10
 seconds, or is not open again 10 seconds after it dropped, means the server
 is gone. A stream the server refuses is asked again with a plain request to
 learn why: `401` (or `403`) is the sign-in above and the stream waits for
-it, `409` or `404` means the change request is closing or closed, a `5xx`
+it (it opens again once signed in, and meanwhile tries from 5 seconds,
+doubling up to a minute), `409` or `404` means the change request is closing or closed, a `5xx`
 counts as a failure (gh may be down only a moment), and any other answer
 is shown as the server gave it; no answer within 5 seconds is a server
 that is gone. The notes sync counts as gone once

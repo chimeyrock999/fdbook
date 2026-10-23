@@ -29,6 +29,19 @@ export function onSignedOut(listener: () => void) {
   return () => { signedOut.delete(listener); };
 }
 
+const back = new Set<() => void>();
+
+// Called when the Studio is signed in again after its session ended (the
+// sign-in over it is gone): what waited for the session goes on.
+export function onSessionBack(listener: () => void) {
+  back.add(listener);
+  return () => { back.delete(listener); };
+}
+
+export function sessionBack() {
+  for (const listener of [...back]) listener();
+}
+
 export async function studioFetch(input: string, init: RequestInit = {}): Promise<Response> {
   const method = (init.method ?? 'GET').toUpperCase();
   const headers = new Headers(init.headers);

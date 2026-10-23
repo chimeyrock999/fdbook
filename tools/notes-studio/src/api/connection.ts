@@ -5,7 +5,7 @@
 // are closed for good and the page asks for a reload (ServerDisconnected).
 // Signing out is not a disconnect: studioFetch tells the page, as before.
 
-import { confirmSignedIn, studioFetch } from './session';
+import { confirmSignedIn, onSessionBack, studioFetch } from './session';
 
 // Why the page stopped: the server cannot be reached, the change request it
 // edits is closing or gone (409, 404), or the server refused the stream for
@@ -17,9 +17,12 @@ const FAILURES = 3;
 // has to stay open before its failures are forgotten.
 export const WINDOW_MS = 10_000;
 // After a failure the stream opens again at the pace the server asks for
-// (`retry: 1000`); after a refusal for a session that ended, more slowly.
+// (`retry: 1000`). One refused for a session that ended waits for the
+// sign-in (onSessionBack), and meanwhile tries again from 5 s, doubling up
+// to a minute, in case the session came back without the page seeing it.
 const REOPEN_MS = 1000;
 const SIGNED_OUT_REOPEN_MS = 5000;
+const SIGNED_OUT_MAX_MS = 60_000;
 // How long the probe of a refused stream waits for an answer.
 const PROBE_MS = 5000;
 
@@ -124,11 +127,27 @@ export function watchEvents(url: string, setup: (events: EventSource) => void, o
   let steady: ReturnType<typeof setTimeout> | undefined;
   let deadline: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
+  let signedOutWait = SIGNED_OUT_REOPEN_MS;
+  let stopWaiting: (() => void) | null = null;
   // Why the last failure happened, for the notice: the server's own answer
   // when it gave one (5xx), else unreachable.
   let why: Disconnect = { reason: 'unreachable' };
 
   const later = (ms: number) => { reopen = setTimeout(open, ms); };
+  const waitForSession = () => {
+    reopen = setTimeout(() => {
+      stopWaiting?.();
+      stopWaiting = null;
+      open();
+    }, signedOutWait);
+    signedOutWait = Math.min(signedOutWait * 2, SIGNED_OUT_MAX_MS);
+    stopWaiting ??= onSessionBack(() => {
+      stopWaiting?.();
+      stopWaiting = null;
+      clearTimeout(reopen);
+      open();
+    });
+  };
   // While the page is leaving, nothing is a disconnect: the stream keeps
   // trying, in case the page stays after all.
   const armDeadline = () => {
@@ -150,6 +169,7 @@ export function watchEvents(url: string, setup: (events: EventSource) => void, o
     source.onopen = () => {
       clearTimeout(deadline);
       deadline = undefined;
+      signedOutWait = SIGNED_OUT_REOPEN_MS;
       steady = setTimeout(() => { failures = 0; }, WINDOW_MS);
       onOpen();
     };
@@ -173,17 +193,22 @@ export function watchEvents(url: string, setup: (events: EventSource) => void, o
           clearTimeout(deadline);
           deadline = undefined;
           failures = 0;
-          later(SIGNED_OUT_REOPEN_MS);
+          waitForSession();
         } else if (refusal.reason === 'failed') {
           why = { reason: 'refused', detail: refusal.detail };
           failed();
-        } else disconnect(refusal);
+        } else {
+          // Also what the deadline says, should the page stay after a leave.
+          why = refusal;
+          disconnect(refusal);
+        }
       });
     };
   }
 
   const close = () => {
     stopped = true;
+    stopWaiting?.();
     clearTimeout(reopen);
     clearTimeout(steady);
     clearTimeout(deadline);
