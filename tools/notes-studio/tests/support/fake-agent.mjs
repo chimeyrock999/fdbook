@@ -7,6 +7,7 @@
 //   ask                 asks for permission and says the answer
 //   ask-edit            asks for permission to edit a file
 //   hang                waits for a cancel
+//   wait <path>         waits until the file <path> exists (a test's go-ahead)
 //   deaf                waits and ignores a cancel
 //   crash               prints to stderr and exits
 //   env                 says which of the Studio's variables it can see
@@ -16,7 +17,7 @@
 //   mcp-servers         says how it was given the MCP servers (JSON)
 // FAKE_AGENT=auth makes session/new ask for a sign-in; FAKE_MCP=http says
 // it can reach MCP servers over HTTP (else it gets them over stdio).
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { Readable, Writable } from 'node:stream';
 import { AgentSideConnection, ndJsonStream, PROTOCOL_VERSION, RequestError } from '@agentclientprotocol/sdk';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -98,6 +99,9 @@ const agent = {
           ],
         });
         await say(sessionId, `answer:${answer.outcome.outcome === 'selected' ? answer.outcome.optionId : 'cancelled'}`);
+      } else if (command === 'wait') {
+        const deadline = Date.now() + 10_000;
+        while (!existsSync(path) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
       } else if (command === 'hang' || command === 'deaf') {
         const cancelled = command === 'hang' && session.cancelled ? true : await new Promise((resolve) => {
           if (command === 'hang') session.cancel = () => { resolve(true); };

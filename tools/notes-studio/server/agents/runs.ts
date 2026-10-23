@@ -202,7 +202,7 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
           const at = worktreePathOf(root, path);
           // The agent is told, so it does not read the note back expecting
           // its text, nor write again.
-          if (propose !== null && at !== null && classifyPath(at) === 'note' && !run.watch.created(at) && existsSync(join(root, at))) {
+          if (propose !== null && at !== null && classifyPath(at) === 'note' && existsSync(join(root, at)) && !(await run.watch.created(at))) {
             const made = await propose({ path: at, content, runId: run.summary.id, agent: profile.id, model: run.summary.model }).then(
               (proposal) => `the Studio made this write a proposal (${(proposal as { id: string }).id}) for a person to accept: ${at} is unchanged until then. Make further edits to it with the propose_edit tool.`,
               (error: unknown) => `the Studio takes edits to ${at} as proposals, and this one was refused: ${(error as Error).message}`,
@@ -210,6 +210,7 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
             throw RequestError.invalidParams(undefined, made);
           }
           const written = await lock('notes', () => pathLock(join(root, worktreePathOf(root, path) ?? ''), () => writeForAgent(root, path, content, (at, previous) => { run.watch.beforeWrite(at, previous); })));
+          run.watch.wrote(written.path, Buffer.from(content));
           record(run, { type: 'write', at: Date.now(), path: written.path, bytes: written.bytes });
           if (!run.summary.writes.includes(written.path)) changed(run, { writes: [...run.summary.writes, written.path] });
         },
@@ -305,7 +306,12 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
 
     // Whether a run going on created `path` itself (mcp/note-tools.ts writes
     // to it directly instead of proposing).
-    created: (id: string, path: string) => live.get(id)?.watch.created(path) ?? false,
+    created: (id: string, path: string) => live.get(id)?.watch.created(path) ?? Promise.resolve(false),
+
+    // What a run's MCP tool write put in a file (after beforeWrite).
+    wrote(id: string, path: string, content: Buffer) {
+      live.get(id)?.watch.wrote(path, content);
+    },
 
     // The model a run going on says it runs (a proposal's author), or null.
     modelOf: (id: string) => live.get(id)?.summary.model ?? null,

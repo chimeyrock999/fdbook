@@ -21,7 +21,7 @@ export type NoteToolDeps = {
   // The model a run says it runs, when it said.
   modelOf: (slug: string, runId: string) => string | null;
   // Whether a run going on created the note itself (agents/watch.ts).
-  createdBy: (slug: string, runId: string, path: string) => boolean;
+  createdBy: (slug: string, runId: string, path: string) => Promise<boolean>;
 };
 
 const json = (value: unknown): ToolResult => ({ content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], structured: value as Record<string, unknown> });
@@ -192,7 +192,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
 
   const proposeEdit = {
     name: 'propose_edit',
-    description: 'Proposes an edit to a note. A note that does not exist yet is created with content (list it in its folder\'s meta.yaml); later edits by the same run to a note it created are written too (answer: written). An edit to any other note is not written: a person sees it in the editor as suggestions, block by block, and accepts or rejects each one. Give either the whole new text (content) or exact find/replace edits on the note as it is now (each find must occur once). Answers the proposal, its hunks, and lint issues of the result to fix in a new proposal.',
+    description: 'Proposes an edit to a note. A note that does not exist yet is created with content (list it in its folder\'s meta.yaml); later edits by the same run to a note it created are written too (answer: written), until someone else changes that note. An edit to any other note is not written: a person sees it in the editor as suggestions, block by block, and accepts or rejects each one. Give either the whole new text (content) or exact find/replace edits on the note as it is now (each find must occur once). Answers the proposal, its hunks, and lint issues of the result to fix in a new proposal.',
     input: z.object({
       path,
       content: z.string().optional().describe('The whole note as it should be, frontmatter included'),
@@ -216,7 +216,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
       }
       // A note this run created is its own draft, not yet a person's: a fix
       // to it is written too, and stays on the run's Keep/Revert list.
-      if (ctx.caller.kind === 'run' && deps.createdBy(ctx.slug, ctx.caller.runId, at)) {
+      if (ctx.caller.kind === 'run' && (await deps.createdBy(ctx.slug, ctx.caller.runId, at))) {
         if ((content === undefined) === (edits === undefined)) throw new HttpError(400, 'give either content or edits');
         const current = await readNote(ctx, at);
         const next = content ?? applyEdits(current.content, edits ?? []);

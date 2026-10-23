@@ -158,11 +158,13 @@ describe('agent panel', () => {
   });
 
   it('shows a proposal with a way to the note, and keeps or reverts what the run changed itself', async () => {
-    const done = summary({ id: 'done', status: 'done', endedMs: Date.now(), writes: ['content/notes/meta.yaml', 'content/notes/late.mdx', 'package.json'] });
+    const done = summary({ id: 'done', status: 'done', endedMs: Date.now(), writes: ['content/notes/meta.yaml', 'content/notes/late.mdx', 'package.json', 'content/notes/saved.mdx'] });
     const changes: RunChange[] = [
       { path: 'content/notes/meta.yaml', existed: true, decided: null, reason: null },
       { path: 'content/notes/late.mdx', existed: true, decided: null, reason: null },
-      { path: 'package.json', existed: true, decided: null, reason: 'outside the notes and their assets: revert it by hand' },
+      // The server keeps no earlier version outside the notes (existed: false).
+      { path: 'package.json', existed: false, decided: null, reason: 'outside the notes and their assets: revert it by hand' },
+      { path: 'content/notes/saved.mdx', existed: true, decided: null, reason: 'also saved by a person during the run: revert it by hand' },
     ];
     const { client } = fakeClient([done], changes);
     client.read.mockImplementation(() => Promise.resolve({ run: done, events: [{ type: 'proposal', at: 1, id: 'p1', path: 'content/notes/guide.mdx', hunks: 2 }] }));
@@ -175,7 +177,14 @@ describe('agent panel', () => {
     expect(screen.getByText('2 suggestions')).toBeTruthy();
 
     const section = within(await screen.findByRole('region', { name: 'Files this run changed' }));
-    expect(await section.findByText(/revert it by hand/)).toBeTruthy();
+    expect(await section.findAllByText(/revert it by hand/)).toHaveLength(2);
+    // A file a person saved too keeps its diff, only not Keep/Revert; one
+    // outside the notes has no earlier version to show.
+    const saved = within(section.getByText('content/notes/saved.mdx').closest('li') as HTMLElement);
+    expect(saved.queryByRole('button', { name: 'Revert' })).toBeNull();
+    await user.click(saved.getByRole('button', { name: 'View diff' }));
+    expect(client.compare).toHaveBeenCalledWith('done', 'content/notes/saved.mdx');
+    expect(within(section.getByText('package.json').closest('li') as HTMLElement).queryByRole('button', { name: 'View diff' })).toBeNull();
     const meta = within(section.getByText('content/notes/meta.yaml').closest('li') as HTMLElement);
     await user.click(meta.getByRole('button', { name: 'View diff' }));
     expect(client.compare).toHaveBeenCalledWith('done', 'content/notes/meta.yaml');

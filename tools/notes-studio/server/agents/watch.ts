@@ -53,6 +53,8 @@ export function watchRun(root: string, dirty: Promise<Map<string, number | null>
   // Files a person saved through the file API during the run: a revert
   // would lose their save.
   const saved = new Set<string>();
+  // What the run last wrote to a file through the Studio.
+  const mine = new Map<string, Buffer>();
 
   return {
     // Settles once the run's start is recorded: the prompt waits for it, so
@@ -64,11 +66,24 @@ export function watchRun(root: string, dirty: Promise<Map<string, number | null>
       if (!written.has(path)) written.set(path, previous);
     },
 
-    // Whether the run created `path` itself through the Studio (it did not
-    // exist before the run's first write to it): the run's own new note,
-    // which it may keep editing directly until a person keeps or reverts it.
-    created(path: string) {
-      return written.has(path) && written.get(path) === null;
+    // fs writes and MCP tool writes call this once they replaced a file.
+    wrote(path: string, content: Buffer) {
+      mine.set(path, content);
+    },
+
+    // Whether `path` is still only the run's own draft: the run created it
+    // through the Studio (it was not there when the run started, nor at its
+    // first write), and nobody changed it since the run's last write, by a
+    // save or any other way. Such a note the run may keep writing directly;
+    // any other goes through proposals.
+    async created(path: string) {
+      if (!written.has(path) || written.get(path) !== null || saved.has(path)) return false;
+      const last = mine.get(path);
+      const now = await readOrNull(join(root, path));
+      if (last === undefined || now?.equals(last) !== true) return false;
+      const [start, sha] = await Promise.all([snapshot.catch(() => null), head]);
+      if (start?.has(path)) return start.get(path) === null;
+      return start === null || (await atCommit(root, sha, path)) === null;
     },
 
     // The file API calls this before a person's save (workspace.ts).

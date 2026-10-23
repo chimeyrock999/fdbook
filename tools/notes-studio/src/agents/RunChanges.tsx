@@ -20,6 +20,7 @@ function Change({ client, run, change, canDecide, onDecided }: { client: AgentsC
     setFailed(null);
     client.decide(run.id, change.path, op).then(onDecided, (reason: unknown) => { setFailed((reason as Error).message); }).finally(() => { setBusy(false); });
   };
+  const viewDiff = <button type="button" className="studio-agent-link" aria-expanded={diff !== null} onClick={toggleDiff}>{diff === null ? 'View diff' : 'Hide diff'}</button>;
   return (
     <li className="studio-agent-change">
       <span className="studio-agent-change-path" title={change.path}>
@@ -30,10 +31,14 @@ function Change({ client, run, change, canDecide, onDecided }: { client: AgentsC
         {change.decided !== null ? (
           <span className="studio-suggest-chip">{change.decided === 'kept' ? 'Kept' : 'Reverted'}</span>
         ) : change.reason !== null ? (
-          <span className="studio-agent-meta">{change.reason}</span>
+          <>
+            {/* Its earlier version is kept (a person saved it too): still readable. */}
+            {change.existed && viewDiff}
+            <span className="studio-agent-meta">{change.reason}</span>
+          </>
         ) : (
           <>
-            <button type="button" className="studio-agent-link" aria-expanded={diff !== null} onClick={toggleDiff}>{diff === null ? 'View diff' : 'Hide diff'}</button>
+            {viewDiff}
             <span className="flex-1" />
             {canDecide && (
               <>

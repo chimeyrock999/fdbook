@@ -304,6 +304,43 @@ describe('Studio MCP server', () => {
     }
   });
 
+  it('takes a run\'s edits to the note it created as proposals once someone else changed it', async () => {
+    // Saved through the file API, then changed on disk some other way (as
+    // the live editor's sync does): either way the note is no longer only
+    // the run's draft, and its later edits are proposed.
+    const saved = 'content/notes/guide/drafted.mdx';
+    const synced = 'content/notes/guide/drafted-too.mdx';
+    const go = (name: string) => join(cr.worktree ?? '', '..', `${cr.slug}-${name}-${String(Date.now())}`);
+    const [first, second] = [go('first'), go('second')];
+    const proposalsOf = async (path: string) => (json(await send(`/cr/${cr.slug}/api/proposals?path=${path}`)) as { proposals: ProposalView[] }).proposals;
+    const until = async (check: () => Promise<boolean>) => {
+      const deadline = Date.now() + 10_000;
+      while (!(await check()) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+    };
+    await hangingRun([
+      `write ${worktree(saved)} Draft.`,
+      `mcp propose_edit {"path": "${synced}", "content": "Draft.\\n"}`,
+      `wait ${first}`,
+      `write ${worktree(saved)} Second draft.`,
+      `wait ${second}`,
+      `mcp propose_edit {"path": "${synced}", "edits": [{"find": "Draft.", "replace": "Fixed."}]}`,
+    ].join('\n'), async () => {
+      await changed(synced, '');
+      const { mtimeMs } = json(await send(`/cr/${cr.slug}/api/file?path=${saved}`)) as { mtimeMs: number };
+      expect((await send(`/cr/${cr.slug}/api/file?path=${saved}`, 'PUT', { content: 'By a person.\n', baseMtime: mtimeMs })).status).toBe(200);
+      await writeFile(first, '');
+      await until(async () => (await proposalsOf(saved)).length > 0);
+      await writeFile(worktree(synced), 'Draft.\n\nBy the editor.\n');
+      await writeFile(second, '');
+      await until(async () => (await proposalsOf(synced)).length > 0);
+    });
+    await Promise.all([rm(first, { force: true }), rm(second, { force: true })]);
+    expect(await readFile(worktree(saved), 'utf8')).toBe('By a person.\n');
+    expect((await proposalsOf(saved)).flatMap((proposal) => proposal.hunks.map((hunk) => hunk.added)).join('')).toContain('Second draft.');
+    expect(await readFile(worktree(synced), 'utf8')).toBe('Draft.\n\nBy the editor.\n');
+    expect((await proposalsOf(synced)).flatMap((proposal) => proposal.hunks.map((hunk) => hunk.added)).join('')).toContain('Fixed.');
+  }, 30_000);
+
   it('lists what a run changed with its own tools, to keep or revert', async () => {
     const meta = 'content/notes/guide/meta.yaml';
     const metaBefore = await readFile(worktree(meta), 'utf8');
