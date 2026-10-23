@@ -305,6 +305,27 @@ Studio is read only, as main is, without New change request, Commit,
 Preview, Publish or Discard, but with a change request's **Open preview**; a writer sees Discard and Clean up off, with
 the reason, on a change request that is on origin.
 
+The page's event streams (`/api/events`, `/api/proposals/events`,
+`/api/agents/events`) and the notes sync are under one connection watch
+(`src/api/connection.ts`, #150). A dropped stream opens again after a
+second; one that fails 3 times in a row without staying open for 10
+seconds, or is not open again 10 seconds after it dropped, means the server
+is gone. A stream the server refuses is asked again with a plain request to
+learn why: `401` (or `403`) is the sign-in above and the stream waits for
+it (it opens again once signed in, and meanwhile tries from 5 seconds,
+doubling up to a minute), `409` or `404` means the change request is closing or closed, a `5xx`
+counts as a failure (gh may be down only a moment), and any other answer
+is shown as the server gave it; no answer within 5 seconds is a server
+that is gone. The notes sync counts as gone once
+it was offline for 10 seconds and `GET /api/session` does not answer
+either. Then every stream and the sync are closed for good, so the page
+sends no more requests, and **Server disconnected** covers the page with
+the reason and **Reload**. It cannot be dismissed and the page behind it
+takes no edits; unsaved note text is kept as above, so the reload offers it
+back. A page leaving for another one (another change request, the list
+after a discard) shows nothing; one still there 10 seconds later, or back
+from the browser's back-forward cache, is watched again.
+
 ## Change requests
 
 The Studio never writes to main. It opens on main read only: the header's
@@ -1019,7 +1040,8 @@ are listed greyed, with how to install them (`GET /api/agents`).
 - **Transcripts.** Every event goes to `GET /api/agents/events`
   (server-sent events, numbered per chat; on connecting it sends a
   snapshot of each chat whose agent is answering, the page reads the
-  chats it holds again, and a refused stream opens again after 5 seconds)
+  chats it holds again; the stream is under the connection watch, see
+  Sign-in)
   and to
   `<STUDIO_HOME>/agents/<slug>/<chat>.jsonl`, turn by turn, with the
   summary (agent, model, role, status, turns, session, cost, files

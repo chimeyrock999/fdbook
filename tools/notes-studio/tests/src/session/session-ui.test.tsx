@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeRequest, CrList } from '../../../src/api/crs';
 import { createHistoryClient } from '../../../src/api/history';
-import { checkSeat, confirmSignedIn, onSignedOut, setCsrf, studioFetch, type SessionState } from '../../../src/api/session';
+import { checkSeat, confirmSignedIn, onSessionBack, onSignedOut, setCsrf, studioFetch, type SessionState } from '../../../src/api/session';
 import { CrListPage } from '../../../src/cr/CrListPage';
 import { CrPicker } from '../../../src/cr/CrMenus';
 import { CrNotice } from '../../../src/cr/CrNotice';
@@ -314,6 +314,29 @@ describe('the session ending under the Studio', () => {
     expect(draft.value).toBe('not saved');
     expect(draft.closest('[inert]')).toBeNull();
     expect(mounts).toBe(1);
+  });
+
+  it('tells what waits for the session (the event streams) once signed in again, and not before', async () => {
+    let state = signedIn('writer');
+    stubFetch({
+      '/api/session': () => ({ body: state }),
+      '/api/x': () => ({ status: 401, body: { error: 'Sign in to use the Studio.' } }),
+      '/api/session/device': () => ({ body: { flow: 'f1', userCode: 'WDJB-MJHT', verificationUri: 'https://github.com/login/device', expiresIn: 900, interval: 0 } }),
+      '/api/session/device/poll': () => ({ body: { state: 'done', session: signedIn('writer', { csrf: 'token-2' }) } }),
+    });
+    const back = vi.fn();
+    const stop = onSessionBack(back);
+    render(<SessionGate><Studio /></SessionGate>);
+    await screen.findByLabelText('Draft of alice');
+    expect(back).not.toHaveBeenCalled();
+    state = signedOut(['device']);
+    await studioFetch('/api/x');
+    await screen.findByRole('dialog', { name: 'Your session ended' });
+    expect(back).not.toHaveBeenCalled();
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign in with a code' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+    expect(back).toHaveBeenCalledTimes(1);
+    stop();
   });
 
   // Signs in again through the dialog as `next`, after a 401 ended the session.
