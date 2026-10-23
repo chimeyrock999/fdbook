@@ -174,7 +174,7 @@ describe('agent panel', () => {
     expect(onOpenNote).toHaveBeenCalledWith('content/notes/guide.mdx');
     expect(screen.getByText('2 suggestions')).toBeTruthy();
 
-    const section = within(await screen.findByRole('region', { name: 'Changed outside the Studio' }));
+    const section = within(await screen.findByRole('region', { name: 'Files this run changed' }));
     expect(await section.findByText(/revert it by hand/)).toBeTruthy();
     const meta = within(section.getByText('content/notes/meta.yaml').closest('li') as HTMLElement);
     await user.click(meta.getByRole('button', { name: 'View diff' }));

@@ -904,7 +904,7 @@ are listed greyed, with how to install them (`GET /api/agents`).
 - **Keep or revert.** When a run starts, the Studio keeps what each file
   that differs from HEAD holds (the others are as HEAD has them at the
   start). Once the run ended, each file it changed can be kept or put back
-  as it was when the run started (**Changed outside the Studio** in the run,
+  as it was when the run started (**Files this run changed** in the run,
   with its diff from before the run; `/api/agents/runs/<id>/changes`, kept in
   `<run>.changes.json` next to the transcript). Revert writes nothing over
   a file changed again since the run ended, and does not touch files

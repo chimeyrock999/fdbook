@@ -67,8 +67,8 @@ export function RunChanges({ client, run, canDecide }: { client: AgentsClient; r
   }, [client, run.id, ready]);
   if (!ready || (changes !== null && changes.length === 0)) return null;
   return (
-    <section className="studio-agent-changes" aria-label="Changed outside the Studio">
-      <h4>Changed outside the Studio</h4>
+    <section className="studio-agent-changes" aria-label="Files this run changed">
+      <h4>Files this run changed</h4>
       <p className="studio-agent-meta">Keep each change, or put the file back as it was when the run started.</p>
       {failed !== null && <p role="alert" className="studio-tree-error">{failed}</p>}
       {changes === null && failed === null && <p className="studio-agent-meta">Loading…</p>}
