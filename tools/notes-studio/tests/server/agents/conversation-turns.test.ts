@@ -225,6 +225,9 @@ describe('agent conversations over many turns', () => {
     expect(removed.status).toBe('fulfilled');
     expect(messaged.status).toBe('rejected');
     expect(messaged.status === 'rejected' ? (messaged.reason as Error).message : '').toMatch(/no such conversation/);
+    // Nothing of it stays in memory either.
+    await expect(again.read(conversation.id)).rejects.toThrow(/no such conversation/);
+    await expect(again.message(conversation.id, 'recall', null)).rejects.toThrow(/no such conversation/);
     await again.close();
     expect(existsSync(join(home, 'agents', 'turns', `${conversation.id}.jsonl`))).toBe(false);
     expect(existsSync(join(home, 'agents', 'turns', `${conversation.id}.json`))).toBe(false);

@@ -312,6 +312,8 @@ export function createAgentConversations(
     const { events, summary } = await stored(id);
     const known = live.get(id);
     if (known !== undefined) return known;
+    // Deleted while it was read: it is not held again.
+    if (removing.has(id)) throw new HttpError(404, `no such conversation: ${id}`);
     const held: ConversationEvent[] = [];
     for (const event of events) hold(held, event);
     const conversation: Live = {
@@ -352,9 +354,13 @@ export function createAgentConversations(
       if (closed) throw new HttpError(409, 'this change request is closing');
       const text = promptOf(prompt);
       const conversation = live.get(id) ?? (await revive(id));
-      // It may have begun closing, or the conversation been deleted, while it was read from disk.
-      if (closing()) throw new HttpError(409, 'this change request is closing');
-      if (conversation.deleted || removing.has(id)) throw new HttpError(404, `no such conversation: ${id}`);
+      // It may have begun closing, or the conversation been deleted, while
+      // it was read from disk: then it is not left held in memory.
+      if (closing() || conversation.deleted || removing.has(id)) {
+        release(conversation);
+        if (closing()) throw new HttpError(409, 'this change request is closing');
+        throw new HttpError(404, `no such conversation: ${id}`);
+      }
       if (conversation.turn !== null) throw new HttpError(409, 'the agent is still answering: wait for it, or cancel the turn');
       if (conversation.agent === null) {
         try {
