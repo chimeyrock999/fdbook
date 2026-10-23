@@ -41,10 +41,11 @@ async function parseWrite(request: IncomingMessage, kind: PathKind): Promise<Wri
 // at `root`. A save names the mtime it was edited from (`null` for a new
 // file); if the disk moved on since, it answers 409 with what the disk holds
 // and writes nothing.
-export function createFilesApi(root: string, pathLock = createKeyedLock()): Handler {
+// `beforeSave` is told each path just before a save replaces it.
+export function createFilesApi(root: string, pathLock = createKeyedLock(), beforeSave?: (path: string) => void): Handler {
   // Saves to one path run one at a time (studio-files.ts), so two saves from
   // the same base cannot both pass the mtime check.
-  const files = createStudioFiles(root, { pathLock });
+  const files = createStudioFiles(root, { pathLock, beforeSave });
 
   async function read(response: ServerResponse, path: string, kind: PathKind, absolute: string) {
     const info = await statOrNull(absolute);

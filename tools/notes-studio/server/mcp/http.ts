@@ -139,7 +139,7 @@ export function createMcpApi({ tools, grants, auth, crs, workspace }: McpHostOpt
 
   async function call(who: Who, name: string, args: Record<string, unknown>, signal: AbortSignal): Promise<CallToolResult> {
     try {
-      if (name in crTools) {
+      if (Object.hasOwn(crTools, name)) {
         const tool = crTools[name as keyof typeof crTools];
         if (who.caller.kind === 'run') throw new ToolError(`${name} is for a person's agent: an agent the Studio started works in its own change request`);
         if (tool.write && !atLeast(who.caller.role, 'writer')) throw new ToolError(`${name} needs write access`);

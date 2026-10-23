@@ -99,7 +99,8 @@ export function createWorkspace(
   const handlers: Handler[] = [
     ...(readOnly ? [refuseWrites] : []),
     fileEvents.handle,
-    createFilesApi(root, pathLock),
+    // A person's save is never reverted by a run going on (agents/watch.ts).
+    createFilesApi(root, pathLock, runs === null ? undefined : (path) => { runs.savedByPerson(path); }),
     createLintApi(root),
     createTreeApi(root, notesLock),
     createAssetsApi(root, notesLock),

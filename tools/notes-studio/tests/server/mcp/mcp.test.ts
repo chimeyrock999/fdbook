@@ -1,5 +1,5 @@
-import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -226,6 +226,83 @@ describe('Studio MCP server', () => {
     }
     expect(json(await send(`/cr/${cr.slug}/api/agents/runs/${run.id}/changes/before?path=${page}`))).toEqual({ path: page, content: before });
   }, 20_000);
+
+  // A note committed as `content`, so the run finds it clean.
+  async function committed(path: string, content: string) {
+    await writeFile(worktree(path), content);
+    await git(cr.worktree ?? '', 'add', '--', path);
+    await git(cr.worktree ?? '', 'commit', '--quiet', '-m', `add ${path}`);
+  }
+
+  // Starts a run that ends with `hang`, does `during` while it waits, then
+  // cancels it and waits for its end.
+  async function hangingRun(prompt: string, during: () => Promise<void>) {
+    const { run } = json(await send(`/cr/${cr.slug}/api/agents/runs`, 'POST', { agent: 'claude', role: 'author', prompt: `${prompt}\nhang` })) as { run: RunSummary };
+    await during();
+    await send(`/cr/${cr.slug}/api/agents/runs/${run.id}/cancel`, 'POST', {});
+    for (;;) {
+      const read = json(await send(`/cr/${cr.slug}/api/agents/runs/${run.id}`)) as { run: RunSummary };
+      if (read.run.status !== 'running') return read.run;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+
+  const changed = async (path: string, from: string) => {
+    const deadline = Date.now() + 10_000;
+    while ((await readFile(worktree(path), 'utf8').catch(() => from)) === from &&Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+  };
+
+  it('lists a file the agent changed with its own tool and committed during the run', async () => {
+    const page = 'content/notes/guide/committed.mdx';
+    await committed(page, 'As found.\n');
+    const run = await hangingRun(`sneak ${worktree(page)} by the agent`, async () => {
+      await changed(page, 'As found.\n');
+      await git(cr.worktree ?? '', 'commit', '--quiet', '-am', 'the agent commits');
+    });
+    expect(run.writes).toContain(page);
+    const base = `/cr/${cr.slug}/api/agents/runs/${run.id}/changes`;
+    expect(json(await send(`${base}/before?path=${page}`))).toEqual({ path: page, content: 'As found.\n' });
+    expect((await send(base, 'POST', { path: page, op: 'revert' })).status).toBe(200);
+    expect(await readFile(worktree(page), 'utf8')).toBe('As found.\n');
+  }, 20_000);
+
+  it('keeps the file as the run found it, not as the agent left it before a later write', async () => {
+    // An asset: a write to a note that exists would be a proposal.
+    const page = 'public/notes/guide/twice.svg';
+    await mkdir(dirname(worktree(page)), { recursive: true });
+    await committed(page, 'As found.\n');
+    const run = await runAgent(`sneak ${worktree(page)} first\nwrite ${worktree(page)} second`);
+    expect(await readFile(worktree(page), 'utf8')).toBe('second');
+    const base = `/cr/${cr.slug}/api/agents/runs/${run.run.id}/changes`;
+    expect(json(await send(`${base}/before?path=${page}`))).toEqual({ path: page, content: 'As found.\n' });
+    expect((await send(base, 'POST', { path: page, op: 'revert' })).status).toBe(200);
+    expect(await readFile(worktree(page), 'utf8')).toBe('As found.\n');
+  }, 20_000);
+
+  it('never reverts a person\'s save made during the run', async () => {
+    const page = 'content/notes/guide/saved.mdx';
+    await committed(page, 'As found.\n');
+    // The agent's first edit shows the run has started.
+    const marker = 'content/notes/guide/marker.mdx';
+    const run = await hangingRun(`sneak ${worktree(marker)} started`, async () => {
+      await changed(marker, '');
+      const { mtimeMs } = json(await send(`/cr/${cr.slug}/api/file?path=${page}`)) as { mtimeMs: number };
+      expect((await send(`/cr/${cr.slug}/api/file?path=${page}`, 'PUT', { content: 'By a person.\n', baseMtime: mtimeMs })).status).toBe(200);
+    });
+    const base = `/cr/${cr.slug}/api/agents/runs/${run.id}/changes`;
+    const { changes } = json(await send(base)) as { changes: RunChange[] };
+    expect(changes).toContainEqual({ path: page, existed: true, decided: null, reason: 'also saved by a person during the run: revert it by hand' });
+    expect(json(await send(`${base}/before?path=${page}`))).toEqual({ path: page, content: 'As found.\n' });
+    expect((await send(base, 'POST', { path: page, op: 'revert' })).status).toBe(409);
+    expect(await readFile(worktree(page), 'utf8')).toBe('By a person.\n');
+    await rm(worktree(marker));
+  }, 20_000);
+
+  it('answers no such tool for a name only inherited', async () => {
+    for (const name of ['constructor', 'toString', '__proto__']) {
+      expect(await call(client, name, {})).toMatchObject({ error: true, text: expect.stringContaining(`no such tool: ${name}`) as unknown });
+    }
+  });
 
   it('lists what a run changed with its own tools, to keep or revert', async () => {
     const meta = 'content/notes/guide/meta.yaml';

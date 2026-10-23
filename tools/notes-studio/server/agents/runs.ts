@@ -138,8 +138,9 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
   const finish = async (run: Live, status: RunSummary['status'], error: string | null, usage: RunSummary['usage'], before: Promise<Map<string, number | null>> | null) => {
     for (const id of [...run.pending.keys()]) settle(run, id, null, null);
     if (before !== null) {
-      const [start, end] = await Promise.all([before.catch(() => null), worktreeState(root).catch(() => null)]);
-      if (start !== null && end !== null) touched(run, changedSince(start, end));
+      // Committed during the run (by the agent's shell, say): clean before and after.
+      const [start, end, committed] = await Promise.all([before.catch(() => null), worktreeState(root).catch(() => null), run.watch.committed()]);
+      touched(run, [...new Set([...(start !== null && end !== null ? changedSince(start, end) : []), ...committed])].sort());
     }
     // What the run changed, with what each file held before, for Keep/Revert.
     if (run.summary.writes.length > 0) {
@@ -316,6 +317,12 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
       if (run === undefined) return;
       run.watch.beforeWrite(path, previous);
       if (!run.summary.writes.includes(path)) changed(run, { writes: [...run.summary.writes, path] });
+    },
+
+    // A person's save through the file API: every run going on lists the
+    // file as theirs to revert by hand, never to revert over their save.
+    savedByPerson(path: string) {
+      for (const run of live.values()) run.watch.savedByPerson(path);
     },
 
     // The files an ended run changed, for Keep/Revert.
