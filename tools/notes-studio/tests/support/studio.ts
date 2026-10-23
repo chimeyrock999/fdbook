@@ -6,12 +6,17 @@ import { repoRoot } from '../../server/config';
 import { startStudioServer } from '../../server/studio-server';
 import { makeGitWorktree } from './git';
 
-// A throwaway worktree: a copy of the real content/notes plus a few assets.
+// A throwaway worktree: a copy of the real content/notes plus a few assets
+// and one real diagram.
+export const DEMO_DIAGRAM = 'diagrams/demo/flow.diagram.json';
+
 export async function makeWorktree() {
   const root = await mkdtemp(join(tmpdir(), 'notes-studio-'));
   await cp(join(repoRoot, 'content/notes'), join(root, 'content/notes'), { recursive: true });
   await mkdir(join(root, 'public/notes/demo'), { recursive: true });
   await writeFile(join(root, 'public/notes/demo/pixel.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  await mkdir(join(root, 'diagrams/demo'), { recursive: true });
+  await cp(join(repoRoot, 'diagrams/data-platform/processing/apache-spark/spark-logic-to-execution.diagram.json'), join(root, DEMO_DIAGRAM));
   await writeFile(join(root, 'package.json'), '{}\n');
   return { root, remove: () => rm(root, { recursive: true, force: true }) };
 }

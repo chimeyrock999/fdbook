@@ -13,6 +13,7 @@ import { openChangeRequests, type ChangeRequestOptions, type ChangeRequests } fr
 import { apiNotFound, HttpError, pathnameOf } from './http.ts';
 import { createRunGrants } from './mcp/grants.ts';
 import { createMcpApi } from './mcp/http.ts';
+import { diagramTools } from './mcp/diagram-tools.ts';
 import { createNoteTools } from './mcp/note-tools.ts';
 import type { StudioTool } from './mcp/tool.ts';
 import { createIconsApi } from './icons/api.ts';
@@ -129,7 +130,7 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
       commentsOf: async (slug) => (await reviewOf(slug)).comments,
       modelOf: (slug, runId) => workspaces.peek(slug)?.runs?.modelOf(runId) ?? null,
       createdBy: (slug, runId, path) => workspaces.peek(slug)?.runs?.created(runId, path) ?? Promise.resolve(false),
-    }).concat(tools),
+    }).concat(diagramTools, tools),
     grants,
     auth,
     crs,

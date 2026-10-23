@@ -186,7 +186,7 @@ export async function planRename(root: string, tree: TreeFolder, request: Rename
   const writes: Write[] = [];
   const changes: TreeChange[] = [{ type: 'move', path, to }];
   const all = await listEditableFiles(root);
-  const files = all.filter((file) => file.kind !== 'asset');
+  const files = all.filter((file) => file.kind === 'note' || file.kind === 'meta');
   const known = knownTargets(files.filter((file) => file.kind === 'note').map((file) => file.path.slice(NOTES_DIR.length + 1)));
   // A file that does not hold the old name cannot point at it: skip the parse.
   const oldName = slugOf(path);

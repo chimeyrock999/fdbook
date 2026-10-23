@@ -5,6 +5,7 @@ import { suggestMessage } from '../../../src/changes/message';
 const note = (path: string, status: ChangedFile['status'], from?: string): ChangedFile =>
   ({ path: `content/notes/${path}`, status, ...(from === undefined ? {} : { from: `content/notes/${from}` }) });
 const asset = (path: string, status: ChangedFile['status'] = 'A'): ChangedFile => ({ path: `public/notes/${path}`, status });
+const diagram = (path: string, status: ChangedFile['status'] = 'M'): ChangedFile => ({ path: `diagrams/${path}.diagram.json`, status });
 
 describe('suggestMessage', () => {
   it.each([
@@ -21,6 +22,10 @@ describe('suggestMessage', () => {
     ['only meta.yaml', [note('streaming/meta.yaml', 'M'), note('meta.yaml', 'M')], 'docs(notes): reorder streaming, notes'],
     ['only assets', [asset('streaming/a.png'), asset('streaming/b.svg', 'M')], 'docs(notes): update assets of streaming'],
     ['a page with its images', [note('streaming/a.mdx', 'M'), asset('streaming/a.png')], 'docs(notes): update a'],
+    ['one diagram', [diagram('spark/flow')], 'docs(notes): update diagram flow'],
+    ['a new diagram and an asset', [diagram('spark/flow', 'A'), asset('spark/a.png')], 'docs(notes): add diagram flow'],
+    ['diagrams', [diagram('spark/flow'), diagram('kafka/topics', 'A')], 'docs(notes): update 2 diagrams'],
+    ['a page with its diagram', [note('spark/a.mdx', 'M'), diagram('spark/flow', 'A')], 'docs(notes): update a'],
     ['nothing', [], ''],
   ])('%s', (_, files, message) => {
     expect(suggestMessage(files)).toBe(message);

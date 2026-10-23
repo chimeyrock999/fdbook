@@ -15,6 +15,7 @@ import { createChangesClient, type ChangedFile } from './api/changes';
 import { assetChanged } from './api/asset-versions';
 import { createCrClient, type ChangeRequest, type Discard } from './api/crs';
 import { createFilesClient } from './api/files';
+import { classifyPath } from '../server/security/asset-types';
 import { createLintClient } from './api/lint';
 import { createPreviewClient, type Preview } from './api/preview';
 import { createTreeClient } from './api/tree';
@@ -184,9 +185,13 @@ export function App() {
     return () => { query.removeEventListener('change', onChange); };
   }, []);
 
-  // An asset changed on disk: what shows it loads it again.
+  // An asset or a diagram changed on disk: what shows it loads it again. A
+  // deleted diagram gets a version of its own too, so its cards read it
+  // again and say it is gone.
   useEffect(() => files.subscribeFileEvents((event) => {
-    if (event.path.startsWith(ASSETS_PREFIX) && event.type !== 'unlink' && event.mtimeMs !== null) assetChanged(event.path, event.mtimeMs);
+    const diagram = classifyPath(event.path) === 'diagram';
+    if (diagram && event.type === 'unlink') assetChanged(event.path, -Date.now());
+    else if ((diagram || event.path.startsWith(ASSETS_PREFIX)) && event.type !== 'unlink' && event.mtimeMs !== null) assetChanged(event.path, event.mtimeMs);
   }), [files]);
 
   // Back and forward move between opened notes and assets.

@@ -81,6 +81,13 @@ describe('DiffPage', () => {
     expect(screen.queryByRole('button', { name: /Open in editor/ })).toBeNull();
   });
 
+  it('shows a diagram as its source only, with no page to open', async () => {
+    setup({ path: 'diagrams/spark/flow.diagram.json', base: BASE, status: 'M', before: text('{ "title": "Old" }\n'), after: text('{ "title": "New" }\n') });
+    expect(await screen.findByTestId('source-diff')).toBeTruthy();
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Open in editor/ })).toBeNull();
+  });
+
   it('previews an image on main and now, and a deleted one with nothing after it', async () => {
     const image = 'public/notes/spark/aqe/flow.png';
     const first = setup({ path: image, base: BASE, status: 'M', before: { kind: 'binary', size: 2048 }, after: { kind: 'binary', size: 4096 } });
