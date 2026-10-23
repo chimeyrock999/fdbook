@@ -106,7 +106,7 @@ describe('the lifecycle editor', () => {
     expect(container.querySelectorAll('.studio-dg-overlay [data-state-port]')).toHaveLength(6);
   });
 
-  it('lists the exits drawn with a transition, and selects one from there', async () => {
+  it('lists the exits drawn with a transition (a bus here), and selects one from there', async () => {
     const { container } = await open();
     click(one(container, '[data-hit-edge="launch-lost"]'));
     await userEvent.click(screen.getByRole('button', { name: 'placed → failed' }));
@@ -123,6 +123,26 @@ describe('the lifecycle editor', () => {
     const hits = [...container.querySelectorAll<SVGElement>('.studio-dg-overlay [data-hit-edge]')].map((hit) => hit.dataset.hitEdge);
     expect(hits).toContain('building-aborted');
     expect(hits).not.toContain('verifying-aborted');
+  });
+
+  it('lists only the exits the layout drew as one, from its frame, not any with the same label', async () => {
+    // a and b leave for f as one exit from their frame; x → f says the same
+    // but is drawn on its own.
+    const doc = {
+      version: 1, type: 'lifecycle', title: 'T', kinds: [{ id: 'k', label: 'K', tone: 'blue' }], mainPath: ['a', 'b', 'c'],
+      nodes: ['a', 'b', 'c', 'f', 'x'].map((id) => ({ id, kind: 'k', label: id.toUpperCase() })),
+      edges: [
+        { id: 'ab', from: 'a', to: 'b' }, { id: 'bc', from: 'b', to: 'c' },
+        { id: 'af', from: 'a', to: 'f', label: 'err' }, { id: 'bf', from: 'b', to: 'f', label: 'err' },
+        { id: 'cx', from: 'c', to: 'x' }, { id: 'xf', from: 'x', to: 'f', label: 'err' },
+      ],
+    };
+    const { container } = await open(false, JSON.stringify(doc));
+    click(one(container, '[data-hit-edge="xf"]'));
+    expect(screen.queryByText('Drawn as one exit with:')).toBeNull();
+    click(one(container, '[data-hit-edge="af"]'));
+    expect(screen.getByRole('button', { name: 'b → f' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'x → f' })).toBeNull();
   });
 
   it('tells a state where it sits: initial, a main-path step, final', async () => {

@@ -265,7 +265,7 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
             </div>
           )}
           </div>
-          {doc && <DiagramPanel doc={doc} selection={selection} onSelect={setSelection} onChange={apply} readOnly={readOnly} />}
+          {doc && <DiagramPanel doc={doc} scene={drawn.scene} selection={selection} onSelect={setSelection} onChange={apply} readOnly={readOnly} />}
         </div>
       )}
     </main>

@@ -71,6 +71,8 @@ export interface LifecycleLayer {
   initial: Point | null;
   finals: Set<string>;
   labels: Map<string, { x: number; y: number; width: number; height: number; cx: number }>;
+  // The transitions drawn as one exit with each (a frame's or a bus's), by id.
+  shares: Map<string, string[]>;
   unplacedLabels: string[];
   crowded: [string, string][];
   // Past this width the smallest text reads too small at desktop width.
@@ -347,6 +349,7 @@ export function buildLifecycleScene(diagram: Diagram): Scene {
       initial: first ? [first.x, first.cy] : null,
       finals,
       labels: new Map([...geometry.placedLabels].map(([edge, rect]) => [edge.id, rect])),
+      shares: new Map([...model.bracketOf].map(([edge, bracket]) => [edge.id, bracket.transitions.filter((other) => other !== edge && other.to === edge.to).map((other) => other.id)])),
       unplacedLabels: geometry.unplacedLabels.map((edge) => edge.id),
       crowded: [...model.crowded].map((key) => key.split('\u0000') as [string, string]),
       readableWidth,

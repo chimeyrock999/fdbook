@@ -1,5 +1,6 @@
 import { EDGE_VARIANTS, ICONS, SIDES, TONES, type Side } from '@site/lib/diagram/schema';
 import { Plus, Trash2 } from 'lucide-react';
+import type { Scene } from '@site/lib/diagram/scene';
 import type { Selection } from './DiagramCanvas';
 import { Check, Choice, Section, TextField } from './panel-fields';
 import { MainPathFields, StateMarksFields } from './LifecyclePanel';
@@ -133,7 +134,7 @@ function NodeFields({ doc, node, onChange, readOnly }: { doc: Input; node: NodeI
   );
 }
 
-function EdgeFields({ doc, id, onChange, onSelect, readOnly }: { doc: Input; id: string; onChange: Change; onSelect: (selection: Selection) => void; readOnly: boolean }) {
+function EdgeFields({ doc, id, scene, onChange, onSelect, readOnly }: { doc: Input; id: string; scene: Scene | null; onChange: Change; onSelect: (selection: Selection) => void; readOnly: boolean }) {
   const edge = (doc.edges ?? []).find((each) => each.id === id);
   if (!edge) return null;
   const layout = doc.layout?.edges?.[id];
@@ -141,10 +142,9 @@ function EdgeFields({ doc, id, onChange, onSelect, readOnly }: { doc: Input; id:
   const side = (key: 'fromSide' | 'toSide') => (value: Side | undefined) => { onChange(setEdgeSides(doc, id, { ...layout, [key]: value })); };
   if (doc.type === 'lifecycle') {
     const states = doc.nodes.map((node) => ({ value: node.id, label: node.label }));
-    // Exits to the same state with the same label, detail and variant are
-    // drawn once (from a frame or a bus): the others are picked from here.
-    const same = (other: typeof edge) => other.to === edge.to && other.label === edge.label && other.detail === edge.detail && (other.variant ?? 'default') === (edge.variant ?? 'default');
-    const shared = (doc.edges ?? []).filter((other) => other.id !== edge.id && same(other));
+    // The exits the layout drew as one with this one (a frame's or a bus's):
+    // the others are picked from here.
+    const shared = (scene?.lifecycle?.shares.get(edge.id) ?? []).flatMap((other) => (doc.edges ?? []).filter((each) => each.id === other));
     return (
       <Section title={`Transition ${edge.from} → ${edge.to}`}>
         <TextField label="Label" value={edge.label ?? ''} readOnly={readOnly} hint="The event, and a guard in [brackets]." onCommit={(label) => { set({ label: label.trim() || undefined }); }} />
@@ -155,7 +155,7 @@ function EdgeFields({ doc, id, onChange, onSelect, readOnly }: { doc: Input; id:
         {edge.bidirectional && <Check label="Arrow at both ends (a lifecycle draws one)" checked readOnly={readOnly} onChange={() => { set({ bidirectional: undefined }); }} />}
         {shared.length > 0 && (
           <div className="studio-dg-shared">
-            <span className="studio-dg-muted">May share its arrow with:</span>
+            <span className="studio-dg-muted">Drawn as one exit with:</span>
             {shared.map((other) => (
               <button key={other.id} type="button" className="studio-button" onClick={() => { onSelect({ type: 'edge', id: other.id }); }}>{other.from} → {other.to}</button>
             ))}
@@ -222,8 +222,10 @@ function CardFields({ doc, index, onChange, readOnly }: { doc: Input; index: num
 
 // The properties of what is selected, or of the diagram (its title, the
 // legend and the cards, which the drawing does not show) when nothing is.
-export function DiagramPanel({ doc, selection, onSelect, onChange, readOnly }: {
+// `scene` is the drawing, for what only the layout knows (a lifecycle's shared exits).
+export function DiagramPanel({ doc, scene = null, selection, onSelect, onChange, readOnly }: {
   doc: Input;
+  scene?: Scene | null;
   selection: Selection;
   onSelect: (selection: Selection) => void;
   onChange: Change;
@@ -242,7 +244,7 @@ export function DiagramPanel({ doc, selection, onSelect, onChange, readOnly }: {
       );
     }
   }
-  if (selection?.type === 'edge') return <div className="studio-dg-panel"><EdgeFields key={selection.id} doc={doc} id={selection.id} onChange={onChange} onSelect={onSelect} readOnly={readOnly} /></div>;
+  if (selection?.type === 'edge') return <div className="studio-dg-panel"><EdgeFields key={selection.id} doc={doc} id={selection.id} scene={scene} onChange={onChange} onSelect={onSelect} readOnly={readOnly} /></div>;
   if (selection?.type === 'group') return <div className="studio-dg-panel"><GroupFields key={selection.id} doc={doc} id={selection.id} onChange={onChange} readOnly={readOnly} /></div>;
   if (selection?.type === 'card') return <div className="studio-dg-panel"><CardFields key={selection.index} doc={doc} index={selection.index} onChange={onChange} readOnly={readOnly} /></div>;
   return (
