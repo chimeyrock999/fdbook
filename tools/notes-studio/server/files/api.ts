@@ -3,7 +3,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '../http.ts';
 import { MAX_ASSET_BYTES } from '../security/asset-types.ts';
 import { ASSET_TYPES, extensionOf, resolveWorktreePath, type PathKind } from '../security/paths.ts';
-import { createKeyedLock, listEditableFiles, statOrNull, writeAtomic } from './store.ts';
+import { createKeyedLock, listEditableFiles, statOrNull } from './store.ts';
+import { createStudioFiles, FileConflictError } from './studio-files.ts';
 
 const MAX_TEXT_BYTES = 5 * 1024 * 1024;
 
@@ -40,10 +41,11 @@ async function parseWrite(request: IncomingMessage, kind: PathKind): Promise<Wri
 // at `root`. A save names the mtime it was edited from (`null` for a new
 // file); if the disk moved on since, it answers 409 with what the disk holds
 // and writes nothing.
-export function createFilesApi(root: string): Handler {
-  // Saves to one path run one at a time, so two saves from the same base
-  // cannot both pass the mtime check.
-  const lock = createKeyedLock();
+// `beforeSave` is told each path just before a save replaces it.
+export function createFilesApi(root: string, pathLock = createKeyedLock(), beforeSave?: (path: string) => void): Handler {
+  // Saves to one path run one at a time (studio-files.ts), so two saves from
+  // the same base cannot both pass the mtime check.
+  const files = createStudioFiles(root, { pathLock, beforeSave });
 
   async function read(response: ServerResponse, path: string, kind: PathKind, absolute: string) {
     const info = await statOrNull(absolute);
@@ -63,19 +65,14 @@ export function createFilesApi(root: string): Handler {
     response.end(data);
   }
 
-  async function write(request: IncomingMessage, response: ServerResponse, path: string, kind: PathKind, absolute: string) {
+  async function write(request: IncomingMessage, response: ServerResponse, path: string, kind: PathKind) {
     const { data, baseMtime } = await parseWrite(request, kind);
-    await lock(absolute, async () => {
-      const info = await statOrNull(absolute);
-      const diskMtime = info?.mtimeMs ?? null;
-      if (diskMtime !== baseMtime) {
-        const content = info && kind !== 'asset' ? await readFile(absolute, 'utf8') : null;
-        sendJson(response, 409, { error: 'the file changed on disk', path, content, mtimeMs: diskMtime });
-        return;
-      }
-      const mtimeMs = await writeAtomic(absolute, data, info?.mode);
-      sendJson(response, 200, { path, mtimeMs });
-    });
+    try {
+      sendJson(response, 200, { path, ...(await files.write(path, data, { baseMtime })) });
+    } catch (error) {
+      if (!(error instanceof FileConflictError)) throw error;
+      sendJson(response, 409, { error: 'the file changed on disk', path, content: error.content, mtimeMs: error.mtimeMs });
+    }
   }
 
   async function route(request: IncomingMessage, response: ServerResponse, url: URL) {
@@ -89,7 +86,7 @@ export function createFilesApi(root: string): Handler {
     const resolved = resolveWorktreePath(root, path);
     if (!resolved) throw new HttpError(403, `not an editable path: ${path}`);
     if (request.method === 'GET') return read(response, path, resolved.kind, resolved.absolute);
-    if (request.method === 'PUT') return write(request, response, path, resolved.kind, resolved.absolute);
+    if (request.method === 'PUT') return write(request, response, path, resolved.kind);
     response.setHeader('Allow', 'GET, PUT');
     throw new HttpError(405, 'method not allowed');
   }

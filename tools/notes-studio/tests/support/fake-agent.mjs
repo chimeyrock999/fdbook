@@ -11,10 +11,17 @@
 //   crash               prints to stderr and exits
 //   env                 says which of the Studio's variables it can see
 //   mode                says the session's mode (it starts in acceptEdits)
-// FAKE_AGENT=auth makes session/new ask for a sign-in.
+//   mcp <tool> <json>   calls a tool of the MCP server it was given and says
+//                       `mcp:<text>`, or `mcp-error:<text>`
+//   mcp-servers         says how it was given the MCP servers (JSON)
+// FAKE_AGENT=auth makes session/new ask for a sign-in; FAKE_MCP=http says
+// it can reach MCP servers over HTTP (else it gets them over stdio).
 import { writeFileSync } from 'node:fs';
 import { Readable, Writable } from 'node:stream';
 import { AgentSideConnection, ndJsonStream, PROTOCOL_VERSION, RequestError } from '@agentclientprotocol/sdk';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 const sessions = new Map();
 let connection;
@@ -24,12 +31,13 @@ const say = (sessionId, text) =>
 
 const agent = {
   async initialize() {
-    return { protocolVersion: PROTOCOL_VERSION, agentCapabilities: {}, agentInfo: { name: 'fake-agent', version: '1.0.0' } };
+    const agentCapabilities = process.env.FAKE_MCP === 'http' ? { mcpCapabilities: { http: true } } : {};
+    return { protocolVersion: PROTOCOL_VERSION, agentCapabilities, agentInfo: { name: 'fake-agent', version: '1.0.0' } };
   },
-  async newSession({ cwd }) {
+  async newSession({ cwd, mcpServers }) {
     if (process.env.FAKE_AGENT === 'auth') throw RequestError.authRequired();
     const sessionId = `s${String(sessions.size + 1)}`;
-    sessions.set(sessionId, { cwd, cancelled: false, cancel: null, mode: 'acceptEdits' });
+    sessions.set(sessionId, { cwd, cancelled: false, cancel: null, mode: 'acceptEdits', mcpServers, mcp: null });
     return {
       sessionId,
       modes: { currentModeId: 'acceptEdits', availableModes: [{ id: 'default', name: 'Default' }, { id: 'acceptEdits', name: 'Accept edits' }] },
@@ -98,6 +106,16 @@ const agent = {
       } else if (command === 'crash') {
         process.stderr.write('boom: the fake agent crashed\n');
         process.exit(3);
+      } else if (command === 'mcp') {
+        try {
+          session.mcp ??= await connectMcp(session.mcpServers);
+          const result = await session.mcp.callTool({ name: path, arguments: JSON.parse(rest.join(' ') || '{}') });
+          await say(sessionId, `${result.isError ? 'mcp-error' : 'mcp'}:${result.content.map((part) => part.text ?? '').join('')}`);
+        } catch (error) {
+          await say(sessionId, `mcp-error:${error.message}`);
+        }
+      } else if (command === 'mcp-servers') {
+        await say(sessionId, `servers:${JSON.stringify(session.mcpServers)}`);
       } else if (command === 'mode') {
         await say(sessionId, `mode:${session.mode}`);
       } else if (command === 'env') {
@@ -109,5 +127,17 @@ const agent = {
     return { stopReason: 'end_turn', usage: { totalTokens: 30, inputTokens: 20, outputTokens: 10 } };
   },
 };
+
+// A client of the Studio's MCP server as the session was given it.
+async function connectMcp(servers) {
+  const server = servers.find((each) => each.name === 'notes-studio');
+  if (!server) throw new Error('no notes-studio MCP server');
+  const transport = server.type === 'http'
+    ? new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers: Object.fromEntries(server.headers.map((header) => [header.name, header.value])) } })
+    : new StdioClientTransport({ command: server.command, args: server.args, env: { ...process.env, ...Object.fromEntries(server.env.map((entry) => [entry.name, entry.value])) } });
+  const client = new Client({ name: 'fake-agent', version: '1.0.0' });
+  await client.connect(transport);
+  return client;
+}
 
 connection = new AgentSideConnection(() => agent, ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)));

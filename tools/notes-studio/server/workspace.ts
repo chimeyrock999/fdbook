@@ -1,4 +1,5 @@
 import type { IncomingMessage } from 'node:http';
+import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { createAgentRunsApi } from './agents/api.ts';
 import { createAgentRuns, type AgentRunsOptions } from './agents/runs.ts';
@@ -16,6 +17,11 @@ import type { PreviewOptions } from './preview/preview.ts';
 import { createBranchPullRequestReader, ghPullRequest } from './preview/pull-request.ts';
 import { refuseUpgrade } from './routing.ts';
 import { createNotesSync } from './sync/notes-sync.ts';
+import { createStudioFiles } from './files/studio-files.ts';
+import type { ToolCaller } from './mcp/tool.ts';
+import { createProposalsApi } from './proposals/api.ts';
+import { createComments } from './proposals/comments.ts';
+import { createProposals } from './proposals/store.ts';
 import { createTreeApi } from './tree/api.ts';
 
 // Methods that change nothing, and the one POST that writes nothing.
@@ -36,8 +42,13 @@ const refuseWrites: Handler = (request, response) => {
 const defaultPreview = (): PreviewOptions => ({ builds: createBuildReader(ghCheckRun), pullRequests: createBranchPullRequestReader(ghPullRequest), pagesProject: null });
 
 // What agent runs need besides the worktree: its change request's slug, the
-// profiles and where transcripts go (agents/runs.ts).
-export type WorkspaceAgents = Omit<AgentRunsOptions, 'slug'>;
+// profiles and where transcripts go (agents/runs.ts); and the Studio home,
+// where the change request's proposals and comments are kept.
+export type WorkspaceAgents = Omit<AgentRunsOptions, 'slug'> & { home: string };
+
+// Where a change request's proposals and comments are kept, outside its worktree.
+export const proposalsDirOf = (home: string, slug: string) => join(home, 'proposals', slug);
+export const commentsFileOf = (home: string, slug: string) => join(home, 'comments', `${slug}.jsonl`);
 
 // The handlers of one worktree: file API and events, lint, page tree,
 // assets, changes (git status, commit, history), page history, preview (push, build, publish),
@@ -46,19 +57,25 @@ export type WorkspaceAgents = Omit<AgentRunsOptions, 'slug'>;
 export function createWorkspace(
   root: string,
   hosts: string[],
-  { readOnly = false, preview = defaultPreview(), agents = null }: { readOnly?: boolean; preview?: PreviewOptions; agents?: AgentRunsOptions | null } = {},
+  { readOnly = false, preview = defaultPreview(), agents = null }: { readOnly?: boolean; preview?: PreviewOptions; agents?: (AgentRunsOptions & { home: string }) | null } = {},
 ) {
   // Tree and asset changes both write notes: one at a time. A commit waits
   // for them too, so it never takes half of a rename. The lock is this
   // worktree's own: change requests never wait on each other.
   const notesLock = createKeyedLock();
+  // Saves to one file, one at a time, from the editor and from agents alike.
+  const pathLock = createKeyedLock();
   const fileEvents = createFileEvents(root);
   const sync = createNotesSync(root, hosts, { readOnly });
-  const runs = agents === null || readOnly ? null : createAgentRuns(root, { ...agents, lock: notesLock });
+  const runs = agents === null || readOnly ? null : createAgentRuns(root, { ...agents, lock: notesLock, pathLock });
+  const review = agents === null || readOnly
+    ? null
+    : { proposals: createProposals(root, { dir: proposalsDirOf(agents.home, agents.slug), notesLock, pathLock }), comments: createComments(commentsFileOf(agents.home, agents.slug)) };
   const handlers: Handler[] = [
     ...(readOnly ? [refuseWrites] : []),
     fileEvents.handle,
-    createFilesApi(root),
+    // A person's save is never reverted by a run going on (agents/watch.ts).
+    createFilesApi(root, pathLock, runs === null ? undefined : (path) => { runs.savedByPerson(path); }),
     createLintApi(root),
     createTreeApi(root, notesLock),
     createAssetsApi(root, notesLock),
@@ -66,10 +83,20 @@ export function createWorkspace(
     createPageHistoryApi(root, notesLock),
     createPreviewApi(root, preview, { readOnly, lock: notesLock }),
     createAgentRunsApi(runs),
+    createProposalsApi(review),
   ];
   return {
     root,
     handlers,
+    runs,
+    review,
+    // The worktree's files for an MCP tool call (mcp/http.ts): under the
+    // notes lock, and on the run's Keep/Revert list when a run writes.
+    files: (caller: ToolCaller) => createStudioFiles(root, {
+      pathLock,
+      notesLock,
+      beforeWrite: caller.kind === 'run' && runs !== null ? (path, previous) => { runs.beforeWrite(caller.runId, path, previous); } : undefined,
+    }),
     handleUpgrade: (request: IncomingMessage, socket: Duplex, head: Buffer) => {
       sync.handleUpgrade(request, socket, head);
     },
@@ -155,6 +182,10 @@ export function createWorkspaceRouter(hosts: string[], resolve: (slug: string) =
 
   return {
     handle,
+    // A change request's workspace, opened if it is not yet; null when there is no such one.
+    open: workspace,
+    // A workspace already open, without opening it.
+    peek: (slug: string) => open.get(slug)?.workspace ?? null,
     // The upgrade route for /cr/<slug>/__fde_sync.
     syncRoute: (endpoint: string) => ({
       matches: (request: IncomingMessage) => {

@@ -25,7 +25,7 @@ export function createAgentsInfoApi(info: () => Promise<AgentInfo[]>, transcript
   };
 }
 
-const RUN = /^\/api\/agents\/runs\/([a-z0-9-]+)(?:\/(cancel|permissions\/([a-f0-9]+)))?$/;
+const RUN = /^\/api\/agents\/runs\/([a-z0-9-]+)(?:\/(cancel|changes|changes\/before|permissions\/([a-f0-9]+)))?$/;
 
 // The runs of one worktree (runs.ts), or null where agents may not run (main):
 // GET  /api/agents/runs                         every run, newest first
@@ -33,6 +33,9 @@ const RUN = /^\/api\/agents\/runs\/([a-z0-9-]+)(?:\/(cancel|permissions\/([a-f0-
 // GET  /api/agents/runs/<id>                    its summary and events
 // POST /api/agents/runs/<id>/cancel {}
 // POST /api/agents/runs/<id>/permissions/<ask> { optionId } (null rejects)
+// GET  /api/agents/runs/<id>/changes            the files it changed, for Keep/Revert
+// POST /api/agents/runs/<id>/changes { path, op: keep | revert }
+// GET  /api/agents/runs/<id>/changes/before?path=…  what the file held before it
 // GET  /api/agents/events                       server-sent events of every run
 export function createAgentRunsApi(runs: AgentRuns | null): Handler {
   async function answer(pathname: string, request: Parameters<Handler>[0]): Promise<unknown> {
@@ -50,6 +53,17 @@ export function createAgentRunsApi(runs: AgentRuns | null): Handler {
     if (action === undefined) {
       if (request.method !== 'GET') throw new HttpError(405, 'method not allowed');
       return runs.read(id);
+    }
+    if (action === 'changes/before') {
+      if (request.method !== 'GET') throw new HttpError(405, 'method not allowed');
+      return runs.before(id, new URL(request.url ?? '/', 'http://studio').searchParams.get('path') ?? '');
+    }
+    if (action === 'changes') {
+      if (request.method === 'GET') return { changes: await runs.changes(id) };
+      if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
+      const body = await readJsonObject(request, MAX_BODY_BYTES, 'a decision');
+      if (typeof body.path !== 'string') throw new HttpError(400, 'path must be a worktree path');
+      return { change: await runs.decide(id, body.path, body.op) };
     }
     if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
     const body = await readJsonObject(request, MAX_BODY_BYTES, action === 'cancel' ? 'a cancel' : 'an answer');

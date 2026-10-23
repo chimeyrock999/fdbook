@@ -55,6 +55,11 @@ export type RunSummary = {
   by: string | null;
 };
 
+// A file a run changed, for Keep/Revert: whether it existed before the
+// run, whether a person kept or reverted the change, and why it cannot be
+// reverted here (outside the notes, too large), or null.
+export type RunChange = { path: string; existed: boolean; decided: 'kept' | 'reverted' | null; reason: string | null };
+
 // A change request's runs, and what they cost by currency.
 export type RunTotals = { runs: number; costs: Record<string, number> };
 
