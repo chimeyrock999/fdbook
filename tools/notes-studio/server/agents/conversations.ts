@@ -195,13 +195,18 @@ export function createAgentConversations(
   };
 
   // Whether `path` is still the conversation's own draft: this turn created
-  // it, or an earlier one did and it holds what the conversation last wrote.
+  // it, or an earlier one did and it holds what the conversation last wrote
+  // (in memory while the process is up, else as the turns' changes on disk
+  // say: then it is held in memory again, for this turn's writes).
   const ownDraft = async (conversation: Live, path: string) => {
     if (await (conversation.turn?.watch.created(path) ?? Promise.resolve(false))) return true;
-    const last = conversation.drafts.get(path);
-    if (last === undefined) return false;
     const now = await readFile(join(root, path)).catch(() => null);
-    return now?.equals(last) === true;
+    if (now === null) return false;
+    const last = conversation.drafts.get(path);
+    if (last !== undefined) return now.equals(last);
+    if (!(await turnChanges.draft(conversation.summary.id, conversation.summary.turns, path))) return false;
+    conversation.drafts.set(path, now);
+    return true;
   };
 
   // After a write of the conversation through the Studio: a draft it

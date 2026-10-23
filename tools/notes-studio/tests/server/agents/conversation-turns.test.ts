@@ -301,6 +301,31 @@ describe('agent conversations over many turns', () => {
     expect(messagesOf(done.events).join('')).toMatch(/made this write a proposal/);
   });
 
+  it('keeps a note the chat created its draft after the process idles out and after a restart', async () => {
+    const proposed: string[] = [];
+    const propose = ({ path }: { path: string }) => { proposed.push(path); return Promise.resolve({ id: 'p1' }); };
+    const conversations = make('resume', { idleMs: 150, propose });
+    const note = join(root, 'content/notes/idle-draft.mdx');
+    const conversation = start(conversations, `write ${note} First draft.`);
+    await waitFor(conversations, conversation.id, ended);
+    await gone(conversations, conversation.id);
+    await conversations.message(conversation.id, `write ${note} Second draft.`, null);
+    await waitFor(conversations, conversation.id, ended);
+    expect(readFileSync(note, 'utf8')).toBe('Second draft.');
+    await conversations.close();
+    const again = make('resume', { propose });
+    await again.message(conversation.id, `write ${note} Third draft.`, null);
+    await waitFor(again, conversation.id, ended);
+    expect(readFileSync(note, 'utf8')).toBe('Third draft.');
+    expect(proposed).toEqual([]);
+    // Changed by someone else since the chat's last write: a proposal again.
+    await writeFile(note, 'A person\'s edit.');
+    await again.message(conversation.id, `write ${note} Fourth draft.`, null);
+    await waitFor(again, conversation.id, ended);
+    expect(readFileSync(note, 'utf8')).toBe('A person\'s edit.');
+    expect(proposed).toEqual(['content/notes/idle-draft.mdx']);
+  });
+
   it('numbers the events it records, so a read and the stream line up', async () => {
     const conversations = make();
     const conversation = start(conversations, 'env');

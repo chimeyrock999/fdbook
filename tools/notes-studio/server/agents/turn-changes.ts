@@ -1,9 +1,9 @@
 import { join } from 'node:path';
-import { createKeyedLock } from '../files/store.ts';
+import { createKeyedLock, statOrNull } from '../files/store.ts';
 import { HttpError } from '../http.ts';
 import type { TurnChange } from './shared.ts';
 import type { Transcripts } from './transcripts.ts';
-import { revertChange } from './watch.ts';
+import { revertChange, type StoredChange } from './watch.ts';
 
 // Keep/Revert of what one turn of a conversation changed (watch.ts keeps
 // what each file held when the turn began). `going`: whether that turn is
@@ -26,6 +26,27 @@ export function createTurnChanges(root: string, { slug, transcripts, lock, pathL
   };
 
   return {
+    // Whether `path` is still a note the conversation created, as kept on
+    // disk (it outlives the process): the first ended turn that changed it
+    // began from nothing, no turn's change to it is decided or also a
+    // person's, and the file is as the last of them left it.
+    async draft(id: string, turns: number, path: string) {
+      await transcripts.settled();
+      let first: StoredChange | null = null;
+      let last: StoredChange | null = null;
+      for (let turn = 1; turn <= turns; turn += 1) {
+        if (going(id, turn)) continue;
+        const change = (await transcripts.readChanges(slug, id, turn))?.find((each) => each.path === path);
+        if (change === undefined) continue;
+        if (change.decided !== null || change.reason !== null) return false;
+        first ??= change;
+        last = change;
+      }
+      if (first === null || last === null || first.before !== null) return false;
+      const now = (await statOrNull(join(root, path)))?.mtimeMs ?? null;
+      return now !== null && now === last.endMtimeMs;
+    },
+
     // The files an ended turn changed, for Keep/Revert.
     async changes(id: string, turn: number): Promise<TurnChange[]> {
       return (await stored(id, turn)).map(({ path, before, decided, reason }) => ({ path, existed: before !== null, decided, reason }));
