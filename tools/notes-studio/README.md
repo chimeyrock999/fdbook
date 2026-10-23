@@ -1314,6 +1314,14 @@ with nothing selected, the segments and activations, each set by its first
 and last message (`src/diagrams/SequencePanel.tsx`). Frames, waypoints and
 copies are not offered.
 
+A lifecycle (`"type": "lifecycle"`) has no positions either: its layout
+places every state and route. Its canvas (`src/diagrams/LifecycleCanvas.tsx`)
+selects a state or a transition, and dragging from the handle on a state's
+right side to another state (or back onto itself) adds a transition. The
+panel (`src/diagrams/LifecyclePanel.tsx`) edits the main path (reorder, take
+a state off, add one) and names a step left without a transition, and says
+of a state whether it is the initial one, a main-path step or final.
+
 Edits save a moment after each change (`src/diagrams/useDiagramFile.ts`)
 through the file API with the mtime they read, written by
 `formatDiagramJson` so a move changes one line. A change on disk (an agent,

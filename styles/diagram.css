@@ -123,6 +123,13 @@ svg.dg-svg {
 .dg-svg .c-segment-pill { fill: var(--mask); stroke: var(--lane-stroke); stroke-width: 0.75px; }
 .dg-svg .t-segment { fill: var(--text-muted); }
 
+/* A lifecycle: the initial marker, a final state's inner border, a composite
+   phase's dotted frame and a shared exit's junction dots, as Archify draws them. */
+.dg-svg .c-initial { fill: var(--arrow-emphasis); stroke: none; }
+.dg-svg .c-final { fill: none; stroke: var(--tone-stroke); }
+.dg-svg .c-composite { fill: none; stroke: var(--arrow); stroke-opacity: 0.55; stroke-dasharray: 1.5 3.5; stroke-linecap: round; }
+.dg-svg .c-junction { fill: var(--arrow); stroke: none; }
+
 .dg-svg .semantic-sigil { color: var(--tone-stroke); fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; opacity: 0.76; pointer-events: none; }
 .dg-svg .semantic-sigil > * { vector-effect: non-scaling-stroke; }
 .dg-svg .semantic-sigil .sigil-fill { fill: currentColor; stroke: none; }

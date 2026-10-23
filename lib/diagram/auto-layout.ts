@@ -14,7 +14,7 @@ import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api.js';
 import { rectsOverlap, textUnits, type Rect } from './geometry.ts';
 import { buildScene, type Scene } from './scene.ts';
-import { diagramSchema, type DiagramInput } from './schema.ts';
+import { diagramSchema, laysItselfOut, type DiagramInput } from './schema.ts';
 import { DiagramOpError } from './ops.ts';
 import { checkBeforeLayout, checkScene, validateDiagram, type DiagramIssue } from './validate.ts';
 
@@ -255,8 +255,8 @@ export interface LayoutResult {
 // out: a schema error, an unknown id, a group cycle.
 export async function layoutDiagram(diagram: Input, { all = false }: { all?: boolean } = {}): Promise<LayoutResult> {
   const next = structuredClone(diagram);
-  // A sequence has no positions: its order lays it out.
-  if (next.type === 'sequence') return { diagram: next, placed: [] };
+  // A sequence or lifecycle has no positions: its structure lays it out.
+  if (laysItselfOut(next.type)) return { diagram: next, placed: [] };
   // Nothing to place leaves even a broken diagram as it is, so an edit that
   // fixes it can still be saved.
   const nodes = Array.isArray(next.nodes) ? next.nodes : [];

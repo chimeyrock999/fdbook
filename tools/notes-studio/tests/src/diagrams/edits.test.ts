@@ -166,9 +166,9 @@ describe('diagram edits', () => {
   });
 
   // Every node and every frame of the repository's diagrams, one at a time.
-  // A sequence copies nothing (SequenceCanvas.test.tsx).
+  // A sequence or lifecycle copies nothing (SequenceCanvas.test.tsx, LifecycleCanvas.test.tsx).
   const architectures = globSync('diagrams/**/*.diagram.json', { cwd: join(import.meta.dirname, '../../../../..') })
-    .filter((path) => (JSON.parse(readFileSync(join(import.meta.dirname, '../../../../..', path), 'utf8')) as Input).type !== 'sequence');
+    .filter((path) => ((JSON.parse(readFileSync(join(import.meta.dirname, '../../../../..', path), 'utf8')) as Input).type ?? 'architecture') === 'architecture');
   it.each(architectures)('duplicates anything in %s without a new error', (path) => {
     const doc = JSON.parse(readFileSync(join(import.meta.dirname, '../../../../..', path), 'utf8')) as Input;
     const scene = draws(doc);

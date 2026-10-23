@@ -1,5 +1,5 @@
 import { addNode, connect, DiagramOpError, moveNode, removeEdge as removeEdgeOp, removeNode, reorder } from '@site/lib/diagram/ops';
-import type { DiagramInput, Side } from '@site/lib/diagram/schema';
+import { laysItselfOut, type DiagramInput, type Side } from '@site/lib/diagram/schema';
 import type { SequenceLayer } from '@site/lib/diagram/sequence';
 
 // What the diagram editor changes, on the file's input form (no schema
@@ -22,12 +22,13 @@ const NEW_NODE = { w: 160, h: 64 };
 
 export const snap = (value: number) => Math.round(value / GRID) * GRID;
 
-// An architecture's layout; one without it gets an empty one. A sequence
-// has none, and an edit that would give it one is refused here, whatever
+// An architecture's layout; one without it gets an empty one. A sequence or
+// lifecycle has none, and an edit that would give it one is refused here, whatever
 // reached it.
 function layoutOf(diagram: Input) {
+  if (!laysItselfOut(diagram.type)) return (diagram.layout ??= { nodes: {} });
   if (diagram.type === 'sequence') throw new DiagramOpError('op/sequence-has-no-layout', 'A sequence lays itself out from its order: reorder its participants or messages instead.');
-  return (diagram.layout ??= { nodes: {} });
+  throw new DiagramOpError('op/lifecycle-has-no-layout', 'A lifecycle lays itself out from its main path and transitions.');
 }
 
 // A record without `key`.
@@ -362,4 +363,30 @@ export function addMessage(diagram: Input, layer: SequenceLayer, from: string, t
 export function addParticipant(diagram: Input): { diagram: Input; id: string } {
   const id = freeId(diagram, 'participant');
   return { diagram: addNode(diagram, { id, kind: diagram.kinds[0].id, label: 'Participant' }), id };
+}
+
+// A lifecycle's edits: the layout places every state and route.
+
+// A new transition from `from` to `to` (the same state for a self-transition).
+export function addTransition(diagram: Input, from: string, to: string): { diagram: Input; id: string } {
+  const id = freeId(diagram, `${from}-${to}`);
+  return { diagram: connect(diagram, { id, from, to, label: 'event' }), id };
+}
+
+// A new state, placed by the layout; a lifecycle with no main path yet
+// starts one with it.
+export function addState(diagram: Input): { diagram: Input; id: string } {
+  const id = freeId(diagram, 'state');
+  const next = addNode(diagram, { id, kind: diagram.kinds[0].id, label: 'State' });
+  if (!(next.mainPath ?? []).length) next.mainPath = [id];
+  return { diagram: next, id };
+}
+
+// The main path with `id` moved to `index`, removed (`null`), or added at the end.
+export function setMainPath(diagram: Input, id: string, index: number | null): Input {
+  const next = structuredClone(diagram);
+  const path = (next.mainPath ?? []).filter((step) => step !== id);
+  if (index !== null) path.splice(Math.max(0, Math.min(index, path.length)), 0, id);
+  next.mainPath = path;
+  return next;
 }

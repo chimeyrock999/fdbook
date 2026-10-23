@@ -22,6 +22,7 @@ import { placeAutomaticLabels, reservedLabelRect, type LabelRect } from './label
 import { legendEntries, legendFootprint, placeLegend, type SceneLegend } from './legend.ts';
 import { createRouter } from './router.ts';
 import type { Diagram, DiagramEdge, DiagramGroup, DiagramKind, DiagramLane, DiagramNode, DiagramType } from './schema.ts';
+import { buildLifecycleScene, type LifecycleLayer } from './lifecycle.ts';
 import { buildSequenceScene, type SequenceLayer } from './sequence.ts';
 
 const MARGIN = 40;
@@ -46,8 +47,11 @@ export interface SceneNode extends Box {
   tagFont: number;
   // The groups around the node, outermost first.
   context: string[];
-  // Where the label and sublabel baselines sit, when not centred in the box.
-  text?: { label: number; sublabel: number };
+  // Where the label, sublabel and tag sit, when not centred in the box: a
+  // sequence's participant (no tag) or a lifecycle's state.
+  text?: { label: number; sublabel: number; tag?: number; x?: number };
+  // The corner glyph when not the kind's own (a lifecycle's final state).
+  icon?: string;
 }
 
 export interface FrameTitle extends Rect {
@@ -94,6 +98,8 @@ export interface Scene {
   legendUnfit: boolean;
   // A sequence's lifelines, messages, segments and activations.
   sequence: SequenceLayer | null;
+  // A lifecycle's composite frames, bus junctions, markers and labels.
+  lifecycle: LifecycleLayer | null;
 }
 
 interface RawFrame extends Rect {
@@ -126,6 +132,7 @@ export function edgeLabelSize(edge: DiagramEdge) {
 
 export function buildScene(diagram: Diagram): Scene {
   if (diagram.type === 'sequence') return buildSequenceScene(diagram);
+  if (diagram.type === 'lifecycle') return buildLifecycleScene(diagram);
   const { layout } = diagram;
   const nodes = new Map<string, Box>(diagram.nodes.map((node) => {
     const at = layout.nodes[node.id];
@@ -350,5 +357,6 @@ export function buildScene(diagram: Diagram): Scene {
     legend,
     legendUnfit: entries.length > 0 && legend === null,
     sequence: null,
+    lifecycle: null,
   };
 }

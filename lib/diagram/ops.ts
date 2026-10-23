@@ -5,7 +5,7 @@
 // formatDiagramJson writes it. A missing id or an id clash throws
 // DiagramOpError with a stable code.
 
-import type { DiagramInput, EdgeVariant, Side, Tone } from './schema.ts';
+import { laysItselfOut, type DiagramInput, type EdgeVariant, type Side, type Tone } from './schema.ts';
 
 type Input = DiagramInput;
 type NodeInput = Input['nodes'][number];
@@ -31,11 +31,12 @@ function freeId(diagram: Input, id: string) {
 }
 
 // What only an architecture has: positions, route pins. A sequence is laid
-// out from its order (`reorder` below moves it).
+// out from its order (`reorder` below moves it), a lifecycle from its main
+// path and transitions.
 function placedOnly(diagram: Input, what: string) {
+  if (!laysItselfOut(diagram.type)) return (diagram.layout ??= { nodes: {} });
   if (diagram.type === 'sequence') throw new DiagramOpError('op/sequence-has-no-layout', `A sequence lays itself out from its order, so it takes no ${what}; reorder its participants or messages instead.`);
-  diagram.layout ??= { nodes: {} };
-  return diagram.layout;
+  throw new DiagramOpError('op/lifecycle-has-no-layout', `A lifecycle lays itself out from its main path and transitions, so it takes no ${what}; change mainPath or the transitions instead.`);
 }
 
 function nodeOf(diagram: Input, id: string) {
@@ -179,7 +180,7 @@ export function setNote(diagram: Input, id: string, note: NoteInput | null): Inp
 }
 
 // Removes a node with its edges, its group memberships (and a group left
-// empty, in turn) and its layout entries.
+// empty, in turn), its layout entries, its activations and its main-path step.
 export function removeNode(diagram: Input, id: string): Input {
   const next = structuredClone(diagram);
   nodeOf(next, id);
@@ -201,6 +202,7 @@ export function removeNode(diagram: Input, id: string): Input {
     next.activations = next.activations.filter((activation) => activation.node !== id);
     if (!next.activations.length) delete next.activations;
   }
+  if (next.mainPath) next.mainPath = next.mainPath.filter((step) => step !== id);
   const { layout } = next;
   if (layout) for (const key of gone) {
     delete layout.nodes[key];

@@ -7,16 +7,11 @@
 // variant legend. Archify takes each message's `y` from its author; here the
 // order gives it, spaced so Archify's own checks hold (see messageYs).
 
-import { fittedNodeFontSize, minimumReadableSourceTextPx, rectsOverlap, textUnits, type Rect } from './geometry.ts';
+import { availableTextWidth, fittedNodeFontSize, minimumReadableSourceTextPx, minimumTextWidth, rectsOverlap, textUnits, type Rect } from './geometry.ts';
 import { legendFootprint, placeLegend, variantLegendEntries } from './legend.ts';
 import type { Scene, SceneEdge, SceneNode } from './scene.ts';
 import type { Diagram, DiagramActivation, DiagramEdge, DiagramSegment } from './schema.ts';
 
-// Node text fitting, Archify's renderers/shared/text-fit.mjs.
-const TEXT_PADDING = 8;
-const TEXT_WIDTH_FACTOR = 0.6;
-export const minimumTextWidth = (text: string, size: number) => textUnits(text) * size * TEXT_WIDTH_FACTOR;
-export const availableTextWidth = (width: number) => width - TEXT_PADDING;
 // How wide Archify takes a participant label to be, at 11px bold.
 export const PARTICIPANT_LABEL_UNIT = 6.8;
 export const participantLabelWidth = (label: string) => textUnits(label) * PARTICIPANT_LABEL_UNIT;
@@ -422,6 +417,7 @@ export function buildSequenceScene(diagram: Diagram): Scene {
     lanes: [],
     legend,
     legendUnfit: entries.length > 0 && legend === null,
+    lifecycle: null,
     sequence: {
       participantWidth: participantW,
       columns,
