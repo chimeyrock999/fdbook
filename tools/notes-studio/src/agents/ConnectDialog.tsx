@@ -21,7 +21,8 @@ function CopyRow({ id, text }: { id: string; text: string }) {
 // How to give an agent in a terminal the Studio's tools (#85): the MCP
 // address, a command per agent, and with sign-in on a token of the person's
 // own (POST /api/mcp/tokens), shown once. `cr` is the change request open,
-// for the tools' cr.
+// for the tools' cr. It does not close while a token request is out: a
+// token minted then is shown once, here.
 export function ConnectDialog({ cr, onClose }: { cr: string | null; onClose: () => void }) {
   const { state } = useSession();
   const signedIn = state.auth === 'github';
@@ -50,7 +51,7 @@ export function ConnectDialog({ cr, onClose }: { cr: string | null; onClose: () 
   };
 
   return (
-    <Dialog title="Connect an agent" onClose={onClose} onSubmit={onClose}>
+    <Dialog title="Connect an agent" busy={action.busy} onClose={onClose} onSubmit={onClose}>
       <p className="text-[13px] text-[var(--fde-muted-foreground)]">
         Gives an agent in a terminal (Claude Code, Codex…) the Studio&apos;s tools while the Studio is open. It works in the change request it names as <code>cr</code>{cr === null ? '' : <> (this one is <code>{cr}</code>)</>}, never on main, and its edits arrive here as suggestions.
       </p>
@@ -87,7 +88,7 @@ export function ConnectDialog({ cr, onClose }: { cr: string | null; onClose: () 
       {note !== null && <p role="status" className="studio-cr-hint">{note}</p>}
       <div className="flex justify-end gap-2">
         {signedIn && <PendingButton className="studio-button" data-tone="error" pending={action.is('end')} pendingLabel="Ending…" disabled={action.busy} onClick={endAll}>End all my tokens</PendingButton>}
-        <button type="submit" className="studio-button studio-button-primary">Done</button>
+        <button type="submit" className="studio-button studio-button-primary" disabled={action.busy}>Done</button>
       </div>
     </Dialog>
   );
