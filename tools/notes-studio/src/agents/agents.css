@@ -407,29 +407,91 @@
     color: var(--fde-warning);
   }
 
-  /* Over the note an agent changed in a run going on. */
-  .studio-agent-wrote {
-    position: absolute;
-    top: 10px;
-    left: 50%;
-    z-index: 20;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    max-width: min(560px, calc(100% - 32px));
-    padding: 6px 8px 6px 10px;
-    border: 1px solid color-mix(in srgb, var(--fde-warning) 45%, var(--fde-border));
-    border-radius: 8px;
-    background: var(--fde-popover);
-    box-shadow: 0 6px 24px rgb(0 0 0 / 0.14);
-    font-size: 12.5px;
-    transform: translateX(-50%);
-  }
-
   /* On a change request's card. */
   .studio-cr-agents {
     display: inline-flex;
     align-items: center;
     gap: 5px;
+  }
+}
+
+@layer components {
+  /* The Connect an agent dialog. */
+  .studio-connect-copy {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+  }
+  .studio-connect-copy code {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    padding: 5px 8px;
+    border: 1px solid var(--fde-border);
+    border-radius: 7px;
+    background: var(--fde-background);
+    font: 12px var(--font-mono);
+    white-space: nowrap;
+  }
+  .studio-connect-clients {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .studio-connect-clients button {
+    padding: 1px 9px;
+    border: 1px solid var(--fde-border);
+    border-radius: 7px;
+    background: var(--fde-background);
+    font-size: 12px;
+  }
+  .studio-connect-clients button[aria-pressed='true'] {
+    background: var(--fde-accent);
+    font-weight: 600;
+  }
+
+  /* What a run changed itself, to keep or revert. */
+  .studio-agent-changes h4 {
+    margin: 8px 0 2px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-changes ul {
+    display: grid;
+    gap: 6px;
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .studio-agent-change {
+    display: grid;
+    gap: 6px;
+    padding: 7px 9px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    background: var(--fde-background);
+  }
+  .studio-agent-change-path {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    font: 12px var(--font-mono);
+    overflow-wrap: anywhere;
+  }
+  .studio-agent-change-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  .studio-agent-change-diff {
+    max-height: 320px;
+    overflow: auto;
+    border: 1px solid var(--fde-border);
+    border-radius: 6px;
   }
 }

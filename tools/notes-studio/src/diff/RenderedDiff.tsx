@@ -7,7 +7,7 @@ import { diffNote, foldSame, type DiffItem, type FrontmatterChange } from './dif
 const decorations = decorationsPlugin(editorConfig.decorators);
 
 // A stretch of a note rendered as the editor shows it, read only.
-function NotePart({ source }: { source: string }) {
+export function NotePart({ source }: { source: string }) {
   const container = useRef<HTMLDivElement>(null);
   useEditorPlugin(container, decorations);
   return (
@@ -50,7 +50,7 @@ function keyed(items: DiffItem[]) {
   });
 }
 
-function FrontmatterTable({ changes, added }: { changes: FrontmatterChange[]; added: boolean }) {
+export function FrontmatterTable({ changes, added }: { changes: FrontmatterChange[]; added: boolean }) {
   if (changes.length === 0) return null;
   return (
     <table className="studio-diff-frontmatter">

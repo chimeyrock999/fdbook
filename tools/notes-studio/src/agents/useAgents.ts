@@ -105,6 +105,7 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
   }, [client, state.events]);
 
   return {
+    client,
     agents,
     picks,
     pick,

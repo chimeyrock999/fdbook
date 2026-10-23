@@ -6,6 +6,8 @@ export type { PermissionOption, SessionUpdate, ToolCallUpdate, Usage };
 
 export type AgentId = 'claude' | 'codex' | 'omp' | 'hermes';
 
+export const AGENT_NAMES: Record<AgentId, string> = { claude: 'Claude Code', codex: 'Codex', omp: 'omp', hermes: 'Hermes Agent' };
+
 // An author may change the change request's files; a reviewer only reads.
 export type AgentRole = 'author' | 'reviewer';
 export const AGENT_ROLES: AgentRole[] = ['author', 'reviewer'];
@@ -79,6 +81,8 @@ export type RunEvent =
   | { type: 'write'; at: number; path: string; bytes: number }
   // Files the agent changed with its own tools.
   | { type: 'changed'; at: number; paths: string[] }
+  // An edit it proposed (propose_edit, or a write to a note): `hunks` wait for a person.
+  | { type: 'proposal'; at: number; id: string; path: string; hunks: number }
   | { type: 'end'; at: number; run: RunSummary };
 
 // One event of the workspace's stream: which run it belongs to.

@@ -19,9 +19,9 @@ import { refuseUpgrade } from './routing.ts';
 import { createNotesSync } from './sync/notes-sync.ts';
 import { createStudioFiles } from './files/studio-files.ts';
 import type { ToolCaller } from './mcp/tool.ts';
-import { createProposalsApi } from './proposals/api.ts';
-import { createComments } from './proposals/comments.ts';
-import { createProposals } from './proposals/store.ts';
+import { createProposalsApi, createProposalStream, type ProposalStream } from './proposals/api.ts';
+import { createComments, type Comments } from './proposals/comments.ts';
+import { createProposals, type Proposals } from './proposals/store.ts';
 import { createTreeApi } from './tree/api.ts';
 
 // Methods that change nothing, and the one POST that writes nothing.
@@ -67,10 +67,35 @@ export function createWorkspace(
   const pathLock = createKeyedLock();
   const fileEvents = createFileEvents(root);
   const sync = createNotesSync(root, hosts, { readOnly });
-  const runs = agents === null || readOnly ? null : createAgentRuns(root, { ...agents, lock: notesLock, pathLock });
-  const review = agents === null || readOnly
+  // A change request's proposals and comments, and the stream of their changes.
+  let review: { proposals: Proposals; comments: Comments; stream: ProposalStream } | null = null;
+  const runs = agents === null || readOnly
     ? null
-    : { proposals: createProposals(root, { dir: proposalsDirOf(agents.home, agents.slug), notesLock, pathLock }), comments: createComments(commentsFileOf(agents.home, agents.slug)) };
+    : createAgentRuns(root, {
+      ...agents,
+      lock: notesLock,
+      pathLock,
+      propose: ({ path, content, runId, agent, model }) => {
+        if (review === null) return Promise.reject(new Error('no proposals here'));
+        return review.proposals.propose({ path, content, by: { kind: 'run', runId, agent, model } });
+      },
+    });
+  if (agents !== null && !readOnly) {
+    const stream = createProposalStream();
+    review = {
+      stream,
+      comments: createComments(commentsFileOf(agents.home, agents.slug), stream.sendComment),
+      proposals: createProposals(root, {
+        dir: proposalsDirOf(agents.home, agents.slug),
+        notesLock,
+        pathLock,
+        onChange: (proposal, created) => {
+          if (created && proposal.by.kind === 'run') runs?.proposed(proposal.by.runId, proposal);
+          stream.send(proposal);
+        },
+      }),
+    };
+  }
   const handlers: Handler[] = [
     ...(readOnly ? [refuseWrites] : []),
     fileEvents.handle,
@@ -101,6 +126,7 @@ export function createWorkspace(
     },
     close: async () => {
       await runs?.close();
+      review?.stream.close();
       fileEvents.close();
       await sync.close();
     },

@@ -63,7 +63,8 @@ export type ProposalsOptions = {
   notesLock?: ReturnType<typeof createKeyedLock>;
   pathLock?: ReturnType<typeof createKeyedLock>;
   // Told each time a proposal is made or changed.
-  onChange?: (proposal: ProposalView) => void;
+  // `created`: the proposal is new.
+  onChange?: (proposal: ProposalView, created: boolean) => void;
 };
 
 // The proposals of one change request: edits to its notes that wait for a
@@ -85,11 +86,11 @@ export function createProposals(root: string, { dir, notesLock = createKeyedLock
     return JSON.parse(text) as Proposal;
   }
 
-  async function save(proposal: Proposal) {
+  async function save(proposal: Proposal, created = false) {
     await mkdir(dir, { recursive: true });
     await writeAtomic(fileOf(proposal.id), `${JSON.stringify(proposal)}\n`);
     const view = viewOf(proposal, await note(proposal.path));
-    onChange?.(view);
+    onChange?.(view, created);
     return view;
   }
 
@@ -137,7 +138,7 @@ export function createProposals(root: string, { dir, notesLock = createKeyedLock
         hunks: hunks.map((hunk, index): StoredHunk => ({ id: String(index + 1), ...hunk, decided: null })),
       };
       // `text`: the note as proposed, for checks of the caller's own.
-      return { ...(await lock(proposal.id, () => save(proposal))), text: next };
+      return { ...(await lock(proposal.id, () => save(proposal, true))), text: next };
     },
 
     // Accepts, rejects, rebases or drops the hunks named (all undecided

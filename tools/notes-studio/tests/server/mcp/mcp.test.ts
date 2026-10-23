@@ -126,9 +126,41 @@ describe('Studio MCP server', () => {
     expect(await readFile(worktree(NOTE), 'utf8')).toBe(before.replace('A first look.', 'A first look, tightened.'));
   });
 
+  it('streams each proposal as it is made', async () => {
+    const controller = new AbortController();
+    const response = await fetch(`${studio.origin}/cr/${cr.slug}/api/proposals/events`, { signal: controller.signal });
+    const reader = (response.body ?? new ReadableStream()).pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    while (!buffer.includes('retry:')) buffer += (await reader.read()).value ?? '';
+    const proposed = await call(client, 'propose_edit', { cr: cr.slug, path: NOTE, edits: [{ find: 'tightened', replace: 'streamed' }] });
+    while (!buffer.includes('data: ')) buffer += (await reader.read()).value ?? '';
+    controller.abort();
+    const data = JSON.parse(buffer.slice(buffer.indexOf('data: ') + 6).split('\n')[0] ?? '') as ProposalView;
+    expect(data).toMatchObject({ id: proposed.value?.id, path: NOTE });
+  });
+
+  it('creates a note that does not exist yet, on the run\'s Keep/Revert list', async () => {
+    const page = 'content/notes/guide/created.mdx';
+    const run = await runAgent(`mcp propose_edit {"path": "${page}", "content": "---\\ntitle: Created\\n---\\n\\nNew.\\n"}\nmcp propose_edit {"path": "content/notes/guide/broken.mdx", "content": "<Broken"}`);
+    expect(run.said).toMatch(/mcp:\{\n {2}"created": true/);
+    expect(run.said).toMatch(/mcp-error:the new note does not parse/);
+    expect(await readFile(worktree(page), 'utf8')).toBe('---\ntitle: Created\n---\n\nNew.\n');
+    const { changes } = json(await send(`/cr/${cr.slug}/api/agents/runs/${run.run.id}/changes`)) as { changes: RunChange[] };
+    expect(changes).toEqual([{ path: page, existed: false, decided: null, reason: null }]);
+  }, 20_000);
+
   it('keeps comments, anchored to a block', async () => {
+    const controller = new AbortController();
+    const response = await fetch(`${studio.origin}/cr/${cr.slug}/api/proposals/events`, { signal: controller.signal });
+    const reader = (response.body ?? new ReadableStream()).pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    while (!buffer.includes('retry:')) buffer += (await reader.read()).value ?? '';
     const added = await call(client, 'add_comment', { cr: cr.slug, path: NOTE, block: 1, body: 'Say more here.' });
     expect(added.error).toBe(false);
+    // Comments stream too, as `comment` events.
+    while (!buffer.includes('event: comment')) buffer += (await reader.read()).value ?? '';
+    controller.abort();
+    expect(buffer).toContain('Say more here.');
     expect((await call(client, 'add_comment', { cr: cr.slug, path: NOTE, block: 9, body: 'x' })).text).toMatch(/has 2 blocks/);
     const { comments } = json(await send(`/cr/${cr.slug}/api/comments?path=${NOTE}`)) as { comments: NoteComment[] };
     expect(comments).toEqual([expect.objectContaining({ body: 'Say more here.', block: { index: 1, text: expect.stringContaining('A first look') as string } })]);

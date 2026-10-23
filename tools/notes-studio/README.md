@@ -102,7 +102,10 @@ checkout that built the plugin keeps its untracked `obsidian-plugin/`
   - `graph/` wraps text as graph markers and edits their ids (see Graph
     markers).
   - `agents/` is the header's agent control, the agent panel, a run's
-    transcript and the permission dialog (see Agents).
+    transcript with what it changed (Keep/Revert), the permission dialog
+    and the Connect an agent dialog (see Agents).
+  - `suggestions/` shows agents' proposals in the editor, with their
+    comments (see Proposals).
   - `plugins/` holds the editor plugins (see below).
 - `tests/`: laid out like `server/` and `src/`. `tests/support/` holds the
   fixtures: a throwaway worktree, a Studio on a free port, and raw HTTP and
@@ -169,6 +172,7 @@ without `changeRequests`, as the tests start it, edits the one worktree at
 | `POST /api/session/logout` | Takes JSON `{}` and the csrf header, ends the session. |
 | `GET /api/proposals[?path=…]`, `GET /api/proposals/<id>` | A change request's proposals (of one note), oldest first: `{ proposals }`, each `{ id, path, by, summary, createdMs, mtimeMs, stale, done, hunks: [{ id, removed, added, state, from, to }] }` (see Proposals); main answers `409` |
 | `POST /api/proposals/<id>` | Takes JSON `{ op: "accept" \| "reject" \| "rebase" \| "drop", hunks? }` (all undecided hunks by default) and answers `{ proposal }`. Accepting writes the hunks into the note; a stale hunk is refused (`409`) until rebased. |
+| `GET /api/proposals/events` | Server-sent events: each proposal (as listed) when it is made or changes |
 | `GET /api/comments[?path=…]` | Comments agents and people left on the notes: `{ comments: [{ id, path, block: { index, text } \| null, body, by, createdMs }] }` |
 | `GET /api/agents/runs/<id>/changes`, `POST` the same | The files an ended run changed, for Keep/Revert: `{ changes: [{ path, existed, decided, reason }] }`; `POST { path, op: "keep" \| "revert" }` decides one (writer). A file changed since the run ended is not reverted (`409`). |
 | `GET /api/agents/runs/<id>/changes/before?path=…` | What the file held before the run: `{ path, content }`, `null` when it did not exist |
@@ -883,19 +887,23 @@ are listed greyed, with how to install them (`GET /api/agents`).
   hidden ones (`.git`, `.env`) and none a symlink leads out to;
   `fs/write_text_file` writes only what the Studio itself edits (notes,
   `meta.yaml`, SVG and HTML assets), for an author, under the worktree's
-  notes lock (`server/agents/fs-policy.ts`). Claude Code and Codex write
-  with their own tools instead, inside the fences above: the Studio sees
-  those edits in their tool calls and, at the end of the run, in `git
-  status` against the start (`server/agents/worktree.ts`), so a file
-  edited by hand meanwhile is listed too. Every changed file is in the
-  run's list with **View diff**, and shows in Changes; until the editor
-  shows proposals (the second step of #85), a note changed by a run going
-  on carries a notice over the editor.
+  notes lock (`server/agents/fs-policy.ts`). A write to a note that exists
+  is never made: it becomes a proposal (see Proposals), and the agent is
+  answered that it did, so it does not read the note back expecting its
+  text; a new note, `meta.yaml` and assets are written. Claude Code has its
+  own file tools denied on notes (`Edit(content/notes/**/*.mdx)`), so it
+  proposes and creates notes through `propose_edit`. Codex, omp and Hermes write with their own tools inside
+  the fences above: the Studio sees those edits in their tool calls and,
+  at the end of the run, in `git status` against the start
+  (`server/agents/worktree.ts`), so a file edited by hand meanwhile is
+  listed too. Every changed file is in the run's list with **View diff**,
+  and shows in Changes.
 - **Keep or revert.** When a run starts, the Studio keeps what each file
   that differs from HEAD holds (the others are as HEAD has them), and what
   a file held right before each write the run makes through it. Once the
   run ended, each file it changed can be kept or put back as it was when
-  the run started (`/api/agents/runs/<id>/changes`, kept in
+  the run started (**Changed outside the Studio** in the run, with its diff
+  from before the run; `/api/agents/runs/<id>/changes`, kept in
   `<run>.changes.json` next to the transcript). Revert writes nothing over
   a file changed again since the run ended, and does not touch files
   outside the notes and their assets (it says so).
@@ -940,7 +948,7 @@ Studio starts and your own agents in a terminal while the Studio is open.
 | `read_note` | A note's text, its top-level blocks (index, line, first line) and the proposals waiting on it |
 | `search_notes` | Notes with every word of the query in their title, description, tags or text, with matching lines |
 | `note_graph` | Links out and in, tags, keywords and graph keywords, notes that share a tag |
-| `propose_edit` | A proposal: the whole new text, or find/replace edits; answers its hunks and lint issues. Nothing is written (see Proposals). |
+| `propose_edit` | A proposal: the whole new text, or find/replace edits; answers its hunks and lint issues. Nothing is written (see Proposals). A note that does not exist yet is created with `content` (on a run's Keep/Revert list). |
 | `add_comment` | A comment on a note, or on one of its blocks |
 | `list_assets` | The assets under `public/notes` and the notes that use them |
 
@@ -957,7 +965,10 @@ Studio starts and your own agents in a terminal while the Studio is open.
   their role until they clear it or their session ends. With sign-in off a
   request without a token acts for the one person of this machine, like
   the rest of the API.
-- **Terminal agents.** With the Studio open: `claude mcp add --transport
+- **Terminal agents.** **Connect an agent…** in the agent menu gives the
+  address, a token with sign-in on, and the command for Claude Code, Codex
+  or the stdio bridge (Codex reads the token from `STUDIO_MCP_TOKEN` each
+  time it starts). By hand, with the Studio open: `claude mcp add --transport
   http notes-studio http://127.0.0.1:4310/api/mcp` (add `--header
   "Authorization: Bearer <token>"` with sign-in on), or the stdio bridge,
   `node tools/notes-studio/server/mcp/stdio.ts` with `STUDIO_MCP_URL` and
@@ -988,6 +999,20 @@ request's go with it).
   from the mtime it read; the open editor merges the change like any edit
   on disk. Hunks are accepted one by one or all at once; a set that would
   leave the note unparsable is refused.
+- **In the editor** (`src/suggestions/`). A bar over the note says who
+  proposed, how many suggestions wait and how many are stale, steps
+  through them, and accepts or rejects them all (stale ones wait for a
+  rebase). In Visual each hunk's blocks are struck through where they are
+  and its card follows, drawn as the diff view draws added blocks, with
+  ✓ and ✕; a stale card offers Rebase and Drop. In Source the lines it
+  replaces are marked and what it puts there follows them. Hunks are
+  placed on the text in the editor (the server's own placement, run in
+  the page), so typing never waits for a save; a stale hunk is shown where
+  a rebase would put it. The page tree marks notes with suggestions
+  waiting, and the list follows `GET /api/proposals/events`.
+- **Comments.** A comment on a block (`add_comment`) is a bubble at the
+  block's right; one on the note, or on a block that is gone, is listed
+  under the bar. Threads, answers and states come with #87.
 
 ## Diff
 
