@@ -14,6 +14,7 @@ export type TranscriptItem =
   | { kind: 'plan'; key: string; entries: PlanEntry[] }
   | { kind: 'ask'; key: string; ask: PermissionAsk; answer: { optionId: string | null; by: string | null } | null }
   | { kind: 'write'; key: string; path: string }
+  | { kind: 'proposal'; key: string; path: string; hunks: number }
 
 export function transcriptOf(events: RunEvent[]): TranscriptItem[] {
   const items: TranscriptItem[] = [];
@@ -36,6 +37,7 @@ export function transcriptOf(events: RunEvent[]): TranscriptItem[] {
       const item = asks.get(event.id);
       if (item) item.answer = { optionId: event.optionId, by: event.by };
     } else if (event.type === 'write') items.push({ kind: 'write', key: `write-${String(items.length)}`, path: event.path });
+    else if (event.type === 'proposal') items.push({ kind: 'proposal', key: `proposal-${event.id}`, path: event.path, hunks: event.hunks });
     else if (event.type === 'changed') for (const path of event.paths) items.push({ kind: 'write', key: `write-${String(items.length)}`, path });
     else if (event.type === 'update') {
       const { update } = event;

@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { parse } from 'yaml';
 import { run } from '../cr/git.ts';
-import type { AgentId, AgentInfo, AgentRole } from './shared.ts';
+import { AGENT_NAMES, type AgentId, type AgentInfo, type AgentRole } from './shared.ts';
 
 // How the Studio starts one agent over ACP. Each agent keeps its own login
 // (claude, codex, omp and hermes each sign in on their own): the Studio
@@ -69,13 +69,16 @@ function installed(command: string, args: string[], install: string) {
 // Commands an author must not run: what reaches GitHub is a person's click.
 // Best effort: `git -C . push` or `sh -c "git push"` do not match, so the
 // permission dialog is the fence; these only spare it the obvious asks.
-const CLAUDE_AUTHOR_DENY = ['Bash(git push:*)', 'Bash(gh:*)'];
+// Notes are not edited in place either: an author proposes (the Studio's
+// propose_edit), and a person accepts. An Edit rule covers every file tool
+// (Edit, MultiEdit, Write); the path is the worktree's, the session's cwd.
+const CLAUDE_AUTHOR_DENY = ['Bash(git push:*)', 'Bash(gh:*)', 'Edit(content/notes/**/*.mdx)'];
 // A reviewer reads: no edits, and no shell that could make one.
 const CLAUDE_REVIEWER_DENY = ['Edit', 'MultiEdit', 'Write', 'NotebookEdit', 'Bash'];
 
 const claude: AgentProfile = {
   id: 'claude',
-  name: 'Claude Code',
+  name: AGENT_NAMES.claude,
   fencesReviewer: true,
   command: () => ({ command: process.execPath, args: [binOf('@agentclientprotocol/claude-agent-acp', 'claude-agent-acp').script] }),
   sessionMeta: (role) => ({
@@ -95,7 +98,7 @@ const claude: AgentProfile = {
 
 const codex: AgentProfile = {
   id: 'codex',
-  name: 'Codex',
+  name: AGENT_NAMES.codex,
   fencesReviewer: true,
   // workspace-write keeps the shell in the worktree with no network, so a
   // push asks first; read-only for a reviewer.
@@ -109,7 +112,7 @@ const codex: AgentProfile = {
 
 const omp: AgentProfile = {
   id: 'omp',
-  name: 'omp',
+  name: AGENT_NAMES.omp,
   // omp acp takes no flag to turn its edit and shell tools off.
   fencesReviewer: false,
   command: () => ({ command: 'omp', args: ['acp'] }),
@@ -135,7 +138,7 @@ const hermesCheck = installed('hermes', ['acp', '--version'], 'install Hermes Ag
 
 const hermes: AgentProfile = {
   id: 'hermes',
-  name: 'Hermes Agent',
+  name: AGENT_NAMES.hermes,
   // Its toolsets are set in the person's config, for every ACP session.
   fencesReviewer: false,
   command: () => ({ command: 'hermes', args: ['acp'] }),

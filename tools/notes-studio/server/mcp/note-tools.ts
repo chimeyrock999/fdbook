@@ -9,7 +9,7 @@ import { pageUrl, resolveHref } from '../lint/rules/links.ts';
 import type { Comments } from '../proposals/comments.ts';
 import { blocksOf } from '../proposals/hunks.ts';
 import type { ProposalAuthor } from '../proposals/shared.ts';
-import type { Proposals } from '../proposals/store.ts';
+import { applyEdits, type Proposals } from '../proposals/store.ts';
 import { classifyPath, NOTES_DIR } from '../security/paths.ts';
 import { readNotesContent } from '../tree/build.ts';
 import type { StudioTool, StudioToolContext, ToolResult } from './tool.ts';
@@ -20,6 +20,8 @@ export type NoteToolDeps = {
   commentsOf: (slug: string) => Promise<Comments>;
   // The model a run says it runs, when it said.
   modelOf: (slug: string, runId: string) => string | null;
+  // Whether a run going on created the note itself (agents/watch.ts).
+  createdBy: (slug: string, runId: string, path: string) => Promise<boolean>;
 };
 
 const json = (value: unknown): ToolResult => ({ content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], structured: value as Record<string, unknown> });
@@ -190,7 +192,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
 
   const proposeEdit = {
     name: 'propose_edit',
-    description: 'Proposes an edit to a note. It is not written: a person sees it in the editor as suggestions, block by block, and accepts or rejects each one. Give either the whole new text (content) or exact find/replace edits on the note as it is now (each find must occur once). Answers the proposal, its hunks, and lint issues of the result to fix in a new proposal.',
+    description: 'Proposes an edit to a note. A note that does not exist yet is created with content (list it in its folder\'s meta.yaml); later edits by the same run to a note it created are written too (answer: written), until someone else changes that note. An edit to any other note is not written: a person sees it in the editor as suggestions, block by block, and accepts or rejects each one. Give either the whole new text (content) or exact find/replace edits on the note as it is now (each find must occur once). Answers the proposal, its hunks, and lint issues of the result to fix in a new proposal.',
     input: z.object({
       path,
       content: z.string().optional().describe('The whole note as it should be, frontmatter included'),
@@ -200,6 +202,33 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
     access: 'write',
     async run({ path: given, content, edits, summary }, ctx) {
       const at = notePath(given);
+      // A new note has nothing to suggest against: it is written (and, for
+      // a run, goes on its Keep/Revert list). It must parse like any note.
+      if (content !== undefined && classifyPath(at) === 'note' && (await ctx.files.read(at)) === null) {
+        try {
+          blocksOf(content);
+        } catch (error) {
+          throw new HttpError(422, `the new note does not parse: ${(error as Error).message}`);
+        }
+        await ctx.files.write(at, content, { baseMtime: null });
+        const issues = lintNote(content, await loadLintContext(ctx.root, at.slice(NOTES_DIR.length + 1)));
+        return json({ created: true, path: at, lint: issues.map((issue) => ({ rule: issue.rule, severity: issue.severity, message: issue.message, line: issue.start.line })) });
+      }
+      // A note this run created is its own draft, not yet a person's: a fix
+      // to it is written too, and stays on the run's Keep/Revert list.
+      if (ctx.caller.kind === 'run' && (await deps.createdBy(ctx.slug, ctx.caller.runId, at))) {
+        if ((content === undefined) === (edits === undefined)) throw new HttpError(400, 'give either content or edits');
+        const current = await readNote(ctx, at);
+        const next = content ?? applyEdits(current.content, edits ?? []);
+        try {
+          blocksOf(next);
+        } catch (error) {
+          throw new HttpError(422, `the note does not parse: ${(error as Error).message}`);
+        }
+        await ctx.files.write(at, next, { baseMtime: current.mtimeMs });
+        const issues = lintNote(next, await loadLintContext(ctx.root, at.slice(NOTES_DIR.length + 1)));
+        return json({ written: true, path: at, lint: issues.map((issue) => ({ rule: issue.rule, severity: issue.severity, message: issue.message, line: issue.start.line })) });
+      }
       const proposals = await deps.proposalsOf(ctx.slug);
       const proposal = await proposals.propose({ path: at, content, edits, by: authorOf(ctx, deps), summary: summary ?? null });
       const issues = lintNote(proposal.text, await loadLintContext(ctx.root, at.slice(NOTES_DIR.length + 1)));

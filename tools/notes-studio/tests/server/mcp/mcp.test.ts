@@ -1,5 +1,5 @@
-import { readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -143,9 +143,46 @@ describe('Studio MCP server', () => {
     expect(await readFile(worktree(NOTE), 'utf8')).toBe(before.replace('A first look.', 'A first look, tightened.'));
   });
 
+  it('streams each proposal as it is made', async () => {
+    const controller = new AbortController();
+    const response = await fetch(`${studio.origin}/cr/${cr.slug}/api/proposals/events`, { signal: controller.signal });
+    const reader = (response.body ?? new ReadableStream()).pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    while (!buffer.includes('retry:')) buffer += (await reader.read()).value ?? '';
+    const proposed = await call(client, 'propose_edit', { cr: cr.slug, path: NOTE, edits: [{ find: 'tightened', replace: 'streamed' }] });
+    while (!buffer.includes('data: ')) buffer += (await reader.read()).value ?? '';
+    controller.abort();
+    const data = JSON.parse(buffer.slice(buffer.indexOf('data: ') + 6).split('\n')[0] ?? '') as ProposalView;
+    expect(data).toMatchObject({ id: proposed.value?.id, path: NOTE });
+  });
+
+  it('creates a note that does not exist yet, on the run\'s Keep/Revert list', async () => {
+    const page = 'content/notes/guide/created.mdx';
+    // A fix to the note the run created is written too, not proposed: the
+    // note is still the run's own, on its Keep/Revert list.
+    const run = await runAgent(`mcp propose_edit {"path": "${page}", "content": "---\\ntitle: Created\\n---\\n\\nNew.\\n"}\nmcp propose_edit {"path": "content/notes/guide/broken.mdx", "content": "<Broken"}\nmcp propose_edit {"path": "${page}", "edits": [{"find": "New.", "replace": "Newer."}]}`);
+    expect(run.said).toMatch(/mcp:\{\n {2}"created": true/);
+    expect(run.said).toMatch(/mcp-error:the new note does not parse/);
+    expect(run.said).toMatch(/mcp:\{\n {2}"written": true/);
+    expect(await readFile(worktree(page), 'utf8')).toBe('---\ntitle: Created\n---\n\nNewer.\n');
+    const { proposals } = json(await send(`/cr/${cr.slug}/api/proposals?path=${page}`)) as { proposals: ProposalView[] };
+    expect(proposals).toEqual([]);
+    const { changes } = json(await send(`/cr/${cr.slug}/api/agents/runs/${run.run.id}/changes`)) as { changes: RunChange[] };
+    expect(changes).toEqual([{ path: page, existed: false, decided: null, reason: null }]);
+  }, 20_000);
+
   it('keeps comments, anchored to a block', async () => {
+    const controller = new AbortController();
+    const response = await fetch(`${studio.origin}/cr/${cr.slug}/api/proposals/events`, { signal: controller.signal });
+    const reader = (response.body ?? new ReadableStream()).pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    while (!buffer.includes('retry:')) buffer += (await reader.read()).value ?? '';
     const added = await call(client, 'add_comment', { cr: cr.slug, path: NOTE, block: 1, body: 'Say more here.' });
     expect(added.error).toBe(false);
+    // Comments stream too, as `comment` events.
+    while (!buffer.includes('event: comment')) buffer += (await reader.read()).value ?? '';
+    controller.abort();
+    expect(buffer).toContain('Say more here.');
     expect((await call(client, 'add_comment', { cr: cr.slug, path: NOTE, block: 9, body: 'x' })).text).toMatch(/has 2 blocks/);
     const { comments } = json(await send(`/cr/${cr.slug}/api/comments?path=${NOTE}`)) as { comments: NoteComment[] };
     expect(comments).toEqual([expect.objectContaining({ body: 'Say more here.', block: { index: 1, text: expect.stringContaining('A first look') as string } })]);
@@ -247,7 +284,9 @@ describe('Studio MCP server', () => {
   }, 20_000);
 
   it('keeps the file as the run found it, not as the agent left it before a later write', async () => {
-    const page = 'content/notes/guide/twice.mdx';
+    // An asset: a write to a note that exists would be a proposal.
+    const page = 'public/notes/guide/twice.svg';
+    await mkdir(dirname(worktree(page)), { recursive: true });
     await committed(page, 'As found.\n');
     const run = await runAgent(`sneak ${worktree(page)} first\nwrite ${worktree(page)} second`);
     expect(await readFile(worktree(page), 'utf8')).toBe('second');
@@ -281,6 +320,43 @@ describe('Studio MCP server', () => {
       expect(await call(client, name, {})).toMatchObject({ error: true, text: expect.stringContaining(`no such tool: ${name}`) as unknown });
     }
   });
+
+  it('takes a run\'s edits to the note it created as proposals once someone else changed it', async () => {
+    // Saved through the file API, then changed on disk some other way (as
+    // the live editor's sync does): either way the note is no longer only
+    // the run's draft, and its later edits are proposed.
+    const saved = 'content/notes/guide/drafted.mdx';
+    const synced = 'content/notes/guide/drafted-too.mdx';
+    const go = (name: string) => join(cr.worktree ?? '', '..', `${cr.slug}-${name}-${String(Date.now())}`);
+    const [first, second] = [go('first'), go('second')];
+    const proposalsOf = async (path: string) => (json(await send(`/cr/${cr.slug}/api/proposals?path=${path}`)) as { proposals: ProposalView[] }).proposals;
+    const until = async (check: () => Promise<boolean>) => {
+      const deadline = Date.now() + 10_000;
+      while (!(await check()) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+    };
+    await hangingRun([
+      `write ${worktree(saved)} Draft.`,
+      `mcp propose_edit {"path": "${synced}", "content": "Draft.\\n"}`,
+      `wait ${first}`,
+      `write ${worktree(saved)} Second draft.`,
+      `wait ${second}`,
+      `mcp propose_edit {"path": "${synced}", "edits": [{"find": "Draft.", "replace": "Fixed."}]}`,
+    ].join('\n'), async () => {
+      await changed(synced, '');
+      const { mtimeMs } = json(await send(`/cr/${cr.slug}/api/file?path=${saved}`)) as { mtimeMs: number };
+      expect((await send(`/cr/${cr.slug}/api/file?path=${saved}`, 'PUT', { content: 'By a person.\n', baseMtime: mtimeMs })).status).toBe(200);
+      await writeFile(first, '');
+      await until(async () => (await proposalsOf(saved)).length > 0);
+      await writeFile(worktree(synced), 'Draft.\n\nBy the editor.\n');
+      await writeFile(second, '');
+      await until(async () => (await proposalsOf(synced)).length > 0);
+    });
+    await Promise.all([rm(first, { force: true }), rm(second, { force: true })]);
+    expect(await readFile(worktree(saved), 'utf8')).toBe('By a person.\n');
+    expect((await proposalsOf(saved)).flatMap((proposal) => proposal.hunks.map((hunk) => hunk.added)).join('')).toContain('Second draft.');
+    expect(await readFile(worktree(synced), 'utf8')).toBe('Draft.\n\nBy the editor.\n');
+    expect((await proposalsOf(synced)).flatMap((proposal) => proposal.hunks.map((hunk) => hunk.added)).join('')).toContain('Fixed.');
+  }, 30_000);
 
   it('lists what a run changed with its own tools, to keep or revert', async () => {
     const meta = 'content/notes/guide/meta.yaml';

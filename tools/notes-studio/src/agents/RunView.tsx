@@ -1,7 +1,8 @@
 import { FilePen, FileText, Search, ShieldCheck, ShieldQuestion, ShieldX, Square, Terminal, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ToolCallUpdate } from '../../server/agents/shared';
-import type { RunEvent, RunSummary } from '../api/agents';
+import type { AgentsClient, RunEvent, RunSummary } from '../api/agents';
+import { RunChanges } from './RunChanges';
 import { AgentLogo } from './AgentLogo';
 import { costLabel, durationLabel, transcriptOf, type TranscriptItem } from './transcript';
 
@@ -21,7 +22,7 @@ function toolIcon(call: ToolCallUpdate): ReactNode {
 
 const TOOL_STATES: Record<string, string> = { pending: 'Waiting', in_progress: 'Running', completed: 'Done', failed: 'Failed' };
 
-function Item({ item, onOpenDiff }: { item: TranscriptItem; onOpenDiff: (path: string) => void }) {
+function Item({ item, onOpenDiff, onOpenNote }: { item: TranscriptItem; onOpenDiff: (path: string) => void; onOpenNote: (path: string) => void }) {
   if (item.kind === 'message') return <p className="studio-agent-message">{item.text}</p>;
   if (item.kind === 'thought') return <p className="studio-agent-thought">{item.text}</p>;
   if (item.kind === 'plan') {
@@ -53,6 +54,16 @@ function Item({ item, onOpenDiff }: { item: TranscriptItem; onOpenDiff: (path: s
       </div>
     );
   }
+  if (item.kind === 'proposal') {
+    return (
+      <div className="studio-agent-tool" data-status="proposal">
+        <FilePen size={14} aria-hidden />
+        <span className="studio-agent-tool-title" title={item.path}>{item.path}</span>
+        <span className="studio-agent-tool-state">{item.hunks === 1 ? '1 suggestion' : `${String(item.hunks)} suggestions`}</span>
+        <button type="button" className="studio-agent-link" onClick={() => { onOpenNote(item.path); }}>Review in editor</button>
+      </div>
+    );
+  }
   return (
     <div className="studio-agent-tool" data-status="wrote">
       <FilePen size={14} aria-hidden />
@@ -65,7 +76,17 @@ function Item({ item, onOpenDiff }: { item: TranscriptItem; onOpenDiff: (path: s
 
 // One run: who ran it, what it said and did, and what it cost. `onCancel`
 // is there while it runs and the viewer may stop it.
-export function RunView({ run, events, onCancel, onOpenDiff }: { run: RunSummary; events: RunEvent[] | undefined; onCancel: (() => void) | null; onOpenDiff: (path: string) => void }) {
+// `client` reads and decides the files the run changed itself (RunChanges),
+// which `canDecide` allows.
+export function RunView({ run, events, onCancel, onOpenDiff, onOpenNote, client, canDecide }: {
+  run: RunSummary;
+  events: RunEvent[] | undefined;
+  onCancel: (() => void) | null;
+  onOpenDiff: (path: string) => void;
+  onOpenNote: (path: string) => void;
+  client: AgentsClient;
+  canDecide: boolean;
+}) {
   const items = events === undefined ? null : transcriptOf(events);
   const cost = costLabel(run);
   return (
@@ -83,8 +104,9 @@ export function RunView({ run, events, onCancel, onOpenDiff }: { run: RunSummary
       <div className="studio-agent-stream">
         <p className="studio-agent-prompt">{run.prompt}</p>
         {items === null && <p className="studio-agent-meta">Loading the transcript…</p>}
-        {items?.map((item) => <Item key={item.key} item={item} onOpenDiff={onOpenDiff} />)}
+        {items?.map((item) => <Item key={item.key} item={item} onOpenDiff={onOpenDiff} onOpenNote={onOpenNote} />)}
         {run.error !== null && <p role="alert" className="studio-tree-error">{run.error}</p>}
+        <RunChanges client={client} run={run} canDecide={canDecide} />
       </div>
       <footer className="studio-agent-run-foot">
         <span>{durationLabel(run)}</span>

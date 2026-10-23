@@ -1,9 +1,12 @@
-import { Bot, Check, ChevronDown } from 'lucide-react';
+import { Bot, Check, ChevronDown, Plug } from 'lucide-react';
+import { useState } from 'react';
 import { AGENT_ROLES } from '../../server/agents/shared';
 import type { AgentInfo, AgentRole } from '../api/agents';
 import { PopupMenu } from '../cr/PopupMenu';
 import { useMenu } from '../cr/use-menu';
+import { CURRENT_CR } from '../api/workspace';
 import { AgentLogo } from './AgentLogo';
+import { ConnectDialog } from './ConnectDialog';
 import { pickOf, type Agents } from './useAgents';
 
 const ROLE_LABELS: Record<AgentRole, { name: string; hint: string }> = {
@@ -29,6 +32,7 @@ function AgentItem({ agent, checked, onPick }: { agent: AgentInfo; checked: bool
 // role runs. Agents that cannot run here are listed, greyed, with why.
 export function AgentControl({ agents, live }: { agents: Agents; live: number }) {
   const menu = useMenu();
+  const [connecting, setConnecting] = useState(false);
   const author = pickOf(agents.agents, agents.picks, 'author');
   const reviewer = pickOf(agents.agents, agents.picks, 'reviewer');
   return (
@@ -84,9 +88,17 @@ export function AgentControl({ agents, live }: { agents: Agents; live: number })
             </div>
           ))}
           <hr />
+          <button type="button" role="menuitem" className="studio-agent-item" onClick={() => { menu.close(); setConnecting(true); }}>
+            <span className="studio-menu-check" />
+            <Plug size={14} aria-hidden />
+            <span className="studio-agent-item-name">Connect an agent…</span>
+            <span className="studio-agent-item-why">Use the Studio&apos;s tools from a terminal</span>
+          </button>
+          <hr />
           <p className="studio-agent-menu-note">Each agent signs in on its own; the Studio keeps no key. Choices are kept in this browser.</p>
         </PopupMenu>
       )}
+      {connecting && <ConnectDialog cr={CURRENT_CR} onClose={() => { setConnecting(false); }} />}
     </div>
   );
 }

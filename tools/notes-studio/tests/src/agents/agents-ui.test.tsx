@@ -6,7 +6,7 @@ import { AgentControl } from '../../../src/agents/AgentControl';
 import { AgentPanel } from '../../../src/agents/AgentPanel';
 import { PermissionDialog } from '../../../src/agents/PermissionDialog';
 import { useAgents } from '../../../src/agents/useAgents';
-import type { AgentInfo, AgentsClient, RunSummary, StreamEvent } from '../../../src/api/agents';
+import type { AgentInfo, AgentsClient, RunChange, RunEvent, RunSummary, StreamEvent } from '../../../src/api/agents';
 
 const AGENTS: AgentInfo[] = [
   { id: 'claude', name: 'Claude Code', fencesReviewer: true, available: true, reason: null, note: null, version: '0.88.0' },
@@ -20,7 +20,7 @@ const summary = (change: Partial<RunSummary> = {}): RunSummary => ({
   startedMs: Date.now(), endedMs: null, cost: null, usage: null, writes: [], by: 'octocat', ...change,
 });
 
-function fakeClient(runs: RunSummary[] = []) {
+function fakeClient(runs: RunSummary[] = [], changes: RunChange[] = []) {
   let listener: ((event: StreamEvent) => void) | null = null;
   let opened: () => void = () => undefined;
   const client = {
@@ -28,9 +28,12 @@ function fakeClient(runs: RunSummary[] = []) {
     totals: vi.fn(() => Promise.resolve({})),
     runs: vi.fn(() => Promise.resolve(runs)),
     start: vi.fn((agent: string, role: string, prompt: string) => Promise.resolve(summary({ id: 'new', agent: agent as RunSummary['agent'], role: role as RunSummary['role'], prompt }))),
-    read: vi.fn((id: string) => Promise.resolve({ run: summary({ id }), events: [] })),
+    read: vi.fn((id: string) => Promise.resolve({ run: summary({ id }), events: [] as RunEvent[] })),
     cancel: vi.fn(() => Promise.resolve()),
     answer: vi.fn(() => Promise.resolve()),
+    changes: vi.fn((): Promise<RunChange[]> => Promise.resolve(changes)),
+    decide: vi.fn((_id: string, path: string, op: 'keep' | 'revert') => (path === 'content/notes/late.mdx' && op === 'revert' ? Promise.reject(new Error('content/notes/late.mdx changed since the run ended')) : Promise.resolve({ path, existed: true, decided: op === 'keep' ? 'kept' as const : 'reverted' as const, reason: null }))),
+    compare: vi.fn(() => Promise.resolve({ before: 'Before.\n', after: 'After.\n' })),
     subscribe: vi.fn((next: (event: StreamEvent) => void, onOpen: () => void = () => undefined) => {
       listener = next;
       opened = onOpen;
@@ -44,13 +47,13 @@ function fakeClient(runs: RunSummary[] = []) {
   return { client, emit, reconnect };
 }
 
-function Harness({ client, inCr = true, canRun = true, onOpenDiff = () => undefined }: { client: AgentsClient; inCr?: boolean; canRun?: boolean; onOpenDiff?: (path: string) => void }) {
+function Harness({ client, inCr = true, canRun = true, onOpenDiff = () => undefined, onOpenNote = () => undefined }: { client: AgentsClient; inCr?: boolean; canRun?: boolean; onOpenDiff?: (path: string) => void; onOpenNote?: (path: string) => void }) {
   const agents = useAgents(client, inCr);
   const live = agents.runs.filter((run) => run.status === 'running').length;
   return (
     <>
       <AgentControl agents={agents} live={live} />
-      {agents.open && <AgentPanel agents={agents} inCr={inCr} canRun={canRun} onOpenDiff={onOpenDiff} />}
+      {agents.open && <AgentPanel agents={agents} inCr={inCr} canRun={canRun} canDecide onOpenDiff={onOpenDiff} onOpenNote={onOpenNote} />}
     </>
   );
 }
@@ -152,6 +155,46 @@ describe('agent panel', () => {
     await user.click(await history.findByRole('button', { name: /Review the links/ }));
     expect(client.read).toHaveBeenCalledWith('old');
     expect(screen.getByRole('region', { name: 'Run of Codex' })).toBeTruthy();
+  });
+
+  it('shows a proposal with a way to the note, and keeps or reverts what the run changed itself', async () => {
+    const done = summary({ id: 'done', status: 'done', endedMs: Date.now(), writes: ['content/notes/meta.yaml', 'content/notes/late.mdx', 'package.json', 'content/notes/saved.mdx'] });
+    const changes: RunChange[] = [
+      { path: 'content/notes/meta.yaml', existed: true, decided: null, reason: null },
+      { path: 'content/notes/late.mdx', existed: true, decided: null, reason: null },
+      // The server keeps no earlier version outside the notes (existed: false).
+      { path: 'package.json', existed: false, decided: null, reason: 'outside the notes and their assets: revert it by hand' },
+      { path: 'content/notes/saved.mdx', existed: true, decided: null, reason: 'also saved by a person during the run: revert it by hand' },
+    ];
+    const { client } = fakeClient([done], changes);
+    client.read.mockImplementation(() => Promise.resolve({ run: done, events: [{ type: 'proposal', at: 1, id: 'p1', path: 'content/notes/guide.mdx', hunks: 2 }] }));
+    const onOpenNote = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness client={client} onOpenNote={onOpenNote} />);
+    await user.click(await within(await screen.findByRole('region', { name: 'Runs in this change request' })).findByRole('button', { name: /Tighten the intro/ }));
+    await user.click(await screen.findByRole('button', { name: 'Review in editor' }));
+    expect(onOpenNote).toHaveBeenCalledWith('content/notes/guide.mdx');
+    expect(screen.getByText('2 suggestions')).toBeTruthy();
+
+    const section = within(await screen.findByRole('region', { name: 'Files this run changed' }));
+    expect(await section.findAllByText(/revert it by hand/)).toHaveLength(2);
+    // A file a person saved too keeps its diff, only not Keep/Revert; one
+    // outside the notes has no earlier version to show.
+    const saved = within(section.getByText('content/notes/saved.mdx').closest('li') as HTMLElement);
+    expect(saved.queryByRole('button', { name: 'Revert' })).toBeNull();
+    await user.click(saved.getByRole('button', { name: 'View diff' }));
+    expect(client.compare).toHaveBeenCalledWith('done', 'content/notes/saved.mdx');
+    expect(within(section.getByText('package.json').closest('li') as HTMLElement).queryByRole('button', { name: 'View diff' })).toBeNull();
+    const meta = within(section.getByText('content/notes/meta.yaml').closest('li') as HTMLElement);
+    await user.click(meta.getByRole('button', { name: 'View diff' }));
+    expect(client.compare).toHaveBeenCalledWith('done', 'content/notes/meta.yaml');
+    await user.click(meta.getByRole('button', { name: 'Revert' }));
+    expect(await meta.findByText('Reverted')).toBeTruthy();
+    const late = within(section.getByText('content/notes/late.mdx').closest('li') as HTMLElement);
+    await user.click(late.getByRole('button', { name: 'Revert' }));
+    expect((await late.findByRole('alert')).textContent).toMatch(/changed since the run ended/);
+    await user.click(late.getByRole('button', { name: 'Keep' }));
+    expect(await late.findByText('Kept')).toBeTruthy();
   });
 
   it('offers no run on main, and none to someone who is not an admin', async () => {

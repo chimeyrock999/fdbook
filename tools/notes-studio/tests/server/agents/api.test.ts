@@ -75,25 +75,35 @@ describe('agents API', () => {
     expect((await send('/api/agents/runs', 'POST', { agent: 'claude', role: 'author', prompt: 'env' })).status).toBe(403);
   });
 
-  it('runs an agent in the change request\'s worktree, writing a note there and streaming it', async () => {
+  it('runs an agent in the change request\'s worktree, proposing an edit to a note there and streaming it', async () => {
     const note = join(cr.worktree ?? '', 'content/notes/guide/first-look.mdx');
+    const before = await readFile(note, 'utf8');
+    const added = join(cr.worktree ?? '', 'content/notes/guide/added.mdx');
     let started = null as RunSummary | null;
     const events = await collect(
       `${studio.origin}${base}/api/agents/events`,
       (seen) => seen.some((event) => event.type === 'end'),
       async () => {
-        const response = await send(`${base}/api/agents/runs`, 'POST', { agent: 'claude', role: 'author', prompt: `write ${note} Agent wrote this.` });
+        const response = await send(`${base}/api/agents/runs`, 'POST', { agent: 'claude', role: 'author', prompt: `write ${note} Agent wrote this.\nwrite ${added} A new note.\nwrite ${added} A new note, fixed.` });
         expect(response.status).toBe(200);
         started = (json(response) as { run: RunSummary }).run;
       },
     );
-    expect(events.map((event) => event.type)).toEqual(expect.arrayContaining(['start', 'write', 'update', 'end']));
+    expect(events.map((event) => event.type)).toEqual(expect.arrayContaining(['start', 'proposal', 'write', 'update', 'end']));
     expect(events.every((event) => event.runId === started?.id)).toBe(true);
-    expect(await readFile(note, 'utf8')).toBe('Agent wrote this.');
-    expect(await readFile(join(repo.repo, 'content/notes/guide/first-look.mdx'), 'utf8').catch(() => null)).not.toBe('Agent wrote this.');
+    // A note that exists is proposed to, never written; a new one is
+    // written, and so is the run's fix to the note it created.
+    expect(await readFile(note, 'utf8')).toBe(before);
+    expect(await readFile(added, 'utf8')).toBe('A new note, fixed.');
+    const { proposals } = json(await send(`${base}/api/proposals`)) as { proposals: { path: string; by: unknown; hunks: { added: string }[] }[] };
+    expect(proposals).toEqual([expect.objectContaining({ path: 'content/notes/guide/first-look.mdx', by: { kind: 'run', runId: started?.id, agent: 'claude', model: 'Fake One' } })]);
+    expect(proposals[0]?.hunks.map((hunk) => hunk.added).join('')).toContain('Agent wrote this.');
+    // The agent hears that its write became a proposal.
+    const said = events.flatMap((event) => (event.type === 'update' && event.update.sessionUpdate === 'agent_message_chunk' && event.update.content.type === 'text' ? [event.update.content.text] : []));
+    expect(said.join('\n')).toMatch(/refused:.*made this write a proposal .* content\/notes\/guide\/first-look\.mdx is unchanged/);
 
     const run = await waitEnded(started?.id ?? '');
-    expect(run.run, JSON.stringify(run.events.slice(-4))).toMatchObject({ status: 'done', writes: ['content/notes/guide/first-look.mdx'], model: 'Fake One' });
+    expect(run.run, JSON.stringify(run.events.slice(-4))).toMatchObject({ status: 'done', writes: ['content/notes/guide/added.mdx'], model: 'Fake One' });
     const list = json(await send(`${base}/api/agents/runs`)) as { runs: RunSummary[] };
     expect(list.runs.map((item) => item.id)).toContain(run.run.id);
     // The list of change requests reads each one's runs and cost.

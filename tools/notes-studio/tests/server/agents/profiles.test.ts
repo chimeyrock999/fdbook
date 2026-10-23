@@ -30,7 +30,7 @@ describe('agent profiles', () => {
 
   it('keeps a Claude author off git push and gh, and a Claude reviewer off edits and the shell', () => {
     const options = (role: 'author' | 'reviewer') => (profile('claude').sessionMeta?.(role) as { claudeCode: { options: { disallowedTools: string[]; allowDangerouslySkipPermissions: boolean } } }).claudeCode.options;
-    expect(options('author')).toEqual({ disallowedTools: ['Bash(git push:*)', 'Bash(gh:*)'], allowDangerouslySkipPermissions: false });
+    expect(options('author')).toEqual({ disallowedTools: ['Bash(git push:*)', 'Bash(gh:*)', 'Edit(content/notes/**/*.mdx)'], allowDangerouslySkipPermissions: false });
     expect(options('reviewer').disallowedTools).toEqual(expect.arrayContaining(['Edit', 'Write', 'Bash']));
   });
 

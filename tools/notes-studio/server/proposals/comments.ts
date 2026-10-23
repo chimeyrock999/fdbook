@@ -20,7 +20,7 @@ const MAX_BODY = 10_000;
 
 // The comments of one change request, one JSON line each in `file`,
 // outside its worktree.
-export function createComments(file: string) {
+export function createComments(file: string, onAdd?: (comment: NoteComment) => void) {
   const lock = createKeyedLock();
   const read = async (): Promise<NoteComment[]> => {
     const text = await readFile(file, 'utf8').catch(() => '');
@@ -43,6 +43,7 @@ export function createComments(file: string) {
       return lock('append', async () => {
         await mkdir(dirname(file), { recursive: true });
         await appendFile(file, `${JSON.stringify(stored)}\n`);
+        onAdd?.(stored);
         return stored;
       });
     },

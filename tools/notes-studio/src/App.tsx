@@ -2,11 +2,13 @@ import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentControl } from './agents/AgentControl';
 import { AgentPanel } from './agents/AgentPanel';
-import { AgentWrote } from './agents/AgentWrote';
 import { PermissionDialog } from './agents/PermissionDialog';
 import { firstAsk } from './agents/transcript';
 import { useAgents } from './agents/useAgents';
 import { createAgentsClient, type RunTotals } from './api/agents';
+import { createProposalsClient } from './api/proposals';
+import type { NoteReview } from './suggestions/Suggestions';
+import { failureOn, useProposals } from './suggestions/useProposals';
 import type { AssetAnswer, AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
 import { createChangesClient, type ChangedFile } from './api/changes';
@@ -116,6 +118,19 @@ export function App() {
   const agents = useAgents(agentsClient, crMode && CURRENT_CR !== null);
   const liveRuns = agents.runs.filter((run) => run.status === 'running');
   const asking = rights.agents ? firstAsk(liveRuns, agents.events) : null;
+  // What agents proposed and commented (#85), as it comes.
+  const proposalsClient = useMemo(() => createProposalsClient(), []);
+  const proposals = useProposals(proposalsClient, crMode && CURRENT_CR !== null);
+  const { act: actOnProposal, proposals: allProposals, comments: allComments, error: proposalFailure } = proposals;
+  const review = useMemo<NoteReview | null>(() => {
+    if (active === null || CURRENT_CR === null) return null;
+    return {
+      proposals: allProposals.filter((proposal) => proposal.path === active && !proposal.done),
+      comments: allComments.filter((comment) => comment.path === active),
+      error: failureOn(proposalFailure, active),
+      act: actOnProposal,
+    };
+  }, [active, allProposals, allComments, proposalFailure, actOnProposal]);
   const [agentTotals, setAgentTotals] = useState<Record<string, RunTotals>>({});
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);
@@ -372,6 +387,7 @@ export function App() {
                 onRenamed={renamed}
                 unsaved={unsaved}
                 marks={marks}
+                suggested={proposals.counts}
                 readOnly={readOnly}
                 onChanged={reload}
               />
@@ -394,6 +410,7 @@ export function App() {
               onIssueShown={closeDrawer}
               onShowHistory={() => { go({ kind: 'history', path: active }); }}
               place={place?.note === active ? place : null}
+              review={review}
             />
           </NoteGate>
         ) : asset ? (
@@ -468,8 +485,7 @@ export function App() {
         ) : (
           <p className="m-auto p-6 text-[13px] text-[var(--fde-muted-foreground)]">{readOnly ? 'Pick a note to read.' : 'Pick a note to edit.'}</p>
         )}
-        {active !== null && <AgentWrote runs={liveRuns} path={active} onOpenDiff={() => { openDiff(active); }} />}
-        {crMode && agents.open && <AgentPanel agents={agents} inCr={CURRENT_CR !== null} canRun={rights.agents} onOpenDiff={openDiff} />}
+        {crMode && agents.open && <AgentPanel agents={agents} inCr={CURRENT_CR !== null} canRun={rights.agents} canDecide={!readOnly} onOpenDiff={openDiff} onOpenNote={open} />}
         {left && <LeaveNotice notice={left} onBack={() => { switchTo(left.cr); }} onClose={dismissLeft} />}
       </div>
       {crDialog?.kind === 'new' && (
