@@ -430,34 +430,10 @@
     cursor: not-allowed;
     opacity: 0.45;
   }
-  .studio-leave-notice {
-    position: absolute;
-    right: 14px;
-    bottom: 14px;
-    z-index: 50;
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    max-width: 340px;
-    padding: 10px 12px;
-    font-size: 12.5px;
-  }
-  .studio-leave-notice > svg {
-    flex: none;
-    margin-top: 1px;
-    color: var(--fde-warning);
-  }
   .studio-leave-actions {
     display: flex;
     gap: 10px;
     margin-top: 6px;
-  }
-  @media (max-width: 767px) {
-    .studio-leave-notice {
-      left: 10px;
-      right: 10px;
-      max-width: none;
-    }
   }
   @media (prefers-reduced-motion: reduce) {
     .studio-changes-chevron {

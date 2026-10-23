@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fakeClient, Harness, summary } from '../../support/agents-ui';
@@ -90,5 +90,31 @@ describe('chat history', () => {
     await screen.findByRole('button', { name: /^Review the links/ });
     expect(screen.queryByRole('button', { name: /^Delete/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Select' })).toBeNull();
+  });
+
+  it('deletes a chat once: its row waits while the delete is out, and comes back if it fails', async () => {
+    const { client } = fakeClient(CHATS);
+    let refuse: (reason: Error) => void = () => undefined;
+    client.remove.mockReturnValueOnce(new Promise<void>((_resolve, reject) => { refuse = reject; }));
+    const user = userEvent.setup();
+    render(<Harness client={client} />);
+    await user.click(await screen.findByRole('button', { name: 'History' }));
+    const trash = await screen.findByRole<HTMLButtonElement>('button', { name: 'Delete: Review the links' });
+    await user.click(trash);
+    await user.click(within(screen.getByRole('dialog', { name: 'Delete this chat?' })).getByRole('button', { name: 'Delete' }));
+    expect(trash.disabled).toBe(true);
+    expect(trash.getAttribute('aria-busy')).toBe('true');
+    // It cannot be confirmed again, nor picked for a bulk delete.
+    await user.click(trash);
+    expect(screen.queryByRole('dialog', { name: 'Delete this chat?' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Select' }));
+    expect(screen.getByRole<HTMLInputElement>('checkbox', { name: 'Pick: Review the links' }).disabled).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Select' }));
+    expect(client.remove).toHaveBeenCalledTimes(1);
+    await act(async () => { refuse(new Error('the agent is still answering: cancel the turn first')); await Promise.resolve(); });
+    expect((await screen.findByRole('alert')).textContent).toContain('cancel the turn first');
+    const again = screen.getByRole<HTMLButtonElement>('button', { name: 'Delete: Review the links' });
+    await waitFor(() => { expect(again.disabled).toBe(false); });
+    expect(again.getAttribute('aria-busy')).toBeNull();
   });
 });

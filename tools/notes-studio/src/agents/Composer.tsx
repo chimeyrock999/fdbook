@@ -1,5 +1,7 @@
 import { ArrowUp } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useBusy } from '../actions/busy';
+import { PendingButton } from '../actions/PendingButton';
 import { composing } from '../keyboard';
 
 // The message box at the bottom of the agent panel. Enter sends, as in
@@ -7,12 +9,14 @@ import { composing } from '../keyboard';
 // text (Telex) only confirms it. It grows with its text
 // up to a few lines (agents.css), then scrolls, and keeps its focus after
 // sending. `busy`: the agent is answering, so typing goes on but nothing
-// sends. `onSend` resolves whether the message went, to clear the box.
+// sends. The box empties as the message goes (the thread shows it on its
+// way, AgentPanel); `onSend` resolves whether it went, and a message that
+// did not comes back to the box.
 export function Composer({ placeholder, busy, onSend, children }: { placeholder: string; busy: boolean; onSend: (text: string) => Promise<boolean>; children?: ReactNode }) {
   const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
+  const action = useBusy();
   const box = useRef<HTMLTextAreaElement>(null);
-  const blocked = busy || sending || text.trim() === '';
+  const blocked = busy || action.busy || text.trim() === '';
 
   useLayoutEffect(() => {
     const area = box.current;
@@ -23,11 +27,12 @@ export function Composer({ placeholder, busy, onSend, children }: { placeholder:
 
   const send = () => {
     if (blocked) return;
-    setSending(true);
-    onSend(text).then((sent) => { if (sent) setText(''); }, () => undefined).finally(() => {
-      setSending(false);
-      box.current?.focus();
-    });
+    const message = text;
+    setText('');
+    void action.run(async () => {
+      // What was typed meanwhile stays.
+      if (!(await onSend(message))) setText((now) => (now === '' ? message : now));
+    }).finally(() => { box.current?.focus(); });
   };
 
   return (
@@ -49,9 +54,9 @@ export function Composer({ placeholder, busy, onSend, children }: { placeholder:
       <div className="studio-agent-composer-row">
         {children}
         <span className="flex-1" />
-        <button type="submit" className="studio-agent-send" aria-label="Send" title="Send" disabled={blocked}>
+        <PendingButton type="submit" className="studio-agent-send" aria-label="Send" title="Send" pending={action.busy} pendingLabel={null} disabled={blocked}>
           <ArrowUp size={14} aria-hidden />
-        </button>
+        </PendingButton>
       </div>
     </form>
   );

@@ -1,13 +1,15 @@
 import { ArrowRight, FileCode } from 'lucide-react';
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { ASSET_TYPES, extensionOf, isAssetExtension, MAX_ASSET_BYTES } from '../../server/security/asset-types';
+import { useBusy } from '../actions/busy';
+import { PendingButton } from '../actions/PendingButton';
 import type { AssetAnswer, AssetInfo, AssetRequest, AssetsClient } from '../api/assets';
 import { useAssetUrl } from '../api/asset-versions';
 import { imageExtension } from '../media/asset-names';
 import { Dialog } from '../tree/TreeDialogs';
 import { formatSize, isImage } from './asset-facts';
 import { nameOf } from './asset-tree';
-import { message, usePreview } from './asset-changes';
+import { usePreview } from './asset-changes';
 import { Changes, Pick } from './AssetDialogs';
 
 const ACCEPT = Object.keys(ASSET_TYPES).map((extension) => `.${extension}`).join(',');
@@ -77,8 +79,8 @@ export function ReplaceAssetDialog({ client, asset, initial, onDone, onClose }: 
   onClose: () => void;
 }) {
   const [file, setFile] = useState<File | null>(initial);
-  const [failed, setFailed] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const action = useBusy();
+  const { busy } = action;
   const oldUrl = useAssetUrl(asset.path);
 
   const extension = file === null ? null : fileExtension(file);
@@ -94,23 +96,19 @@ export function ReplaceAssetDialog({ client, asset, initial, onDone, onClose }: 
   const pick = (next: File | undefined) => {
     if (next === undefined) return;
     setFile(next);
-    setFailed(null);
   };
   const drop = (event: DragEvent) => {
     event.preventDefault();
     pick(event.dataTransfer.files[0]);
   };
+  // A failure says why in a toast; the dialog stays, to try again.
   const submit = () => {
-    if (request === null || file === null || busy) return;
-    setBusy(true);
-    client.replace(asset.path, request.extension, file, asset.mtimeMs).then(onDone, (reason: unknown) => {
-      setBusy(false);
-      setFailed(message(reason));
-    });
+    if (request === null || file === null || planned?.error != null) return;
+    void action.run(async () => { onDone(await client.replace(asset.path, request.extension, file, asset.mtimeMs)); });
   };
 
   return (
-    <Dialog title={`Replace “${nameOf(asset.path)}”`} onClose={onClose} onSubmit={submit}>
+    <Dialog title={`Replace “${nameOf(asset.path)}”`} busy={busy} onClose={onClose} onSubmit={submit}>
       <Pick asset={asset} />
       <div className="studio-asset-pair">
         <Side label="now" name={nameOf(asset.path)} source={oldUrl} size={asset.size} />
@@ -131,18 +129,16 @@ export function ReplaceAssetDialog({ client, asset, initial, onDone, onClose }: 
           <b>Different type.</b> The file becomes {nameOf(asset.path).replace(/\.[^.]+$/, `.${extension}`)}, and the notes that use it follow. Everything else in those notes stays as it is.
         </p>
       )}
-      {failed !== null ? (
-        <p role="alert" className="studio-tree-error">{failed}</p>
-      ) : planned?.error != null ? (
+      {planned?.error != null ? (
         <p role="alert" className="studio-tree-error">{planned.error}</p>
       ) : (
         planned && <Changes changes={planned.changes} />
       )}
       <div className="flex justify-end gap-2">
-        <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
-        <button type="submit" className="studio-button studio-button-primary" disabled={request === null || planned?.error != null || busy}>
+        <button type="button" className="studio-button" disabled={busy} onClick={onClose}>Cancel</button>
+        <PendingButton type="submit" className="studio-button studio-button-primary" pending={busy} pendingLabel="Replacing…" disabled={request === null || planned?.error != null}>
           {renames ? 'Replace and rename' : 'Replace'}
-        </button>
+        </PendingButton>
       </div>
     </Dialog>
   );

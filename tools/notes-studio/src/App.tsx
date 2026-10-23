@@ -2,13 +2,13 @@ import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentControl } from './agents/AgentControl';
 import { AgentPanel } from './agents/AgentPanel';
-import { PermissionDialog } from './agents/PermissionDialog';
-import { firstAsk } from './agents/transcript';
+import { useAsking } from './agents/useAsking';
 import { useAgents } from './agents/useAgents';
+import { ToastStack } from './actions/ToastStack';
 import { createAgentsClient, type ConversationTotals } from './api/agents';
 import { createProposalsClient } from './api/proposals';
 import type { NoteReview } from './suggestions/Suggestions';
-import { failureOn, useProposals } from './suggestions/useProposals';
+import { useProposals } from './suggestions/useProposals';
 import type { AssetAnswer, AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
 import { createChangesClient, type ChangedFile } from './api/changes';
@@ -119,21 +119,19 @@ export function App() {
   // Agents run in the change request this page edits (#84).
   const agentsClient = useMemo(() => createAgentsClient(), []);
   const agents = useAgents(agentsClient, crMode && CURRENT_CR !== null);
-  const answering = agents.conversations.filter((conversation) => conversation.status === 'running');
-  const asking = rights.agents ? firstAsk(answering, agents.events) : null;
+  const { answering, asking, asks } = useAsking(agents, rights.agents);
   // What agents proposed and commented (#85), as it comes.
   const proposalsClient = useMemo(() => createProposalsClient(), []);
   const proposals = useProposals(proposalsClient, crMode && CURRENT_CR !== null);
-  const { act: actOnProposal, proposals: allProposals, comments: allComments, error: proposalFailure } = proposals;
+  const { act: actOnProposal, proposals: allProposals, comments: allComments } = proposals;
   const review = useMemo<NoteReview | null>(() => {
     if (active === null || CURRENT_CR === null) return null;
     return {
       proposals: allProposals.filter((proposal) => proposal.path === active && !proposal.done),
       comments: allComments.filter((comment) => comment.path === active),
-      error: failureOn(proposalFailure, active),
       act: actOnProposal,
     };
-  }, [active, allProposals, allComments, proposalFailure, actOnProposal]);
+  }, [active, allProposals, allComments, actOnProposal]);
   const [agentTotals, setAgentTotals] = useState<Record<string, ConversationTotals>>({});
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);
@@ -310,10 +308,8 @@ export function App() {
       openView('changes');
       requestAnimationFrame(() => { document.getElementById('studio-commit-message')?.focus(); });
     } else if (kind === 'publish') setPublishing(true);
-    else if (preview.preview !== null) {
-      // A failed push says why in the Preview section.
-      void pusher.push(preview.preview).then((ok) => { if (!ok) openView('changes'); });
-    }
+    // A failed push says why in a toast.
+    else if (preview.preview !== null) void pusher.push(preview.preview);
   };
 
   return (
@@ -327,7 +323,7 @@ export function App() {
         <span className={`min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)] ${crMode ? 'max-md:hidden' : ''}`}>{pagePath ?? ''}</span>
         {crMode && CURRENT_CR === null && rights.write && <EditMenu list={crs.list} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} />}
         {!onMain && <OpenPreview preview={preview.preview} route={route} />}
-        {crMode && <AgentControl agents={agents} live={answering.length} />}
+        {crMode && <AgentControl agents={agents} live={answering.length} asks={asks} />}
         {action !== null && <PrimaryActionButton action={action} onAction={act} />}
         <UserMenu />
       </header>
@@ -488,8 +484,7 @@ export function App() {
         ) : (
           <p className="m-auto p-6 text-[13px] text-[var(--fde-muted-foreground)]">{readOnly ? 'Pick a note to read.' : 'Pick a note to edit.'}</p>
         )}
-        {crMode && agents.open && <AgentPanel agents={agents} inCr={CURRENT_CR !== null} canRun={rights.agents} canDecide={!readOnly} onOpenDiff={openDiff} onOpenNote={open} />}
-        {left && <LeaveNotice notice={left} onBack={() => { switchTo(left.cr); }} onClose={dismissLeft} />}
+        {crMode && agents.open && <AgentPanel agents={agents} inCr={CURRENT_CR !== null} canRun={rights.agents} canDecide={!readOnly} asking={asking} onOpenDiff={openDiff} onOpenNote={open} />}
       </div>
       {crDialog?.kind === 'new' && (
         <NewCrDialog
@@ -502,10 +497,8 @@ export function App() {
       {publishing && preview.preview !== null && (
         <PublishDialog client={previewClient} preview={preview.preview} onPublished={published} onClose={() => { setPublishing(false); }} />
       )}
-      {asking !== null && (
-        <PermissionDialog key={asking.ask.id} conversation={asking.conversation} ask={asking.ask} at={asking.at} onAnswer={(optionId) => { void agents.answer(asking.conversation.id, asking.ask.id, optionId); }} />
-      )}
       {crDialog?.kind === 'discard' && <DiscardDialog client={crClient} cr={crDialog.cr} current={crDialog.cr.slug === CURRENT_CR} onDone={discarded} onClose={() => { setCrDialog(null); }} />}
+      <ToastStack>{left && <LeaveNotice notice={left} onBack={() => { switchTo(left.cr); }} onClose={dismissLeft} />}</ToastStack>
     </div>
   );
 }

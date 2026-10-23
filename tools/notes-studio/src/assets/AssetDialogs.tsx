@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { extensionOf } from '../../server/security/asset-types';
+import { useBusy } from '../actions/busy';
+import { PendingButton } from '../actions/PendingButton';
 import type { AssetAnswer, AssetChange, AssetInfo, AssetRequest, AssetsClient, AssetSource, AssetUsage } from '../api/assets';
 import { sitePath } from '../media/asset-names';
 import { slugify } from '../slug';
 import { Dialog } from '../tree/TreeDialogs';
-import { message, usePreview } from './asset-changes';
+import { usePreview } from './asset-changes';
 import { nameOf } from './asset-tree';
 
 const stemOf = (path: string) => nameOf(path).slice(0, nameOf(path).lastIndexOf('.'));
@@ -96,7 +98,7 @@ export function RenameAssetDialog({ client, asset, onDone, onClose }: {
   onClose: () => void;
 }) {
   const [typed, setTyped] = useState(stemOf(asset.path));
-  const [failed, setFailed] = useState<string | null>(null);
+  const action = useBusy();
   const name = slugify(typed);
   const extension = extensionOf(asset.path);
   // The name as it was is no change, even when it is not in slug form yet:
@@ -106,13 +108,14 @@ export function RenameAssetDialog({ client, asset, onDone, onClose }: {
   const preview = usePreview(client, request);
   const to = `${asset.path.slice(0, asset.path.lastIndexOf('/'))}/${name || '…'}.${extension}`;
 
+  // A failure says why in a toast; the dialog stays, to try again.
   const submit = () => {
-    if (request === null) return;
-    client.change(request).then(onDone, (reason: unknown) => { setFailed(message(reason)); });
+    if (request === null || preview?.error != null) return;
+    void action.run(async () => { onDone(await client.change(request)); });
   };
 
   return (
-    <Dialog title={`Rename “${nameOf(asset.path)}”`} onClose={onClose} onSubmit={submit}>
+    <Dialog title={`Rename “${nameOf(asset.path)}”`} busy={action.busy} onClose={onClose} onSubmit={submit}>
       <Pick asset={asset} />
       <div className="grid gap-1">
         <label htmlFor="asset-rename" className="studio-field-label">File name</label>
@@ -123,7 +126,7 @@ export function RenameAssetDialog({ client, asset, onDone, onClose }: {
             spellCheck={false}
             autoComplete="off"
             value={typed}
-            onChange={(event) => { setTyped(event.target.value); setFailed(null); }}
+            onChange={(event) => { setTyped(event.target.value); }}
           />
           <span>.{extension}</span>
         </div>
@@ -131,16 +134,14 @@ export function RenameAssetDialog({ client, asset, onDone, onClose }: {
           Notes get {sitePath(to)}; a query or hash after it stays.
         </span>
       </div>
-      {failed !== null ? (
-        <p role="alert" className="studio-tree-error">{failed}</p>
-      ) : preview?.error != null ? (
+      {preview?.error != null ? (
         <p role="alert" className="studio-tree-error">{preview.error}</p>
       ) : (
         preview && <Changes changes={preview.changes} />
       )}
       <div className="flex justify-end gap-2">
-        <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
-        <button type="submit" className="studio-button studio-button-primary" disabled={!changed || preview?.error != null}>Rename</button>
+        <button type="button" className="studio-button" disabled={action.busy} onClick={onClose}>Cancel</button>
+        <PendingButton type="submit" className="studio-button studio-button-primary" pending={action.busy} pendingLabel="Renaming…" disabled={!changed || preview?.error != null}>Rename</PendingButton>
       </div>
     </Dialog>
   );
@@ -155,15 +156,15 @@ export function DeleteAssetDialog({ client, asset, onDone, onClose, onOpenUsage 
   onClose: () => void;
   onOpenUsage: (usage: AssetUsage) => void;
 }) {
-  const [failed, setFailed] = useState<string | null>(null);
+  const action = useBusy();
   const used = asset.usages.length;
   const submit = () => {
     if (used > 0 || asset.sources.length > 0) return;
-    client.change({ op: 'delete', path: asset.path, baseMtime: asset.mtimeMs }).then(onDone, (reason: unknown) => { setFailed(message(reason)); });
+    void action.run(async () => { onDone(await client.change({ op: 'delete', path: asset.path, baseMtime: asset.mtimeMs })); });
   };
 
   return (
-    <Dialog title={`Delete “${nameOf(asset.path)}”?`} onClose={onClose} onSubmit={submit}>
+    <Dialog title={`Delete “${nameOf(asset.path)}”?`} busy={action.busy} onClose={onClose} onSubmit={submit}>
       <Pick asset={asset} />
       {used === 0 && asset.sources.length > 0 ? (
         <>
@@ -189,10 +190,9 @@ export function DeleteAssetDialog({ client, asset, onDone, onClose, onOpenUsage 
         <>
           <p className="text-[12.5px] text-[var(--fde-muted-foreground)]">No note uses it. The file is removed from the worktree; git still has it if it was committed.</p>
           <Changes changes={[{ type: 'delete', path: asset.path }]} />
-          {failed !== null && <p role="alert" className="studio-tree-error">{failed}</p>}
           <div className="flex justify-end gap-2">
-            <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
-            <button type="submit" className="studio-button studio-button-danger" autoFocus>Delete</button>
+            <button type="button" className="studio-button" disabled={action.busy} onClick={onClose}>Cancel</button>
+            <PendingButton type="submit" className="studio-button studio-button-danger" autoFocus pending={action.busy} pendingLabel="Deleting…">Delete</PendingButton>
           </div>
         </>
       )}

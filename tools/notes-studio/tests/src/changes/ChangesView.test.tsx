@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChangedFile, Changes, ChangesClient, Commit, History } from '../../../src/api/changes';
 import type { createFilesClient, FileEvent } from '../../../src/api/files';
+import { ToastStack } from '../../../src/actions/ToastStack';
 import { ChangesView } from '../../../src/changes/ChangesView';
 import { LeaveNotice } from '../../../src/changes/LeaveNotice';
 import { leaveNotice, leftBehind, rememberLeave } from '../../../src/changes/leave';
@@ -137,10 +138,11 @@ describe('ChangesView', () => {
     expect(box().checked).toBe(true);
   });
 
-  it('shows what git said when a commit fails', async () => {
+  it('shows what git said when a commit fails, in a toast, and keeps the message', async () => {
+    render(<ToastStack />);
     setup({ commit: vi.fn(() => Promise.reject(new Error('git commit failed: Author identity unknown'))) });
     await userEvent.click(submit());
-    expect((await screen.findByRole('alert')).textContent).toBe('git commit failed: Author identity unknown');
+    expect((await screen.findByRole('alert')).textContent).toContain('git commit failed: Author identity unknown');
     expect(message().value).toBe('docs(notes): update 3 pages');
   });
 
