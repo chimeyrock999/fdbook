@@ -141,10 +141,15 @@ describe('Studio MCP server', () => {
 
   it('creates a note that does not exist yet, on the run\'s Keep/Revert list', async () => {
     const page = 'content/notes/guide/created.mdx';
-    const run = await runAgent(`mcp propose_edit {"path": "${page}", "content": "---\\ntitle: Created\\n---\\n\\nNew.\\n"}\nmcp propose_edit {"path": "content/notes/guide/broken.mdx", "content": "<Broken"}`);
+    // A fix to the note the run created is written too, not proposed: the
+    // note is still the run's own, on its Keep/Revert list.
+    const run = await runAgent(`mcp propose_edit {"path": "${page}", "content": "---\\ntitle: Created\\n---\\n\\nNew.\\n"}\nmcp propose_edit {"path": "content/notes/guide/broken.mdx", "content": "<Broken"}\nmcp propose_edit {"path": "${page}", "edits": [{"find": "New.", "replace": "Newer."}]}`);
     expect(run.said).toMatch(/mcp:\{\n {2}"created": true/);
     expect(run.said).toMatch(/mcp-error:the new note does not parse/);
-    expect(await readFile(worktree(page), 'utf8')).toBe('---\ntitle: Created\n---\n\nNew.\n');
+    expect(run.said).toMatch(/mcp:\{\n {2}"written": true/);
+    expect(await readFile(worktree(page), 'utf8')).toBe('---\ntitle: Created\n---\n\nNewer.\n');
+    const { proposals } = json(await send(`/cr/${cr.slug}/api/proposals?path=${page}`)) as { proposals: ProposalView[] };
+    expect(proposals).toEqual([]);
     const { changes } = json(await send(`/cr/${cr.slug}/api/agents/runs/${run.run.id}/changes`)) as { changes: RunChange[] };
     expect(changes).toEqual([{ path: page, existed: false, decided: null, reason: null }]);
   }, 20_000);

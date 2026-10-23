@@ -890,7 +890,10 @@ are listed greyed, with how to install them (`GET /api/agents`).
   notes lock (`server/agents/fs-policy.ts`). A write to a note that exists
   is never made: it becomes a proposal (see Proposals), and the agent is
   answered that it did, so it does not read the note back expecting its
-  text; a new note, `meta.yaml` and assets are written. Claude Code has its
+  text; a new note, `meta.yaml` and assets are written. A note the run
+  created itself stays its own draft until a person keeps or reverts it:
+  the run's later writes to it are written too, not proposed, so one new
+  note is reviewed once, on Keep/Revert. Claude Code has its
   own file tools denied on notes (`Edit(content/notes/**/*.mdx)`), so it
   proposes and creates notes through `propose_edit`. Codex, omp and Hermes write with their own tools inside
   the fences above: the Studio sees those edits in their tool calls and,
@@ -948,7 +951,7 @@ Studio starts and your own agents in a terminal while the Studio is open.
 | `read_note` | A note's text, its top-level blocks (index, line, first line) and the proposals waiting on it |
 | `search_notes` | Notes with every word of the query in their title, description, tags or text, with matching lines |
 | `note_graph` | Links out and in, tags, keywords and graph keywords, notes that share a tag |
-| `propose_edit` | A proposal: the whole new text, or find/replace edits; answers its hunks and lint issues. Nothing is written (see Proposals). A note that does not exist yet is created with `content` (on a run's Keep/Revert list). |
+| `propose_edit` | A proposal: the whole new text, or find/replace edits; answers its hunks and lint issues. Nothing is written (see Proposals). A note that does not exist yet is created with `content` (on a run's Keep/Revert list); the same run's later edits to a note it created are written too (`written: true`). |
 | `add_comment` | A comment on a note, or on one of its blocks |
 | `list_assets` | The assets under `public/notes` and the notes that use them |
 

@@ -84,16 +84,17 @@ describe('agents API', () => {
       `${studio.origin}${base}/api/agents/events`,
       (seen) => seen.some((event) => event.type === 'end'),
       async () => {
-        const response = await send(`${base}/api/agents/runs`, 'POST', { agent: 'claude', role: 'author', prompt: `write ${note} Agent wrote this.\nwrite ${added} A new note.` });
+        const response = await send(`${base}/api/agents/runs`, 'POST', { agent: 'claude', role: 'author', prompt: `write ${note} Agent wrote this.\nwrite ${added} A new note.\nwrite ${added} A new note, fixed.` });
         expect(response.status).toBe(200);
         started = (json(response) as { run: RunSummary }).run;
       },
     );
     expect(events.map((event) => event.type)).toEqual(expect.arrayContaining(['start', 'proposal', 'write', 'update', 'end']));
     expect(events.every((event) => event.runId === started?.id)).toBe(true);
-    // A note that exists is proposed to, never written; a new one is written.
+    // A note that exists is proposed to, never written; a new one is
+    // written, and so is the run's fix to the note it created.
     expect(await readFile(note, 'utf8')).toBe(before);
-    expect(await readFile(added, 'utf8')).toBe('A new note.');
+    expect(await readFile(added, 'utf8')).toBe('A new note, fixed.');
     const { proposals } = json(await send(`${base}/api/proposals`)) as { proposals: { path: string; by: unknown; hunks: { added: string }[] }[] };
     expect(proposals).toEqual([expect.objectContaining({ path: 'content/notes/guide/first-look.mdx', by: { kind: 'run', runId: started?.id, agent: 'claude', model: 'Fake One' } })]);
     expect(proposals[0]?.hunks.map((hunk) => hunk.added).join('')).toContain('Agent wrote this.');

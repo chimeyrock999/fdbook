@@ -8,7 +8,7 @@ import { useAgents } from './agents/useAgents';
 import { createAgentsClient, type RunTotals } from './api/agents';
 import { createProposalsClient } from './api/proposals';
 import type { NoteReview } from './suggestions/Suggestions';
-import { useProposals } from './suggestions/useProposals';
+import { failureOn, useProposals } from './suggestions/useProposals';
 import type { AssetAnswer, AssetUsage } from './api/assets';
 import { createAssetsClient } from './api/assets';
 import { createChangesClient, type ChangedFile } from './api/changes';
@@ -115,16 +115,16 @@ export function App() {
   // What agents proposed and commented (#85), as it comes.
   const proposalsClient = useMemo(() => createProposalsClient(), []);
   const proposals = useProposals(proposalsClient, crMode && CURRENT_CR !== null);
-  const { act: actOnProposal, proposals: allProposals, comments: allComments, error: proposalError } = proposals;
+  const { act: actOnProposal, proposals: allProposals, comments: allComments, error: proposalFailure } = proposals;
   const review = useMemo<NoteReview | null>(() => {
     if (active === null || CURRENT_CR === null) return null;
     return {
       proposals: allProposals.filter((proposal) => proposal.path === active && !proposal.done),
       comments: allComments.filter((comment) => comment.path === active),
-      error: proposalError,
+      error: failureOn(proposalFailure, active),
       act: actOnProposal,
     };
-  }, [active, allProposals, allComments, proposalError, actOnProposal]);
+  }, [active, allProposals, allComments, proposalFailure, actOnProposal]);
   const [agentTotals, setAgentTotals] = useState<Record<string, RunTotals>>({});
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);

@@ -1,13 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NoteComment, ProposalOp, ProposalsClient, ProposalView } from '../api/proposals';
 import { NOTES_PREFIX } from '../notes/notes';
+
+export type ProposalFailure = { path: string | null; message: string };
+
+// The failure to show on the note at `path`: one about that note, or one
+// about all of them (a failed reload); a failed accept on another note
+// stays there.
+export const failureOn = (failure: ProposalFailure | null, path: string) =>
+  (failure !== null && (failure.path === null || failure.path === path) ? failure.message : null);
 
 // The proposals and comments of the change request the page edits (`inCr`),
 // kept up to date from the server's stream, and the actions on them.
 export function useProposals(client: ProposalsClient, inCr: boolean) {
   const [proposals, setProposals] = useState<ProposalView[]>([]);
   const [comments, setComments] = useState<NoteComment[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  // The last failure, with the note it is about (null: all of them, as a
+  // failed reload), so a failed accept shows on that note only.
+  const [error, setError] = useState<ProposalFailure | null>(null);
+  const known = useRef(proposals);
+  useEffect(() => { known.current = proposals; }, [proposals]);
 
   const reload = useCallback(async () => {
     if (!inCr) return;
@@ -17,7 +29,7 @@ export function useProposals(client: ProposalsClient, inCr: boolean) {
       setComments(notes);
       setError(null);
     } catch (reason) {
-      setError((reason as Error).message);
+      setError({ path: null, message: (reason as Error).message });
     }
   }, [client, inCr]);
 
@@ -40,7 +52,7 @@ export function useProposals(client: ProposalsClient, inCr: boolean) {
       merge(await client.act(id, op, hunks));
       setError(null);
     } catch (reason) {
-      setError((reason as Error).message);
+      setError({ path: known.current.find((each) => each.id === id)?.path ?? null, message: (reason as Error).message });
     }
   }, [client, merge]);
 

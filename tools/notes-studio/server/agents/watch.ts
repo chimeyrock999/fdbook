@@ -52,6 +52,13 @@ export function watchRun(root: string, dirty: Promise<Map<string, number | null>
       if (!written.has(path)) written.set(path, previous);
     },
 
+    // Whether the run created `path` itself through the Studio (it did not
+    // exist before the run's first write to it): the run's own new note,
+    // which it may keep editing directly until a person keeps or reverts it.
+    created(path: string) {
+      return written.has(path) && written.get(path) === null;
+    },
+
     // The run's changes as kept for Keep/Revert, once it ended. Paths the
     // Studio may not edit are listed but cannot be reverted here.
     async settle(paths: string[]): Promise<StoredChange[]> {

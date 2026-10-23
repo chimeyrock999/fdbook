@@ -128,6 +128,7 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
       proposalsOf: async (slug) => (await reviewOf(slug)).proposals,
       commentsOf: async (slug) => (await reviewOf(slug)).comments,
       modelOf: (slug, runId) => workspaces.peek(slug)?.runs?.modelOf(runId) ?? null,
+      createdBy: (slug, runId, path) => workspaces.peek(slug)?.runs?.created(runId, path) ?? false,
     }).concat(tools),
     grants,
     auth,

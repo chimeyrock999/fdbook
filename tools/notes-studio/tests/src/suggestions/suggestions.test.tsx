@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useMemo, type RefObject } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { hunksOf } from '../../../server/proposals/hunks';
-import type { NoteComment, ProposalHunk, ProposalView } from '../../../src/api/proposals';
+import type { NoteComment, ProposalHunk, ProposalsClient, ProposalView } from '../../../src/api/proposals';
 import { useEditorPlugin } from '../../../src/editor/decorations';
 import { placeAll } from '../../../src/suggestions/places';
 import { sourceSuggestions } from '../../../src/suggestions/source';
 import { SuggestionBar, VisualSuggestions, type NoteReview } from '../../../src/suggestions/Suggestions';
+import { failureOn, useProposals } from '../../../src/suggestions/useProposals';
 import { createSuggestionLayer } from '../../../src/suggestions/visual';
 import { mountVisual, stubLayout } from '../../support/visual-editor';
 
@@ -89,7 +90,7 @@ describe('suggestions in Source', () => {
   it('marks the lines a hunk replaces and puts what it adds under them, with its actions', () => {
     const next = NOTE.replace('Second paragraph.', 'Second, rewritten.');
     const placement = placeAll(NOTE, [proposal(next)]);
-    const act = vi.fn();
+    const act = vi.fn(() => Promise.resolve());
     const view = new EditorView({ parent: document.body, state: EditorState.create({ doc: NOTE, extensions: [sourceSuggestions(NOTE, placement.hunks, act)] }) });
     const removed = [...view.dom.querySelectorAll('.studio-suggest-line-removed')].map((line) => line.textContent);
     expect(removed).toEqual(['Second paragraph.']);
@@ -97,6 +98,23 @@ describe('suggestions in Source', () => {
     expect(widget?.querySelector('pre')?.textContent).toBe('Second, rewritten.');
     widget?.querySelector<HTMLButtonElement>('[aria-label="Accept suggestion"]')?.click();
     expect(act).toHaveBeenCalledWith(placement.hunks[0], 'accept');
+    view.destroy();
+  });
+
+  it('sends one request per click until it is answered, so a double click does not decide twice', async () => {
+    const placement = placeAll(NOTE, [proposal(NOTE.replace('Second paragraph.', 'Two.'))]);
+    let answer: () => void = () => undefined;
+    const act = vi.fn(() => new Promise<void>((resolve) => { answer = resolve; }));
+    const view = new EditorView({ parent: document.body, state: EditorState.create({ doc: NOTE, extensions: [sourceSuggestions(NOTE, placement.hunks, act)] }) });
+    const accept = view.dom.querySelector<HTMLButtonElement>('[aria-label="Accept suggestion"]');
+    const reject = view.dom.querySelector<HTMLButtonElement>('[aria-label="Reject suggestion"]');
+    accept?.click();
+    accept?.click();
+    reject?.click();
+    expect(act).toHaveBeenCalledTimes(1);
+    expect([accept?.disabled, reject?.disabled]).toEqual([true, true]);
+    answer();
+    await waitFor(() => { expect(accept?.disabled).toBe(false); });
     view.destroy();
   });
 
@@ -137,5 +155,26 @@ describe('suggestions in Visual', () => {
     expect(prose.querySelector('.studio-suggest-comment button')?.getAttribute('aria-label')).toBe('Comment from Codex');
     await act(async () => { within(card).getByRole('button', { name: 'Accept suggestion' }).click(); await Promise.resolve(); });
     expect(decide.act).toHaveBeenCalledWith('p1', 'accept', ['1']);
+  });
+});
+
+describe('useProposals', () => {
+  it('keeps a failed action on its own note, and a failed reload on every note', async () => {
+    const other = { ...proposal(NOTE.replace('First paragraph.', 'One.'), 'p2'), path: 'content/notes/other.mdx' };
+    let listing: () => Promise<ProposalView[]> = () => Promise.resolve([proposal(NOTE.replace('First paragraph.', 'One.')), other]);
+    const client = {
+      list: () => listing(),
+      comments: () => Promise.resolve([]),
+      subscribe: (_merge: unknown, reopened: () => void) => { reopened(); return () => undefined; },
+      act: () => Promise.reject(new Error('nothing left to decide in these hunks')),
+    } as unknown as ProposalsClient;
+    const { result } = renderHook(() => useProposals(client, true));
+    await waitFor(() => { expect(result.current.proposals).toHaveLength(2); });
+    await act(() => result.current.act('p2', 'accept', ['1']));
+    expect(failureOn(result.current.error, 'content/notes/other.mdx')).toBe('nothing left to decide in these hunks');
+    expect(failureOn(result.current.error, PATH)).toBeNull();
+    listing = () => Promise.reject(new Error('offline'));
+    const { result: again } = renderHook(() => useProposals(client, true));
+    await waitFor(() => { expect(failureOn(again.current.error, PATH)).toBe('offline'); });
   });
 });

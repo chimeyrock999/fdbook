@@ -3,7 +3,7 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import type { ProposalOp } from '../api/proposals';
 import type { PlacedHunk } from './places';
 
-export type SourceAct = (hunk: PlacedHunk, op: ProposalOp) => void;
+export type SourceAct = (hunk: PlacedHunk, op: ProposalOp) => Promise<void>;
 
 const button = (label: string, text: string, onClick: () => void, tone?: string) => {
   const element = document.createElement('button');
@@ -39,10 +39,18 @@ class Proposed extends WidgetType {
     if (act !== null) {
       const acts = document.createElement('div');
       acts.className = 'studio-suggest-acts';
+      // One request at a time, as on the Visual card: the buttons wait for
+      // it, so a double click never sends a second one.
+      const run = (op: ProposalOp) => () => {
+        const buttons = [...acts.querySelectorAll('button')];
+        if (buttons.some((each) => each.disabled)) return;
+        for (const each of buttons) each.disabled = true;
+        void act(hunk, op).finally(() => { for (const each of buttons) each.disabled = false; });
+      };
       if (hunk.stale) {
-        acts.append(button('Rebase suggestion', 'Rebase', () => { act(hunk, 'rebase'); }), button('Drop suggestion', 'Drop', () => { act(hunk, 'drop'); }));
+        acts.append(button('Rebase suggestion', 'Rebase', run('rebase')), button('Drop suggestion', 'Drop', run('drop')));
       } else {
-        acts.append(button('Accept suggestion', '✓', () => { act(hunk, 'accept'); }, 'success'), button('Reject suggestion', '✕', () => { act(hunk, 'reject'); }, 'error'));
+        acts.append(button('Accept suggestion', '✓', run('accept'), 'success'), button('Reject suggestion', '✕', run('reject'), 'error'));
       }
       box.append(acts);
     }

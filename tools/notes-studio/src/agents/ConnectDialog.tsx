@@ -4,7 +4,7 @@ import { studioFetch } from '../api/session';
 import { useCopy } from '../clipboard';
 import { useSession } from '../session/session';
 import { Dialog } from '../tree/TreeDialogs';
-import { CLIENTS, connectCommand, type Client } from './connect-command';
+import { CLIENTS, CODEX_TOKEN_STEP, connectCommand, type Client } from './connect-command';
 
 function CopyRow({ id, text }: { id: string; text: string }) {
   const { copied, ref, copy } = useCopy<HTMLElement>(text);
@@ -78,8 +78,15 @@ export function ConnectDialog({ cr, onClose }: { cr: string | null; onClose: () 
             <button key={each.id} type="button" aria-pressed={client === each.id} onClick={() => { setClient(each.id); }}>{each.name}</button>
           ))}
         </span>
+        {signedIn && client === 'codex' && (
+          <>
+            <CopyRow id="studio-connect-token-step" text={CODEX_TOKEN_STEP} />
+            <span className="studio-cr-hint">Run this first, paste the token and press Enter: it is not echoed nor kept in the shell history. Codex reads it from STUDIO_MCP_TOKEN each time it starts, so keep it set in the shell you start Codex from.</span>
+          </>
+        )}
         <CopyRow id="studio-connect-command" text={connectCommand(client, url, signedIn ? (token ?? '<token>') : null)} />
-        {signedIn && client === 'codex' && <span className="studio-cr-hint">Codex reads the token from STUDIO_MCP_TOKEN each time it starts: keep it set in the shell you start Codex from.</span>}
+        {signedIn && client === 'claude' && <span className="studio-cr-hint">The command holds the token: it stays in your shell history and in Claude Code&apos;s MCP settings until you end it here.</span>}
+        {signedIn && client === 'stdio' && <span className="studio-cr-hint">The command holds the token: it stays in your shell history, or wherever you put the command, until you end it here.</span>}
       </div>
       {note !== null && <p role="status" className="studio-cr-hint">{note}</p>}
       <div className="flex justify-end gap-2">

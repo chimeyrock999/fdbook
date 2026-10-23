@@ -26,7 +26,8 @@ describe('Connect an agent', () => {
   it('builds the command for each agent, with a token only when there is one', () => {
     expect(connectCommand('claude', 'http://h/api/mcp', null)).toBe('claude mcp add --transport http notes-studio http://h/api/mcp');
     expect(connectCommand('claude', 'http://h/api/mcp', 't')).toBe('claude mcp add --transport http notes-studio http://h/api/mcp --header "Authorization: Bearer t"');
-    expect(connectCommand('codex', 'http://h/api/mcp', 't')).toBe('export STUDIO_MCP_TOKEN=t && codex mcp add notes-studio --url http://h/api/mcp --bearer-token-env-var STUDIO_MCP_TOKEN');
+    // Codex names the variable only: the token never goes on its command line.
+    expect(connectCommand('codex', 'http://h/api/mcp', 't')).toBe('codex mcp add notes-studio --url http://h/api/mcp --bearer-token-env-var STUDIO_MCP_TOKEN');
     expect(connectCommand('codex', 'http://h/api/mcp', null)).toBe('codex mcp add notes-studio --url http://h/api/mcp');
     expect(connectCommand('stdio', 'http://h/api/mcp', null)).toBe('STUDIO_MCP_URL=http://h/api/mcp node tools/notes-studio/server/mcp/stdio.ts');
   });
@@ -50,6 +51,12 @@ describe('Connect an agent', () => {
     expect(await screen.findByText('studio-agent-abc')).toBeTruthy();
     expect(screen.getByText(/Bearer studio-agent-abc"$/)).toBeTruthy();
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/mcp/tokens');
+    expect(screen.getByText(/stays in your shell history and in Claude Code's MCP settings/)).toBeTruthy();
+    // For Codex the token is set without echo, apart from the command.
+    await user.click(screen.getByRole('button', { name: 'Codex' }));
+    expect(screen.getByText('read -rs STUDIO_MCP_TOKEN && export STUDIO_MCP_TOKEN')).toBeTruthy();
+    expect(screen.getByText(/^codex mcp add notes-studio --url .* --bearer-token-env-var STUDIO_MCP_TOKEN$/)).toBeTruthy();
+    expect(screen.queryByText(/studio-agent-abc.*codex|codex.*studio-agent-abc/)).toBeNull();
     await user.click(screen.getByRole('button', { name: 'End all my tokens' }));
     expect(await screen.findByText(/Every agent token of yours has ended/)).toBeTruthy();
   });

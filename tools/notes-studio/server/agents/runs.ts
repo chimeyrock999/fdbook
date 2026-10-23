@@ -195,11 +195,13 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
         cost: (cost) => { changed(run, { cost }); },
         write: async (path, content) => {
           // A note that exists is never written over: the write becomes a
-          // proposal, recorded when the store says it was made.
+          // proposal, recorded when the store says it was made. A note this
+          // run created itself is still its own draft (on its Keep/Revert
+          // list), so it is written.
           const at = worktreePathOf(root, path);
           // The agent is told, so it does not read the note back expecting
           // its text, nor write again.
-          if (propose !== null && at !== null && classifyPath(at) === 'note' && existsSync(join(root, at))) {
+          if (propose !== null && at !== null && classifyPath(at) === 'note' && !run.watch.created(at) && existsSync(join(root, at))) {
             const made = await propose({ path: at, content, runId: run.summary.id, agent: profile.id, model: run.summary.model }).then(
               (proposal) => `the Studio made this write a proposal (${(proposal as { id: string }).id}) for a person to accept: ${at} is unchanged until then. Make further edits to it with the propose_edit tool.`,
               (error: unknown) => `the Studio takes edits to ${at} as proposals, and this one was refused: ${(error as Error).message}`,
@@ -299,6 +301,10 @@ export function createAgentRuns(root: string, { slug, profiles, transcripts, loc
       const run = live.get(id);
       if (run !== undefined) record(run, { type: 'proposal', at: Date.now(), id: proposal.id, path: proposal.path, hunks: proposal.hunks.length });
     },
+
+    // Whether a run going on created `path` itself (mcp/note-tools.ts writes
+    // to it directly instead of proposing).
+    created: (id: string, path: string) => live.get(id)?.watch.created(path) ?? false,
 
     // The model a run going on says it runs (a proposal's author), or null.
     modelOf: (id: string) => live.get(id)?.summary.model ?? null,

@@ -149,7 +149,7 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
   const layer = useMemo(() => createSuggestionLayer(), []);
   useEditorPlugin(editor, layer.plugin);
   const canDecide = !locked && !source.readOnly;
-  const sourceExtra = useMemo(() => (review === null || suggestions.placement.hunks.length === 0 ? null : sourceSuggestions(source.value, suggestions.placement.hunks, canDecide ? (hunk, op) => { void review.act(hunk.proposal.id, op, [hunk.hunk.id]); } : null)), [review, source.value, suggestions.placement.hunks, canDecide]);
+  const sourceExtra = useMemo(() => (review === null || suggestions.placement.hunks.length === 0 ? null : sourceSuggestions(source.value, suggestions.placement.hunks, canDecide ? (hunk, op) => review.act(hunk.proposal.id, op, [hunk.hunk.id]) : null)), [review, source.value, suggestions.placement.hunks, canDecide]);
   const stepTo = (by: number) => {
     const key = suggestions.step(by);
     if (key !== undefined && mode === 'visual') layer.element(key, 'studio-suggest-card').scrollIntoView({ block: 'center', behavior: 'smooth' });
