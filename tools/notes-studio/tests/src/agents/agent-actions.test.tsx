@@ -2,12 +2,12 @@
 import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { askAgent, useCanAsk } from '../../../src/agents/agent-ask';
+import { askAgent, useAsk } from '../../../src/agents/agent-ask';
 import { draftPrompt, NOTE_ACTIONS, SELECTION_ACTIONS } from '../../../src/agents/actions';
 import { cleanFolder } from '../../../src/agents/context-labels';
 import { editorPlaces } from '../../../src/agents/editor-place';
 import type { MessageSelection } from '../../../src/api/agents';
-import { fakeClient, Harness, summary } from '../../support/agents-ui';
+import { AGENTS, fakeClient, Harness, summary } from '../../support/agents-ui';
 
 const NOTE = 'content/notes/guide/first-look.mdx';
 const SELECTION: MessageSelection = { lines: [5, 5], source: 'A first look.', text: 'first look' };
@@ -68,12 +68,20 @@ describe('agent actions (#86)', () => {
     place(null);
     const box = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Message' });
     await user.type(box, 'Go on{Enter}');
-    await user.type(box, 'next thought');
+    await user.type(box, 'next @help');
+    await screen.findByRole('option', { name: /helper/ });
+    await user.keyboard('{Enter}');
+    const input = document.querySelector<HTMLInputElement>('.studio-agent-composer input[type=file]');
+    if (input === null) throw new Error('no file input');
+    await user.upload(input, new File(['# Brief'], 'brief.md'));
+    await screen.findByText('brief.md');
     await user.click(screen.getByRole('button', { name: 'Diagram' }));
     expect(client.message).toHaveBeenCalledTimes(1);
     expect(client.start).toHaveBeenCalledWith('claude', 'author', NOTE_ACTIONS[2].prompt, { ...atNote, caret: 3 });
-    // The new chat's composer holds what was typed.
-    await vi.waitFor(() => { expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Message' }).value).toBe('next thought'); });
+    // The new chat's composer holds the message being written, chips too.
+    await vi.waitFor(() => { expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Message' }).value).toBe('next '); });
+    expect(screen.getByText('@lib/helper.ts')).toBeTruthy();
+    expect(screen.getByText('brief.md')).toBeTruthy();
   });
 
   it('leaves the mentions and attachments for the message being written', async () => {
@@ -113,12 +121,12 @@ describe('agent actions (#86)', () => {
 
   it('fills the frontmatter when the note header asks, while the panel takes asks', async () => {
     function Probe() {
-      return <span data-testid="can-ask">{String(useCanAsk())}</span>;
+      return <span data-testid="can-ask">{String(useAsk().can)}</span>;
     }
     const { client } = fakeClient([summary({ status: 'done', endedMs: Date.now() })]);
     const { unmount } = render(<><Harness client={client} /><Probe /></>);
-    await screen.findByRole('button', { name: 'History' });
-    expect(screen.getByTestId('can-ask').textContent).toBe('true');
+    // Once the agents are known: an author agent can run.
+    await vi.waitFor(() => { expect(screen.getByTestId('can-ask').textContent).toBe('true'); });
     place(SELECTION);
     act(() => { askAgent('frontmatter'); askAgent('frontmatter'); });
     // A new chat: none is on screen. Asked twice at once, it goes once.
@@ -127,6 +135,30 @@ describe('agent actions (#86)', () => {
     unmount();
     render(<Probe />);
     expect(screen.getByTestId('can-ask').textContent).toBe('false');
+  });
+
+  it('shows Fill pending while its ask goes, and takes no ask without an author agent', async () => {
+    function Probe() {
+      const ask = useAsk();
+      return <span data-testid="ask">{`${String(ask.can)} ${ask.pending ?? '-'}`}</span>;
+    }
+    const { client } = fakeClient([summary({ status: 'done', endedMs: Date.now() })]);
+    let finish: () => void = () => undefined;
+    client.start.mockImplementationOnce(() => new Promise((resolve) => { finish = () => { resolve(summary({ id: 'new' })); }; }));
+    const { unmount } = render(<><Harness client={client} /><Probe /></>);
+    await screen.findByRole('button', { name: 'History' });
+    place(null);
+    act(() => { askAgent('frontmatter'); });
+    await vi.waitFor(() => { expect(screen.getByTestId('ask').textContent).toBe('true frontmatter'); });
+    await act(async () => { finish(); await Promise.resolve(); });
+    await vi.waitFor(() => { expect(screen.getByTestId('ask').textContent).toBe('true -'); });
+    unmount();
+
+    const none = fakeClient();
+    none.client.agents.mockResolvedValue(AGENTS.map((agent) => ({ ...agent, available: false })));
+    render(<><Harness client={none.client} /><Probe /></>);
+    await screen.findByText(/No agent can run here/);
+    expect(screen.getByTestId('ask').textContent).toBe('false -');
   });
 
   it('drafts a new note from the form: its path from folder and title, with the composer\'s context', async () => {
@@ -141,10 +173,28 @@ describe('agent actions (#86)', () => {
     expect(form.getByLabelText('Path').textContent).toBe('content/notes/guide/photon-va-spark-sql.mdx');
     await user.type(form.getByRole('textbox', { name: 'Outline' }), '- What it is');
     await user.type(form.getByRole('textbox', { name: 'Links to read' }), 'https://docs.example.com/photon');
+    await vi.waitFor(() => { expect(send.disabled).toBe(false); });
     await user.click(send);
     const prompt = draftPrompt({ path: 'content/notes/guide/photon-va-spark-sql.mdx', title: 'Photon và Spark SQL', outline: '- What it is', urls: ['https://docs.example.com/photon'] });
     expect(client.start).toHaveBeenCalledWith('claude', 'author', prompt, { ...atNote, caret: 3 });
     expect(screen.queryByRole('group', { name: 'New note' })).toBeNull();
+  });
+
+  it('sends no draft before its path is looked up', async () => {
+    const { client, user } = await openChat();
+    place(null);
+    let answer: () => void = () => undefined;
+    client.mentions.mockImplementation((query: string) => new Promise((resolve) => { answer = () => { resolve(query.endsWith('.mdx') ? [] : []); }; }));
+    await user.click(screen.getByRole('button', { name: 'New note' }));
+    const form = within(screen.getByRole('group', { name: 'New note' }));
+    await user.type(form.getByRole('textbox', { name: 'Title' }), 'Fresh');
+    const send = screen.getByRole<HTMLButtonElement>('button', { name: 'Send' });
+    await user.type(screen.getByRole('textbox', { name: 'Message' }), '{Enter}');
+    expect(send.disabled).toBe(true);
+    expect(client.start).not.toHaveBeenCalled();
+    await vi.waitFor(() => { expect(client.mentions).toHaveBeenCalledWith('content/notes/guide/fresh.mdx'); });
+    await act(async () => { answer(); await Promise.resolve(); });
+    await vi.waitFor(() => { expect(send.disabled).toBe(false); });
   });
 
   it('will not draft over a note that is already at the path', async () => {
@@ -174,6 +224,13 @@ describe('action messages', () => {
     for (const each of [...SELECTION_ACTIONS, ...NOTE_ACTIONS]) expect(each.prompt, each.id).toMatch(/propose_edit/);
     expect(NOTE_ACTIONS[0].prompt).toContain('note_vocabulary');
     expect(NOTE_ACTIONS[1].prompt).toContain('related_notes');
+    // Diagram changes the note's diagram when it shows one, from either row.
+    for (const prompt of [NOTE_ACTIONS[2].prompt, SELECTION_ACTIONS[6].prompt]) {
+      expect(prompt).toMatch(/diagram_read.*diagram_update/s);
+      expect(prompt).toContain('diagram_create');
+      expect(prompt).toContain('diagram_render_png');
+    }
+    expect(SELECTION_ACTIONS[6].prompt).toContain('of the selected lines');
   });
 
   it('drafts without an outline from the sources, and lists the links to read', () => {

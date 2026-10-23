@@ -19,6 +19,9 @@ export type ContextClient = {
   attach: (file: File) => Promise<Attachment>;
 };
 
+// The message being written: its text and its chips.
+export type Draft = { text: string; mentions: Mention[]; attachments: Attachment[] };
+
 // The message box at the bottom of the agent panel. Enter sends, as in
 // other chat panels; Shift+Enter adds a line; Enter that confirms an IME's
 // text (Telex) only confirms it. It grows with its text
@@ -32,26 +35,26 @@ export type ContextClient = {
 // message), and the notes and files mentioned with @ or attached.
 // `actions`: the one-click actions (actions.ts) for what is selected or
 // open, sent through `onAction` with the editor's place; the text typed,
-// mentions and attachments stay for the message being written (`typed` is
-// that text, for a panel that moves to another chat). `sendEmpty`: the
-// message may go without text (the new note's form holds it).
-// `initialText`: what the box holds when it mounts.
-export function Composer({ placeholder, busy, onSend, client = null, actions = false, onAction, sendEmpty = false, initialText = '', children }: {
+// mentions and attachments stay for the message being written (`draft`,
+// for a panel that moves to another chat). `sendEmpty`: the message may go
+// without text (the new note's form holds it). `initial`: the message being
+// written when it mounts.
+export function Composer({ placeholder, busy, onSend, client = null, actions = false, onAction, sendEmpty = false, initial = null, children }: {
   placeholder: string;
   busy: boolean;
   onSend: (text: string, context: MessageContext | null) => Promise<boolean>;
   client?: ContextClient | null;
   actions?: boolean;
-  onAction?: (prompt: string, context: MessageContext | null, typed: string) => Promise<boolean>;
+  onAction?: (prompt: string, context: MessageContext | null, draft: Draft) => Promise<boolean>;
   sendEmpty?: boolean;
-  initialText?: string;
+  initial?: Draft | null;
   children?: ReactNode;
 }) {
-  const [text, setText] = useState(initialText);
+  const [text, setText] = useState(initial?.text ?? '');
   const action = useBusy();
   const upload = useBusy();
-  const [mentions, setMentions] = useState<Mention[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [mentions, setMentions] = useState<Mention[]>(initial?.mentions ?? []);
+  const [attachments, setAttachments] = useState<Attachment[]>(initial?.attachments ?? []);
   // The selection taken off this message: another one shows, and after sending this one does too.
   const [dropped, setDropped] = useState<MessageSelection | null>(null);
   // The @ being typed, at `start` in the text, and what it matches.
@@ -112,7 +115,7 @@ export function Composer({ placeholder, busy, onSend, client = null, actions = f
     if (onAction === undefined) return;
     const context = contextOf();
     void action.run(async () => {
-      if (await onAction(prompt, context === null ? null : { ...context, mentions: [], attachments: [] }, text)) setDropped(null);
+      if (await onAction(prompt, context === null ? null : { ...context, mentions: [], attachments: [] }, { text, mentions, attachments })) setDropped(null);
     }, key);
   };
   const shown = actions && onAction !== undefined && place !== null ? (selection !== null ? SELECTION_ACTIONS : NOTE_ACTIONS) : [];

@@ -31,21 +31,26 @@ export function NewNote({ client, onDraft, onClose }: {
   const slug = slugify(title);
   const inside = cleanFolder(folder);
   const path = `${NOTES_DIR}/${[inside ?? '', `${slug}.mdx`].filter((part) => part !== '').join('/')}`;
-  // A note already at the path: the agent would propose to replace it.
-  const [taken, setTaken] = useState<string | null>(null);
+  // The path last looked up and whether a note is already there (the
+  // agent would propose to replace it): Send waits for the path shown. A
+  // lookup that fails lets it go; the message tells the agent to stop then.
+  const [checked, setChecked] = useState<{ path: string; taken: boolean } | null>(null);
   useEffect(() => {
     if (slug === '' || inside === null) return undefined;
     let current = true;
     const timer = setTimeout(() => {
-      client.mentions(path).then((found) => { if (current) setTaken(found.some((each) => each.path === path) ? path : null); }, () => undefined);
+      client.mentions(path).then(
+        (found) => { if (current) setChecked({ path, taken: found.some((each) => each.path === path) }); },
+        () => { if (current) setChecked({ path, taken: false }); },
+      );
     }, LOOKUP_MS);
     return () => {
       current = false;
       clearTimeout(timer);
     };
   }, [client, path, slug, inside]);
-  const exists = taken === path;
-  const ready = slug !== '' && inside !== null && !exists;
+  const exists = checked?.path === path && checked.taken;
+  const ready = slug !== '' && inside !== null && checked?.path === path && !checked.taken;
 
   return (
     <>

@@ -7,6 +7,10 @@ export type AgentAction = { id: string; label: string; prompt: string };
 
 const PROPOSE = 'Propose the change with propose_edit; do not write the note yourself.';
 
+// Draws a diagram, or changes the one the note shows: both the selection
+// row and the note row offer it.
+const diagram = (of: string) => `Make a diagram ${of} with the diagram tools. If the note already shows one there (<Diagram src="…" />), change that diagram: diagram_read it, then diagram_update, diagram_add_node, diagram_connect and the other edit tools. Otherwise draw one: diagram_create, then its nodes and edges, then diagram_layout. Check the result with diagram_validate and look at it with diagram_render_png. A new diagram goes into the note where it helps the reader, with propose_edit.`;
+
 // On the lines selected in the editor.
 export const SELECTION_ACTIONS: AgentAction[] = [
   { id: 'rewrite', label: 'Rewrite', prompt: `Rewrite the selected lines: clearer, same meaning, same voice and language. ${PROPOSE}` },
@@ -15,13 +19,14 @@ export const SELECTION_ACTIONS: AgentAction[] = [
   { id: 'translate', label: 'VI ↔ EN', prompt: `Translate the selected lines: Vietnamese to English, or English to Vietnamese. Keep MDX, code, links and names as they are. ${PROPOSE}` },
   { id: 'callout', label: 'Callout', prompt: `Turn the selected lines into a callout, as the notes write them (:::note, :::info, :::warn or :::caution, closed by :::); pick the kind that fits. ${PROPOSE}` },
   { id: 'table', label: 'Table', prompt: `Turn the selected lines into a Markdown table, if they hold items that share fields; keep every value. ${PROPOSE}` },
+  { id: 'diagram', label: 'Diagram', prompt: diagram('of the selected lines') },
 ];
 
 // On the note open in the editor.
 export const NOTE_ACTIONS: AgentAction[] = [
   { id: 'frontmatter', label: 'Fill frontmatter', prompt: `Fill the frontmatter of the open note: description (one sentence on what the reader gets), tags and keywords. Read the note, then call note_vocabulary and reuse its tags and keywords before making up new ones. Change the frontmatter only. ${PROPOSE}` },
   { id: 'links', label: 'Suggest links', prompt: `Suggest links to related notes in the open note: call related_notes, and where a related note helps the reader, link to it in the text with its href. Skip the notes it already links to; do not add a list of links at the end. ${PROPOSE}` },
-  { id: 'diagram', label: 'Diagram', prompt: 'Draw a diagram for the open note (of the selected lines, if any) with the diagram tools: diagram_create, then nodes, edges and diagram_layout, and check it with diagram_validate. Then embed it in the note where it helps the reader, with propose_edit.' },
+  { id: 'diagram', label: 'Diagram', prompt: diagram('for the open note') },
 ];
 
 // The message for a new note drafted from an outline and sources: the

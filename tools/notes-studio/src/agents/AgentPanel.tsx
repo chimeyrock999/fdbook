@@ -4,10 +4,10 @@ import { useBusy } from '../actions/busy';
 import { toast } from '../actions/toasts';
 import type { AgentInfo, AgentRole, Conversation, ConversationEvent, MessageContext } from '../api/agents';
 import { NOTE_ACTIONS } from './actions';
-import { takeAsks } from './agent-ask';
+import { askPending, takeAsks } from './agent-ask';
 import { AgentLogo } from './AgentLogo';
 import { ChatHistory } from './ChatHistory';
-import { Composer } from './Composer';
+import { Composer, type Draft } from './Composer';
 import { ConversationView, Sending, Thinking } from './ConversationView';
 import { editorPlaces } from './editor-place';
 import { NewNote } from './NewNote';
@@ -37,7 +37,7 @@ function NewChat({ agents, sending, onSend, onAction }: {
   agents: Agents;
   sending: string | null;
   onSend: (role: AgentRole, text: string, context: MessageContext | null) => Promise<boolean>;
-  onAction: (prompt: string, context: MessageContext | null, typed: string) => Promise<boolean>;
+  onAction: (prompt: string, context: MessageContext | null, draft: Draft) => Promise<boolean>;
 }) {
   const [role, setRole] = useState<AgentRole>('author');
   const agent = pickOf(agents.agents, agents.picks, role);
@@ -115,14 +115,14 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
   const pendingIn = (conversation: Conversation) =>
     (outgoing !== null && outgoing.id === conversation.id && turnsOf(agents.events[conversation.id]) <= outgoing.turns ? outgoing.text : null);
 
-  // `typed`: what the composer held, for the new chat's (an action's).
-  const start = async (role: AgentRole, text: string, context: MessageContext | null, typed = '') => {
+  // `draft`: what the composer held, for the new chat's (an action's).
+  const start = async (role: AgentRole, text: string, context: MessageContext | null, draft: Draft | null = null) => {
     setOutgoing({ id: null, text, turns: 0 });
     try {
       const chat = await agents.start(role, text, context);
       setOutgoing({ id: chat.id, text, turns: 0 });
       setStarted(chat);
-      setCarried(typed === '' ? null : { id: chat.id, text: typed });
+      setCarried(draft === null ? null : { id: chat.id, draft });
       setShown(chat.id);
       // Read it should the stream have missed its start.
       void agents.load(chat.id);
@@ -144,22 +144,24 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
       return false;
     }
   };
-  // What was typed in the composer an action left for a new chat: that
-  // chat's composer starts with it.
-  const [carried, setCarried] = useState<{ id: string; text: string } | null>(null);
+  // The message being written an action left for a new chat: that chat's
+  // composer starts with it, chips too.
+  const [carried, setCarried] = useState<{ id: string; draft: Draft } | null>(null);
   // An action (actions.ts) goes to the author chat on screen while it waits
   // for a message (none on its way to it either), else to a new author chat.
-  const act = (prompt: string, context: MessageContext | null, typed = '') => {
+  const act = (prompt: string, context: MessageContext | null, draft: Draft | null = null) => {
     setDrafting(false);
     if (current !== null && current.role === 'author' && current.status !== 'running' && pendingIn(current) === null) return reply(current, prompt, context);
-    return start('author', prompt, context, typed);
+    return start('author', prompt, context, draft);
   };
   // The note header's asks (agent-ask.ts), on the note open now; one at a time.
   const latestAct = useRef(act);
   useLayoutEffect(() => { latestAct.current = act; });
-  const { run: runAsk } = useBusy();
+  const { run: runAsk, running: askRunning } = useBusy();
+  useEffect(() => { askPending(askRunning); }, [askRunning]);
+  const author = pickOf(agents.agents, agents.picks, 'author') !== null;
   useEffect(() => {
-    if (!inCr || !canRun) return undefined;
+    if (!inCr || !canRun || !author) return undefined;
     return takeAsks((actionId) => {
       const wanted = NOTE_ACTIONS.find((each) => each.id === actionId);
       const place = editorPlaces.get();
@@ -167,7 +169,7 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
       setHistory(false);
       void runAsk(() => latestAct.current(wanted.prompt, { note: place.note, selection: null, caret: null, mentions: [], attachments: [] }), actionId);
     });
-  }, [inCr, canRun, runAsk]);
+  }, [inCr, canRun, author, runAsk]);
   const stop = (conversation: Conversation) => {
     const { id, turns } = conversation;
     const key = `${id}@${String(turns)}`;
@@ -244,7 +246,7 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
               client={agents.client}
               actions={current.role === 'author'}
               onAction={act}
-              initialText={carried?.id === current.id ? carried.text : ''}
+              initial={carried?.id === current.id ? carried.draft : null}
             >
               <span className="studio-agent-who"><AgentLogo id={current.agent} size={14} /> {current.agentName} · {roleLabel(current.role)}</span>
             </Composer>
