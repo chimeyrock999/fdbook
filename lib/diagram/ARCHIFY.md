@@ -47,8 +47,11 @@ holds the port to those layouts.
      them, keeping Archify's constants and comparisons as they are there,
      until it passes. Then update the version.
 4. Read the release's `SKILL.md` and `references/` (`authoring-defaults.md`,
-   `architecture-layout-repair.md`, `authoring-contract.md`) for guidance
-   worth bringing into `skills/chimeyrock-diagram`.
+   `architecture-layout-repair.md`, `authoring-contract.md`,
+   `delivery-contract.md`) for guidance worth bringing into
+   `skills/chimeyrock-diagram`. `delivery-contract.md` is mostly Archify's
+   finalize and browser pipeline; only its repair rules (such as the
+   two-round limit) apply here.
 
 The dataflow constants have no layout fixture: compare them with
 `dataflow-compiler.mjs` by hand.
