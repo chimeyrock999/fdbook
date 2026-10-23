@@ -919,6 +919,20 @@ are listed greyed, with how to install them (`GET /api/agents`).
   paths (`server/agents/context.ts`). While that turn goes on,
   `propose_edit` on the selected note answers `outsideSelection` for hunks
   that change other lines.
+- **Actions.** In an author chat (and a new author chat), a row over the
+  message box offers one-click actions (`src/agents/actions.ts`): with a
+  selection, **Rewrite**, **Tighten**, **Expand**, **VI ↔ EN**,
+  **Callout**, **Table**; without one, **Fill frontmatter**, **Suggest
+  links** (through `related_notes`) and **Diagram** (through the diagram
+  tools). Each is a written message sent with the same context; it goes to
+  the author chat on screen when that one waits for a message, else to a
+  new author chat. Every edit comes back as a suggestion (`propose_edit`);
+  a new note or diagram lands on the turn's Keep/Revert list. While the
+  panel is open, **Fill** at the top of the note header asks for the
+  frontmatter the same way. **New note** opens a form (folder, title, the
+  path it makes, an outline, links to read) above a composer for mentions,
+  attachments and anything else; it starts an author chat that drafts the
+  note there and lists it in `meta.yaml`.
 - **History.** Every chat of the change request, last active first, with
   its agent, role, turns, cost and last activity, filtered by its first
   message. One opens to read and go on with; an admin deletes one, or
@@ -1030,6 +1044,8 @@ Studio starts and your own agents in a terminal while the Studio is open.
 | `search_notes` | Notes with every word of the query in their title, description, tags or text, with matching lines |
 | `note_graph` | Links out and in, tags, keywords and graph keywords, notes that share a tag |
 | `propose_edit` | A proposal: the whole new text, or find/replace edits; answers its hunks and lint issues, and `outsideSelection` when the message selected other lines of the note. Nothing is written (see Proposals). A note that does not exist yet is created with `content` (on the turn's Keep/Revert list); the same turn's later edits to a note it created are written too (`written: true`), until someone else changes it. |
+| `note_vocabulary` | Every tag, keyword and graph keyword the notes use, with how many notes use each, most used first: what a frontmatter reuses. |
+| `related_notes` | The notes most related to one, ranked by shared tags and keywords, links either way and title words found in it; each with its href from the note, why, and whether the note already links there. |
 | `add_comment` | A comment on a note, or on one of its blocks |
 | `list_assets` | The assets under `public/notes` and the notes that use them |
 

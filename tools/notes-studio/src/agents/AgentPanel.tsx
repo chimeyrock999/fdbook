@@ -1,11 +1,16 @@
-import { History, Plus, ShieldQuestion, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { FilePlus, History, Plus, ShieldQuestion, X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useBusy } from '../actions/busy';
 import { toast } from '../actions/toasts';
 import type { AgentInfo, AgentRole, Conversation, ConversationEvent, MessageContext } from '../api/agents';
+import { NOTE_ACTIONS } from './actions';
+import { takeAsks } from './agent-ask';
 import { AgentLogo } from './AgentLogo';
 import { ChatHistory } from './ChatHistory';
 import { Composer } from './Composer';
 import { ConversationView, Sending, Thinking } from './ConversationView';
+import { editorPlaces } from './editor-place';
+import { NewNote } from './NewNote';
 import { roleLabel } from './transcript';
 import { pickOf, type Agents } from './useAgents';
 
@@ -28,7 +33,12 @@ function hintOf(agent: AgentInfo | null, role: AgentRole) {
 // A new chat: pick the role (the agent is the one picked for it), then the
 // first message starts the conversation. While the agent starts, the
 // message shows on its way.
-function NewChat({ agents, sending, onSend }: { agents: Agents; sending: string | null; onSend: (role: AgentRole, text: string, context: MessageContext | null) => Promise<boolean> }) {
+function NewChat({ agents, sending, onSend, onAction }: {
+  agents: Agents;
+  sending: string | null;
+  onSend: (role: AgentRole, text: string, context: MessageContext | null) => Promise<boolean>;
+  onAction: (prompt: string, context: MessageContext | null, typed: string) => Promise<boolean>;
+}) {
   const [role, setRole] = useState<AgentRole>('author');
   const agent = pickOf(agents.agents, agents.picks, role);
   return (
@@ -50,6 +60,8 @@ function NewChat({ agents, sending, onSend }: { agents: Agents; sending: string 
         busy={agent === null}
         onSend={(text, context) => onSend(role, text, context)}
         client={agents.client}
+        actions={role === 'author' && agent !== null}
+        onAction={onAction}
       >
         <span className="studio-agent-roles" role="group" aria-label="Role">
           {(['author', 'reviewer'] as const).map((each) => (
@@ -81,6 +93,8 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
   // NEW_CHAT: a new chat; null: the chat whose agent asks or is answering, if any.
   const [shown, setShown] = useState<string | null>(null);
   const [history, setHistory] = useState(false);
+  // The new note's form is open (#86).
+  const [drafting, setDrafting] = useState(false);
   const [outgoing, setOutgoing] = useState<Outgoing | null>(null);
   // The chat this panel just started, as the server answered, until the
   // stream lists it (then the list has it, deleted or not).
@@ -101,12 +115,14 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
   const pendingIn = (conversation: Conversation) =>
     (outgoing !== null && outgoing.id === conversation.id && turnsOf(agents.events[conversation.id]) <= outgoing.turns ? outgoing.text : null);
 
-  const start = async (role: AgentRole, text: string, context: MessageContext | null) => {
+  // `typed`: what the composer held, for the new chat's (an action's).
+  const start = async (role: AgentRole, text: string, context: MessageContext | null, typed = '') => {
     setOutgoing({ id: null, text, turns: 0 });
     try {
       const chat = await agents.start(role, text, context);
       setOutgoing({ id: chat.id, text, turns: 0 });
       setStarted(chat);
+      setCarried(typed === '' ? null : { id: chat.id, text: typed });
       setShown(chat.id);
       // Read it should the stream have missed its start.
       void agents.load(chat.id);
@@ -128,6 +144,30 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
       return false;
     }
   };
+  // What was typed in the composer an action left for a new chat: that
+  // chat's composer starts with it.
+  const [carried, setCarried] = useState<{ id: string; text: string } | null>(null);
+  // An action (actions.ts) goes to the author chat on screen while it waits
+  // for a message (none on its way to it either), else to a new author chat.
+  const act = (prompt: string, context: MessageContext | null, typed = '') => {
+    setDrafting(false);
+    if (current !== null && current.role === 'author' && current.status !== 'running' && pendingIn(current) === null) return reply(current, prompt, context);
+    return start('author', prompt, context, typed);
+  };
+  // The note header's asks (agent-ask.ts), on the note open now; one at a time.
+  const latestAct = useRef(act);
+  useLayoutEffect(() => { latestAct.current = act; });
+  const { run: runAsk } = useBusy();
+  useEffect(() => {
+    if (!inCr || !canRun) return undefined;
+    return takeAsks((actionId) => {
+      const wanted = NOTE_ACTIONS.find((each) => each.id === actionId);
+      const place = editorPlaces.get();
+      if (wanted === undefined || place === null) return;
+      setHistory(false);
+      void runAsk(() => latestAct.current(wanted.prompt, { note: place.note, selection: null, caret: null, mentions: [], attachments: [] }), actionId);
+    });
+  }, [inCr, canRun, runAsk]);
   const stop = (conversation: Conversation) => {
     const { id, turns } = conversation;
     const key = `${id}@${String(turns)}`;
@@ -151,12 +191,17 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
         <span>Agent</span>
         <span className="flex-1" />
         {inCr && (
-          <button type="button" className="studio-button gap-1.5" aria-pressed={history} title="Chats in this change request" onClick={() => { setHistory(!history); }}>
+          <button type="button" className="studio-button gap-1.5" aria-pressed={history} title="Chats in this change request" onClick={() => { setHistory(!history); setDrafting(false); }}>
             <History size={13} aria-hidden /> History
           </button>
         )}
         {inCr && canRun && (
-          <button type="button" className="studio-button gap-1.5" onClick={() => { setShown(NEW_CHAT); setHistory(false); requestAnimationFrame(() => { document.getElementById('studio-agent-prompt')?.focus(); }); }}>
+          <button type="button" className="studio-button gap-1.5" aria-pressed={drafting} title="Draft a new note with an author agent" onClick={() => { setDrafting(!drafting); setHistory(false); }}>
+            <FilePlus size={13} aria-hidden /> New note
+          </button>
+        )}
+        {inCr && canRun && (
+          <button type="button" className="studio-button gap-1.5" onClick={() => { setShown(NEW_CHAT); setHistory(false); setDrafting(false); requestAnimationFrame(() => { document.getElementById('studio-agent-prompt')?.focus(); }); }}>
             <Plus size={13} aria-hidden /> New chat
           </button>
         )}
@@ -171,6 +216,8 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
       )}
       {!inCr ? (
         <p className="studio-agent-meta studio-agent-panel-note">Agents work in a change request, never on main. Open one, or start a new one, to chat with an agent.</p>
+      ) : drafting && canRun ? (
+        <NewNote client={agents.client} onDraft={(prompt, context) => start('author', prompt, context)} onClose={() => { setDrafting(false); }} />
       ) : history ? (
         <ChatHistory conversations={agents.conversations} current={current?.id ?? null} onOpen={open} onDelete={canRun ? (ids) => agents.remove(ids) : null} />
       ) : current !== null ? (
@@ -195,13 +242,16 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
               busy={current.status === 'running'}
               onSend={(text, context) => reply(current, text, context)}
               client={agents.client}
+              actions={current.role === 'author'}
+              onAction={act}
+              initialText={carried?.id === current.id ? carried.text : ''}
             >
               <span className="studio-agent-who"><AgentLogo id={current.agent} size={14} /> {current.agentName} · {roleLabel(current.role)}</span>
             </Composer>
           )}
         </>
       ) : canRun ? (
-        <NewChat agents={agents} sending={outgoing?.id === null ? outgoing.text : null} onSend={start} />
+        <NewChat agents={agents} sending={outgoing?.id === null ? outgoing.text : null} onSend={start} onAction={act} />
       ) : (
         <p className="studio-agent-meta studio-agent-panel-note">Starting an agent needs admin access: it runs commands as the person who started the Studio, with their logins. You can read the chats in History.</p>
       )}

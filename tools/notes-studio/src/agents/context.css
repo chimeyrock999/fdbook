@@ -1,6 +1,7 @@
 /* What a message carries besides its text (#86): the chips over the
    composer and under a sent message, the composer's attach and mention
-   buttons, and the list of mentions. Same tokens as agents.css. */
+   buttons, the list of mentions, the one-click actions, the new note's
+   form and the note header's Fill. Same tokens as agents.css. */
 @layer components {
   .studio-agent-composer {
     position: relative;
@@ -118,5 +119,96 @@
   }
   .studio-agent-mention[aria-selected='true'] {
     background: var(--fde-accent);
+  }
+
+  /* One-click actions, over the message box. */
+  .studio-agent-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .studio-agent-actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 9px;
+    border: 1px solid var(--fde-border);
+    border-radius: 999px;
+    background: var(--fde-background);
+    font-size: 11.5px;
+  }
+  .studio-agent-actions button:hover:not(:disabled) {
+    background: var(--fde-accent);
+  }
+  .studio-agent-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* The new note's form, over its composer. */
+  .studio-agent-newnote {
+    display: grid;
+    flex: 1;
+    align-content: start;
+    gap: 8px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 4px 12px 10px;
+    font-size: 12px;
+  }
+  .studio-agent-newnote-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .studio-agent-newnote-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+  }
+  .studio-agent-newnote label {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-newnote input,
+  .studio-agent-newnote textarea {
+    width: 100%;
+    padding: 4px 7px;
+    border: 1px solid var(--fde-border);
+    border-radius: 6px;
+    background: var(--fde-card);
+    color: var(--fde-foreground);
+    font-size: 12.5px;
+    resize: vertical;
+  }
+  .studio-agent-newnote-taken {
+    color: var(--fde-warning);
+  }
+  .studio-agent-newnote-path {
+    overflow-wrap: anywhere;
+    font: 11px var(--font-mono);
+    color: var(--fde-muted-foreground);
+  }
+
+  /* The note header's Fill, at its top right. */
+  .studio-note-fill {
+    display: inline-flex;
+    align-items: center;
+    justify-self: end;
+    gap: 4px;
+    margin-bottom: -4px;
+    padding: 1px 8px;
+    border: 1px solid var(--fde-border);
+    border-radius: 6px;
+    background: var(--fde-background);
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-note-fill:hover {
+    color: var(--fde-foreground);
   }
 }

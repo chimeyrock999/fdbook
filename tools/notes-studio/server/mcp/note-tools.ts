@@ -52,7 +52,7 @@ export function hunksOutside(text: string, hunks: { id: string; from: number | n
   }).map((hunk) => hunk.id);
 }
 
-const json = (value: unknown): ToolResult => ({ content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], structured: value as Record<string, unknown> });
+export const json = (value: unknown): ToolResult => ({ content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], structured: value as Record<string, unknown> });
 
 // A note's worktree path from what an agent passes: `content/notes/x.mdx`,
 // or `x.mdx` relative to content/notes.
@@ -61,11 +61,11 @@ export function notePath(path: string) {
   return trimmed.startsWith(`${NOTES_DIR}/`) ? trimmed : `${NOTES_DIR}/${trimmed}`;
 }
 
-const strings = (value: unknown) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
-const text = (value: unknown) => (typeof value === 'string' ? value : null);
+export const strings = (value: unknown) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
+export const text = (value: unknown) => (typeof value === 'string' ? value : null);
 
 // Each note's frontmatter, by path relative to content/notes.
-async function notesOf(root: string) {
+export async function notesOf(root: string) {
   const { pages, mtimes } = await readNotesContent(root);
   return [...pages].map(([path, data]) => ({ path, data, mtimeMs: mtimes?.get(path) ?? null })).sort((a, b) => a.path.localeCompare(b.path));
 }
@@ -90,7 +90,7 @@ export function linkTarget(href: string, from: string, pages: ReadonlySet<string
 }
 
 // Every note a note's links reach, by path relative to content/notes.
-function linksOf(source: string, from: string, pages: ReadonlySet<string>, byUrl: ReadonlyMap<string, string>) {
+export function linksOf(source: string, from: string, pages: ReadonlySet<string>, byUrl: ReadonlyMap<string, string>) {
   const found = new Set<string>();
   try {
     visit(parseNote(source), (node) => {
@@ -103,6 +103,23 @@ function linksOf(source: string, from: string, pages: ReadonlySet<string>, byUrl
   }
   return [...found].sort();
 }
+
+// A graph's keywords (frontmatter `graph.keywords`, a section's `keywords`).
+const keywordEntriesOf = (value: unknown) => (Array.isArray(value)
+  ? value.flatMap((item: unknown) => {
+    const { id, displayName } = (typeof item === 'object' && item !== null ? item : {}) as { id?: unknown; displayName?: unknown };
+    return typeof id === 'string' ? [{ id, displayName: typeof displayName === 'string' ? displayName : id }] : [];
+  })
+  : []);
+
+// Every graph keyword of a note's frontmatter, its sections' too.
+export function graphKeywordEntriesOf(data: Record<string, unknown>) {
+  const graph = (data.graph ?? {}) as { keywords?: unknown; sections?: unknown };
+  const sections = Array.isArray(graph.sections) ? graph.sections : [];
+  return [...keywordEntriesOf(graph.keywords), ...sections.flatMap((section: unknown) => keywordEntriesOf((section as { keywords?: unknown }).keywords))];
+}
+
+export const graphKeywordsOf = (data: Record<string, unknown>) => graphKeywordEntriesOf(data).map((keyword) => keyword.id);
 
 const authorOf = (ctx: StudioToolContext, deps: NoteToolDeps): ProposalAuthor =>
   ctx.caller.kind === 'run'
@@ -200,9 +217,6 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
       const byUrl = new Map(notes.map((note) => [pageUrl(note.path), note.path]));
       const texts = await Promise.all(notes.map((note) => ctx.files.read(`${NOTES_DIR}/${note.path}`)));
       const links = new Map(notes.map((note, index) => [note.path, linksOf(texts[index]?.content ?? '', note.path, pages, byUrl)]));
-      const graph = (self.data.graph ?? {}) as { keywords?: unknown; sections?: unknown };
-      const keywordsOf = (value: unknown) => (Array.isArray(value) ? value.flatMap((item) => (typeof item === 'object' && item !== null && typeof (item as { id?: unknown }).id === 'string' ? [(item as { id: string }).id] : [])) : []);
-      const sections = Array.isArray(graph.sections) ? graph.sections : [];
       const tags = strings(self.data.tags);
       const full = (each: string) => `${NOTES_DIR}/${each}`;
       return json({
@@ -212,7 +226,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
         linkedFrom: notes.filter((note) => note.path !== page && (links.get(note.path) ?? []).includes(page)).map((note) => full(note.path)),
         tags,
         keywords: strings(self.data.keywords),
-        graphKeywords: [...keywordsOf(graph.keywords), ...sections.flatMap((section: unknown) => keywordsOf((section as { keywords?: unknown }).keywords))],
+        graphKeywords: graphKeywordsOf(self.data),
         sharesTags: notes.filter((note) => note.path !== page && strings(note.data.tags).some((tag) => tags.includes(tag))).map((note) => full(note.path)),
       });
     },
