@@ -1,0 +1,831 @@
+# Using the Studio
+
+Read this to edit notes in the Studio: from opening a change request to
+publishing it, and working with agents and diagrams on the way. Setting it
+up is in [setup.md](setup.md); how each part is built is in
+[architecture.md](architecture.md).
+
+- [Change requests](#change-requests)
+- [Signing in](#signing-in)
+- [Editor](#editor)
+- [Sidebar](#sidebar)
+- [Page tree](#page-tree)
+- [Graph markers](#graph-markers)
+- [Images](#images)
+- [Assets](#assets)
+- [Diagrams](#diagrams)
+- [Changes](#changes)
+- [Diff](#diff)
+- [Preview](#preview)
+- [Publish](#publish)
+- [History](#history)
+- [Agents](#agents)
+- [Proposals](#proposals)
+- [Buttons, dialogs and errors](#buttons-dialogs-and-errors)
+
+## Change requests
+
+The Studio never writes to main. It opens on main read only: the header's
+picker says `main · Read only`, the editor and the frontmatter are locked,
+the page tree has no New page, row menu or drag, and assets cannot be
+replaced, renamed or deleted. The server refuses every write there too
+(`403`); lint still runs.
+
+**Edit** in the header continues in a change request still open (Draft,
+Previewing, In review) or starts a new one; with none open it starts one at
+once. A new change request takes a name (up to 80 characters). Its slug is
+the name in kebab-case ASCII, at most 24 characters, with `-2`, `-3`, …
+when taken, so `cr-<slug>` fits the 28 characters Cloudflare Pages keeps in
+a preview alias. Taken means a local or remote `cr/*` branch, the head of a
+past pull request (whose status a new branch of that name would show) or a
+folder in `<STUDIO_HOME>/worktrees`; the dialog shows the branch the server
+will pick. Creating it fetches origin and adds branch `cr/<slug>` from
+`origin/main` with its own worktree (see
+[architecture.md](architecture.md#change-requests-and-git)).
+
+The page then opens `?cr=<slug>` with what was open. Switching (the picker)
+loads the page again, keeping the note or asset open.
+
+| Status | When |
+| --- | --- |
+| Draft | the branch is not on origin |
+| Previewing | the branch is on origin (as of the last fetch or push), no pull request |
+| In review / Merged / Closed | the branch's pull request is open, merged or closed (`gh pr list`, read at most every 30 s) |
+
+When gh cannot read the pull requests (not installed, not logged in,
+offline), the statuses come from git alone and the list says why.
+
+### The list
+
+The list (the activity bar's Change requests button, or All change requests
+in the picker; `?view=crs`) groups them as In progress (Draft, Previewing),
+Waiting to merge (In review) and To clean up (Merged, Closed). Each card
+shows the name, status, branch, the notes changed against `origin/main`
+(committed or not), how many files are not committed, when it was last
+updated (its last commit, an uncommitted file, or its creation), the
+preview link once it is pushed, the pull request, and its agent chats with
+their reported cost. The card of the change request the page shows says
+Current instead of an Open button; Open is off while the open note has
+edits not saved yet. The list loads again when the window gets the focus
+back and when files change. **Refresh** fetches origin first (main and
+every `cr/*` branch), then reads the pull requests again; when the fetch
+fails, the list says so and shows the refs as last fetched.
+
+An open change request also shows how far it is from `origin/main` as last
+fetched: up to date, how many commits behind, or the files a merge of main
+would conflict in (only commits count, not what is left uncommitted). One
+that cannot be read (a history unrelated to main) shows nothing rather than
+failing the list. One not updated for 30 days (`STUDIO_STALE_DAYS`) is
+marked Stale, with a hint to discard it; nothing is removed on its own. The
+Changes view of the change request the page shows says the same on top:
+the conflicting files and the command that merges main in a terminal
+(`cd <worktree> && git merge origin/main`, with a copy button). The Studio
+does not merge main itself.
+
+### Discard and Clean up
+
+**Discard** (on a card) asks first, listing what goes from origin and from
+this machine, as a dry run that fetches origin first and reads the pull
+request fresh.
+
+- On origin: the open pull request is closed (`gh pr close`, with a
+  comment) and the branch is deleted (`git push origin --delete`); a branch
+  already gone there, as GitHub deletes a merged pull request's, is skipped.
+- On this machine: the worktree, with what was not committed, and the local
+  branch with its commits; commits that were never pushed are counted,
+  since they are lost. The change request's agent chats, proposals and
+  comments go too, so a new change request with the same slug starts
+  empty.
+
+Origin goes first: when the push or gh fails, nothing is removed here and
+the dialog shows why. When origin changed since the dry run (pushed or
+opened from elsewhere), nothing is removed: the dialog never does more than
+it listed, and it checks again to show what a new try would do. While gh
+cannot read the pull requests, a pushed change request cannot be discarded
+(its pull request would close without notice). With sign-in on, removing
+what is on origin needs an admin.
+
+A merged or closed change request offers **Clean up** instead, on its card
+and on top of its Changes view; it removes the same things. Cloudflare
+keeps the preview deployments it built. Discarding the change request the
+page shows goes back to main.
+
+## Signing in
+
+With sign-in on (see [setup.md](setup.md#sign-in)), the page shows the
+sign-in page until someone signs in. The header then ends with the
+signed-in person (their picture alone on a phone) and a menu with their
+role and **Sign out**.
+
+When the session ends while the Studio is open (a request answers `401`,
+access is taken away, a sign-out in another tab), the sign-in comes up as a
+dialog over the Studio, which stays mounted behind it: a note's edits not
+saved yet stay in the editor, and once signed in again the autosave writes
+them. Someone else signing in, or the same person back without write
+access, gets the Studio afresh instead, so nothing saves under another
+account.
+
+Until a note's edits are saved, the page also keeps them in the tab's
+sessionStorage, per person, change request and note
+(`src/editor/unsaved.ts`). If the page went away first (the web sign-in
+leaves for GitHub, a reload), opening the note again offers **Restore
+edits**, with a warning when the note changed on disk since; someone who
+may no longer write can copy them.
+
+A reader's Studio is read only, as main is: no New change request, Commit,
+Preview, Publish or Discard, but a change request's **Open preview**. A
+writer sees Discard and Clean up off, with the reason, on a change request
+that is on origin. Agents are an admin's (see [Agents](#agents)).
+
+A commit from the UI has the signed-in person as its author, `Name
+<id+login@users.noreply.github.com>`, so GitHub links it to them; the
+committer stays the host's git identity. Pushes and pull requests run as
+the host's `gh`, so Publish ends the description with `Opened in Notes
+Studio by @login.`
+
+## Editor
+
+Pick a note in the page tree (or open `?path=content/notes/…mdx`). The
+editor is [fumadocs-editor](https://github.com/fuma-nama/fumadocs-editor):
+
+- **Visual** edits blocks in place and looks like the note page: the
+  frontmatter title and description on top, the site's prose, callouts,
+  code frames, keywords, accordions and diagrams (see
+  [Plugins](architecture.md#plugins)). Type `/` for the block and component
+  menu. Blocks you don't touch are written back byte for byte; syntax that
+  no plugin understands shows as source and still round-trips.
+- **Source** is CodeMirror 6 over the whole MDX file. Text that does not
+  parse stays in Source until it is fixed. Typing `src="` or an image's
+  `](` suggests assets (see [Images](#images)).
+- **Frontmatter** is edited at the top of the note in Visual. The title and
+  description are typed in place (Enter moves on to the next line, then the
+  body). The strip under them sums up the rest (icon, Hidden, graph id,
+  keyword and section counts, errors) and opens to edit it: the icon, from
+  the lucide names the site knows (`lib/notes-icons.ts`); whether the page
+  is shown in the site's sidebar (off writes `visible: false`); the graph's
+  id and displayName; keywords as chips; sections with their keywords.
+  Other keys show read only. Every change is checked against
+  `notesPageSchema` (`lib/notes-schema.ts`), written only when it passes,
+  and the issues show next to the field. Only the edited values change;
+  comments, key order, quoting and other keys stay. Visual hides the YAML
+  block; Source shows it.
+- **Saving** is automatic: edits go to the file in the worktree (no
+  commit). `Cmd/Ctrl-S` saves at once. Changes made on disk (another
+  editor, an agent) are merged into the open note. If the same block
+  changed on both sides, a dialog asks which version to keep.
+- Light and dark follow the system. The look is the site's own, imported
+  rather than copied, so a change on the site shows here with no Studio
+  edit (see [architecture.md](architecture.md#the-sites-look)).
+
+## Sidebar
+
+The left side works like VS Code's. The activity bar holds the **Notes**
+view (the page tree), the **Assets** view, the **Issues** view (the open
+note's lint issues, with their count on the icon; see [lint.md](lint.md))
+and the **Changes** view (with the number of changed files). Picking the
+open view again hides the sidebar, and so does the button at the foot of
+the bar. A rail marks the open view. The **Deleted pages** button (with
+their count) and, with change requests, the **Change requests** button sit
+at the foot, above that button: each opens a page in the main pane rather
+than a view, so it is filled, not railed, while its page is open.
+
+Drag the sidebar's right edge to resize it (220–480px), or focus the edge
+and use the arrow keys, Shift for bigger steps, Home and End for the
+limits; double-click resets it to 284px. It never takes more than the
+window leaves the editor (420px). The view, the width and whether it is
+shown are kept in localStorage. Below 768px the sidebar is a drawer, opened
+from the header's Notes button or the toolbar's issue count, and its view
+takes up to 320px.
+
+## Page tree
+
+The Notes view shows the notes as the site's sidebar does: the same order,
+separators (`---Label---`), links, nested entries (`a/b`), `...`, `z...a`,
+`...folder` and `!slug`. On top of that the tree shows:
+
+- **hidden**: pages and folders the site leaves out of its sidebar. Those
+  no `meta.yaml` lists come after the listed ones in their folder; those
+  that say `visible: false` stay where they are listed. Hover the badge
+  for the reason.
+- **missing**: a `pages` entry that reaches no page or folder, at its place.
+- **Filter** keeps the pages and folders whose title or path matches, with
+  the folders on the way to them; Move up and Move down are off while it
+  filters.
+- Folders start closed, apart from the ones on the way to the open note,
+  and the tree remembers which ones you opened. `meta.yaml`'s `defaultOpen`
+  is for the site's sidebar and is not read here: most folders set it, so
+  the whole tree would open at once.
+- Rows follow the site's sidebar: 34px high, 14px text, a guide line for
+  each nested level, and the icon the site shows (a page's frontmatter
+  `icon`, a folder's `meta.yaml` `icon` or else its index page's). A new
+  icon set in the metadata strip shows once the note is saved.
+- Change marks: a note's status after its title, a dot on a closed folder
+  that holds a change or on any folder whose `meta.yaml` changed, `D` on a
+  `meta.yaml` entry whose page was deleted, and a mark on notes with
+  suggestions waiting.
+
+Every change below shows what it will write (a dry run) before you confirm,
+and refuses with `409` when a file it writes changed on disk meanwhile. A
+note open in the editor follows the change through its sync; while it has
+unsaved edits, a change that touches it waits.
+
+- **Reorder** (drag a row, or the row menu's Move up / Move down) moves an
+  entry within its folder's `pages`. Only nodes with an entry of their own
+  there can move; a lock explains the others. Comments, blank lines, quote
+  style, `icon`, `visible` and a missing final newline stay as they were. A
+  folder without `meta.yaml` gets one with only `pages`, in the new order,
+  so its title (from the index page) and its closed-by-default state stay.
+- **New page** (the `+` button, or New page here / below in the row menu)
+  writes a page `slug.mdx`, a folder page `slug/index.mdx` plus
+  `slug/meta.yaml`, or a plain folder with only `slug/meta.yaml` (no index
+  page: it opens and closes on click). The slug is kebab-case and not
+  `index`. A page gets the frontmatter the notes use (title, description,
+  graph); a folder's `meta.yaml` gets its title, `pages: []` and
+  `defaultOpen: false`, or `true` when "Open by default on the site" is on.
+  The slug is added to the parent's `pages` after the chosen entry, unless
+  the parent has no `meta.yaml`, no `pages`, or `...`/`z...a`, which list
+  it already. A new plain folder opens in the tree and takes focus.
+- **Open by default on the site** (a folder's row menu) sets `defaultOpen`
+  in its `meta.yaml`: the value is replaced where it is, or a line is added
+  after `title`. A folder without `meta.yaml` cannot set it.
+- **Hide from sidebar / Show in sidebar** (the row menu of a page or
+  folder; not the root page) writes `visible: false` into the page's
+  frontmatter or the folder's `meta.yaml`, after `title`, or takes that
+  line out again: hiding and showing gives back the file byte for byte,
+  unless it said `visible: true` (that line goes too). A page with no
+  frontmatter cannot be hidden. A folder without `meta.yaml` gets one with
+  `visible: false` and its children in `pages`, so they can still be
+  ordered; shown again, that `meta.yaml` is removed while it still lists
+  them in the order they had without it, and stays (without `visible`)
+  once reordered. A `meta.yaml` that showing would leave empty, which the
+  site's schema refuses, says `visible: true`. Showing an unlisted node
+  also lists it in its folder's `pages`: a `!name` entry becomes `name`, or
+  it is added at the end. A page `x.mdx` next to a folder `x/` that the
+  folder already lists is refused: the entry reaches the folder, so rename
+  one of them.
+- **Rename** gives a page or folder a new name in the same folder. Every
+  `meta.yaml` entry that reached it (`a/b`, `!x`, `...x` included) and
+  every Markdown link or link definition to it (`./`, `../` and
+  `/notes/…`, anchors kept) points at the new name; only the changed path
+  segment is rewritten. Only links that reach a note change:
+  `/notes/a/page/x.png` (an image in the page's asset folder) and a folder
+  `page/` next to `page.mdx` keep their paths. JSX `href`s are not
+  rewritten, and neither are notes that do not parse.
+
+A rename does not move the page's images: they stay in
+`public/notes/<old path>/`, the links to them keep working, and the dry run
+lists the folder as staying. New images go to the folder of the new path.
+The tree does not move a page to another folder, delete it, or edit a
+folder's title or icon.
+
+## Graph markers
+
+The graph markup of `components/graph-objects.tsx` is inserted and edited
+in Visual:
+
+- The `/` menu inserts a Keyword or Tag (`<Keyword id="" displayName="">`),
+  a Graph heading (`### Title :graph-meta{…}`) and the site's directive
+  blocks: accordions, tabs, steps and `::youtube`, next to the JSX
+  components (`<YouTube>`, `<Diagram>` among them). **Mermaid diagram**
+  (`/mermaid`; `/diagram` lists it next to SVG diagram and Diagram) inserts
+  a ` ```mermaid ` code block with a starter flowchart, drawn under the code
+  as you type, with the caret in the code.
+- Select text and the graph bar under it wraps it as a **Keyword**
+  (`Mod-Alt-K`) or **Tag** (`Mod-Alt-T`). With the caret in a heading,
+  **Graph node** (`Mod-Alt-G`) adds `:graph-meta{…}` from its title. Some
+  systems take a shortcut before the page sees it (`Ctrl-Alt-T` opens a
+  terminal on GNOME, `Cmd-Opt-K` the Firefox console on macOS); the bar
+  buttons work everywhere. The bar sits under the selection, below the
+  editor's own format bar, or above it with no room left
+  (`src/graph/dock.ts`).
+- The id is slugged from the text (Vietnamese marks dropped, `đ` → `d`)
+  and the displayName is the text. The fields open right after, and again
+  from **Edit … id** on the bar (caret in a keyword or a marked heading) or
+  a click on a graph node marker or a `:keyword[…]` label. Change the text,
+  id or displayName; Enter or a click elsewhere writes them, Escape leaves
+  the marker as it is. A marker without an id (just inserted from `/`)
+  opens them when the caret reaches it, and takes its id from the text as
+  you type it.
+- **Remove keyword / tag / graph node** (`Mod-Alt-X`) on the bar, or Remove
+  at the foot of the fields, takes the marker at the caret off and keeps
+  what it marked: a keyword's text with its Markdown, a `:keyword[…]` label
+  as the text it reads as, a heading's title without the space its
+  `:graph-meta` added. One undo puts it back. When the note's `graph`
+  frontmatter lists the marker's id (`graph.keywords`, `graph.sections`, a
+  section's `keywords`), the bar and the fields name those entries; Remove
+  leaves them.
+- Only the marker's own source changes. Keyword text with mixed formatting,
+  or a `:keyword[…]` label with Markdown in it, is kept as it is; the
+  fields then change only the id and displayName. A label typed in the
+  fields is written with its Markdown and MDX characters escaped (`\\`,
+  `\*`, `\_`, `` \` ``, `\[`, `\]`, `\{`, `\<`), so the site shows it as
+  typed. A value with both `"` and `'` is saved with its `"` turned into
+  `'`. The rest of the marker's paragraph is written the way the editor
+  writes Markdown, as for any edit in Visual; the notes use `*a*` and
+  `**b**`, the markers the editor writes, so that rewrite does not show in
+  a diff (lint's `emphasis-marker` keeps it so).
+
+## Images
+
+Paste or drop an image in Visual, pick one from the `/` menu's Image item,
+or use Upload on a selected image's toolbar. A dialog asks for the file
+name first: the image's own name in kebab-case ASCII is offered, selected,
+and the extension stays as it is (a pasted image without one takes it from
+its type). A name already used in the page's folder, in any case, cannot be
+saved, and Escape or Cancel writes nothing.
+
+- The file goes to the page's folder under `public/notes`:
+  `content/notes/a/b.mdx` uses `public/notes/a/b/`, and a folder's
+  `index.mdx` uses the folder (`public/notes/a/`).
+- The note gets `![alt](/notes/a/b/name.png)`, the path the site reads; the
+  alt text is the original file name, so edit it in the image toolbar.
+- The dialog keeps the focus while it is open: the image goes where the
+  caret was when it was pasted, so the note should not change meanwhile.
+- Only images the site serves are saved (PNG, JPEG, WebP, GIF, AVIF, SVG,
+  up to 25 MB); anything else is refused with a notice beside the save
+  status. The save makes a new file only, so a name taken meanwhile is
+  refused, never overwritten.
+- In Source, typing `src="` or an image's `](` suggests the assets under
+  `public/notes`: `HtmlEmbed` and `::html` suggest `.html` files,
+  `SvgDiagram`, `::svg` and `::diagram` suggest `.svg`, images suggest
+  images, and `<Diagram src>` suggests nothing. The page's own folder ranks
+  first, then the folder the note sits in.
+
+Renaming, replacing or deleting an asset is in the Assets view.
+
+## Assets
+
+The sidebar's Assets view shows `public/notes` as folders, the open note's
+asset folder open, each file with how many times notes use it (`unused`
+when none does) and `diagram` when a diagram source generates it. Under
+**Diagrams** follow the `diagrams/**/*.diagram.json` files, each with the
+`<Diagram>` that draw it, opening the [diagram editor](#diagrams); they are
+not renamed or deleted here. Filter by name, or show the unused files only.
+
+A file opens its asset page in the main pane, and its row is marked as the
+open one. The URL names it (`?asset=public/notes/…`), so back and forward
+move between notes and assets. On a phone, opening an asset closes the
+drawer. The page shows:
+
+- the file: an image fitted to the pane, or at 100%, on a checkerboard; an
+  `.html` embed in a sandboxed frame, where its scripts do not run, so an
+  interactive embed may show only its static part (**Open preview** in the
+  header opens the file on the change request's preview once it is
+  pushed); other types get an icon;
+- its path, size, dimensions (for an image) and modified time;
+- **Used in**: the notes and lines that use it; picking one opens the note
+  in Source with the path selected;
+- **Generated by**: the diagram sources that generate it;
+- **History** (see [History](#history)), **Replace…**, **Rename…** and
+  **Delete…**.
+
+The row's menu opens the page, renames or deletes:
+
+- **Rename…** gives the file a new name in its folder, in the same
+  kebab-case as uploads; the extension stays, and a name already taken is
+  refused (a change of case alone is allowed). Every reference to it is
+  rewritten: `![…](/notes/…)` images, Markdown links and link definitions,
+  `src` on `HtmlEmbed`, `SvgDiagram` and `<img>`, and `::html`, `::svg`,
+  `::diagram`. Only the path changes: a query or hash (`?embed=1`) and the
+  way the path was written stay. The dialog shows every file it writes,
+  and the diagram sources that still name the old path.
+- **Delete…** removes a file no note uses and no diagram generates, and the
+  folders it leaves empty. Otherwise the dialog lists those instead and
+  offers no delete.
+- **Replace…** (on the page) puts new content in place of the file: pick
+  one, or drop it on the preview. The dialog shows the old file and the new
+  one side by side, with size and dimensions, and what it writes. The new
+  file must be a type the Studio stores (PNG, JPEG, GIF, WebP, AVIF, SVG,
+  HTML, GLB, PDF), up to 25 MB. With the same extension only the file
+  changes, so every note that uses it keeps working. With another one
+  (`.png` to `.webp`) the file takes that extension and its references are
+  rewritten as in a rename. A file a diagram source generates cannot be
+  replaced: regenerating would write it again. The preview and the images
+  on the page load the new content without a reload, and so does a change
+  made outside the Studio.
+
+References are found as the site reads them (the lint's `asset-missing`
+rule reads them the same way): embed `src` is a path under `public/`, `/…`
+images, links and `<img src>` are URLs from the page. Relative images
+(`./a.png`) are imported by the MDX build, so they are not assets here; the
+frontmatter and code blocks never count; a `<Diagram src>` is listed but
+never rewritten. Some uses cannot be rewritten: a path written with a
+character reference the Studio does not read, or a note that does not parse
+but holds the file's name. They count as unsure uses: a rename, or a
+replace that changes the extension, is refused until they are fixed, and
+delete is refused for any use.
+
+A diagram source is a file under `diagrams/` that generates an asset: a
+JSON spec naming it in `meta.output`, or a `*.regen.sh` script naming it in
+`OUT=`. Regenerating writes that path again, so the Studio does not delete
+or replace such a file, and never edits a source itself: after a rename,
+update the source before regenerating. The repository has no such sources
+at present: a `<Diagram>` (`diagrams/**/*.diagram.json`) is drawn when the
+site builds and generates no asset.
+
+While the open note has unsaved edits, rename, replace and delete wait for
+it: the server only sees what is on disk.
+
+## Diagrams
+
+A `<Diagram src>` card in the editor draws its `diagrams/<src>.diagram.json`
+with the site's renderer and counts the problems the site's checks find; it
+draws again when the file changes on disk. Diagram files are editable
+paths: they are listed, watched and diffed, and a commit of only diagrams
+is named after them.
+
+A diagram picked in the Assets view opens the diagram editor in the main
+pane (`?diagram=diagrams/…`). The canvas is the site's own drawing, so it
+looks as the note will, with an editing layer on top:
+
+- drag a node (Shift-click adds to the selection and the drag moves them
+  all) or a frame (its nodes move and it follows them); nodes land on an
+  8-unit grid, the arrow keys nudge them (Shift: 4 steps);
+- drag from a selected node's side handle to another node or a frame to
+  connect them, with both ends pinned to the sides drawn between;
+- on a selected edge, drag a waypoint, or the middle of a segment to add
+  one; a double click removes it and **Route it again** clears them all;
+- add a node (where it fits, or with a double click on the canvas), wrap
+  the selection in a frame, add a card; duplicate (⌘D) a node, frame or
+  card, and delete (Delete or Backspace) what is selected, unless that is
+  every node; Escape clears the selection;
+- undo and redo (⌘Z, ⇧⌘Z or ⌘Y) cover every edit, the JSON's too, up to
+  200 steps. A copy goes where it overlaps nothing: inside the innermost
+  frame that holds the original when it has room there, else in the first
+  free spot of the drawing, else below it;
+- the panel edits what is selected: a node's label, sublabel, tag, kind (or
+  a **New kind…** for it), its kind's name, tone and icon, and its note
+  (role, evidence badge, points); an edge's label, detail, variant, arrows
+  and end sides; a frame's label, tone and dashes; a card; or, with nothing
+  selected, the title, legend, kinds (add one, remove one no node is of,
+  but not the last) and cards;
+- **JSON** shows the file under the drawing (drag the bar between them, or
+  focus it and use the arrow keys, to resize; double-click it for halves);
+  typing there draws once it parses;
+- under the drawing, the checks' findings and the notes that use it.
+
+Keys do nothing while you type in a field or the JSON.
+
+A sequence (`"type": "sequence"`) has no positions, so its canvas edits the
+order instead: drag a participant's header sideways to change its column,
+drag a message's grip (in the left margin) up or down to move it in the
+timeline, and drag from the handle under a lifeline to another lifeline to
+add a message where it is dropped; the arrow keys, or the panel's buttons,
+move a selected participant a column or a message a step. The panel sets a
+message's ends and, with nothing selected, the segments and activations,
+each from its first and last message. Frames and waypoints are not offered,
+and only cards are copied.
+
+Edits save a moment after each change, with the mtime they read, written so
+a move changes one line. A change on disk (an agent, the CLI) loads while
+nothing waits to be saved, and undo can go back past it; with edits
+waiting, the page asks whether to load the disk's version or keep its own.
+Edits not on disk yet block switching change request, renames and Commit,
+as a note's do, and the tab asks before it closes; left in a conflict or as
+JSON that does not parse, they show again the next time the file is opened
+in the tab (a reload drops them). On main, or for a reader, the editor only
+shows.
+
+Agents edit diagrams through the `diagram_*` MCP tools (see
+[architecture.md](architecture.md#mcp-server)); the skill
+`skills/chimeyrock-diagram` at the repository root says how. The format is
+in `diagrams/README.md`.
+
+## Changes
+
+The sidebar's Changes view commits from the Studio. It lists what
+`git status` says changed in the worktree under `content/notes` and
+`public/notes`, only files the path policy allows, grouped as Pages (notes
+and `meta.yaml`, shown as the folder's page order) and Assets, each with
+`M`, `A`, `D` or `R`. Any row, and any file of a commit in History, opens
+the file's [diff against main](#diff). Every file starts picked, and so
+does a file that changes later; uncheck what should wait.
+
+Changed diagram files are counted in the badge and picked for the commit
+but have no row yet, so they cannot be unchecked here (#156).
+
+The commit message is required. It starts as a suggestion for the picked
+files (`src/changes/message.ts`), for example:
+
+| Picked | Suggestion |
+| --- | --- |
+| one page | `docs(notes): update <slug>` (or `add`, `remove`); a folder's index is named by its folder, the root index "notes home" |
+| a page deleted and one added | `docs(notes): rename <a> to <b>` |
+| several pages in one folder | `docs(notes): <verb> <folder> (3 pages)` |
+| pages in several folders | `docs(notes): <verb> 5 pages` |
+| `meta.yaml` and no page | `docs(notes): reorder <folder>` |
+| only assets | `docs(notes): update assets of <folder>` |
+| diagrams, no page or `meta.yaml` | `docs(notes): <verb> diagram <name>`, or `update 2 diagrams` |
+
+Once edited, the message stays as written, `#` lines too, until **Use the
+suggestion**. An unchecked file stays unchecked until it leaves the list.
+
+**Commit** commits the picked paths alone, so anything else, staged or not,
+stays as it was; a deletion or rename staged in a terminal commits too. A
+commit that fails (a hook, a missing `user.email`) stages nothing, and
+git's reason shows in a toast. It waits while the open note has edits not
+saved yet. Main is read only: the view lists its changes and history
+without the commit box.
+
+**History** lists the change request's commits, those on `HEAD` and not on
+`origin/main` (or `main`), without merges, up to 200: message, time, short
+sha, and its files when opened. The changes are read again when a note,
+`meta.yaml` or asset changes on disk; both, when the window comes back (a
+commit made in a terminal) and after each commit.
+
+Switching away from a change request with uncommitted files (the picker,
+the list, Edit) shows a reminder on the page the switch opens, with **Back
+to** that change request; it blocks nothing and goes after 8 seconds. A
+discard needs none: its dialog lists the uncommitted files it removes.
+
+## Diff
+
+A file picked in the Changes view opens in the main pane against main: what
+main held at the merge base, where the change request left it, against what
+the worktree holds now, committed or not. Commits main gained since are not
+this work, so they never show as undone. A file main has no copy of under
+its path is looked up as a rename against the base, so a rename already
+committed still reads main under the old name. The bar names the file (both
+paths for a rename) with its status, and **Open in editor** opens a note or
+an asset that is still there.
+
+- **Rendered**, for a note: its changed frontmatter keys, old over new,
+  then its blocks as the editor renders them, matched by text; between two
+  unchanged blocks, what main had shows struck through in red over what
+  replaced it in green. An unchanged stretch keeps one block at each end
+  and folds the rest behind a button. A side that does not parse offers
+  Source.
+- **Source**: the raw text in CodeMirror's merge view, unchanged lines
+  folded; side by side from 720px, one column below.
+- A `meta.yaml`, a diagram and an HTML asset have Source only. An image
+  shows main and now side by side with their sizes and dimensions, an SVG
+  has Source too; another asset, or a text file over 2 MB, shows its sizes.
+
+The diff loads again whenever the changes do. The URL is `?diff=<path>`
+(with `&from=<old path>` for a rename), so back and forward work.
+
+## Preview
+
+The Changes view's **Preview** section, above History, pushes the change
+request so Cloudflare Pages builds its preview; no pull request is opened
+(that is [Publish](#publish)). **Preview** pushes `HEAD` to `cr/<slug>` on
+origin: never to main, never forced. A push the remote refuses, because the
+branch there has commits this one has not, shows git's reason. The push
+waits while the open note has edits not saved yet, and commits after it
+wait for the push. Files not committed are not pushed; the section says how
+many.
+
+The build is the `Cloudflare Pages` check run Cloudflare posts on the
+pushed commit, read with `gh api`, so no Cloudflare token is needed:
+
+| State | When |
+| --- | --- |
+| Not pushed | the branch is not on origin |
+| Waiting for Cloudflare | pushed, no check run yet, for 3 minutes after the push |
+| Building | the check run is queued or in progress |
+| Ready | it succeeded |
+| Failed | it failed, was cancelled, timed out, or ended `action_required`, `stale` or `startup_failure`; the branch's preview still shows its last successful build |
+| Skipped | it finished `neutral` or `skipped`: nothing new was built, and the preview still shows its last successful build |
+| No build | no check run 3 minutes after the push: Cloudflare skips a push outside its watch paths (`tools/…`) or branches (`cr/*`) without a trace |
+| Status unknown | gh could not read it (not installed, not logged in, offline) |
+
+The page asks every 5 seconds while the build runs, and again when the
+window comes back and after each commit.
+
+**Open preview**, in the section and in the header once the branch is
+pushed, opens the branch's preview at the page that is open; its dot is the
+build's state. It is the Studio's only link to the site: Visual already
+renders the note, and the Studio does not run the site's dev server. On a
+diff it opens the file at its path now; a `meta.yaml`, or a file the change
+request deleted, opens the notes home. Previews sit behind Cloudflare
+Access: the first one asks for the one-time PIN in the browser. **View
+log** opens the build in the Cloudflare dashboard. Commits made after the
+push show "↑ not pushed" in History, the section says the preview is behind
+by that many, and the button pushes them. With a pull request open, the
+button is **Update PR**: the push goes to that pull request.
+
+## Publish
+
+The **Pull request** section, under Preview, opens a pull request from
+`cr/<slug>` to main for review. **Publish…** opens a dialog with the title
+and description filled from the change request's name and its commits
+(oldest first, with the branch's preview link), both editable; the title
+takes up to 256 characters and the description up to 60,000. Publishing
+pushes the commits not pushed yet, then opens the pull request with `gh pr
+create`. If gh fails after the push, the push stays and the dialog says
+why; it cannot be closed while it publishes.
+
+A branch gets one pull request: Publish reads it fresh and refuses when one
+is open (later commits go to it with Update PR) or merged or closed (the
+change request is cleaned up instead). When gh cannot read it, Publish is
+off and Preview still works.
+
+The header's main action follows the change request: **Commit** (files not
+committed; it opens Changes at the commit message) → **Preview** (commits
+not pushed) → **Publish** (all pushed, no pull request) → **View PR** (the
+pull request on GitHub, whatever its state), and **Update PR** for commits
+made after publishing (`src/changes/primary-action.ts`). With nothing to
+commit yet, Commit is off. Pushes and Publish wait while the open note has
+edits not saved yet.
+
+## History
+
+**History** in the editor bar opens the note's history in the main pane. On
+the left are its versions, newest first: **Now** (the page on disk,
+committed or not; not on main, where the disk is main), then each commit
+that changed it, following renames, with merges whose page is none of their
+parents' (two change requests' edits, or a resolved conflict) as versions
+of their own. A version names the path the page had in that commit; a
+commit of the change request's own, not on main, has an **In this CR** tag,
+a rename **Renamed from**, the first commit **Created**. The list stops at
+the latest 200.
+
+The version picked shows against the one before it, which is what that
+commit changed; **Compare with** picks Now or any other version instead.
+The diff always reads from that version to the picked one, so against Now
+it shows what a restore would do. Rendered and Source are the
+[diff page's](#diff).
+
+**Restore**, after a confirm, writes the picked version over the page under
+its current name, in the change request: nothing is committed, the page
+shows in Changes and is committed from there. If the page changed since the
+history was read, nothing is written and the history loads again. It needs
+a writer and a change request; the button is off on main, for a reader, and
+on Now. An open editor takes the restored text as any edit made on disk.
+
+**Assets** have a history too: **History** on the asset page opens it, on
+main as well. Preview shows the two versions side by side, an image with
+its size and pixel box, any other file by its size; an SVG has Source too.
+Restore goes the way Replace writes an asset: off for an asset a diagram
+source generates, and a version under another extension (a `.png` before a
+`.webp`) gives the asset that extension, every note's link following; the
+history then follows the asset to its new name. Git follows an asset's
+rename only while its content stays alike, so a rename made together with
+new content starts a new history.
+
+**Deleted pages**, at the foot of the activity bar, lists the pages deleted
+on `HEAD`, grouped by the commit that deleted them, newest first (a rename
+is no delete, and a page the worktree has again is left out). A page
+deleted but not committed yet is in Changes instead. Opening one shows its
+history with the delete on top (**Deleted**). **Restore page…** first lists
+every file it writes, then brings the picked version back, uncommitted, and
+opens it:
+
+- the page;
+- each folder deleted with it, as the commit before the delete held it (its
+  `index.mdx`, and its `meta.yaml` listing only what comes back);
+- the topmost of these listed again in the `meta.yaml` above, after the
+  entry it followed when it was deleted (first when none of those is left),
+  unless that list shows every page by itself (`...`) or did not list it
+  before the delete.
+
+A path the worktree has is refused: its own history restores it.
+
+`meta.yaml` has no history: a folder's order, title and visibility are
+redone from the page tree, and restoring a whole older file would drop the
+pages made since and bring back entries for pages gone.
+
+The URLs are `?history=<path>` and `?view=deleted`.
+
+## Agents
+
+The Studio drives coding agents (Claude Code, Codex, omp, Hermes Agent)
+over the [Agent Client Protocol](https://agentclientprotocol.com). Setting
+them up is in [setup.md](setup.md#agents); how they are fenced in is in
+[architecture.md](architecture.md#agents).
+
+> An agent runs commands as the person who started the Studio. With sign-in
+> on, only an **admin** may start a chat, send it a message, answer,
+> cancel or delete; readers and writers follow and read the chats, and a
+> writer may keep or revert what a turn changed.
+
+**Agent** in the header shows or hides the agent panel and counts the
+agents answering and the questions waiting; the picker beside it chooses
+the agent for each role, kept in this browser.
+
+- **Where.** Only in a change request: the agent works in its worktree,
+  never main. A Studio over one worktree (as the tests start it) runs no
+  agent.
+- **Chats.** **New chat** picks the role, *author* (may write) or
+  *reviewer* (only reads); agent and role stay for the whole chat. Enter
+  sends, Shift+Enter adds a line, and Enter that only confirms an IME's
+  text (Telex) sends nothing. One turn at a time: while the agent answers,
+  the composer keeps what you type but sends nothing, and **Cancel** stops
+  that turn, not the chat. The message shows in the thread at once, marked
+  Sending, and comes back to the box if it did not go; until the agent
+  says or does anything, the thread says it is thinking. Replies and
+  thoughts show as markdown: raw HTML shows as text, links go only to
+  `http(s):` and `mailto:`, and an image is a link. The header names the
+  model the agent reports.
+- **Context.** A message carries where you are in the editor, with no
+  button to press: the note open, and the lines selected there, or else the
+  caret's line. The selection is the editor's last one: it stays when you
+  click into the chat and goes when it collapses to a caret. In Source the
+  lines are exact; in Visual they are those of the blocks the selection
+  touches, plus the text selected. The composer shows it as a chip,
+  `guide/first-look.mdx:L12-L18`; × leaves it out of that message. `@` (or
+  the @ button) mentions a note, an asset or any file of the worktree, and
+  the paperclip, a drop or a paste attaches a document of up to 10 MB (at
+  most 5 per message). Attachments are kept outside the worktree and go
+  with their chat or the change request. While that turn goes on, an edit
+  the agent proposes to other lines of the selected note is flagged.
+- **Actions.** In an author chat (and a new one), a row over the message
+  box offers one-click actions (`src/agents/actions.ts`): with a selection,
+  **Rewrite**, **Tighten**, **Expand**, **VI ↔ EN**, **Callout**, **Table**
+  and **Diagram**; without one, **Fill frontmatter**, **Suggest links** and
+  **Diagram**. **Diagram** changes the diagram the note shows there
+  (`<Diagram src>`), or else draws one and embeds it, checking and looking
+  at it as it goes. Each action is a written message sent with the editor's
+  place; the text, mentions and attachments being written stay for their
+  own message. It goes to the author chat on screen when that one waits for
+  a message, else to a new author chat. Every edit comes back as a
+  suggestion (see [Proposals](#proposals)); a new note or diagram lands on
+  the turn's Keep/Revert list. While the panel is open for someone who may
+  run agents, **Fill** at the top of the note header asks an author agent
+  for the frontmatter the same way. **New note** opens a form (folder,
+  title, the path it makes, an outline, links to read) above a composer for
+  mentions, attachments and anything else; it sends once the path shown
+  holds no note, and starts an author chat that drafts the note there and
+  lists it in `meta.yaml`.
+- **Edits.** An agent's edit to a note that exists becomes a proposal, not
+  a write. A new note, `meta.yaml`, a diagram or an SVG or HTML asset is
+  written. A note the chat created stays its own draft until a person keeps
+  or reverts it, so later writes to it are written too; once anyone else
+  changed it, later writes are proposals again. Every file a turn changed
+  is in the chat with **View diff**, and shows in Changes.
+- **Keep or revert.** Once a turn ended, **Files this turn changed** under
+  it lists each file with its diff from before the turn; keep it, or put it
+  back as it was when the turn began. Revert writes nothing over a file
+  changed again since the turn ended (a later turn's edit included), and
+  does not touch files outside the notes, their assets and the diagrams,
+  files over 25 MB, or files a person saved through the Studio during the
+  turn (it says so: revert those by hand). Edits typed in the editor during
+  a turn are not marked: look at the diff before reverting a note you
+  edited meanwhile.
+- **Questions.** When the agent asks permission, a card in the thread shows
+  what it would run or touch, the agent's own options (less "allow always",
+  which would outlive the chat) and the time left; nobody answering within
+  5 minutes is a no. A new question opens the panel on its chat; with
+  another chat shown, a strip over it says where one waits. Pushes, pull
+  requests and GitHub replies are never the agent's: they stay a person's
+  click.
+- **History.** Every chat of the change request, last active first, with
+  its agent, role, turns, cost and last activity, filtered by its first
+  message. One opens to read and go on with; an admin deletes one, or
+  several with **Select**, after a confirmation (not while its agent
+  answers). Deleting drops the Studio's transcript; the agent's own record
+  of the session stays. The cost is what the agent reports, added up over
+  the turns.
+- **Processes.** At most three agents run at once per change request. One
+  stays up between turns and stops after 10 minutes idle; when a fourth
+  chat needs a place, the one idle longest stops, never one answering. A
+  message to a chat whose agent stopped starts it again on the same session
+  when the agent can resume or load it, else on a new session, marked in
+  the thread, that does not remember the earlier turns.
+
+## Proposals
+
+An edit an agent proposes is kept against the change request, never
+written into the note until a person accepts it.
+
+- **Hunks.** The note and the proposed text are split into blocks as the
+  editor splits them and aligned; each stretch between two unchanged blocks
+  that differs is a hunk. Accepting every hunk gives exactly the text the
+  agent sent.
+- **Stale.** A hunk applies where its own blocks still are, word for word,
+  even after edits elsewhere. Once its own blocks changed it is stale:
+  **Rebase** sets it on what is now between its two neighbours (so it
+  replaces that), **Drop** gives it up.
+- **Accept.** Writes the hunks where they are now; the open editor merges
+  the change like any edit on disk. Hunks are accepted one by one or all at
+  once; a set that would leave the note unparsable is refused.
+- **In the editor.** A bar over the note says who proposed, how many
+  suggestions wait and how many are stale, steps through them, and accepts
+  or rejects them all (stale ones wait for a rebase). In Visual each hunk's
+  blocks are struck through where they are and its card follows, drawn as
+  the diff view draws added blocks, with ✓ and ✕; a stale card offers
+  Rebase and Drop. One decision at a time per note; an accepted card stays,
+  marked Accepting, until its text is in the editor (or 3 seconds). In
+  Source the lines it replaces are marked and what it puts there follows
+  them. Hunks are placed on the text in the editor, so typing never waits
+  for a save; a stale hunk is shown where a rebase would put it.
+- **Comments.** A comment on a block is a bubble at the block's right; one
+  on the note, or on a block that is gone, is listed under the bar. Threads,
+  answers and states are planned in #87.
+
+## Buttons, dialogs and errors
+
+Every button or dialog that writes to the server behaves the same way
+(details in [architecture.md](architecture.md#write-actions)):
+
+- A second click, Enter pressed again or Escape while a write is out does
+  nothing.
+- The button is disabled at once and, after 150 ms, shows a spinner and
+  what it is doing ("Sending…", "Accepting…", "Creating…").
+- A dialog neither closes nor sends again while its request is out, and
+  stays open when it fails, so it can be tried again.
+- A failed action says why in a toast at the top right, gone after 8
+  seconds or on Dismiss. What fails to load (a diff, a history, a list)
+  says so where the content would be.
+- A repeat the server refuses as already done (an answer or a cancel
+  another click or page sent first) shows nothing.

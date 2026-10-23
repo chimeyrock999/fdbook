@@ -47,7 +47,7 @@ export function parseAuthConfig(host: string, env: Env = process.env): AuthConfi
   if (mode === 'off' && !loopback) throw new Error(`STUDIO_AUTH=off is only allowed on ${DEFAULT_STUDIO_HOST}: on ${host} anyone who reaches the Studio could edit and publish.`);
   if ((mode ?? (loopback ? 'off' : 'github')) === 'off') return null;
   const clientId = valueOf(env, 'STUDIO_GITHUB_CLIENT_ID');
-  if (clientId === null) throw new Error('Sign-in with GitHub needs STUDIO_GITHUB_CLIENT_ID, the client ID of a GitHub OAuth App (see the README).');
+  if (clientId === null) throw new Error('Sign-in with GitHub needs STUDIO_GITHUB_CLIENT_ID, the client ID of a GitHub OAuth App (see tools/notes-studio/docs/setup.md).');
   const flows = parseFlows(valueOf(env, 'STUDIO_GITHUB_FLOWS'));
   const clientSecret = valueOf(env, 'STUDIO_GITHUB_CLIENT_SECRET');
   if (flows.includes('web') && clientSecret === null) throw new Error('STUDIO_GITHUB_FLOWS includes web, which needs STUDIO_GITHUB_CLIENT_SECRET.');
