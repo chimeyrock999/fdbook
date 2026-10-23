@@ -203,11 +203,11 @@ export interface DiagramReport {
 }
 
 // The errors that stop a diagram from being laid out automatically: all but
-// the positions the layout is about to fill in.
+// the node positions the layout is about to fill in. Lanes it does not place.
 export function checkBeforeLayout(value: unknown): DiagramIssue[] {
   const parsed = parseIssues(value);
   if (!('diagram' in parsed)) return parsed.issues;
-  return checkStructure(parsed.diagram).filter((issue) => issue.severity === 'error' && issue.code !== 'layout/missing-position');
+  return checkStructure(parsed.diagram).filter((issue) => issue.severity === 'error' && !(issue.code === 'layout/missing-position' && issue.path?.startsWith('layout.nodes.')));
 }
 
 // Schema errors only: the file's shape, before any id is looked up.

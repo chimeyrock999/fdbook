@@ -13,10 +13,10 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api.js';
 import { rectsOverlap, textUnits, type Rect } from './geometry.ts';
-import { buildScene } from './scene.ts';
+import { buildScene, type Scene } from './scene.ts';
 import { diagramSchema, type DiagramInput } from './schema.ts';
 import { DiagramOpError } from './ops.ts';
-import { checkBeforeLayout, validateDiagram } from './validate.ts';
+import { checkBeforeLayout, checkScene, validateDiagram, type DiagramIssue } from './validate.ts';
 
 type Input = DiagramInput;
 type Box = { x: number; y: number; w: number; h: number };
@@ -31,6 +31,8 @@ const LAYER_GAP = 100;
 const FRAME_PAD = 30;
 const FRAME_TOP = 44;
 const FREE_GAP = 24;
+// How many spots freeSpot draws before it settles for the nearest quick fit.
+const MAX_DRAWN = 150;
 // The desktop reading column a note fits its diagram to (geometry.ts).
 const READING_WIDTH = 930;
 
@@ -134,9 +136,9 @@ function memberships(diagram: Input) {
 
 const rectOf = (box: Box): Rect => ({ x: box.x, y: box.y, width: box.w, height: box.h });
 
-// The frames the placed nodes draw, from the scene of the diagram cut down
-// to them; the estimate below when that cut does not build.
-function frameRects(diagram: Input, placed: Map<string, Box>) {
+// The scene of the diagram cut down to the placed nodes, their groups and
+// the edges between them; null when that cut does not build.
+function cutScene(diagram: Input, placed: Map<string, Box>): Scene | null {
   const ids = new Set(placed.keys());
   const groups = structuredClone(diagram.groups ?? []);
   for (let changed = true; changed;) {
@@ -160,11 +162,24 @@ function frameRects(diagram: Input, placed: Map<string, Box>) {
     layout: { ...diagram.layout, nodes: Object.fromEntries(placed), lanes: undefined },
   };
   try {
-    return buildScene(diagramSchema.parse(cut)).frames.map((frame) => ({ id: frame.group.id, rect: { x: frame.x, y: frame.y, width: frame.width, height: frame.height } }));
+    return buildScene(diagramSchema.parse(cut));
   } catch {
-    return estimatedFrames(diagram, placed);
+    return null;
   }
 }
+
+// The frames the placed nodes draw; the estimate below when the cut does not build.
+function frameRects(diagram: Input, placed: Map<string, Box>) {
+  const scene = cutScene(diagram, placed);
+  return scene
+    ? scene.frames.map((frame) => ({ id: frame.group.id, rect: { x: frame.x, y: frame.y, width: frame.width, height: frame.height } }))
+    : estimatedFrames(diagram, placed);
+}
+
+// An error by its code and the ids it names: the same problem whatever the
+// canvas size its message quotes.
+const errorKey = (issue: DiagramIssue) => `${issue.code} ${(issue.message.match(/"[^"]+"/g) ?? []).join(' ')}`;
+const sceneErrors = (scene: Scene | null) => new Set(scene ? checkScene(scene).filter((issue) => issue.severity === 'error').map(errorKey) : []);
 
 function estimatedFrames(diagram: Input, placed: Map<string, Box>) {
   const inGroups = memberships(diagram);
@@ -182,26 +197,52 @@ function estimatedFrames(diagram: Input, placed: Map<string, Box>) {
 // The nearest free spot to `want`, on the grid, stepping outwards in rings.
 // It stays within `maxRight`: a wider canvas would shrink every label once
 // the note fits it to the reading column, while a taller one costs nothing.
-function freeSpot(want: Box, inGroups: Set<string>, diagram: Input, placed: Map<string, Box>, maxRight: number) {
+//
+// A spot that passes the quick test (clear of the other nodes and of frames
+// the node is not in) is then drawn: the node's own frames grow to hold it,
+// so the first spot whose drawing adds no error to the diagram's (a frame
+// covering a non-member, crossing another or leaving the canvas, a label
+// collision) wins. Without one, the nearest quick fit does.
+function freeSpot(want: Box, nodeId: string, inGroups: Set<string>, diagram: Input, placed: Map<string, Box>, maxRight: number, near: Box[]) {
   const frames = frameRects(diagram, placed).filter((frame) => !inGroups.has(frame.id));
   const others = [...placed.values()].map(rectOf);
   const fits = (box: Box) => box.x >= MARGIN / 2 && box.y >= MARGIN / 2 && box.x + box.w <= maxRight
     && others.every((other) => !rectsOverlap(rectOf(box), other, FREE_GAP))
     && frames.every((frame) => !rectsOverlap(rectOf(box), frame.rect, FREE_GAP / 2));
+  const before = sceneErrors(cutScene(diagram, placed));
+  const clean = (box: Box) => [...sceneErrors(cutScene(diagram, new Map([...placed, [nodeId, box]])))].every((key) => before.has(key));
   const start = { ...want, x: Math.min(snap(want.x), Math.max(MARGIN, snap(maxRight - want.w))), y: snap(want.y) };
-  if (fits(start)) return start;
+  let fallback: Box | null = null;
+  let drawn = 0;
+  const pick = (candidates: Box[]) => {
+    for (const box of candidates.filter(fits)) {
+      fallback ??= box;
+      if (drawn++ < MAX_DRAWN && clean(box)) return box;
+    }
+    return null;
+  };
+  // The spot ELK suggests, then the spots beside the nodes it sits with
+  // (its group's members, what it connects to), nearest first.
+  const beside = near.flatMap((box) => [
+    { x: box.x + box.w + NODE_GAP, y: box.y },
+    { x: box.x, y: box.y + box.h + NODE_GAP },
+    { x: box.x - want.w - NODE_GAP, y: box.y },
+    { x: box.x, y: box.y - want.h - NODE_GAP },
+  ]).map((at) => ({ ...want, x: snap(at.x), y: snap(at.y) }));
+  const first = pick([start, ...beside.sort((a, b) => Math.hypot(a.x - want.x, a.y - want.y) - Math.hypot(b.x - want.x, b.y - want.y))]);
+  if (first) return first;
   // Rings of 40px: a spot is found well before the last on any real diagram.
-  for (let ring = 1; ring < 100; ring += 1) {
+  for (let ring = 1; ring < 100 && drawn < MAX_DRAWN; ring += 1) {
     const candidates: Box[] = [];
     for (let i = -ring; i <= ring; i += 1) {
       for (const [dx, dy] of [[i, -ring], [i, ring], [-ring, i], [ring, i]]) {
         candidates.push({ ...start, x: start.x + dx * GRID * 2, y: start.y + dy * GRID * 2 });
       }
     }
-    const best = candidates.filter(fits).sort((a, b) => Math.hypot(a.x - want.x, a.y - want.y) - Math.hypot(b.x - want.x, b.y - want.y))[0];
+    const best = pick(candidates.sort((a, b) => Math.hypot(a.x - want.x, a.y - want.y) - Math.hypot(b.x - want.x, b.y - want.y)));
     if (best) return best;
   }
-  return start;
+  return fallback ?? start;
 }
 
 export interface LayoutResult {
@@ -265,7 +306,8 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
   const placed: string[] = [];
   // As wide as the canvas, or the drawing, or the reading column, whichever is widest.
   const contentRight = Math.max(...[...kept.values()].map((box) => box.x + box.w)) + MARGIN;
-  const maxRight = Math.max(next.layout.canvas?.[0] ?? contentRight, contentRight, READING_WIDTH) - MARGIN / 2;
+  // The same margin growCanvas keeps, so a node at the edge does not widen it.
+  const maxRight = Math.max(next.layout.canvas?.[0] ?? contentRight, contentRight, READING_WIDTH) - MARGIN;
   const queue = [...missing];
   while (queue.length) {
     queue.sort((a, b) => Number(neighbours(b.id).some((id) => kept.has(id))) - Number(neighbours(a.id).some((id) => kept.has(id))));
@@ -286,7 +328,9 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
       const bottom = Math.max(...[...kept.values()].map((box) => box.y + box.h));
       want = { x: MARGIN, y: bottom + LAYER_GAP / 2, ...size };
     }
-    const box = freeSpot(want, inGroups.get(node.id) ?? noGroups, next, kept, maxRight);
+    const near = [...new Set([...neighbours(node.id), ...[...kept.keys()].filter((id) => [...(inGroups.get(node.id) ?? [])].some((group) => inGroups.get(id)?.has(group)))])]
+      .flatMap((id) => (kept.has(id) ? [kept.get(id)!] : []));
+    const box = freeSpot(want, node.id, inGroups.get(node.id) ?? noGroups, next, kept, maxRight, near);
     kept.set(node.id, box);
     next.layout.nodes[node.id] = box;
     placed.push(node.id);

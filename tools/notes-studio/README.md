@@ -1149,7 +1149,9 @@ Agents change diagrams through the Studio MCP server's `diagram_*` tools
 (`server/mcp/diagram-tools.ts`, mounted at `/api/mcp` beside the note
 tools):
 `diagram_create`, `diagram_add_node`, `diagram_connect`, `diagram_move`,
-`diagram_set_note`, `diagram_remove_node` and `diagram_layout` write through
+`diagram_set_note`, `diagram_update` (a node's, an edge's or a group's fields,
+and an edge's label pin), `diagram_remove_edge`, `diagram_remove_node` and
+`diagram_layout` write through
 `ctx.files` with the mtime they read, so a save made meanwhile is refused,
 not overwritten; `diagram_list`, `diagram_read`, `diagram_validate` and
 `diagram_render_png` (a PNG the agent can look at) only read. Each write lays
