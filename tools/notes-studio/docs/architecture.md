@@ -88,7 +88,12 @@ the React app through Vite.
     it is shown.
   - `tree/` is the page tree in the Notes view and its dialogs.
   - `assets/` is the Assets view, the asset page and its dialogs.
-  - `diagrams/` is the diagram editor.
+  - `diagrams/` is the diagram editor: the page and canvas
+    (`DiagramPage.tsx`, `DiagramCanvas.tsx`), the panel (`DiagramPanel.tsx`),
+    where a copy goes (`placement.ts`), the sequence and lifecycle canvases
+    and panels (`SequenceCanvas.tsx`/`SequencePanel.tsx`,
+    `LifecycleCanvas.tsx`/`LifecyclePanel.tsx`), and saving
+    (`useDiagramFile.ts`).
   - `changes/` is the Changes view, the suggested commit message, the
     Preview and Pull request sections, the Publish dialog, the header's
     main action, the change marks on the page tree and the reminder on
@@ -105,7 +110,8 @@ the React app through Vite.
     [Write actions](#write-actions)).
   - `plugins/` holds the editor plugins (see [Plugins](#plugins)).
 - `tests/`: laid out like `server/` and `src/`, plus `tests/lib/` for the
-  site's `lib/`. `tests/support/` holds the fixtures (see
+  site's `lib/`. `tests/support/` holds the fixtures, `tests/setup/` and
+  `tests/global-setup.ts` the setup every run gets (see
   [checks.md](checks.md)).
 - Shared code from the site is imported as `@site/...`, for example the
   notes frontmatter and `meta.yaml` schemas in `@site/lib/notes-schema`.
@@ -190,8 +196,17 @@ under `/cr/<slug>/`. `startStudioServer({ root })` without
 instead and runs no agent.
 
 JSON bodies need `Content-Type: application/json` (`415` otherwise) and are
-capped (`413`): 5 MB for a file or a lint, 1 MB for a commit, 64 KB for tree
-and asset operations, 512 KB for an agent message, 4 MB for an MCP request.
+capped (`413`):
+
+- 5 MB for a file or a lint, 4 MB for an MCP request, 1 MB for a commit;
+- 512 KB for anything sent to `/api/agents/conversations`;
+- 64 KB for tree and asset operations;
+- 16 KB for change requests, history restores and proposal decisions;
+- 1 KB for sign-in, a push and `/api/mcp/tokens`;
+- 6 × 60,000 + 4,096 bytes for a publish, room for a description at its
+  limit however JSON escapes it.
+
+Raw bodies are capped too: 25 MB for an asset, 10 MB for an attachment.
 
 ### Files, lint, tree, assets
 
@@ -217,7 +232,7 @@ and asset operations, 512 KB for an agent message, 4 MB for an MCP request.
 | `POST /api/changes` | Takes `{ message, paths }` and commits those files, and only them, on the worktree's branch; answers `{ sha, date, message, files: [{ status, path }] }`. Refuses an empty message, a path with no change, a merge in progress, and a branch named `main` or a detached HEAD; read-only main answers `403` first. |
 | `GET /api/changes/history` | The change request's commits, newest first, no merges, up to 200: `{ base, commits }`, `base` being `origin/main`, else `main`, else `null` (no commits) |
 | `GET /api/changes/diff?path=…[&from=…]` | The file against main: `{ path, from?, base, status: "same" \| "M" \| "A" \| "D" \| "R", before, after }`, each side `{ kind: "text", text, size }`, `{ kind: "binary", size }` (an asset that is not SVG or HTML, or text over 2 MB) or `null` where the file is missing. `base` is the merge base of `origin/main` (else `main`) and `HEAD`, or `null`; `from` reads main under a renamed file's old name. |
-| `GET /api/changes/blob?path=…[&base=<sha>]` | The file's bytes as commit `base` (else the merge base now) holds it, for an image's before side; `404` when it has none. Served like an asset. |
+| `GET /api/changes/blob?path=…[&base=<sha>]` | The file's bytes as commit `base` (else the merge base now) holds it, for an image's before side in the diff and an older version's image in history; `404` when it has none. Served like an asset. |
 | `GET /api/history?path=…` | `{ path, mtimeMs, deleted, generated, versions }`: `deleted` names the commit that deleted a file the worktree no longer has, `generated` whether a diagram source generates the asset |
 | `GET /api/history/compare?path=&to=[&from=]` | Each a full sha or `now`; without `from`, nothing is before |
 | `POST /api/history/restore` | `{ path, sha, mtimeMs }`, answers `{ path, mtimeMs }`, `path` being where the file is now; `409` when the file changed since its mtime |
@@ -234,19 +249,19 @@ Restores write under the notes lock; main and a reader answer `403`.
 | Endpoint | What it does |
 | --- | --- |
 | `GET /api/preview` | `{ branch, blocked, pushed, unpushed, uncommitted, url, build, pr, prError }`, `build` being `{ state, logUrl, deploymentUrl, aliasUrl, at, error }` once pushed, `pr` the branch's pull request `{ number, url, state, title }` or null, `prError` why gh could not read it; main answers that it is read only |
-| `POST /api/preview` | Takes `{}`, pushes the branch to origin and answers the preview. `409` when everything committed is pushed, when the worktree is blocked (main, a branch outside `cr/`), or when the remote branch has commits the change request has not (with git's reason); `502` when the push fails, `504` after 120 s; main answers `403` first. |
+| `POST /api/preview` | Takes `{}`, pushes the branch to origin and answers the preview. `409` when nothing was committed yet, when everything committed is pushed, when the worktree is blocked (main, a branch outside `cr/`), or when the remote branch has commits the change request has not (with git's reason); `502` when the push fails, `504` after 120 s; main answers `403` first. |
 | `GET /api/publish` | The pull request's draft, `{ title, body }`: the branch's description (the change request's name), and its commits oldest first with the branch's preview link; `409` on main |
 | `POST /api/publish` | Takes `{ title, body }`, pushes what is not pushed, opens the pull request and answers the preview. `400` for a title that is empty or over 256 characters or a description over 60,000; `409` with nothing committed or when the branch already has a pull request; `502` when gh cannot read the pull request or open one (a push already made stays); main answers `403` first. |
 
 The push is `git push origin <HEAD>:refs/heads/cr/<slug>`
 (`server/preview/preview.ts`), never forced; after it the server moves
 `origin/cr/<slug>` itself with `git update-ref`. The build is the
-`Cloudflare Pages` check run on the pushed commit, read with `gh api`
-(`server/preview/check-runs.ts`) at most every 10 seconds per commit, and a
-finished one every minute (Cloudflare can retry a build on the same
-commit). The 3 minutes before "No build" count from when `origin/cr/<slug>`
-last moved in this clone (its reflog: the push, or the fetch that saw a
-push made elsewhere). The fallback preview link is
+`Cloudflare Pages` check run on the pushed commit, read with `gh api` from
+origin's GitHub repository (`server/preview/check-runs.ts`) at most every 10
+seconds per commit, and a finished one every minute (Cloudflare can retry a
+build on the same commit). The 3 minutes before "No build" count from when
+`origin/cr/<slug>` last moved in this clone (its reflog: the push, or the
+fetch that saw a push made elsewhere). The fallback preview link is
 `https://<alias>.<STUDIO_PAGES_PROJECT>.pages.dev`, the alias being the
 branch slugged as Cloudflare does (`cr-<slug>`) and cut to 28 characters.
 
@@ -257,7 +272,8 @@ left out (`gh pr view <branch>` would take a fork's pull request from a
 branch of the same name). It is read at most every 15 seconds while there
 is none or it is open, every minute once merged or closed, and again after
 each push or publish. Publish runs `gh pr create --repo <origin> --base
-main --head cr/<slug>` (`server/preview/publish.ts`).
+main --head cr/<slug>` (`create` in `server/preview/pull-request.ts`,
+called from `server/preview/publish.ts`).
 
 ### Change requests
 
@@ -302,12 +318,16 @@ A flow that is not enabled answers `404`.
 | `POST /api/mcp` | The MCP server, Streamable HTTP, stateless (see [MCP server](#mcp-server)). `GET` and `DELETE` answer `405`. |
 | `POST`, `DELETE /api/mcp/tokens` | With sign-in on, makes an agent token for the signed-in person (`{ token }`), or ends all of theirs; any role, with the csrf header. Sign-in off answers `409`. |
 
-Agent chats, proposals and comments answer `409` on main.
+Agent chats, proposals and comments answer `409` on main to reads and event
+streams. Their writes (starting a chat, a message, a cancel, an answer, an
+attachment, a proposal decision) never get there: main answers `403` to
+every write but `POST /api/lint` first.
 
 ### Under a change request
 
 `/cr/<slug>/api/…` and `/cr/<slug>/__fde_sync` serve the workspace
-endpoints above for the change request's worktree; `/api/crs`,
+endpoints above for the change request's worktree, so a page can only write
+to the change request it shows (`server/workspace.ts`); `/api/crs`,
 `/api/session*`, `/api/mcp` and `/api/mcp/tokens` are served only at the
 root. An unknown slug answers `404`, and so does any other path under
 `/cr/<slug>/`. Any other `/api/…` answers `404` with a JSON `{ error }`,
@@ -364,7 +384,9 @@ instead of every stream retrying forever.
   other answer is shown as the server gave it, and no answer within 5
   seconds is a server that is gone.
 - The notes sync counts as gone once it was offline for 10 seconds and
-  `GET /api/session` does not answer either.
+  `GET /api/session` does not answer with a 2xx either. A `503` counts as
+  no answer here, unlike on the streams, so a sync drop while gh is down
+  for a moment shows Server disconnected (#163).
 - Then every stream and the sync are closed for good, so the page sends no
   more requests, and `src/session/ServerDisconnected.tsx` covers the page.
   A page leaving for another one shows nothing; one still there 10 seconds
@@ -390,9 +412,11 @@ instead of every stream retrying forever.
 - Drift from main is read with `git merge-tree`, in memory, so no worktree
   is touched (`server/cr/drift.ts`).
 - Discard removes origin's side first (`gh pr close` with a comment, `git
-  push origin --delete`), then the worktree, the local branch, and the
-  change request's transcripts, proposals and comments under
-  `STUDIO_HOME`.
+  push origin --delete`). Then `beforeDiscard` (set from `onDiscard` in
+  `server/studio-server.ts`) closes the change request's agents, watchers
+  and sync and removes its transcripts, proposals and comments under
+  `STUDIO_HOME`; then the worktree and the local branch go
+  (`server/cr/manager.ts`).
 - A commit (`server/git/commit.ts`) adds and commits the picked paths alone
   with `git commit --cleanup=whitespace`, rolling the index back
   (`write-tree`/`read-tree`) when it fails. It is authored by the signed-in
@@ -422,11 +446,14 @@ dry run plans without the lock.
 - An asset rename moves the asset first, then writes each note
   atomically; if the first note cannot be written, the asset moves back. A
   replace that changes the extension writes the new file, rewrites the
-  notes, and removes the old one last. References are read on the parsed
-  note (`server/assets/refs.ts`), the same reading as lint's
-  `asset-missing`; rewritten Markdown destinations are percent-encoded.
+  notes, and removes the old one only once the notes are written; if the
+  first note cannot be written, the new file is removed instead.
+  References are read on the parsed note (`server/assets/refs.ts`), the
+  same reading as lint's `asset-missing`; rewritten Markdown destinations
+  are percent-encoded.
 - Diagram sources (`server/assets/sources.ts`) are read again when a note
-  or an asset changes; files over 1 MB and symlinks are skipped.
+  or an asset changes, not when a diagram does; files over 1 MB and
+  symlinks are skipped.
 
 ## Agents
 
@@ -457,16 +484,17 @@ agent is started in the change request's worktree without the Studio's own
   note back expecting its text. A note the chat created stays its own
   draft, written directly, until anyone else changes it (a save, a revert,
   the live editor, any edit on disk). Between turns the Studio takes no
-  write from the agent.
+  write from the agent: nobody would follow it.
 - **What a turn changed** (`watch.ts`, `worktree.ts`, `turn-changes.ts`).
   Codex, omp and Hermes write with their own tools; the Studio sees those
   edits in their tool calls and, at the end of each turn, in `git status`
   against the turn's start plus the files of any commit made during the
-  turn. When a turn begins, the Studio keeps what each file that differs
-  from `HEAD` holds; the turn's changes are kept in
-  `<chat>.t<n>.changes.json` next to the transcript. A revert made while a
-  later turn runs counts as a person's save for that turn; other pages read
-  the list again after each decision (`decided` on the event stream).
+  turn, so a file edited by hand meanwhile is listed too. When a turn
+  begins, the Studio keeps what each file that differs from `HEAD` holds;
+  the turn's changes are kept in `<chat>.t<n>.changes.json` next to the
+  transcript. A revert made while a later turn runs counts as a person's
+  save for that turn; other pages read the list again after each decision
+  (`decided` on the event stream).
 - **Context** (`context.ts`, `attachment-blocks.ts`). The server checks
   every path against the worktree (no `..`, `.git` or symlinks), keeps the
   context on the turn, and adds it below the message: the note, the lines
@@ -481,8 +509,8 @@ agent is started in the change request's worktree without the Studio's own
   else through the stdio bridge, with a token for the chat's agent process
   (see [MCP server](#mcp-server)).
 - **Permission.** `session/request_permission` asks in the chat with the
-  agent's own options less `allow_always`; the server rejects when nobody
-  answers within 5 minutes.
+  agent's own options less `allow_always`, which would outlive the chat;
+  the server rejects when nobody answers within 5 minutes.
 - **Processes** (`sessions.ts`). At most three agent processes per change
   request; one idle for 10 minutes stops; a fourth chat stops the one idle
   longest, never one answering (all three answering: `409`). Cancel sends
@@ -498,7 +526,9 @@ agent is started in the change request's worktree without the Studio's own
   `<STUDIO_HOME>/agents/<slug>/<chat>.jsonl`, with the summary (agent,
   model, role, status, turns, session, cost from `usage_update`, files
   written, who started it) in `<chat>.json`: next to the worktrees, never
-  in the branch.
+  in the branch. A run kept from before chats reads as a one-turn chat,
+  with its changes from `<id>.changes.json`. For Claude Code's "default"
+  model, the summary's model is the one it stands for (`connection.ts`).
 - **Live test.** `STUDIO_AGENT_LIVE=1` runs a real chat with each installed
   agent (see [checks.md](checks.md#agent-tests)); the other tests use a
   stand-in ACP agent.
@@ -512,8 +542,8 @@ the chats the Studio starts and your own agents in a terminal (see
 
 | Tool | Access | What it does |
 | --- | --- | --- |
-| `list_crs` | read | The change requests |
-| `create_cr` | write | A new change request (a person's agent only: a chat's agent works in its own) |
+| `list_crs` | read | The change requests (a person's agent only: a chat's agent works in its own) |
+| `create_cr` | write | A new change request (a person's agent only) |
 | `list_notes` | read | Every note: path, title, description, tags, keywords |
 | `read_note` | read | A note's text, its top-level blocks (index, line, first line) and the proposals waiting on it |
 | `search_notes` | read | Notes with every word of the query in their title, description, tags or text, with up to 3 matching lines each (20 notes by default, at most 50) |
@@ -555,7 +585,9 @@ the chats the Studio starts and your own agents in a terminal (see
   a zod input, `read` or `write`, and `run(args, ctx)` with the change
   request's worktree and its files. `writing-tools.ts`, `note-tools.ts` and
   `diagram-tools.ts` hold the tools; `studio-server.ts` mounts them
-  together.
+  together. `list_crs` and `create_cr` are the exception: they take no
+  change request, so they are `crTools` in `server/mcp/http.ts`, left out
+  of a chat's `tools/list` and refused to it.
 
 ## Proposals
 
@@ -598,8 +630,12 @@ the site shows here with no Studio edit:
   sets it on the site);
 - Mermaid previews take the site's diagram palette: `NoteEditor` marks the
   author's fills on each one as the site does (`lib/pele-author-fill.ts`),
-  and the code block frame sets `--notes-diagram-bg`, the plate behind each
-  edge label.
+  so dark mode gets the right node ink, subgraph tint and title halos, and
+  the code block frame sets `--notes-diagram-bg`, the plate behind each
+  edge label;
+- `<Diagram>` cards and the diagram editor: `styles/diagram.css`, imported
+  by `src/plugins/diagram/Diagram.tsx` (`src/diagrams/diagram-page.css`
+  adds only the editor's chrome).
 
 What the editor cannot import stays a copy in its plugin: the accordion
 card, the code block frame, `SvgDiagram`, `YouTube`, `HtmlEmbed` and the
@@ -679,8 +715,9 @@ The plugins:
   head, and the body opens as MDX source. Each is written back as typing
   pauses and rewrites only its own line or lines: a kind or title keeps its
   quotes and its place, a title written as the `[label]` stays there, and
-  an empty title is not written. Titles show the text the site shows and
-  are written so they read back the same. The MDX button shows the block's
+  an empty title is not written. Titles show the text the site shows
+  (character references and label escapes decoded) and are written so they
+  read back the same. The MDX button shows the block's
   source.
 - `site-inserts`: the `/` menu items for graph markers, directive blocks
   and a Mermaid diagram. The menu lists components, so each is a spec named

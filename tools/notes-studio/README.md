@@ -59,6 +59,8 @@ tools/notes-studio/
 
 Related docs elsewhere in the repository:
 
+- [`docs/authoring/`](../../docs/authoring/README.md): how to write notes,
+  pages and the page tree, and the house style that lint checks.
 - `diagrams/README.md`: the diagram file format the diagram editor and the
   `diagram_*` tools edit.
 - `skills/chimeyrock-diagram/`: how an agent draws and edits diagrams with

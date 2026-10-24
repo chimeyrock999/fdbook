@@ -27,10 +27,10 @@ up is in [setup.md](setup.md); how each part is built is in
 ## Change requests
 
 The Studio never writes to main. It opens on main read only: the header's
-picker says `main · Read only`, the editor and the frontmatter are locked,
-the page tree has no New page, row menu or drag, and assets cannot be
-replaced, renamed or deleted. The server refuses every write there too
-(`403`); lint still runs.
+picker says `main · Read only`, the editor and the frontmatter are locked
+(the status says Read only), the page tree has no New page, row menu or
+drag, and assets cannot be replaced, renamed or deleted. The server refuses
+every write there too (`403`); lint still runs.
 
 **Edit** in the header continues in a change request still open (Draft,
 Previewing, In review) or starts a new one; with none open it starts one at
@@ -109,14 +109,14 @@ what is on origin needs an admin.
 A merged or closed change request offers **Clean up** instead, on its card
 and on top of its Changes view; it removes the same things. Cloudflare
 keeps the preview deployments it built. Discarding the change request the
-page shows goes back to main.
+page shows goes back to main, and the dialog says so.
 
 ## Signing in
 
 With sign-in on (see [setup.md](setup.md#sign-in)), the page shows the
 sign-in page until someone signs in. The header then ends with the
 signed-in person (their picture alone on a phone) and a menu with their
-role and **Sign out**.
+role and **Sign out**, which leaves the Studio for the sign-in page.
 
 When the session ends while the Studio is open (a request answers `401`,
 access is taken away, a sign-out in another tab), the sign-in comes up as a
@@ -188,6 +188,9 @@ editor is [fumadocs-editor](https://github.com/fuma-nama/fumadocs-editor):
   commit). `Cmd/Ctrl-S` saves at once. Changes made on disk (another
   editor, an agent) are merged into the open note. If the same block
   changed on both sides, a dialog asks which version to keep.
+- Images under `/notes/…` show through the file API
+  (`src/media/asset-media.ts`), so a new or replaced one shows before the
+  site has it.
 - Light and dark follow the system. The look is the site's own, imported
   rather than copied, so a change on the site shows here with no Studio
   edit (see [architecture.md](architecture.md#the-sites-look)).
@@ -206,7 +209,8 @@ than a view, so it is filled, not railed, while its page is open.
 
 Drag the sidebar's right edge to resize it (220–480px), or focus the edge
 and use the arrow keys, Shift for bigger steps, Home and End for the
-limits; double-click resets it to 284px. It never takes more than the
+limits; double-click resets it to 284px. Resizing starts from the width it
+shows, not the stored one. It never takes more than the
 window leaves the editor (420px). The view, the width and whether it is
 shown are kept in localStorage. Below 768px the sidebar is a drawer, opened
 from the header's Notes button or the toolbar's issue count, and its view
@@ -232,15 +236,18 @@ separators (`---Label---`), links, nested entries (`a/b`), `...`, `z...a`,
   the whole tree would open at once.
 - Rows follow the site's sidebar: 34px high, 14px text, a guide line for
   each nested level, and the icon the site shows (a page's frontmatter
-  `icon`, a folder's `meta.yaml` `icon` or else its index page's). A new
-  icon set in the metadata strip shows once the note is saved.
+  `icon`, a folder's `meta.yaml` `icon` or else its index page's); a row
+  with no icon, or with a name the site does not know, gets the plain
+  folder or page icon. A new icon set in the metadata strip shows once the
+  note is saved.
 - Change marks: a note's status after its title, a dot on a closed folder
   that holds a change or on any folder whose `meta.yaml` changed, `D` on a
   `meta.yaml` entry whose page was deleted, and a mark on notes with
   suggestions waiting.
 
-Every change below shows what it will write (a dry run) before you confirm,
-and refuses with `409` when a file it writes changed on disk meanwhile. A
+New page and Rename show what they will write (a dry run) before you
+confirm; reorder, Hide/Show and Open by default write at once. Every change
+refuses with `409` when a file it writes changed on disk meanwhile. A
 note open in the editor follows the change through its sync; while it has
 unsaved edits, a change that touches it waits.
 
@@ -312,7 +319,9 @@ in Visual:
   terminal on GNOME, `Cmd-Opt-K` the Firefox console on macOS); the bar
   buttons work everywhere. The bar sits under the selection, below the
   editor's own format bar, or above it with no room left
-  (`src/graph/dock.ts`).
+  (`src/graph/dock.ts`). It is a popup of its own because the editor has
+  no way to add buttons to its format bar yet; a request for that is
+  drafted upstream.
 - The id is slugged from the text (Vietnamese marks dropped, `đ` → `d`)
   and the displayName is the text. The fields open right after, and again
   from **Edit … id** on the bar (caret in a keyword or a marked heading) or
@@ -345,15 +354,17 @@ in Visual:
 Paste or drop an image in Visual, pick one from the `/` menu's Image item,
 or use Upload on a selected image's toolbar. A dialog asks for the file
 name first: the image's own name in kebab-case ASCII is offered, selected,
-and the extension stays as it is (a pasted image without one takes it from
-its type). A name already used in the page's folder, in any case, cannot be
-saved, and Escape or Cancel writes nothing.
+and the extension stays, lowercased (`Photo.PNG` is saved as `.png`; a
+pasted image without one takes it from its type). A name already used in the
+page's folder, in any case, cannot be saved, and Escape or Cancel writes
+nothing.
 
 - The file goes to the page's folder under `public/notes`:
   `content/notes/a/b.mdx` uses `public/notes/a/b/`, and a folder's
   `index.mdx` uses the folder (`public/notes/a/`).
 - The note gets `![alt](/notes/a/b/name.png)`, the path the site reads; the
-  alt text is the original file name, so edit it in the image toolbar.
+  alt text is the original file name without its extension (`Screen
+  Shot.png` gives `Screen Shot`), so edit it in the image toolbar.
 - The dialog keeps the focus while it is open: the image goes where the
   caret was when it was pasted, so the note should not change meanwhile.
 - Only images the site serves are saved (PNG, JPEG, WebP, GIF, AVIF, SVG,
@@ -376,6 +387,9 @@ when none does) and `diagram` when a diagram source generates it. Under
 **Diagrams** follow the `diagrams/**/*.diagram.json` files, each with the
 `<Diagram>` that draw it, opening the [diagram editor](#diagrams); they are
 not renamed or deleted here. Filter by name, or show the unused files only.
+The list loads only while the Assets view, an asset page or the diagram
+editor is shown; otherwise it keeps the last one and asks the server
+nothing (`src/assets/useAssetList.ts`).
 
 A file opens its asset page in the main pane, and its row is marked as the
 open one. The URL names it (`?asset=public/notes/…`), so back and forward
@@ -420,13 +434,15 @@ The row's menu opens the page, renames or deletes:
   made outside the Studio.
 
 References are found as the site reads them (the lint's `asset-missing`
-rule reads them the same way): embed `src` is a path under `public/`, `/…`
-images, links and `<img src>` are URLs from the page. Relative images
+rule reads them the same way): embed `src` is a path under `public/` (a
+string, or a string literal in braces, `src={"…"}`), `/…` images, links and
+`<img src>` are URLs from the page, percent escapes decoded. Relative images
 (`./a.png`) are imported by the MDX build, so they are not assets here; the
 frontmatter and code blocks never count; a `<Diagram src>` is listed but
 never rewritten. Some uses cannot be rewritten: a path written with a
 character reference the Studio does not read, or a note that does not parse
-but holds the file's name. They count as unsure uses: a rename, or a
+but holds the file's name (whole, so `data.png` does not match `ta.png`).
+They count as unsure uses: a rename, or a
 replace that changes the extension, is refused until they are fixed, and
 delete is refused for any use.
 
@@ -467,7 +483,8 @@ looks as the note will, with an editing layer on top:
 - undo and redo (⌘Z, ⇧⌘Z or ⌘Y) cover every edit, the JSON's too, up to
   200 steps. A copy goes where it overlaps nothing: inside the innermost
   frame that holds the original when it has room there, else in the first
-  free spot of the drawing, else below it;
+  free spot of the drawing, else below it, a fixed canvas growing to hold
+  it;
 - the panel edits what is selected: a node's label, sublabel, tag, kind (or
   a **New kind…** for it), its kind's name, tone and icon, and its note
   (role, evidence badge, points); an edge's label, detail, variant, arrows
@@ -504,11 +521,12 @@ Edits save a moment after each change, with the mtime they read, written so
 a move changes one line. A change on disk (an agent, the CLI) loads while
 nothing waits to be saved, and undo can go back past it; with edits
 waiting, the page asks whether to load the disk's version or keep its own.
-Edits not on disk yet block switching change request, renames and Commit,
-as a note's do, and the tab asks before it closes; left in a conflict or as
-JSON that does not parse, they show again the next time the file is opened
-in the tab (a reload drops them). On main, or for a reader, the editor only
-shows.
+A drag still under way when a change loads applies to the version that
+loaded. Edits not on disk yet block switching change request, renames and
+Commit, as a note's do, and the tab asks before it closes; left in a
+conflict or as JSON that does not parse, they show again the next time the
+file is opened in the tab (a reload drops them). On main, or for a reader,
+the editor only shows.
 
 Agents edit diagrams through the `diagram_*` MCP tools (see
 [architecture.md](architecture.md#mcp-server)); the skill
@@ -574,11 +592,12 @@ paths for a rename) with its status, and **Open in editor** opens a note or
 an asset that is still there.
 
 - **Rendered**, for a note: its changed frontmatter keys, old over new,
-  then its blocks as the editor renders them, matched by text; between two
-  unchanged blocks, what main had shows struck through in red over what
-  replaced it in green. An unchanged stretch keeps one block at each end
-  and folds the rest behind a button. A side that does not parse offers
-  Source.
+  then its blocks as the editor renders them, matched by text
+  (`src/diff/diff-blocks.ts`); between two unchanged blocks, what main had
+  shows struck through in red over what replaced it in green. Each run is
+  rendered from its own side's text, read only. An unchanged stretch keeps
+  one block at each end and folds the rest behind a button. A side that does
+  not parse offers Source.
 - **Source**: the raw text in CodeMirror's merge view, unchanged lines
   folded; side by side from 720px, one column below.
 - A `meta.yaml`, a diagram and an HTML asset have Source only. An image
@@ -681,7 +700,8 @@ on Now. An open editor takes the restored text as any edit made on disk.
 main as well. Preview shows the two versions side by side, an image with
 its size and pixel box, any other file by its size; an SVG has Source too.
 Restore goes the way Replace writes an asset: off for an asset a diagram
-source generates, and a version under another extension (a `.png` before a
+source generates (the history says so, and the server refuses it too), and
+a version under another extension (a `.png` before a
 `.webp`) gives the asset that extension, every note's link following; the
 history then follows the asset to its new name. Git follows an asset's
 rename only while its content stays alike, so a rename made together with
@@ -697,7 +717,9 @@ opens it:
 
 - the page;
 - each folder deleted with it, as the commit before the delete held it (its
-  `index.mdx`, and its `meta.yaml` listing only what comes back);
+  `index.mdx`, and its `meta.yaml` listing only what comes back, `index`
+  included when it was listed: a listed index is a child of its folder,
+  not the folder's page);
 - the topmost of these listed again in the `meta.yaml` above, after the
   entry it followed when it was deleted (first when none of those is left),
   unless that list shows every page by itself (`...`) or did not list it
@@ -740,7 +762,8 @@ the agent for each role, kept in this browser.
   says or does anything, the thread says it is thinking. Replies and
   thoughts show as markdown: raw HTML shows as text, links go only to
   `http(s):` and `mailto:`, and an image is a link. The header names the
-  model the agent reports.
+  model the agent reports; for Claude Code's "default" choice, the model it
+  stands for.
 - **Context.** A message carries where you are in the editor, with no
   button to press: the note open, and the lines selected there, or else the
   caret's line. The selection is the editor's last one: it stays when you
@@ -762,7 +785,8 @@ the agent for each role, kept in this browser.
   at it as it goes. Each action is a written message sent with the editor's
   place; the text, mentions and attachments being written stay for their
   own message. It goes to the author chat on screen when that one waits for
-  a message, else to a new author chat. Every edit comes back as a
+  a message, else to a new author chat, whose composer then starts with the
+  message you were writing, chips included. Every edit comes back as a
   suggestion (see [Proposals](#proposals)); a new note or diagram lands on
   the turn's Keep/Revert list. While the panel is open for someone who may
   run agents, **Fill** at the top of the note header asks an author agent
@@ -775,17 +799,21 @@ the agent for each role, kept in this browser.
   a write. A new note, `meta.yaml`, a diagram or an SVG or HTML asset is
   written. A note the chat created stays its own draft until a person keeps
   or reverts it, so later writes to it are written too; once anyone else
-  changed it, later writes are proposals again. Every file a turn changed
-  is in the chat with **View diff**, and shows in Changes.
+  changed it, later writes are proposals again. A turn's changes come from
+  `git status` against the turn's start, so a file edited by hand during
+  the turn is listed with them. Every file a turn changed is in the chat
+  with **View diff**, and shows in Changes.
 - **Keep or revert.** Once a turn ended, **Files this turn changed** under
   it lists each file with its diff from before the turn; keep it, or put it
   back as it was when the turn began. Revert writes nothing over a file
   changed again since the turn ended (a later turn's edit included), and
   does not touch files outside the notes, their assets and the diagrams,
-  files over 25 MB, or files a person saved through the Studio during the
-  turn (it says so: revert those by hand). Edits typed in the editor during
-  a turn are not marked: look at the diff before reverting a note you
-  edited meanwhile.
+  files over 25 MB, or files a person saved through the file API during the
+  turn (it says so: revert those by hand). Other writes during the turn (a
+  proposal accepted, an asset change, a restore, a tree change) are not
+  marked, and Revert puts those files back too. Edits typed
+  in the editor during a turn are not marked: look at the diff before
+  reverting a note you edited meanwhile.
 - **Questions.** When the agent asks permission, a card in the thread shows
   what it would run or touch, the agent's own options (less "allow always",
   which would outlive the chat) and the time left; nobody answering within

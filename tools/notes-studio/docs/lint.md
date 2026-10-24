@@ -7,7 +7,9 @@ Read this to know what the Issues view reports and why, or to add a rule.
 The rules follow what the site does, not a style guide: the site turns many
 mistakes into plain text or a placeholder instead of failing the build, so
 they would otherwise only show on the page. The one style rule,
-`emphasis-marker`, keeps the markers the editor writes.
+`emphasis-marker`, keeps the markers the editor writes. How to write a
+note so it passes, rule by rule, is in the authoring guide's
+[style.md](../../../docs/authoring/style.md#lint).
 
 The sidebar's Issues view shows the open note's issues, checked about
 400 ms after typing stops (`src/lint/useLint.ts`) and again when another
