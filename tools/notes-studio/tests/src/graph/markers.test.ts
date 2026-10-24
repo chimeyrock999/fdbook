@@ -244,7 +244,7 @@ describe('markerAt and updateMarker', () => {
   });
 
   // An attribute value cannot hold both quote kinds: double quotes become
-  // single ones (README, Graph markers).
+  // single ones (docs/using.md, Graph markers).
   it('quotes a value with both quote kinds by turning " into \'', () => {
     expect(withAttributes('', { displayName: 'He said "it\'s"' })).toBe('displayName="He said \'it\'s\'"');
   });
@@ -381,7 +381,7 @@ describe('removeMarker', () => {
   });
 
   // The serializer writes the marker's paragraph in its own Markdown, as for
-  // any edit in Visual (README, Graph markers): `_a_` comes back as `*a*`.
+  // any edit in Visual (docs/using.md, Graph markers): `_a_` comes back as `*a*`.
   it('writes the rest of the paragraph the way the editor writes Markdown', () => {
     const { state, write } = open('_a_ __b__ <Keyword id="k" displayName="K">c</Keyword> d\n\n_kept_ as is.\n');
     expect(write(remove(caret(state, at(state, 'K">') + 3)).doc)).toBe('*a* **b** c d\n\n_kept_ as is.\n');

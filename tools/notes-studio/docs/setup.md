@@ -1,0 +1,170 @@
+# Set up and run the Studio
+
+Read this to start the Studio, serve it to other machines, turn on sign-in,
+install the agents it drives, or connect an agent from a terminal. How to
+use it is in [using.md](using.md); how it is built is in
+[architecture.md](architecture.md).
+
+## Needs
+
+- **Node 22.18 or newer.** The server runs its TypeScript directly
+  (`engines` in `package.json`).
+- **git**, in a clone whose `origin` has a `main` branch. The Studio opens
+  main read only and edits in change requests, each a `cr/<slug>` branch
+  with its own worktree (see [Change requests](using.md#change-requests)).
+- **gh**, logged in, for the pull request statuses, Publish and, with
+  sign-in on, the roles. Without it the Studio still runs: statuses come
+  from git alone and Publish is off.
+
+## Run
+
+From the repo root, after the root `npm install`:
+
+```sh
+npm run studio:install   # once, and after a pull that changed this package
+npm run studio           # http://127.0.0.1:4310
+```
+
+`npm run studio` runs `server/index.ts` in this package. The Studio is not
+part of the site build: `tools/` is outside the site's TypeScript, ESLint
+and Tailwind sources.
+
+### After a pull
+
+Run `npm install` (and `npm run studio:install` when this package changed),
+then restart the Studio. The server keeps the code it started with while
+the page reloads with every update, so a new endpoint answers with the
+app's page until the restart; the API clients (`src/api/json.ts`) then say
+to restart `npm run studio`.
+
+The server refuses to start when a direct dependency, at the root or here,
+is missing or installed at another version than its `package-lock.json`
+pins, and names the command to run and the packages (`server/deps.ts`).
+The Studio's tests stop the same way (`tests/global-setup.ts`); the root
+`npm test` has no such check. A package put in place with `npm link` is skipped.
+
+## Host and port
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `STUDIO_PORT` | `4310` | The port. |
+| `STUDIO_HOST` | `127.0.0.1` | One IP address of this machine to serve on instead of loopback, for example a Tailscale address: `STUDIO_HOST=100.71.207.12 npm run studio` serves `http://100.71.207.12:4310`. `0.0.0.0`, host names and IPv6 zone ids are refused. |
+
+Off loopback, everyone signs in with GitHub first, and the Studio does not
+start until sign-in is set up (below).
+
+## Other settings
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `STUDIO_HOME` | `~/.chimey-studio` | Where the Studio keeps what is not in the branch: the worktrees (`worktrees/_main`, `worktrees/<slug>`), sessions, agent transcripts and attachments, proposals and comments. |
+| `STUDIO_PAGES_PROJECT` | unset | The Cloudflare Pages project, for a change request's preview link `https://cr-<slug>.<project>.pages.dev` when the build check has not named one. Unset, the Changes view and Open preview use the alias the build check names once there is one, and the change request list shows no preview link. |
+| `STUDIO_STALE_DAYS` | `30` | After how many days without an update an open change request is marked Stale: a whole number, 1 or more. |
+
+A value the server cannot read stops it at start with the reason. The
+sign-in variables follow below; `STUDIO_MCP_URL` and `STUDIO_MCP_TOKEN`
+are for the [stdio bridge](#connect-an-agent-from-a-terminal).
+
+## Sign-in
+
+On `127.0.0.1` the Studio is one person's on one machine, and sign-in is
+off unless `STUDIO_AUTH=github`. On any other host (`STUDIO_HOST` set to
+anything but `127.0.0.1`, `::1` included) it is always on: `STUDIO_AUTH=off`
+is refused there, and so is starting without a client ID,
+since anyone who reaches the address could edit, commit and publish.
+
+People sign in with GitHub. What they may do comes from their access to
+this repository, read with the host's `gh` (`gh api
+repos/<owner>/<repo>/collaborators/<login>/permission`), so the GitHub
+token asks for no scope and is dropped once the Studio knows who signed in.
+
+| Role | Access to the repository | May |
+| --- | --- | --- |
+| Reader | `read`, `triage` | read main and change requests, diffs, previews, lint, agent chats |
+| Writer | `write`, `maintain` | also create, edit, commit, preview and publish a change request, keep or revert what an agent turn changed, and discard a change request that is only on this machine |
+| Admin | `admin` | also discard or clean up what is on origin (the branch, an open pull request), and run agents: start a chat, send it a message or an attachment, answer, cancel, delete |
+
+Anyone else is refused after signing in, with the reason. The role is read
+again after five minutes, so access taken away on GitHub shows within that;
+when it cannot be read (gh logged out, offline), requests answer `503`
+rather than guess.
+
+> An agent runs commands as the person who started the Studio, with that
+> person's logins, keys and files. Give admin only to people you would hand
+> a shell on this machine.
+
+### Set up a GitHub OAuth App
+
+Create an OAuth App (GitHub Settings → Developer settings → OAuth Apps) and
+tick **Enable Device Flow**. Then set:
+
+| Variable | Value |
+| --- | --- |
+| `STUDIO_AUTH` | `github` or `off`. Unset: off on `127.0.0.1`, on everywhere else. |
+| `STUDIO_GITHUB_CLIENT_ID` | The OAuth App's client ID. Required when sign-in is on. |
+| `STUDIO_GITHUB_FLOWS` | `device` (the default), `web`, or both in the order the sign-in page shows them, the first as its main button: `device,web`. |
+| `STUDIO_GITHUB_CLIENT_SECRET` | The OAuth App's client secret; only `web` needs it. |
+| `STUDIO_ALLOWED_USERS` | GitHub logins, comma-separated; when set, only they get in, whatever their access. |
+| `STUDIO_SESSION_DAYS` | How long a sign-in lasts, 7 days by default. |
+
+- **Device flow** (`device`): the page shows a code to enter at
+  github.com/login/device. It needs no callback URL, so it works on any
+  address of the machine, and no secret.
+- **Web flow** (`web`): the browser goes to GitHub and comes back to
+  `http://<STUDIO_HOST>:<port>/api/session/callback`, which the server
+  prints at start and which must be the OAuth App's callback URL. An OAuth
+  App has one callback URL, so each address the Studio is served on needs
+  its own App; on loopback a sign-in started on `localhost` starts again on
+  `127.0.0.1`.
+
+Sessions are kept in `sessions-<port>.json` in `STUDIO_HOME` (mode `0600`),
+so a restart keeps everyone signed in and Studios on other ports keep their
+own. The cookie is not `Secure`, because the Studio serves plain `http://`;
+on a tailnet the traffic is already encrypted. How sessions, roles and the
+csrf token are checked is in
+[architecture.md](architecture.md#sign-in-and-sessions).
+
+## Agents
+
+The Studio drives coding agents over ACP (see [Agents](using.md#agents)).
+Each agent signs in on its own (its CLI's login, or its own API key
+variable): the Studio holds no key, and starts the agent without its own
+`STUDIO_*`, `GH_*` and `GITHUB_*` variables.
+
+| Agent | How it is installed |
+| --- | --- |
+| Claude Code | `@agentclientprotocol/claude-agent-acp`, a dependency of this package (`npm run studio:install`) |
+| Codex | `@agentclientprotocol/codex-acp`, a dependency of this package |
+| omp | install it yourself; the Studio runs `omp acp` |
+| Hermes Agent | install it with its `[acp]` extra; the Studio runs `hermes acp` |
+
+The agent picker lists the agents that are not installed greyed, with how
+to install them, and checks again every minute, so one installed while the
+Studio runs shows up without a restart. Your own agent settings still
+apply: a command your Claude Code settings allow runs without asking. For
+Hermes, the toolsets in your `~/.hermes/config.yaml` are its fence; the
+Studio warns while `terminal` or `code_execution` is on.
+
+## Connect an agent from a terminal
+
+The Studio's MCP server (`POST /api/mcp`, see
+[architecture.md](architecture.md#mcp-server)) also serves your own agents
+while the Studio is open. **Connect an agent…** in the agent menu gives the
+address, a token with sign-in on, and the command for Claude Code, Codex or
+the stdio bridge. By hand:
+
+```sh
+# Claude Code (add --header "Authorization: Bearer <token>" with sign-in on)
+claude mcp add --transport http notes-studio http://127.0.0.1:4310/api/mcp
+
+# Codex (add --bearer-token-env-var STUDIO_MCP_TOKEN with sign-in on;
+# Codex then reads the token from that variable each time it starts)
+codex mcp add notes-studio --url http://127.0.0.1:4310/api/mcp
+
+# Any stdio client (add STUDIO_MCP_TOKEN=<token> with sign-in on)
+STUDIO_MCP_URL=http://127.0.0.1:4310/api/mcp node tools/notes-studio/server/mcp/stdio.ts
+```
+
+With sign-in on, a token acts with the role of the person who made it,
+until they clear their tokens or their session ends. With sign-in off a
+request without a token acts for the one person of this machine.

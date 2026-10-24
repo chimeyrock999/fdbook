@@ -1,0 +1,72 @@
+# Lint
+
+Read this to know what the Issues view reports and why, or to add a rule.
+
+## What it checks
+
+The rules follow what the site does, not a style guide: the site turns many
+mistakes into plain text or a placeholder instead of failing the build, so
+they would otherwise only show on the page. The one style rule,
+`emphasis-marker`, keeps the markers the editor writes. How to write a
+note so it passes, rule by rule, is in the authoring guide's
+[style.md](../../../docs/authoring/style.md#lint).
+
+The sidebar's Issues view shows the open note's issues, checked about
+400 ms after typing stops (`src/lint/useLint.ts`) and again when another
+file changes on disk. The toolbar shows the count and opens the view;
+picking an issue opens Source with the problem selected and marked. The
+frontmatter is blanked before the note is parsed, so no rule reports in it;
+`notesPageSchema` checks it in the frontmatter form instead (see
+[Editor](using.md#editor)).
+
+The rules live in `server/lint/` (`lint.ts` runs them, `rules/` holds them)
+and run on `POST /api/lint`, which writes nothing. Code blocks and inline
+code are never checked.
+
+## Rules
+
+| Rule | Level | Reports | Why |
+| --- | --- | --- | --- |
+| `directive-unknown` | error | A container or leaf directive the site does not render; a text directive with a label or attributes that it does not render (`:keywrod[Map]`; a bare `a:b` is fine); a `:::tab` with no `value` or `[label]` | The site shows it as plain text. |
+| `directive-unclosed` | error | A container with no closing fence of its own | It takes in everything after it. |
+| `directive-nesting` | error | A nested container with as many colons as its parent, and a fence left with nothing to close | The inner closing fence closes both; give the outer one more colons. |
+| `callout-type` | error | `<Callout type>` outside the site's list | The site renders it as `info`. |
+| `callout-style` | error | `<Callout style="…">` as a string | The site only reads a `style` object, so the string sets nothing; `type` picks the look. |
+| `accordion-kind` | error | `kind` of `:::accordion` or `<Accordion>` outside the site's list | The page fails to render: the accordion has no icon for it. |
+| `link-broken` | error | A relative link or link definition (`./`, `../`, `foo/bar`) that reaches no note, resolved like `source.resolveHref` (as a file next to the note, then as a URL against the page), and a `/notes/…` link with no page. A link to a file under `public/notes` is fine. | The link is dead on the site. |
+| `asset-missing` | error | A `HtmlEmbed`, `SvgDiagram`, `::html`, `::svg` or `::diagram` with no `src` or a `src` that is not a file in `public/` (a URL such as `https://…` included: the site only reads `public/`), a `/…` image that is not in `public/`, and a `<Diagram>` with no `src` or no `diagrams/<src>.diagram.json`. `HtmlEmbed` with inline `html` and `SvgDiagram` with inline `svg` are skipped. | The site shows a placeholder. |
+| `diagram-invalid` | error, warning | A `<Diagram>` file the site's checks (`lib/diagram/validate.ts`) find wrong: an error when it cannot be laid out, a warning when it draws with a layout problem (nodes too close, a label that overflows) | An error shows a placeholder on the site; a warning draws badly. |
+| `graph-id-duplicate` | error | Two sections with one id in a note: `GraphMeta`, `:graph-meta`, `SectionTitle`, `GraphSection`, or any marker with `graphType`/`graphKind="section"`. Keywords may reuse a section's id, and the same id on two notes is how the graph links them. | The anchor and graph node point to the first one. |
+| `graph-meta-incomplete` | error, warning | A marker with no `id`; a Keyword, Tag, SectionTitle or GraphSection with no `displayName` (a `:keyword[…]` or `:tag[…]` label stands in for it); a warning for a GraphMeta with no `displayName` | The graph drops the marker; a GraphMeta falls back to its heading text. |
+| `emphasis-marker` | warning | Emphasis or strong written with `_` / `__` | The notes use `*text*` / `**text**`, as the editor writes them, so a Visual edit does not rewrite them in a diff. |
+| `mdx-parse` | error | The note does not parse | The site cannot build it, and no other rule can check it. |
+
+## Lists shared with the site
+
+Callout types and accordion kinds come from `lib/notes-syntax.ts`, the same
+lists the site's components use. The directive names the lint knows come
+from there too (`CONTAINER_DIRECTIVES`, `LEAF_DIRECTIVES`,
+`TEXT_DIRECTIVES`), but the site's directive plugin
+(`lib/remark-notes-directives.ts`) reads only `CALLOUT_DIRECTIVES` from it
+and names the other directives it renders itself.
+The root test `tests/remark-notes-directives.test.mjs` checks that every
+listed directive renders; it cannot see a non-callout directive the plugin
+renders and the list lacks, so when the site gains one, add it to `lib/notes-syntax.ts`
+too, or the lint reports it as unknown.
+
+## Running it on every note
+
+```sh
+npm run studio:lint   # from the repo root
+```
+
+lints every note and exits 1 on an error (`server/lint/cli.ts`).
+`tests/server/lint/notes.test.ts` keeps the whole of `content/notes` at
+zero issues, warnings included.
+
+## Adding a rule
+
+Add it to `server/lint/rules/`, call it from `server/lint/lint.ts`, add its
+name to `LintRule` in `server/lint/types.ts`, report the site's consequence in the message (as
+the rules above do), add a test under `tests/server/lint/`, and add a row
+here.
