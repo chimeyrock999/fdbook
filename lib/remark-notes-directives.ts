@@ -219,6 +219,18 @@ function createParagraph(children: unknown[]) {
   return start && end ? { type: 'paragraph', children, position: { start, end } } : { type: 'paragraph', children };
 }
 
+function titleOfAccordion(attributes: Record<string, unknown>, label: string | undefined) {
+  return getStringAttribute(attributes, 'title') ?? label ?? 'Accordion';
+}
+
+/**
+ * The title a `:::accordion` directive renders with: `title`, else its `[label]`, else
+ * "Accordion". The Studio lint reads it to know the item's value in a group.
+ */
+export function accordionDirectiveTitle(node: { attributes?: Record<string, unknown> | null; children: unknown[] }) {
+  return titleOfAccordion(node.attributes ?? {}, extractDirectiveLabel(node.children).title);
+}
+
 // Marks the `<Accordions>` a `:::accordion` wraps itself in, so `::::accordions`
 // unwraps only those and leaves an `<Accordions>` written in MDX alone.
 const accordionWrapper = 'notesAccordionWrapper';
@@ -254,7 +266,7 @@ function transformContainerDirective(node: DirectiveNode) {
   if (node.name === 'accordion') {
     const { children, title } = extractDirectiveLabel(node.children);
     const attributes = node.attributes ?? {};
-    const accordionTitle = getStringAttribute(attributes, 'title') ?? title ?? 'Accordion';
+    const accordionTitle = titleOfAccordion(attributes, title);
 
     // A standalone accordion is its own group. Inside `::::accordions` the group is
     // the root, so it unwraps this one to its item (see below).

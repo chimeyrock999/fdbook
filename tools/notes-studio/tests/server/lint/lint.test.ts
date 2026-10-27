@@ -119,6 +119,24 @@ describe('callouts and accordions', () => {
     expect(issues[2]?.message).toContain('`One`');
   });
 
+  it('counts an <Accordion> written in a group as one of its items', () => {
+    const source = [
+      '::::accordions{type="single" defaultValue="Jsx"}',
+      '<Accordion title="Jsx">a</Accordion>',
+      '',
+      ':::accordion[Jsx]', 'b', ':::',
+      '::::',
+      '',
+      '::::accordions{type="multiple" defaultValue="A,B"}',
+      ':::accordion[A]', 'a', ':::',
+      ':::accordion[B]', 'b', ':::',
+      '::::',
+    ].join('\n');
+    const issues = lint(source);
+    expect(summary(issues)).toEqual(['accordion-group@4', 'accordion-group@9']);
+    expect(issues[1]?.message).toContain('names one item');
+  });
+
   it('accepts a group whose defaultValue names an item by title or value', () => {
     const source = [
       '::::accordions{type="single" defaultValue="Second"}',
