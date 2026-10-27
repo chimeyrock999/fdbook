@@ -219,6 +219,19 @@ function createParagraph(children: unknown[]) {
   return start && end ? { type: 'paragraph', children, position: { start, end } } : { type: 'paragraph', children };
 }
 
+// Marks the `<Accordions>` a `:::accordion` wraps itself in, so `::::accordions`
+// unwraps only those and leaves an `<Accordions>` written in MDX alone.
+const accordionWrapper = 'notesAccordionWrapper';
+
+function isAccordionWrapper(node: unknown): node is DirectiveNode & { children: [unknown] } {
+  return (
+    !!node &&
+    typeof node === 'object' &&
+    (node as DirectiveNode).data?.[accordionWrapper] === true &&
+    Array.isArray((node as DirectiveNode).children)
+  );
+}
+
 function transformContainerDirective(node: DirectiveNode) {
   if (!node.name || !Array.isArray(node.children)) return;
 
@@ -243,10 +256,13 @@ function transformContainerDirective(node: DirectiveNode) {
     const attributes = node.attributes ?? {};
     const accordionTitle = getStringAttribute(attributes, 'title') ?? title ?? 'Accordion';
 
+    // A standalone accordion is its own group. Inside `::::accordions` the group is
+    // the root, so it unwraps this one to its item (see below).
     Object.assign(node, {
       type: 'mdxJsxFlowElement',
       name: 'Accordions',
       attributes: [createMdxAttribute('type', getStringAttribute(attributes, 'type') ?? 'single')],
+      data: { ...node.data, [accordionWrapper]: true },
       children: [
         {
           type: 'mdxJsxFlowElement',
@@ -264,10 +280,14 @@ function transformContainerDirective(node: DirectiveNode) {
   }
 
   if (node.name === 'accordions') {
+    // Children are transformed first, so each `:::accordion` is already its own
+    // `<Accordions>`. Its item joins this group instead, so the group's `type` and
+    // `defaultValue` reach it; a `type` written on the item is dropped.
     Object.assign(node, {
       type: 'mdxJsxFlowElement',
       name: 'Accordions',
       attributes: createStringAttributes(node.attributes ?? {}, ['type', 'defaultValue']),
+      children: node.children.map((child) => (isAccordionWrapper(child) ? child.children[0] : child)),
     });
 
     return;

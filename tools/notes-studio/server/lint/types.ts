@@ -8,6 +8,7 @@ export type LintRule =
   | 'callout-type'
   | 'callout-style'
   | 'accordion-kind'
+  | 'accordion-group'
   | 'link-broken'
   | 'asset-missing'
   | 'diagram-invalid'
