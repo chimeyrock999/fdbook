@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMdx from 'remark-mdx';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
+import { checkAccordions } from './rules/accordions.ts';
 import { checkComponents } from './rules/components.ts';
 import { checkDirectives } from './rules/directives.ts';
 import { checkEmphasis } from './rules/emphasis.ts';
@@ -58,6 +59,7 @@ export function lintNote(source: string, context: LintContext): LintIssue[] {
   };
   checkDirectives(tree, source, report);
   checkComponents(tree, source, context, report);
+  checkAccordions(tree, source, report);
   checkLinks(tree, context, report);
   checkEmphasis(tree, source, report);
   return issues.sort((a, b) => a.start.offset - b.start.offset);

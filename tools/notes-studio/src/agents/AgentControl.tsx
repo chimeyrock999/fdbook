@@ -66,8 +66,10 @@ export function AgentControl({ agents, live, asks = 0 }: { agents: Agents; live:
             <span className="studio-agent-picker-name">{author.name}</span>
           </>
         )}
+        {/* Below 1280px the menu alone names the reviewer, so the change
+            request picker keeps room for its name (#164). */}
         {reviewer !== null && (
-          <span className="studio-agent-picker-review max-lg:hidden">
+          <span className="studio-agent-picker-review max-xl:hidden">
             <span aria-hidden>·</span> review <AgentLogo id={reviewer.id} size={14} /> {reviewer.name}
           </span>
         )}

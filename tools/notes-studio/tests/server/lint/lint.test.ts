@@ -100,6 +100,56 @@ describe('callouts and accordions', () => {
     expect(summary(issues)).toEqual(['accordion-kind@2', 'accordion-kind@7']);
     expect(issues[0]?.message).toContain('the page fails to render');
   });
+
+  it('flags what a group decides for its accordions: their type, one value twice, a defaultValue no item has', () => {
+    const source = [
+      '::::accordions{type="single" defaultValue="Missing"}',
+      ':::accordion[One]{type="multiple"}', 'a', ':::',
+      ':::accordion{title="One"}', 'b', ':::',
+      ':::accordion[Two]{value="One"}', 'c', ':::',
+      '::::',
+      '',
+      ':::accordion[Alone]{type="multiple"}', 'd', ':::',
+    ].join('\n');
+    const issues = lint(source);
+    expect(summary(issues)).toEqual(['accordion-group@1', 'accordion-group@2', 'accordion-group@5', 'accordion-group@8']);
+    expect(issues.map((issue) => issue.severity)).toEqual(['warning', 'warning', 'warning', 'warning']);
+    expect(issues[0]?.message).toContain('`Missing`');
+    expect(issues[1]?.message).toContain('`type` on `::::accordions`');
+    expect(issues[2]?.message).toContain('`One`');
+  });
+
+  it('counts an <Accordion> written in a group as one of its items', () => {
+    const source = [
+      '::::accordions{type="single" defaultValue="Jsx"}',
+      '<Accordion title="Jsx">a</Accordion>',
+      '',
+      ':::accordion[Jsx]', 'b', ':::',
+      '::::',
+      '',
+      '::::accordions{type="multiple" defaultValue="A,B"}',
+      ':::accordion[A]', 'a', ':::',
+      ':::accordion[B]', 'b', ':::',
+      '::::',
+    ].join('\n');
+    const issues = lint(source);
+    expect(summary(issues)).toEqual(['accordion-group@4', 'accordion-group@9']);
+    expect(issues[1]?.message).toContain('names one item');
+  });
+
+  it('accepts a group whose defaultValue names an item by title or value', () => {
+    const source = [
+      '::::accordions{type="single" defaultValue="Second"}',
+      ':::accordion[First]', 'a', ':::',
+      ':::accordion[Two]{value="Second"}', 'b', ':::',
+      '::::',
+      '',
+      '::::accordions{type="multiple" defaultValue="First"}',
+      ':::accordion{title="First" kind="question"}', 'a', ':::',
+      '::::',
+    ].join('\n');
+    expect(lint(source)).toEqual([]);
+  });
 });
 
 describe('links', () => {
