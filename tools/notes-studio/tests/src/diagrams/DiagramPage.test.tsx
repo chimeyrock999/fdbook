@@ -77,6 +77,15 @@ function jsonView() {
   if (!view) throw new Error('no JSON editor');
   return view;
 }
+// A file that does not parse opens in the JSON view. Its status shows on the
+// first render, but the editor is created in an effect after it, so wait for
+// both (#149).
+async function brokenFileOpened() {
+  await waitFor(() => {
+    expect(screen.getByRole('status').textContent).toBe('Not valid JSON');
+    jsonView();
+  });
+}
 
 // A press, a move and a release, in SVG units (jsdom lays nothing out, so
 // the canvas maps client pixels one to one).
@@ -300,7 +309,7 @@ describe('DiagramPage', () => {
   it('opens a file that is not JSON in the JSON view, to fix it there', async () => {
     const fake = disk('{ "version": 1,');
     render(<DiagramPage files={fake.files} path={PATH} readOnly={false} usages={[]} onOpenUsage={vi.fn()} />);
-    await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Not valid JSON'); });
+    await brokenFileOpened();
     act(() => { jsonView().dispatch({ changes: { from: 0, to: 15, insert: real } }); });
     await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Saved'); });
     expect(fake.writes).toEqual([real]);
@@ -320,7 +329,7 @@ describe('DiagramPage', () => {
   it('keeps the JSON view open once a broken file parses', async () => {
     const fake = disk('{ "version": 1,');
     const { container } = render(<DiagramPage files={fake.files} path={PATH} readOnly={false} usages={[]} onOpenUsage={vi.fn()} />);
-    await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Not valid JSON'); });
+    await brokenFileOpened();
     act(() => { jsonView().dispatch({ changes: { from: 0, to: 15, insert: real } }); });
     await waitFor(() => { expect(container.querySelector('svg.dg-svg')).not.toBeNull(); });
     expect(screen.getByRole('button', { name: 'JSON' }).getAttribute('aria-pressed')).toBe('true');
@@ -380,7 +389,7 @@ describe('DiagramPage', () => {
     const fake = disk('{ "version": 1,');
     const onWaiting = vi.fn();
     render(<DiagramPage files={fake.files} path={PATH} readOnly={false} usages={[]} onOpenUsage={vi.fn()} onWaiting={onWaiting} />);
-    await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Not valid JSON'); });
+    await brokenFileOpened();
     expect(onWaiting).not.toHaveBeenCalledWith(true);
     act(() => { jsonView().dispatch({ changes: { from: 0, insert: ' ' } }); });
     expect(onWaiting).toHaveBeenLastCalledWith(true);
