@@ -189,6 +189,7 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
 
   return (
     <aside className="studio-agent-panel" aria-label="Agent">
+      {/* New note and New chat are icons: with their labels the header is wider than the panel (#161). */}
       <header className="studio-agent-panel-head">
         <span>Agent</span>
         <span className="flex-1" />
@@ -198,13 +199,13 @@ export function AgentPanel({ agents, inCr, canRun, canDecide, asking, onOpenDiff
           </button>
         )}
         {inCr && canRun && (
-          <button type="button" className="studio-button gap-1.5" aria-pressed={drafting} title="Draft a new note with an author agent" onClick={() => { setDrafting(!drafting); setHistory(false); }}>
-            <FilePlus size={13} aria-hidden /> New note
+          <button type="button" className="studio-button px-[7px]" aria-pressed={drafting} aria-label="New note" title="New note" onClick={() => { setDrafting(!drafting); setHistory(false); }}>
+            <FilePlus size={13} aria-hidden />
           </button>
         )}
         {inCr && canRun && (
-          <button type="button" className="studio-button gap-1.5" onClick={() => { setShown(NEW_CHAT); setHistory(false); setDrafting(false); requestAnimationFrame(() => { document.getElementById('studio-agent-prompt')?.focus(); }); }}>
-            <Plus size={13} aria-hidden /> New chat
+          <button type="button" className="studio-button px-[7px]" aria-label="New chat" title="New chat" onClick={() => { setShown(NEW_CHAT); setHistory(false); setDrafting(false); requestAnimationFrame(() => { document.getElementById('studio-agent-prompt')?.focus(); }); }}>
+            <Plus size={13} aria-hidden />
           </button>
         )}
         <button type="button" className="studio-icon-button" aria-label="Close the agent panel" title="Close" onClick={() => { agents.setPanel(false); }}><X size={15} /></button>

@@ -49,10 +49,20 @@
     white-space: nowrap;
     font-weight: 500;
   }
+  /* Only the name gives way to a narrow header. */
+  .studio-cr-picker > svg {
+    flex: none;
+  }
+  /* On a phone the picker keeps room for its icons, and the name gets what
+     the status badge took: the menu still shows the status (#162). */
   @media (max-width: 767px) {
     .studio-cr-picker {
       flex: 1;
+      min-width: 64px;
       max-width: none;
+    }
+    .studio-cr-picker > .studio-cr-badge {
+      display: none;
     }
   }
 

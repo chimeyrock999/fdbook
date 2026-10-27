@@ -215,7 +215,11 @@ describe('sign-in', () => {
         const response = await studio.send(fileApi(NOTE), { cookie });
         expect(response.status).toBe(503);
         expect((json(response) as { error: string }).error).toContain('gh: not logged in');
-        expect((await studio.send('/api/session', { cookie })).status).toBe(503);
+        // In JSON: the connection watch reads it as the Studio still there (#163).
+        const session = await studio.send('/api/session', { cookie });
+        expect(session.status).toBe(503);
+        expect(session.headers['content-type']).toMatch(/^application\/json/);
+        expect((json(session) as { error: string }).error).toContain('gh: not logged in');
         // What needs no role (the page and its modules) does not wait for gh.
         expect((await studio.send('/', { cookie })).status).toBe(200);
       } finally {

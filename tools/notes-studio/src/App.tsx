@@ -1,4 +1,5 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
+import { PanelLeft } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentControl } from './agents/AgentControl';
 import { AgentPanel } from './agents/AgentPanel';
@@ -319,9 +320,10 @@ export function App() {
 
   return (
     <div className="flex h-dvh flex-col bg-[var(--fde-background)] text-[var(--fde-foreground)]">
-      <header className="flex min-w-0 items-center gap-2.5 border-b border-[var(--fde-border)] px-3 py-2">
-        <button type="button" className="studio-button md:hidden" onClick={() => { openView('notes'); }}>
-          Notes
+      {/* On a phone the controls go narrower, so the header fits (#162). */}
+      <header className="flex min-w-0 items-center gap-1.5 border-b border-[var(--fde-border)] px-3 py-2 md:gap-2.5">
+        <button type="button" className="studio-button px-[7px] md:hidden" aria-label="Notes" title="Notes" onClick={() => { openView('notes'); }}>
+          <PanelLeft size={15} aria-hidden />
         </button>
         <span className={`font-semibold whitespace-nowrap ${crMode ? 'max-md:hidden' : ''}`}>Notes Studio</span>
         {crMode && <CrPicker list={crs.list} current={CURRENT_CR} waiting={unsaved !== null} onSwitch={(cr) => { switchTo(cr); }} onNew={newCr} onList={openList} />}

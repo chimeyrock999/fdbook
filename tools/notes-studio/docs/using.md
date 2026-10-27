@@ -536,15 +536,12 @@ in `diagrams/README.md`.
 ## Changes
 
 The sidebar's Changes view commits from the Studio. It lists what
-`git status` says changed in the worktree under `content/notes` and
-`public/notes`, only files the path policy allows, grouped as Pages (notes
-and `meta.yaml`, shown as the folder's page order) and Assets, each with
-`M`, `A`, `D` or `R`. Any row, and any file of a commit in History, opens
+`git status` says changed in the worktree under `content/notes`,
+`public/notes` and `diagrams`, only files the path policy allows, grouped
+as Pages (notes and `meta.yaml`, shown as the folder's page order), Assets
+and Diagrams (by name), each with `M`, `A`, `D` or `R`. Any row, and any file of a commit in History, opens
 the file's [diff against main](#diff). Every file starts picked, and so
 does a file that changes later; uncheck what should wait.
-
-Changed diagram files are counted in the badge and picked for the commit
-but have no row yet, so they cannot be unchecked here (#156).
 
 The commit message is required. It starts as a suggestion for the picked
 files (`src/changes/message.ts`), for example:
@@ -669,7 +666,11 @@ not pushed) → **Publish** (all pushed, no pull request) → **View PR** (the
 pull request on GitHub, whatever its state), and **Update PR** for commits
 made after publishing (`src/changes/primary-action.ts`). With nothing to
 commit yet, Commit is off. Pushes and Publish wait while the open note has
-edits not saved yet.
+edits not saved yet. On a phone the action shows its icon only, named for
+assistive tech, with its tooltip still saying what it does; the **Notes**
+button that opens the sidebar is an icon there too, named Notes, and the
+change request picker leaves out the status badge, which its menu still
+shows.
 
 ## History
 
@@ -752,18 +753,18 @@ the agent for each role, kept in this browser.
 - **Where.** Only in a change request: the agent works in its worktree,
   never main. A Studio over one worktree (as the tests start it) runs no
   agent.
-- **Chats.** **New chat** picks the role, *author* (may write) or
-  *reviewer* (only reads); agent and role stay for the whole chat. Enter
-  sends, Shift+Enter adds a line, and Enter that only confirms an IME's
-  text (Telex) sends nothing. One turn at a time: while the agent answers,
-  the composer keeps what you type but sends nothing, and **Cancel** stops
-  that turn, not the chat. The message shows in the thread at once, marked
-  Sending, and comes back to the box if it did not go; until the agent
-  says or does anything, the thread says it is thinking. Replies and
-  thoughts show as markdown: raw HTML shows as text, links go only to
-  `http(s):` and `mailto:`, and an image is a link. The header names the
-  model the agent reports; for Claude Code's "default" choice, the model it
-  stands for.
+- **Chats.** **New chat** (the + icon in the panel's header) picks the
+  role, *author* (may write) or *reviewer* (only reads); agent and role
+  stay for the whole chat. Enter sends, Shift+Enter adds a line, and Enter
+  that only confirms an IME's text (Telex) sends nothing. One turn at a
+  time: while the agent answers, the composer keeps what you type but
+  sends nothing, and **Cancel** stops that turn, not the chat. The message
+  shows in the thread at once, marked Sending, and comes back to the box
+  if it did not go; until the agent says or does anything, the thread says
+  it is thinking. Replies and thoughts show as markdown: raw HTML shows as
+  text, links go only to `http(s):` and `mailto:`, and an image is a link.
+  The header names the model the agent reports; for Claude Code's
+  "default" choice, the model it stands for.
 - **Context.** A message carries where you are in the editor, with no
   button to press: the note open, and the lines selected there, or else the
   caret's line. The selection is the editor's last one: it stays when you
@@ -790,11 +791,11 @@ the agent for each role, kept in this browser.
   suggestion (see [Proposals](#proposals)); a new note or diagram lands on
   the turn's Keep/Revert list. While the panel is open for someone who may
   run agents, **Fill** at the top of the note header asks an author agent
-  for the frontmatter the same way. **New note** opens a form (folder,
-  title, the path it makes, an outline, links to read) above a composer for
-  mentions, attachments and anything else; it sends once the path shown
-  holds no note, and starts an author chat that drafts the note there and
-  lists it in `meta.yaml`.
+  for the frontmatter the same way. **New note** (the file icon beside
+  **History**) opens a form (folder, title, the path it makes, an outline,
+  links to read) above a composer for mentions, attachments and anything
+  else; it sends once the path shown holds no note, and starts an author
+  chat that drafts the note there and lists it in `meta.yaml`.
 - **Edits.** An agent's edit to a note that exists becomes a proposal, not
   a write. A new note, `meta.yaml`, a diagram or an SVG or HTML asset is
   written. A note the chat created stays its own draft until a person keeps
