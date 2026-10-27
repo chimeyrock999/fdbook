@@ -384,9 +384,11 @@ instead of every stream retrying forever.
   other answer is shown as the server gave it, and no answer within 5
   seconds is a server that is gone.
 - The notes sync counts as gone once it was offline for 10 seconds and
-  `GET /api/session` does not answer with a 2xx either. A `503` counts as
-  no answer here, unlike on the streams, so a sync drop while gh is down
-  for a moment shows Server disconnected (#163).
+  the Studio does not answer `GET /api/session` either. A 2xx or an error
+  of the Studio's own (`{ error }` in JSON, as the `503` while gh cannot
+  read the role) is an answer, and the sync is checked again after another
+  10 seconds; a network failure, or a proxy's or gateway's error for a
+  Studio that stopped, is not.
 - Then every stream and the sync are closed for good, so the page sends no
   more requests, and `src/session/ServerDisconnected.tsx` covers the page.
   A page leaving for another one shows nothing; one still there 10 seconds

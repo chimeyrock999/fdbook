@@ -58,6 +58,13 @@ function answerProbe(status: number | null, body: unknown = {}) {
   return fetch;
 }
 
+// A proxy before the Studio answers for it with a page of its own.
+function answerProxy(status: number) {
+  const fetch = vi.fn(() => Promise.resolve(new Response('<html><body>Bad Gateway</body></html>', { status, headers: { 'Content-Type': 'text/html' } })));
+  vi.stubGlobal('fetch', fetch);
+  return fetch;
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal('EventSource', FakeEventSource);
@@ -365,13 +372,33 @@ describe('the sync under the watch', () => {
     expect(sync.close).not.toHaveBeenCalled();
   });
 
-  it('counts a server that answers with an error (a proxy before a dead Studio) as gone', async () => {
-    answerProbe(502);
+  it.each([502, 503])('counts a proxy that answers %i for a dead Studio as gone', async (status) => {
+    answerProxy(status);
     const sync = fakeSync();
     watchSync(sync);
     sync.set('offline');
     await vi.advanceTimersByTimeAsync(WINDOW_MS);
     expect(disconnected()).toEqual({ reason: 'unreachable' });
+  });
+
+  it('counts a gateway that answers in JSON of its own for a dead Studio as gone', async () => {
+    answerProbe(502, { message: 'Bad gateway' });
+    const sync = fakeSync();
+    watchSync(sync);
+    sync.set('offline');
+    await vi.advanceTimersByTimeAsync(WINDOW_MS);
+    expect(disconnected()).toEqual({ reason: 'unreachable' });
+  });
+
+  it('keeps waiting while the Studio answers 503 (gh cannot read the role) and the sync stays offline', async () => {
+    const probe = answerProbe(503, { error: 'Could not read your access to the repository: gh failed' });
+    const sync = fakeSync();
+    watchSync(sync);
+    sync.set('offline');
+    await vi.advanceTimersByTimeAsync(WINDOW_MS * 3);
+    expect(probe).toHaveBeenCalledTimes(3);
+    expect(disconnected()).toBeNull();
+    expect(sync.close).not.toHaveBeenCalled();
   });
 
   it('keeps waiting while the server answers and the sync stays offline', async () => {

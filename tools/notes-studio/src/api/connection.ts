@@ -222,11 +222,22 @@ export function watchEvents(url: string, setup: (events: EventSource) => void, o
 
 type SyncLike = { status(): string; onStatus(listener: (status: string) => void): () => void; close(): void };
 
+// Whether `GET /api/session` reached the Studio: a 2xx, or an error the
+// Studio gave itself, `{ error }` in JSON (a 503 while gh cannot read the
+// role). A proxy or gateway answering for a Studio that is gone (a 502
+// page, or JSON of its own) did not.
+async function studioAnswered(response: Response) {
+  if (response.ok) return true;
+  if (!(response.headers.get('Content-Type') ?? '').startsWith('application/json')) return false;
+  const body: unknown = await response.json().catch(() => null);
+  return typeof body === 'object' && body !== null && typeof (body as { error?: unknown }).error === 'string';
+}
+
 // The notes sync reconnects on its own, without end: offline for the
-// window, with the server not answering either, is a disconnect, and the
-// sync is closed with the streams. A server that answers (the sync is
-// refused for the change request; the streams tell why) is asked again
-// after another window.
+// window, with the Studio not answering either, is a disconnect, and the
+// sync is closed with the streams. A Studio that answers (the sync is
+// refused for the change request, the streams tell why; or gh is down for
+// a moment) is asked again after another window.
 export function watchSync(client: SyncLike) {
   if (current !== null) {
     client.close();
@@ -237,7 +248,7 @@ export function watchSync(client: SyncLike) {
     clearTimeout(timer);
     if (status !== 'offline') return;
     timer = setTimeout(() => {
-      void fetch('/api/session').then((response) => response.ok, () => false).then((answers) => {
+      void fetch('/api/session').then(studioAnswered, () => false).then((answers) => {
         if (client.status() !== 'offline') return;
         if (answers || leaving) check('offline');
         else disconnect({ reason: 'unreachable' });
