@@ -666,7 +666,10 @@ not pushed) → **Publish** (all pushed, no pull request) → **View PR** (the
 pull request on GitHub, whatever its state), and **Update PR** for commits
 made after publishing (`src/changes/primary-action.ts`). With nothing to
 commit yet, Commit is off. Pushes and Publish wait while the open note has
-edits not saved yet.
+edits not saved yet. On a phone the action shows its icon only, with its
+name in the tooltip, and so does the **Notes** button that opens the
+sidebar; the change request picker leaves out the status badge there,
+which its menu still shows.
 
 ## History
 
