@@ -749,10 +749,10 @@ the agent for each role, kept in this browser.
 - **Where.** Only in a change request: the agent works in its worktree,
   never main. A Studio over one worktree (as the tests start it) runs no
   agent.
-- **Chats.** **New chat** picks the role, *author* (may write) or
-  *reviewer* (only reads); agent and role stay for the whole chat. Enter
-  sends, Shift+Enter adds a line, and Enter that only confirms an IME's
-  text (Telex) sends nothing. One turn at a time: while the agent answers,
+- **Chats.** **New chat** (the + icon in the panel's header) picks the
+  role, *author* (may write) or *reviewer* (only reads); agent and role
+  stay for the whole chat. Enter sends, Shift+Enter adds a line, and Enter
+  that only confirms an IME's text (Telex) sends nothing. One turn at a time: while the agent answers,
   the composer keeps what you type but sends nothing, and **Cancel** stops
   that turn, not the chat. The message shows in the thread at once, marked
   Sending, and comes back to the box if it did not go; until the agent
@@ -787,7 +787,8 @@ the agent for each role, kept in this browser.
   suggestion (see [Proposals](#proposals)); a new note or diagram lands on
   the turn's Keep/Revert list. While the panel is open for someone who may
   run agents, **Fill** at the top of the note header asks an author agent
-  for the frontmatter the same way. **New note** opens a form (folder,
+  for the frontmatter the same way. **New note** (the file icon beside
+  **History**) opens a form (folder,
   title, the path it makes, an outline, links to read) above a composer for
   mentions, attachments and anything else; it sends once the path shown
   holds no note, and starts an author chat that drafts the note there and

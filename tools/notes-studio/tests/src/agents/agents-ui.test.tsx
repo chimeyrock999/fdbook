@@ -177,6 +177,18 @@ describe('agent chat', () => {
     expect(screen.getByText(/omp cannot be held to reading/)).toBeTruthy();
   });
 
+  it('shows New note and New chat as icons named for assistive tech, so the header fits the panel (#161)', async () => {
+    const { client } = fakeClient();
+    render(<Harness client={client} />);
+    await screen.findByText('Claude Code', { selector: '.studio-agent-who' });
+    for (const name of ['New note', 'New chat']) {
+      const button = screen.getByRole('button', { name });
+      expect(button.textContent).toBe('');
+      expect(button.getAttribute('title')).toBe(name);
+    }
+    expect(screen.getByRole('button', { name: 'History' }).textContent.trim()).toBe('History');
+  });
+
   it('offers no chat on main, and only reading to someone who is not an admin', async () => {
     const { client } = fakeClient([summary({ status: 'done' })]);
     const { unmount } = render(<Harness client={client} inCr={false} />);
