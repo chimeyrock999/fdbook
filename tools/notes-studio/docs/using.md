@@ -670,7 +670,10 @@ edits not saved yet. On a phone the action shows its icon only, named for
 assistive tech, with its tooltip still saying what it does; the **Notes**
 button that opens the sidebar is an icon there too, named Notes, and the
 change request picker leaves out the status badge, which its menu still
-shows.
+shows. Below 1024px a change request's header also leaves out the Studio's
+name and the agent's name in the agent picker (its logo and menu still show
+which agent), so the change request picker keeps room for its name; only
+that name gives way to a narrow header.
 
 ## History
 

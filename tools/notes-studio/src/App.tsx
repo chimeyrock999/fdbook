@@ -320,12 +320,14 @@ export function App() {
 
   return (
     <div className="flex h-dvh flex-col bg-[var(--fde-background)] text-[var(--fde-foreground)]">
-      {/* On a phone the controls go narrower, so the header fits (#162). */}
+      {/* On a phone the controls go narrower, so the header fits (#162). Up to
+          a laptop's width a change request leaves out the Studio's name, so
+          its picker keeps room for its name (#164). */}
       <header className="flex min-w-0 items-center gap-1.5 border-b border-[var(--fde-border)] px-3 py-2 md:gap-2.5">
         <button type="button" className="studio-button px-[7px] md:hidden" aria-label="Notes" title="Notes" onClick={() => { openView('notes'); }}>
           <PanelLeft size={15} aria-hidden />
         </button>
-        <span className={`font-semibold whitespace-nowrap ${crMode ? 'max-md:hidden' : ''}`}>Notes Studio</span>
+        <span className={`font-semibold whitespace-nowrap ${crMode ? 'max-lg:hidden' : ''}`}>Notes Studio</span>
         {crMode && <CrPicker list={crs.list} current={CURRENT_CR} waiting={unsaved !== null} onSwitch={(cr) => { switchTo(cr); }} onNew={newCr} onList={openList} />}
         <span className={`min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--fde-muted-foreground)] ${crMode ? 'max-md:hidden' : ''}`}>{pagePath ?? ''}</span>
         {crMode && CURRENT_CR === null && rights.write && <EditMenu list={crs.list} onSwitch={(cr) => { switchTo(cr); }} onNew={() => { setCrDialog({ kind: 'new' }); }} />}

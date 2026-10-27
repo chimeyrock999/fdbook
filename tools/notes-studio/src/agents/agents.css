@@ -51,7 +51,9 @@
     gap: 5px;
     color: var(--fde-muted-foreground);
   }
-  @media (max-width: 767px) {
+  /* Up to a laptop's width the header leaves the change request picker the
+     room the agent's name took; the logo and the menu still name it (#164). */
+  @media (max-width: 1023px) {
     .studio-agent-picker-name {
       display: none;
     }

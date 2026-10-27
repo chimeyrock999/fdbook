@@ -30,11 +30,14 @@
   .studio-cr-badge[data-status='merged'] { --cr-color: var(--fde-success); }
   .studio-cr-badge[data-status='closed'] { --cr-color: var(--fde-error); }
 
+  /* Only the name gives way to a narrow header; past that the picker clips
+     its badge rather than letting it spill under the next control (#164). */
   .studio-cr-picker {
     display: inline-flex;
     align-items: center;
     gap: 7px;
     min-width: 0;
+    overflow: hidden;
     max-width: 280px;
     padding: 4px 8px 4px 10px;
     border: 1px solid var(--fde-border);
