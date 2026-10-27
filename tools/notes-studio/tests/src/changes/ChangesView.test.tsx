@@ -157,6 +157,20 @@ describe('ChangesView', () => {
     expect(screen.getByRole('button', { name: 'timeline.png' }).closest('li')?.hasAttribute('aria-current')).toBe(false);
   });
 
+  it('lists changed diagrams in their own group, to unpick or open like the rest', async () => {
+    const diagram: ChangedFile = { path: 'diagrams/streaming/pipeline.diagram.json', status: 'M' };
+    const { commit, onOpen } = setup({ changes: { branch: 'cr/sinks', files: [files[2], diagram] } });
+    const diagrams = within(screen.getByRole('region', { name: 'Diagrams' }));
+    expect(diagrams.getAllByRole('listitem').map((item) => item.textContent)).toEqual(['pipelinestreaming/pipeline.diagram.jsonM']);
+    expect(submit().textContent).toBe('Commit 2 files');
+    await userEvent.click(diagrams.getByRole('button', { name: 'pipeline' }));
+    expect(onOpen).toHaveBeenLastCalledWith(diagram);
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Pick all diagrams' }));
+    expect(submit().textContent).toBe('Commit 1 file');
+    await userEvent.click(submit());
+    expect(commit).toHaveBeenCalledWith('docs(notes): update watermarks', ['content/notes/streaming/watermarks.mdx']);
+  });
+
   it('on main (read only) lists the changes without a commit box', () => {
     render(<ChangesView client={{} as ChangesClient} changes={{ branch: null, files }} history={history} error={null} titles={titles} unsaved={null} readOnly onOpen={vi.fn()} onCommitted={() => Promise.resolve()} />);
     expect(screen.getByText(/Main is read only/)).toBeTruthy();
@@ -201,10 +215,10 @@ describe('useChanges', () => {
     return <p>{error ?? (changes ? String(changes.files.length) : 'loading')}</p>;
   }
 
-  it('reloads after a burst of note or asset events, and when the window comes back', async () => {
+  it('reloads after a burst of note, asset or diagram events, and when the window comes back', async () => {
     let listener: (event: FileEvent) => void = () => undefined;
     const events = { subscribeFileEvents: (next: (event: FileEvent) => void) => { listener = next; return () => undefined; } } as unknown as ReturnType<typeof createFilesClient>;
-    const counts = [0, 1, 2];
+    const counts = [0, 1, 2, 3];
     const loadChanges = vi.fn(() => Promise.resolve({ branch: 'cr/x', files: Array<ChangedFile>(counts.shift() ?? 3).fill(files[0]) }));
     const loadHistory = vi.fn(() => Promise.resolve(history));
     render(<Probe client={{ loadChanges, loadHistory } as unknown as ChangesClient} events={events} />);
@@ -214,11 +228,15 @@ describe('useChanges', () => {
     listener({ type: 'change', path: 'package.json', mtimeMs: 3 });
     expect(await screen.findByText('1')).toBeTruthy();
     await new Promise((resolve) => setTimeout(resolve, 400));
-    expect(loadChanges).toHaveBeenCalledTimes(2);
+    // A diagram saved in the Studio is a change too.
+    listener({ type: 'change', path: 'diagrams/streaming/pipeline.diagram.json', mtimeMs: 4 });
+    expect(await screen.findByText('2')).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(loadChanges).toHaveBeenCalledTimes(3);
     // A file event cannot add a commit: only the changes load again.
     expect(loadHistory).toHaveBeenCalledTimes(1);
     act(() => { window.dispatchEvent(new Event('focus')); });
-    expect(await screen.findByText('2')).toBeTruthy();
+    expect(await screen.findByText('3')).toBeTruthy();
     expect(loadHistory).toHaveBeenCalledTimes(2);
   });
 

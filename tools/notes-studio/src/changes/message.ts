@@ -1,6 +1,7 @@
 import type { ChangedFile, ChangeStatus } from '../api/changes';
 import { classifyPath } from '../../server/security/asset-types';
 import { NOTES_PREFIX } from '../notes/notes';
+import { shortPath } from './labels';
 
 const PREFIX = 'docs(notes): ';
 const VERB: Record<ChangeStatus, string> = { M: 'update', A: 'add', D: 'remove', R: 'rename' };
@@ -11,7 +12,7 @@ const isDiagram = (file: ChangedFile) => classifyPath(file.path) === 'diagram';
 
 // The folder a file sits in, by name ('notes' at the top of content/notes).
 function folderOf(path: string) {
-  const segments = path.replace(/^((content|public)\/notes|diagrams)\//, '').split('/');
+  const segments = shortPath(path).split('/');
   return segments.length > 1 ? segments[segments.length - 2] : 'notes';
 }
 

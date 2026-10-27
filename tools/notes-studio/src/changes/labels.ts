@@ -1,5 +1,6 @@
 import type { ChangedFile } from '../api/changes';
 import type { TreeFolder } from '../api/tree';
+import { DIAGRAM_SUFFIX } from '../../server/security/asset-types';
 import { NOTES_PREFIX } from '../notes/notes';
 import { noteOf } from '../tree/tree';
 
@@ -24,19 +25,22 @@ export function titlesOf(root: TreeFolder | null): Map<string, string> {
 const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
 // What a changed file is called in the Changes view: a note by its title, a
-// meta.yaml as its folder's page order, an asset (or a note the tree no
-// longer has) by its file name.
+// meta.yaml as its folder's page order, a diagram by its name, an asset (or
+// a note the tree no longer has) by its file name.
 export function labelOf(file: ChangedFile, titles: Map<string, string>) {
   const title = titles.get(file.path);
   if (file.path.endsWith(`/${META}`)) {
     const dir = file.path.slice(0, -META.length - 1);
     return `Page order of ${title ?? nameOf(dir)}`;
   }
-  return title ?? nameOf(file.path).replace(/\.mdx$/, '');
+  if (title !== undefined) return title;
+  const name = nameOf(file.path);
+  return name.endsWith(DIAGRAM_SUFFIX) ? name.slice(0, -DIAGRAM_SUFFIX.length) : name.replace(/\.mdx$/, '');
 }
 
-// The path under content/notes or public/notes, which the area makes plain.
-export const shortPath = (path: string) => path.replace(/^(content|public)\/notes\//, '');
+// The path under content/notes, public/notes or diagrams, which the area
+// makes plain.
+export const shortPath = (path: string) => path.replace(/^((content|public)\/notes|diagrams)\//, '');
 
 // "just now", "5 min ago", "3 hours ago", then the date.
 export function timeAgo(date: string, now = Date.now()) {

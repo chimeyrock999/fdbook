@@ -536,15 +536,12 @@ in `diagrams/README.md`.
 ## Changes
 
 The sidebar's Changes view commits from the Studio. It lists what
-`git status` says changed in the worktree under `content/notes` and
-`public/notes`, only files the path policy allows, grouped as Pages (notes
-and `meta.yaml`, shown as the folder's page order) and Assets, each with
-`M`, `A`, `D` or `R`. Any row, and any file of a commit in History, opens
+`git status` says changed in the worktree under `content/notes`,
+`public/notes` and `diagrams`, only files the path policy allows, grouped
+as Pages (notes and `meta.yaml`, shown as the folder's page order), Assets
+and Diagrams (by name), each with `M`, `A`, `D` or `R`. Any row, and any file of a commit in History, opens
 the file's [diff against main](#diff). Every file starts picked, and so
 does a file that changes later; uncheck what should wait.
-
-Changed diagram files are counted in the badge and picked for the commit
-but have no row yet, so they cannot be unchecked here (#156).
 
 The commit message is required. It starts as a suggestion for the picked
 files (`src/changes/message.ts`), for example:

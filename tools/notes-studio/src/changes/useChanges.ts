@@ -3,13 +3,13 @@ import type { ChangesClient, Changes, History } from '../api/changes';
 import type { createFilesClient } from '../api/files';
 
 const SETTLE_MS = 300;
-const WATCHED = ['content/notes/', 'public/notes/'];
+const WATCHED = ['content/notes/', 'public/notes/', 'diagrams/'];
 
 // The worktree's changes and the change request's commits. The changes load
-// again when a note, meta.yaml or asset changes on disk; both load again when
-// the window comes back (a commit made in a terminal) and on `reload` (after
-// a commit), since a file event cannot add a commit. Loads run one at a
-// time, in order; a burst of file events settles into one.
+// again when a note, meta.yaml, asset or diagram changes on disk; both load
+// again when the window comes back (a commit made in a terminal) and on
+// `reload` (after a commit), since a file event cannot add a commit. Loads
+// run one at a time, in order; a burst of file events settles into one.
 export function useChanges(client: ChangesClient, files: ReturnType<typeof createFilesClient>) {
   const [changes, setChanges] = useState<Changes | null>(null);
   const [history, setHistory] = useState<History | null>(null);

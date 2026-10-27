@@ -163,6 +163,7 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
   const blocked = busy ? 'Committing…' : blockedBy({ branch: changes.branch, unsaved, picked: picked.length, message });
   const pages = files.filter((file) => file.path.startsWith('content/'));
   const assets = files.filter((file) => file.path.startsWith('public/'));
+  const diagrams = files.filter((file) => classifyPath(file.path) === 'diagram');
 
   const toggle = (paths: string[], pick: boolean) => {
     setResult(null);
@@ -246,6 +247,8 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
           <FileGroup name="Pages" files={pages} excluded={excluded} titles={titles} readOnly={readOnly} current={current} onOpen={onOpen}
             onToggle={(path, pick) => { toggle([path], pick); }} onToggleAll={(group, pick) => { toggle(group.map((file) => file.path), pick); }} />
           <FileGroup name="Assets" files={assets} excluded={excluded} titles={titles} readOnly={readOnly} current={current} onOpen={onOpen}
+            onToggle={(path, pick) => { toggle([path], pick); }} onToggleAll={(group, pick) => { toggle(group.map((file) => file.path), pick); }} />
+          <FileGroup name="Diagrams" files={diagrams} excluded={excluded} titles={titles} readOnly={readOnly} current={current} onOpen={onOpen}
             onToggle={(path, pick) => { toggle([path], pick); }} onToggleAll={(group, pick) => { toggle(group.map((file) => file.path), pick); }} />
         </>
       )}
