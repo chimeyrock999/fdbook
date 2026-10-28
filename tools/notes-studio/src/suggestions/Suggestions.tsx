@@ -21,6 +21,7 @@ export type NoteReview = {
   proposals: ProposalView[];
   comments: NoteComment[];
   act: (id: string, op: ProposalOp, hunks?: string[]) => Promise<void>;
+  resolveComment?: (id: string) => Promise<void>;
 };
 
 const VERBS: Record<ProposalOp, string> = { accept: 'Accepting', reject: 'Rejecting', rebase: 'Rebasing', drop: 'Dropping' };
@@ -145,7 +146,7 @@ function Card({ hunk, index, total, readOnly, decisions }: { hunk: PlacedHunk; i
   );
 }
 
-function Bubble({ comment }: { comment: NoteComment }) {
+function Bubble({ comment, readOnly, onResolve }: { comment: NoteComment; readOnly: boolean; onResolve: (id: string) => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const who = comment.by.kind === 'run' ? agentName(comment.by.agent) : (comment.by.login ?? 'You');
   return (
@@ -153,14 +154,14 @@ function Bubble({ comment }: { comment: NoteComment }) {
       <button type="button" className="studio-suggest-icon" aria-expanded={open} aria-label={`Comment from ${who}`} onClick={() => { setOpen(!open); }}>
         <MessageSquare size={13} aria-hidden />
       </button>
-      {open && <div className="studio-suggest-comment-pop" role="note"><strong>{who}</strong><p>{comment.body}</p></div>}
+      {open && <div className="studio-suggest-comment-pop" role="note"><strong>{who}</strong><p>{comment.body}</p>{!readOnly && <PendingButton className="studio-button" pending={false} pendingLabel="Resolving…" onClick={() => { void onResolve(comment.id); }}>Resolve feedback</PendingButton>}</div>}
     </>
   );
 }
 
 // The cards and comment bubbles, drawn into the elements the editor plugin
 // placed (visual.ts), and the plugin told where they go.
-export function VisualSuggestions({ layer, placement, focus, readOnly, decisions }: { layer: SuggestionLayer; placement: Placement; focus: string | null; readOnly: boolean; decisions: Decisions }) {
+export function VisualSuggestions({ layer, placement, focus, readOnly, decisions, onResolveComment }: { layer: SuggestionLayer; placement: Placement; focus: string | null; readOnly: boolean; decisions: Decisions; onResolveComment: (id: string) => Promise<void> }) {
   const placedComments = placement.comments.filter((each): each is { comment: NoteComment; block: number } => each.block !== null);
   const marks: VisualMarks = {
     hunks: placement.hunks.map((hunk) => ({ key: hunk.key, first: hunk.first, count: hunk.count, stale: hunk.stale, focus: hunk.key === focus })),
@@ -175,7 +176,7 @@ export function VisualSuggestions({ layer, placement, focus, readOnly, decisions
   const portals: ReactNode[] = placement.hunks.map((hunk, index) =>
     createPortal(<Card hunk={hunk} index={index + 1} total={placement.hunks.length} readOnly={readOnly} decisions={decisions} />, layer.element(hunk.key, 'studio-suggest-card'), hunk.key),
   );
-  for (const { comment } of placedComments) portals.push(createPortal(<Bubble comment={comment} />, layer.element(`c:${comment.id}`, 'studio-suggest-comment'), comment.id));
+  for (const { comment } of placedComments) portals.push(createPortal(<Bubble comment={comment} readOnly={readOnly} onResolve={onResolveComment} />, layer.element(`c:${comment.id}`, 'studio-suggest-comment'), comment.id));
   return <>{portals}</>;
 }
 

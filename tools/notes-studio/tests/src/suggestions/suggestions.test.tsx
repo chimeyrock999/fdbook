@@ -59,8 +59,9 @@ describe('placeAll', () => {
   });
 });
 
-function review(proposals: ProposalView[], act = vi.fn(() => Promise.resolve())): NoteReview & { act: typeof act } {
-  return { proposals, comments: [], act };
+function review(proposals: ProposalView[], act = vi.fn(() => Promise.resolve())): NoteReview & { act: typeof act; resolveComment: ReturnType<typeof vi.fn> } {
+  const resolveComment = vi.fn(() => Promise.resolve());
+  return { proposals, comments: [], act, resolveComment };
 }
 
 // The bar over `text`, deciding as NoteEditor does.
@@ -138,7 +139,7 @@ function Layer({ container, text, decide }: { container: RefObject<HTMLElement |
   const layer = useMemo(createSuggestionLayer, []);
   useEditorPlugin(container, layer.plugin);
   const { placement, focus, decisions } = useNoteSuggestions(decide, text);
-  return <VisualSuggestions layer={layer} placement={placement} focus={focus} readOnly={false} decisions={decisions} />;
+  return <VisualSuggestions layer={layer} placement={placement} focus={focus} readOnly={false} decisions={decisions} onResolveComment={decide.resolveComment ?? (() => Promise.reject(new Error('feedback cannot be resolved here')))} />;
 }
 
 describe('suggestions in Visual', () => {
@@ -159,7 +160,11 @@ describe('suggestions in Visual', () => {
     expect(card.querySelector('strong')?.textContent).toBe('rewritten');
     // The card sits right after the block it replaces.
     expect(prose.querySelector('.studio-suggest-removed')?.nextElementSibling).toBe(card);
-    expect(prose.querySelector('.studio-suggest-comment button')?.getAttribute('aria-label')).toBe('Comment from Codex');
+    const commentUi = within(prose.querySelector('.studio-suggest-comment') as HTMLElement);
+    const commentButton = commentUi.getByRole('button', { name: 'Comment from Codex' });
+    await act(async () => { commentButton.click(); await Promise.resolve(); });
+    await act(async () => { commentUi.getByRole('button', { name: 'Resolve feedback' }).click(); await Promise.resolve(); });
+    expect(decide.resolveComment).toHaveBeenCalledWith('c9');
     await act(async () => { within(card).getByRole('button', { name: 'Accept suggestion' }).click(); await Promise.resolve(); });
     expect(decide.act).toHaveBeenCalledWith('p1', 'accept', ['1']);
   });

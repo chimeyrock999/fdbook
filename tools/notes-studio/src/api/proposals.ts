@@ -23,6 +23,9 @@ export function createProposalsClient(base = API_BASE) {
     async comments(): Promise<NoteComment[]> {
       return (await answer<{ comments: NoteComment[] }>(await studioFetch(`${base}/api/comments`))).comments;
     },
+    async resolveComment(id: string): Promise<void> {
+      await answer<{ ok: true }>(await studioFetch(`${base}/api/comments/${id}`, { method: 'DELETE' }));
+    },
     // `hunks`: the ones to decide; all undecided ones without.
     async act(id: string, op: ProposalOp, hunks?: string[]): Promise<ProposalView> {
       const response = await studioFetch(`${base}/api/proposals/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op, hunks }) });
@@ -32,10 +35,11 @@ export function createProposalsClient(base = API_BASE) {
     // connect, so the caller reads again what changed while it was down.
     // Comments come as `comment` events. The stream opens again after a
     // drop, under the page's connection watch (connection.ts).
-    subscribe(listener: (proposal: ProposalView) => void, onOpen: () => void = () => undefined, onComment: (comment: NoteComment) => void = () => undefined): () => void {
+    subscribe(listener: (proposal: ProposalView) => void, onOpen: () => void = () => undefined, onComment: (comment: NoteComment) => void = () => undefined, onCommentResolved: (comment: { id: string }) => void = () => undefined): () => void {
       return watchEvents(`${base}/api/proposals/events`, (events) => {
         events.onmessage = (message: MessageEvent<string>) => { listener(JSON.parse(message.data) as ProposalView); };
         events.addEventListener('comment', (message: MessageEvent<string>) => { onComment(JSON.parse(message.data) as NoteComment); });
+        events.addEventListener('comment-resolved', (message: MessageEvent<string>) => { onCommentResolved(JSON.parse(message.data) as { id: string }); });
       }, onOpen);
     },
   };

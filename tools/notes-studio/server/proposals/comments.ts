@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { appendFile, mkdir, readFile, rm } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { createKeyedLock } from '../files/store.ts';
 import type { ProposalAuthor } from './shared.ts';
@@ -20,7 +20,7 @@ const MAX_BODY = 10_000;
 
 // The comments of one change request, one JSON line each in `file`,
 // outside its worktree.
-export function createComments(file: string, onAdd?: (comment: NoteComment) => void) {
+export function createComments(file: string, onAdd?: (comment: NoteComment) => void, onResolve?: (id: string) => void) {
   const lock = createKeyedLock();
   const read = async (): Promise<NoteComment[]> => {
     const text = await readFile(file, 'utf8').catch(() => '');
@@ -45,6 +45,14 @@ export function createComments(file: string, onAdd?: (comment: NoteComment) => v
         await appendFile(file, `${JSON.stringify(stored)}\n`);
         onAdd?.(stored);
         return stored;
+      });
+    },
+    resolve(id: string) {
+      return lock('append', async () => {
+        const comments = await read();
+        if (!comments.some((comment) => comment.id === id)) throw new Error('no such comment');
+        await writeFile(file, `${comments.filter((comment) => comment.id !== id).map((comment) => JSON.stringify(comment)).join('\n')}\n`);
+        onResolve?.(id);
       });
     },
     remove: () => rm(file, { force: true }),

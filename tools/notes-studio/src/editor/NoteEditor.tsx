@@ -242,7 +242,7 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
                 reveal={field}
               />
               <MdxEditor.Visual className="studio-prose notes-prose" />
-              {review !== null && <VisualSuggestions layer={layer} placement={suggestions.placement} focus={suggestions.focus} readOnly={!canDecide} decisions={suggestions.decisions} />}
+              {review !== null && <VisualSuggestions layer={layer} placement={suggestions.placement} focus={suggestions.focus} readOnly={!canDecide} decisions={suggestions.decisions} onResolveComment={review.resolveComment ?? (() => Promise.reject(new Error('feedback cannot be resolved here')))} />}
               <GraphTools container={editor} graph={frontmatter.status === 'ok' ? frontmatter.data.graph : undefined} />
             </div>
           </div>

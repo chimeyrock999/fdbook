@@ -33,8 +33,15 @@ export function useProposals(client: ProposalsClient, inCr: boolean) {
     if (!inCr) return undefined;
     return client.subscribe(merge, () => { void reload(); }, (comment) => {
       setComments((current) => (current.some((each) => each.id === comment.id) ? current : [...current, comment]));
+    }, ({ id }) => {
+      setComments((current) => current.filter((comment) => comment.id !== id));
     });
   }, [client, inCr, merge, reload]);
+
+  const resolveComment = useCallback(async (id: string) => {
+    await client.resolveComment(id);
+    setComments((current) => current.filter((comment) => comment.id !== id));
+  }, [client]);
 
   const act = useCallback(async (id: string, op: ProposalOp, hunks?: string[]) => {
     merge(await client.act(id, op, hunks));
@@ -55,6 +62,7 @@ export function useProposals(client: ProposalsClient, inCr: boolean) {
     comments,
     counts,
     act,
+    resolveComment,
   };
 }
 

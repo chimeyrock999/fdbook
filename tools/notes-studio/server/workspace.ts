@@ -88,7 +88,7 @@ export function createWorkspace(
     const stream = createProposalStream();
     review = {
       stream,
-      comments: createComments(commentsFileOf(agents.home, agents.slug), stream.sendComment),
+      comments: createComments(commentsFileOf(agents.home, agents.slug), stream.sendComment, stream.sendCommentResolved),
       proposals: createProposals(root, {
         dir: proposalsDirOf(agents.home, agents.slug),
         notesLock,
