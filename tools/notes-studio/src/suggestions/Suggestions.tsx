@@ -2,7 +2,7 @@ import { Check, ChevronLeft, ChevronRight, MessageSquare, X } from 'lucide-react
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AGENT_NAMES, type AgentId } from '../../server/agents/shared';
-import { useShownAfter } from '../actions/busy';
+import { useBusy, useShownAfter } from '../actions/busy';
 import { PendingButton, Spinner } from '../actions/PendingButton';
 import { AgentLogo } from '../agents/AgentLogo';
 import type { NoteComment, ProposalOp, ProposalView } from '../api/proposals';
@@ -21,7 +21,7 @@ export type NoteReview = {
   proposals: ProposalView[];
   comments: NoteComment[];
   act: (id: string, op: ProposalOp, hunks?: string[]) => Promise<void>;
-  resolveComment?: (id: string) => Promise<void>;
+  resolveComment: (id: string) => Promise<void>;
 };
 
 const VERBS: Record<ProposalOp, string> = { accept: 'Accepting', reject: 'Rejecting', rebase: 'Rebasing', drop: 'Dropping' };
@@ -148,13 +148,14 @@ function Card({ hunk, index, total, readOnly, decisions }: { hunk: PlacedHunk; i
 
 function Bubble({ comment, readOnly, onResolve }: { comment: NoteComment; readOnly: boolean; onResolve: (id: string) => Promise<void> }) {
   const [open, setOpen] = useState(false);
+  const action = useBusy();
   const who = comment.by.kind === 'run' ? agentName(comment.by.agent) : (comment.by.login ?? 'You');
   return (
     <>
       <button type="button" className="studio-suggest-icon" aria-expanded={open} aria-label={`Comment from ${who}`} onClick={() => { setOpen(!open); }}>
         <MessageSquare size={13} aria-hidden />
       </button>
-      {open && <div className="studio-suggest-comment-pop" role="note"><strong>{who}</strong><p>{comment.body}</p>{!readOnly && <PendingButton className="studio-button" pending={false} pendingLabel="Resolving…" onClick={() => { void onResolve(comment.id); }}>Resolve feedback</PendingButton>}</div>}
+      {open && <div className="studio-suggest-comment-pop" role="note"><strong>{who}</strong><p>{comment.body}</p>{!readOnly && <PendingButton className="studio-button" pending={action.busy} pendingLabel="Resolving…" disabled={action.busy} onClick={() => { void action.run(() => onResolve(comment.id)); }}>Resolve feedback</PendingButton>}</div>}
     </>
   );
 }

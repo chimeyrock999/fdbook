@@ -61,6 +61,7 @@ const COMMENT = /^\/api\/comments\/([a-z0-9-]+)$/;
 // POST /api/proposals/<id> { op: accept | reject | rebase | drop, hunks? }
 // GET  /api/proposals/events     server-sent events (createProposalStream)
 // GET  /api/comments[?path=…]
+// DELETE /api/comments/<id>     resolves it: gone, as a `comment-resolved` event
 export function createProposalsApi(state: { proposals: Proposals; comments: Comments; stream: ProposalStream } | null): Handler {
   async function answer(pathname: string, request: Parameters<Handler>[0]): Promise<unknown> {
     if (state === null) throw new HttpError(409, NO_CR);
