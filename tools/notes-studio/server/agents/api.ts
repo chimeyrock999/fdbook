@@ -30,7 +30,9 @@ const LIST = '/api/agents/conversations';
 const ONE = /^\/api\/agents\/conversations\/([a-z0-9-]+)(?:\/(messages|cancel|permissions\/([a-f0-9]+)|turns\/([1-9][0-9]*)\/changes(\/before)?))?$/;
 
 // The conversations of one worktree (conversations.ts), or null where
-// agents may not work (main):
+// agents may not work (a Studio without change requests). `prepare` runs
+// before each turn starts (on main: a fresh copy for its agents).
+// On main every route answers alike, but Keep/Revert (nothing to keep):
 // GET    /api/agents/conversations                         every one, last active first
 // POST   /api/agents/conversations { agent, role, prompt, context? } starts one
 // GET    /api/agents/conversations/<id>                    its summary and events
@@ -42,7 +44,7 @@ const ONE = /^\/api\/agents\/conversations\/([a-z0-9-]+)(?:\/(messages|cancel|pe
 // POST   /api/agents/conversations/<id>/turns/<n>/changes { path, op: keep | revert }
 // GET    /api/agents/conversations/<id>/turns/<n>/changes/before?path=…  what the file held before it
 // GET    /api/agents/events                                server-sent events of every conversation
-export function createAgentConversationsApi(conversations: AgentConversations | null): Handler {
+export function createAgentConversationsApi(conversations: AgentConversations | null, prepare: () => Promise<unknown> = () => Promise.resolve()): Handler {
   async function answer(pathname: string, request: Parameters<Handler>[0]): Promise<unknown> {
     if (conversations === null) throw new HttpError(409, NO_CR);
     const by = viewerOf(request).user?.login ?? null;
@@ -51,6 +53,7 @@ export function createAgentConversationsApi(conversations: AgentConversations | 
       if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
       const body = await readJsonObject(request, MAX_BODY_BYTES, 'a conversation');
       const context = await conversations.context(body.context);
+      await prepare();
       return { conversation: conversations.start({ agent: body.agent, role: body.role, prompt: body.prompt, by, context }) };
     }
     const match = ONE.exec(pathname);
@@ -77,7 +80,9 @@ export function createAgentConversationsApi(conversations: AgentConversations | 
     if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
     if (action === 'messages') {
       const body = await readJsonObject(request, MAX_BODY_BYTES, 'a message');
-      return { conversation: await conversations.message(id, body.prompt, by, await conversations.context(body.context)) };
+      const context = await conversations.context(body.context);
+      await prepare();
+      return { conversation: await conversations.message(id, body.prompt, by, context) };
     }
     const body = await readJsonObject(request, MAX_BODY_BYTES, action === 'cancel' ? 'a cancel' : 'an answer');
     if (action === 'cancel') conversations.cancel(id);

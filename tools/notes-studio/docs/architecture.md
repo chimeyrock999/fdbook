@@ -299,7 +299,7 @@ A flow that is not enabled answers `404`.
 | Endpoint | What it does |
 | --- | --- |
 | `GET /api/agents` | The agents this Studio knows and whether each can run: `{ agents }` |
-| `GET /api/agents/totals` | Each change request's chats and cost: `{ totals }` |
+| `GET /api/agents/totals` | Each change request's chats and cost (main's under `_main`): `{ totals }` |
 | `GET`, `POST /api/agents/conversations` | Every chat, last active first; `POST { agent, role, prompt, context? }` starts one |
 | `GET`, `DELETE /api/agents/conversations/<id>` | Its summary and events; deletes it (not during a turn) |
 | `POST /api/agents/conversations/<id>/messages` | `{ prompt, context? }`: its next turn |
@@ -318,10 +318,11 @@ A flow that is not enabled answers `404`.
 | `POST /api/mcp` | The MCP server, Streamable HTTP, stateless (see [MCP server](#mcp-server)). `GET` and `DELETE` answer `405`. |
 | `POST`, `DELETE /api/mcp/tokens` | With sign-in on, makes an agent token for the signed-in person (`{ token }`), or ends all of theirs; any role, with the csrf header. Sign-in off answers `409`. |
 
-Agent chats, proposals and comments answer `409` on main to reads and event
-streams. Their writes (starting a chat, a message, a cancel, an answer, an
-attachment, a proposal decision) never get there: main answers `403` to
-every write but `POST /api/lint` first.
+Proposals and comments answer `409` on main to reads and event streams,
+and their writes never get there: main answers `403` to every write but
+`POST /api/lint` and the agent routes first. Agent chats work on main, read
+only (see [Agents](#agents)); their Keep/Revert routes answer `409` to a
+read and `403` to a decision.
 
 ### Under a change request
 
@@ -472,6 +473,27 @@ agent is started in the change request's worktree without the Studio's own
 | omp | `omp acp` | its own permission prompts |
 | Hermes Agent | `hermes acp` | the toolsets in your `~/.hermes/config.yaml` |
 
+- **On main** (`main-only.ts`). A chat on main may pick either role, but
+  every agent runs fenced as a reviewer (its tools, ACP writes, the
+  questions it asks, its MCP token), whatever it was told. It runs in
+  `worktrees/_main-agents`, a detached worktree that `cr/manager.ts` checks
+  out at `_main`'s commit and cleans (`git clean -dfx`) before a turn
+  starts while no other turn on main runs (the chats share it), so even
+  omp or Hermes, whose own tools may write without asking, leave `_main`
+  and every branch as they were. A message's context is checked against
+  `_main` itself. A turn on main lists no changed
+  files and has nothing to keep or revert. After each message the Studio
+  adds one line saying the chat is on main and how to hand work on: an
+  agent there gets `create_cr { name, brief }` (`server/mcp/handoff.ts`),
+  once per message, which opens a change request and starts an author chat
+  there with the same agent, for the person who sent the message, its
+  brief as the first message (`from` on that turn names the chat on main).
+  The chat on main records a `handoff` event with the slug and the link
+  (`/?cr=<slug>&chat=<id>`; `?chat=` opens a chat in the panel), also when
+  the chat there could not start (then `chat` is null and the link opens
+  the change request). Only the routes of a chat write on main (start,
+  message, cancel, answer, delete, attachment): `server/workspace.ts`
+  lists them.
 - **Roles.** A reviewer only reads: whatever it asks for beyond reading
   (`read`, `search`, `fetch`, `think` tool calls), the Studio refuses
   without asking, whichever the agent. omp and Hermes cannot be held to
@@ -545,7 +567,7 @@ the chats the Studio starts and your own agents in a terminal (see
 | Tool | Access | What it does |
 | --- | --- | --- |
 | `list_crs` | read | The change requests (a person's agent only: a chat's agent works in its own) |
-| `create_cr` | write | A new change request (a person's agent only) |
+| `create_cr` | write | A new change request (a person's agent). A chat's agent on main gets it with a `brief`: it opens the change request and starts an author chat there, answering `{ slug, name, branch, url, conversationId }`, once per message (see [Agents](#agents)) |
 | `list_notes` | read | Every note: path, title, description, tags, keywords |
 | `read_note` | read | A note's text, its top-level blocks (index, line, first line) and the proposals waiting on it |
 | `search_notes` | read | Notes with every word of the query in their title, description, tags or text, with up to 3 matching lines each (20 notes by default, at most 50) |
@@ -589,7 +611,9 @@ the chats the Studio starts and your own agents in a terminal (see
   `diagram-tools.ts` hold the tools; `studio-server.ts` mounts them
   together. `list_crs` and `create_cr` are the exception: they take no
   change request, so they are `crTools` in `server/mcp/http.ts`, left out
-  of a chat's `tools/list` and refused to it.
+  of a chat's `tools/list` and refused to it, but for `create_cr` with a
+  brief to a chat on main. A chat on main reads main with the read tools;
+  every write tool tells it to call `create_cr`.
 
 ## Proposals
 

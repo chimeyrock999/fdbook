@@ -29,12 +29,18 @@ import { createTreeApi } from './tree/api.ts';
 // Methods that change nothing, and the one POST that writes nothing.
 const READS = new Set(['GET', 'HEAD']);
 const READ_ONLY_POSTS = new Set(['/api/lint']);
+// What an agent chat on main writes: a chat, a message, a cancel, an
+// answer, its deletion, an attachment. Never Keep/Revert.
+const AGENT_CHAT_WRITES = /^\/api\/agents\/(?:attachments|conversations(?:\/[a-z0-9-]+(?:\/(?:messages|cancel|permissions\/[a-f0-9]+))?)?)$/;
 
 // Refuses every write to a read-only worktree (main), before a handler
-// sees it: the UI hides the writes, this is what stops them.
+// sees it: the UI hides the writes, this is what stops them. Its agent
+// chats write only their transcripts, outside the worktree, and their
+// agents run in a copy of it (agents/main-only.ts).
 const refuseWrites: Handler = (request, response) => {
   const pathname = pathnameOf(request);
   if (READS.has(request.method ?? 'GET') || READ_ONLY_POSTS.has(pathname) || !pathname.startsWith('/api/')) return Promise.resolve(false);
+  if (AGENT_CHAT_WRITES.test(pathname)) return Promise.resolve(false);
   sendJson(response, 403, { error: 'main is read only: edit in a change request' });
   return Promise.resolve(true);
 };
@@ -48,18 +54,22 @@ const defaultPreview = (): PreviewOptions => ({ builds: createBuildReader(ghChec
 // the Studio home, where the change request's proposals and comments are kept.
 export type WorkspaceAgents = Omit<AgentConversationsOptions, 'slug'> & { home: string };
 
+// Main's agents: where they run instead of the worktree (a copy of it),
+// and what makes that copy fresh before each turn (cr/manager.ts).
+export type MainAgents = { root: string; prepare: () => Promise<unknown> };
+
 // Where a change request's proposals and comments are kept, outside its worktree.
 export const proposalsDirOf = (home: string, slug: string) => join(home, 'proposals', slug);
 export const commentsFileOf = (home: string, slug: string) => join(home, 'comments', `${slug}.jsonl`);
 
 // The handlers of one worktree: file API and events, lint, page tree,
 // assets, changes (git status, commit, history), page history, preview (push, build, publish),
-// agent conversations, and the notes sync socket. Agents work only with `agents`: in a
-// change request, never on main.
+// agent conversations, and the notes sync socket. Agents work only with `agents`; on
+// main (`readOnly`) only with `mainAgents` too, and only read there.
 export function createWorkspace(
   root: string,
   hosts: string[],
-  { readOnly = false, preview = defaultPreview(), agents = null }: { readOnly?: boolean; preview?: PreviewOptions; agents?: (AgentConversationsOptions & { home: string }) | null } = {},
+  { readOnly = false, preview = defaultPreview(), agents = null, mainAgents = null }: { readOnly?: boolean; preview?: PreviewOptions; agents?: (AgentConversationsOptions & { home: string }) | null; mainAgents?: MainAgents | null } = {},
 ) {
   // Tree and asset changes both write notes: one at a time. A commit waits
   // for them too, so it never takes half of a rename. The lock is this
@@ -71,15 +81,18 @@ export function createWorkspace(
   const sync = createNotesSync(root, hosts, { readOnly });
   // A change request's proposals and comments, and the stream of their changes.
   let review: { proposals: Proposals; comments: Comments; stream: ProposalStream } | null = null;
-  const attachments = agents === null || readOnly ? null : createAttachments(agents.home);
-  const conversations = agents === null || readOnly
+  const runs = agents !== null && (!readOnly || mainAgents !== null);
+  const attachments = agents === null || !runs ? null : createAttachments(agents.home);
+  const conversations = agents === null || !runs
     ? null
-    : createAgentConversations(root, {
+    : createAgentConversations(readOnly && mainAgents !== null ? mainAgents.root : root, {
       ...agents,
       attachments,
+      readOnly,
+      contextRoot: root,
       lock: notesLock,
       pathLock,
-      propose: ({ path, content, runId, agent, model }) => {
+      propose: readOnly ? null : ({ path, content, runId, agent, model }) => {
         if (review === null) return Promise.reject(new Error('no proposals here'));
         return review.proposals.propose({ path, content, by: { kind: 'run', runId, agent, model } });
       },
@@ -111,7 +124,8 @@ export function createWorkspace(
     createChangesApi(root, notesLock),
     createPageHistoryApi(root, notesLock),
     createPreviewApi(root, preview, { readOnly, lock: notesLock }),
-    createAgentConversationsApi(conversations),
+    // Main's copy is made fresh only while no turn there uses it.
+    createAgentConversationsApi(conversations, mainAgents === null ? undefined : () => (conversations?.answering() === true ? Promise.resolve() : mainAgents.prepare())),
     createAgentContextApi(root, agents?.slug ?? '', attachments),
     createProposalsApi(review),
   ];
@@ -123,12 +137,15 @@ export function createWorkspace(
     // The worktree's files for an MCP tool call (mcp/http.ts): under the
     // notes lock, and on the turn's Keep/Revert list when an agent writes
     // (a caller's `runId` is its conversation).
-    files: (caller: ToolCaller) => createStudioFiles(root, {
-      pathLock,
-      notesLock,
-      beforeWrite: caller.kind === 'run' && conversations !== null ? (path, previous) => { conversations.beforeWrite(caller.runId, path, previous); } : undefined,
-      afterWrite: caller.kind === 'run' && conversations !== null ? (path, content) => conversations.wrote(caller.runId, path, content) : undefined,
-    }),
+    files: (caller: ToolCaller) => {
+      const files = createStudioFiles(root, {
+        pathLock,
+        notesLock,
+        beforeWrite: caller.kind === 'run' && conversations !== null ? (path, previous) => { conversations.beforeWrite(caller.runId, path, previous); } : undefined,
+        afterWrite: caller.kind === 'run' && conversations !== null ? (path, content) => conversations.wrote(caller.runId, path, content) : undefined,
+      });
+      return readOnly ? { ...files, write: () => Promise.reject(new Error('main is read only: edit in a change request')) } : files;
+    },
     handleUpgrade: (request: IncomingMessage, socket: Duplex, head: Buffer) => {
       sync.handleUpgrade(request, socket, head);
     },

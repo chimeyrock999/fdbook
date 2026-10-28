@@ -40,7 +40,7 @@ export function rankMentions(paths: string[], query: string, max = MENTIONS_MAX)
 // What a message can carry, for one change request's worktree:
 // GET  /api/agents/mentions?q=…   notes, assets and other files to mention
 // POST /api/agents/attachments    a document (the body; its name in X-File-Name, URI-encoded)
-// Null `attachments`: agents may not work here (main).
+// Null `attachments`: agents may not work here (a Studio without change requests).
 export function createAgentContextApi(root: string, slug: string, attachments: Attachments | null): Handler {
   let listing: { at: number; files: Promise<string[]> } | null = null;
   const files = () => {

@@ -15,6 +15,7 @@ import { sentIn, type Attachments } from './attachments.ts';
 import { connectAgent, type AgentHooks, type AgentSession } from './connection.ts';
 import { contextOf, promptWith } from './context.ts';
 import { writeForAgent } from './fs-policy.ts';
+import { fencedRole, mainNote, refuseChanges } from './main-only.ts';
 import type { AgentProfile } from './profiles.ts';
 import { IDLE_MS, idlest, MAX_LIVE_AGENTS } from './sessions.ts';
 import { PERMISSION_TIMEOUT_MS, summaryOf, type Conversation, type ConversationEvent, type ConversationRead, type Cost, type MessageContext, type PermissionAsk, type StreamEvent, type TurnEnd } from './shared.ts';
@@ -44,8 +45,9 @@ type Turn = {
   answered: boolean;
   costBefore: number;
   cost: Cost | null;
-  // What went with its message (context.ts).
+  // What went with its message (context.ts), and who sent it.
   context: MessageContext | null;
+  by: string | null;
 };
 // A conversation held in memory: while its process is up or a turn runs.
 // `reported`: the cost the process reported last (it adds up over its
@@ -126,6 +128,10 @@ export type AgentConversationsOptions = {
   propose?: ((input: { path: string; content: string; runId: string; agent: string; model: string | null }) => Promise<unknown>) | null;
   // Documents attached to messages (attachments.ts); none without it.
   attachments?: Attachments | null;
+  // Main (main-only.ts): every agent fenced as a reviewer, no file listed
+  // as changed, nothing to keep or revert; context checked in `contextRoot`.
+  readOnly?: boolean;
+  contextRoot?: string;
 };
 
 // A message's context, checked (context.ts), with its attachments' files.
@@ -138,7 +144,7 @@ export type GivenContext = { context: MessageContext; attached: AttachedFile[] }
 // transcript and to every open event stream (GET /api/agents/events).
 export function createAgentConversations(
   root: string,
-  { slug, profiles, transcripts, lock = createKeyedLock(), pathLock = createKeyedLock(), permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, cancelGraceMs, mcp = null, propose = null, attachments = null }: AgentConversationsOptions,
+  { slug, profiles, transcripts, lock = createKeyedLock(), pathLock = createKeyedLock(), permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, cancelGraceMs, mcp = null, propose = null, attachments = null, readOnly = false, contextRoot = root }: AgentConversationsOptions,
 ) {
   const live = new Map<string, Live>();
   const streams = new Map<ServerResponse, Viewer>();
@@ -200,6 +206,7 @@ export function createAgentConversations(
   // Files the agent changed with its own tools: on the lists, and one
   // event for those new to the turn.
   const touched = (conversation: Live, paths: string[]) => {
+    if (readOnly) return;
     const fresh = listed(conversation, paths);
     if (fresh.length > 0) record(conversation, { type: 'changed', at: Date.now(), paths: fresh });
   };
@@ -238,7 +245,7 @@ export function createAgentConversations(
       record(conversation, { type: 'permission', at: Date.now(), ask: asked });
       // A reviewer reads: whatever else it asks for (an edit, a command, an
       // escalation out of its sandbox, a tool of no kind), the Studio says no.
-      if (conversation.summary.role === 'reviewer' && !READING_KINDS.has(request.toolCall.kind ?? '')) settle(conversation, asked.id, null, 'studio');
+      if (fencedRole(readOnly, conversation.summary.role) === 'reviewer' && !READING_KINDS.has(request.toolCall.kind ?? '')) settle(conversation, asked.id, null, 'studio');
     });
 
   const hooks = (conversation: Live): AgentHooks => ({
@@ -315,7 +322,8 @@ export function createAgentConversations(
   // Starts the conversation's agent process on its session, or a new one,
   // with a token for the Studio's MCP server that ends with the process.
   const connect = (conversation: Live) => {
-    const { id, role } = conversation.summary;
+    const { id } = conversation.summary;
+    const role = fencedRole(readOnly, conversation.summary.role);
     // Its token acts only while a turn goes on (mcp/grants.ts).
     const grant = mcp?.grants.issue({ slug, runId: id, agent: conversation.profile.id, role, active: () => conversation.turn !== null && !conversation.deleted }) ?? null;
     let agent: AgentSession;
@@ -359,7 +367,7 @@ export function createAgentConversations(
     const [start, end, committed] = await Promise.all([turn.before.catch(() => null), worktreeState(root).catch(() => null), turn.watch.committed()]);
     touched(conversation, [...new Set([...(start !== null && end !== null ? changedSince(start, end) : []), ...committed])].sort());
     // What the turn changed, with what each file held before, for Keep/Revert.
-    if (turn.writes.length > 0) {
+    if (turn.writes.length > 0 && !readOnly) {
       await turn.watch.settle(turn.writes).then((changes) => transcripts.writeChanges(slug, conversation.summary.id, turn.index, changes)).catch(() => undefined);
     }
     const now = Date.now();
@@ -375,15 +383,15 @@ export function createAgentConversations(
 
   // One turn: the message goes to the conversation's process, started (and
   // its session taken up again) when it is not up.
-  const turn = (conversation: Live, prompt: string, by: string | null, given: GivenContext) => {
+  const turn = (conversation: Live, prompt: string, by: string | null, given: GivenContext, from: string | null = null) => {
     clearTimeout(conversation.idle);
     const before = worktreeState(root);
     before.catch(() => undefined);
     conversation.turn = {
-      index: conversation.summary.turns + 1, before, watch: watchRun(root, before), writes: [], stopping: false, answered: false, costBefore: conversation.summary.cost?.amount ?? 0, cost: null, context: given?.context ?? null,
+      index: conversation.summary.turns + 1, before, watch: watchRun(root, before), writes: [], stopping: false, answered: false, costBefore: conversation.summary.cost?.amount ?? 0, cost: null, context: given?.context ?? null, by,
     };
     const now = Date.now();
-    record(conversation, given === null ? { type: 'turn', at: now, prompt, by } : { type: 'turn', at: now, prompt, by, context: given.context });
+    record(conversation, { type: 'turn', at: now, prompt, by, ...(given === null ? {} : { context: given.context }), ...(from === null ? {} : { from }) });
     changed(conversation, { status: 'running', error: null, endedMs: null, lastMs: now, turns: conversation.summary.turns + 1 });
     let agent = conversation.agent;
     try {
@@ -397,7 +405,8 @@ export function createAgentConversations(
     }
     conversation.base = conversation.reported;
     const current = conversation.turn;
-    conversation.ending = agent.prompt(promptWith(prompt, given?.context ?? null), current.watch.ready, given?.attached).then(
+    const sent = promptWith(prompt, given?.context ?? null) + (readOnly ? mainNote(conversation.summary.role) : '');
+    conversation.ending = agent.prompt(sent, current.watch.ready, given?.attached).then(
       (response) => {
         current.answered = true;
         return finish(conversation, current.stopping || response.stopReason === 'cancelled' ? 'cancelled' : 'done', null, response.usage ?? null);
@@ -470,10 +479,14 @@ export function createAgentConversations(
 
   return {
     // A message's context as sent (context.ts), checked against this worktree.
-    context: (value: unknown): Promise<GivenContext> => contextOf(value, root, slug, attachments),
+    context: (value: unknown): Promise<GivenContext> => contextOf(value, contextRoot, slug, attachments),
 
-    // A new conversation, with its first message.
-    start({ agent, role, prompt, by, context = null }: { agent: unknown; role: unknown; prompt: unknown; by: string | null; context?: GivenContext }): Conversation {
+    // Whether a turn goes on in any conversation here.
+    answering: () => [...live.values()].some((conversation) => conversation.turn !== null),
+
+    // A new conversation, with its first message. `from`: the chat on main
+    // it carries on from (mcp/handoff.ts).
+    start({ agent, role, prompt, by, context = null, from = null }: { agent: unknown; role: unknown; prompt: unknown; by: string | null; context?: GivenContext; from?: string | null }): Conversation {
       if (closed) throw new HttpError(409, 'this change request is closing');
       const profile = profileOf(agent);
       if (role !== 'author' && role !== 'reviewer') throw new HttpError(400, 'role must be author or reviewer');
@@ -487,7 +500,7 @@ export function createAgentConversations(
       const conversation: Live = { summary, events: [], count: 0, pending: new Map(), profile, agent: null, reported: 0, base: 0, turn: null, ending: Promise.resolve(), exiting: Promise.resolve(), drafts: new Map(), idle: undefined, deleted: false };
       live.set(summary.id, conversation);
       record(conversation, { type: 'start', at: now, conversation: summary });
-      turn(conversation, text, by, context);
+      turn(conversation, text, by, context, from);
       return conversation.summary;
     },
 
@@ -580,6 +593,19 @@ export function createAgentConversations(
       return context?.note == null || context.selection === null ? null : { path: context.note, lines: context.selection.lines, source: context.selection.source };
     },
 
+    // The turn going on: its number, its agent and who sent it; null between turns.
+    turnOf(id: string) {
+      const conversation = live.get(id);
+      const current = conversation?.turn ?? null;
+      return conversation === undefined || current === null || current.stopping ? null : { index: current.index, agent: conversation.profile.id, by: current.by };
+    },
+
+    // A change request a turn opened to carry the work on (mcp/handoff.ts).
+    handedOff(id: string, handoff: Omit<Extract<ConversationEvent, { type: 'handoff' }>, 'type' | 'at'>) {
+      const conversation = live.get(id);
+      if (conversation !== undefined) record(conversation, { type: 'handoff', at: Date.now(), ...handoff });
+    },
+
     // The model a conversation's agent says it runs (a proposal's author), or null.
     modelOf: (id: string) => live.get(id)?.summary.model ?? null,
 
@@ -597,9 +623,9 @@ export function createAgentConversations(
     savedByPerson,
 
     // Keep/Revert of an ended turn's changes (turn-changes.ts).
-    changes: (id: string, turn: number) => turnChanges.changes(id, turn),
-    before: (id: string, turn: number, path: string) => turnChanges.before(id, turn, path),
-    decide: (id: string, turn: number, path: string, op: unknown) => turnChanges.decide(id, turn, path, op),
+    changes: (id: string, turn: number) => (readOnly ? refuseChanges() : turnChanges.changes(id, turn)),
+    before: (id: string, turn: number, path: string) => (readOnly ? refuseChanges() : turnChanges.before(id, turn, path)),
+    decide: (id: string, turn: number, path: string, op: unknown) => (readOnly ? refuseChanges() : turnChanges.decide(id, turn, path, op)),
 
     // Deletes a conversation and its transcript, stopping its process. Not
     // while a turn runs. The agent's own record of the session stays.

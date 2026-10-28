@@ -189,12 +189,41 @@ describe('agent chat', () => {
     expect(screen.getByRole('button', { name: 'History' }).textContent.trim()).toBe('History');
   });
 
-  it('offers no chat on main, and only reading to someone who is not an admin', async () => {
+  it('chats on main read only, with no New note, and links the change request an agent opened from there (#167)', async () => {
+    const { client, emit } = fakeClient();
+    const user = userEvent.setup();
+    render(<Harness client={client} inCr={false} />);
+    expect(await screen.findByText(/^Read only on main\./)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'New note' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'New chat' })).toBeTruthy();
+    expect(screen.getByText(/on main the agent only reads, and opens a change request to make it/)).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Reviewer' }));
+    expect(screen.getByText('Ask for a review of what is on main: the agent reads and answers.')).toBeTruthy();
+    await user.type(screen.getByRole('textbox', { name: 'Message' }), 'Is the intro right?{Enter}');
+    expect(client.start).toHaveBeenCalledWith('codex', 'reviewer', 'Is the intro right?', null);
+    const started = summary({ id: 'new', role: 'reviewer' });
+    emit({ type: 'start', at: 0, conversation: started, conversationId: 'new' });
+    emit({ type: 'turn', at: 0, prompt: 'Is the intro right?', by: 'octocat', conversationId: 'new' });
+    emit({ type: 'handoff', at: 1, slug: 'fix-the-intro', name: 'Fix the intro', branch: 'cr/fix-the-intro', url: 'http://127.0.0.1/?cr=fix-the-intro&chat=c9', chat: 'c9', conversationId: 'new' });
+    const view = within(screen.getByRole('region', { name: 'Chat with Claude Code' }));
+    expect(view.getByText('Continued in a change request')).toBeTruthy();
+    expect(view.getByText('cr/fix-the-intro')).toBeTruthy();
+    expect(view.getByRole('link', { name: 'Open' }).getAttribute('href')).toBe('/?cr=fix-the-intro&chat=c9');
+  });
+
+  it('says which chat on main a change request\'s chat carries on from', async () => {
+    const { client, emit } = fakeClient();
+    render(<Harness client={client} />);
+    await screen.findByText('Claude Code', { selector: '.studio-agent-who' });
+    emit({ type: 'start', at: 0, conversation: summary({ id: 'c9' }), conversationId: 'c9' });
+    emit({ type: 'turn', at: 0, prompt: 'Fix the intro.', by: 'octocat', from: 'm1', conversationId: 'c9' });
+    const view = within(await screen.findByRole('region', { name: 'Chat with Claude Code' }));
+    expect(view.getByText(/Carried on from a chat on main/)).toBeTruthy();
+    expect(view.getByRole('link', { name: 'Open it' }).getAttribute('href')).toBe('/?chat=m1');
+  });
+
+  it('offers only reading to someone who is not an admin', async () => {
     const { client } = fakeClient([summary({ status: 'done' })]);
-    const { unmount } = render(<Harness client={client} inCr={false} />);
-    expect(await screen.findByText(/Agents work in a change request, never on main/)).toBeTruthy();
-    expect(client.subscribe).not.toHaveBeenCalled();
-    unmount();
     const user = userEvent.setup();
     render(<Harness client={client} canRun={false} />);
     expect(await screen.findByText(/Starting an agent needs admin access/)).toBeTruthy();

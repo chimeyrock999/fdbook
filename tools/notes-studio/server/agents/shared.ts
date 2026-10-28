@@ -127,8 +127,9 @@ export type ConversationEvent =
   // The summary changed: the model named, a cost reported, the process gone.
   | { type: 'summary'; at: number; conversation: Conversation }
   // A message from a person: a turn begins. `context`: what went with it
-  // (none on turns recorded before #86).
-  | { type: 'turn'; at: number; prompt: string; by: string | null; context?: MessageContext }
+  // (none on turns recorded before #86). `from`: the chat on main whose
+  // agent opened this change request and wrote this message.
+  | { type: 'turn'; at: number; prompt: string; by: string | null; context?: MessageContext; from?: string }
   // An agent process took up the session.
   | { type: 'session'; at: number; how: SessionStart; sessionId: string }
   | { type: 'update'; at: number; update: SessionUpdate }
@@ -140,6 +141,10 @@ export type ConversationEvent =
   | { type: 'changed'; at: number; paths: string[] }
   // An edit it proposed (propose_edit, or a write to a note): `hunks` wait for a person.
   | { type: 'proposal'; at: number; id: string; path: string; hunks: number }
+  // The agent opened a change request to carry the work on (on main):
+  // `url` opens `chat`, the author chat started there (null: it could not
+  // start, and `url` opens the change request).
+  | { type: 'handoff'; at: number; slug: string; name: string; branch: string; url: string; chat: string | null }
   // A turn ended.
   | { type: 'end'; at: number; conversation: Conversation; turn: TurnEnd };
 

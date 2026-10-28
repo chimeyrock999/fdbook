@@ -8,6 +8,7 @@ import { atLeast } from '../auth/shared.ts';
 import type { ChangeRequests } from '../cr/manager.ts';
 import { HttpError, pathnameOf, readBody, readJsonObject, sendJson, type Handler } from '../http.ts';
 import type { RunGrants } from './grants.ts';
+import type { Handoff } from './handoff.ts';
 import type { StudioFiles, StudioTool, ToolCaller, ToolResult } from './tool.ts';
 
 // A request body holds one JSON-RPC message: a proposal carries a whole note.
@@ -16,6 +17,7 @@ const MAIN = '_main';
 
 const INSTRUCTIONS = `Tools of the Notes Studio, for the notes under content/notes of one change request (CR).
 - Every note tool takes \`cr\`, the change request's slug; an agent the Studio started has its CR already. Main is read only and refused: use list_crs, or create_cr for a new one.
+- An agent the Studio started on main reads main with the tools that read, and edits nothing. When a change is needed it calls create_cr with a name and a brief: the Studio opens a change request and starts an author chat there with the brief; the answer has its slug and url.
 - Edits go through propose_edit: they are not written, but shown to a person as suggestions to accept or reject. Read a note with read_note first.
 - A reviewer reads and comments (add_comment); it does not propose.
 - A message from the Studio may end with the context it adds: the note open in the editor, the lines selected there (edit those), mentioned files and attached documents.`;
@@ -34,6 +36,8 @@ export type McpHostOptions = {
   auth: Pick<Auth, 'enabled' | 'viewerOfAgentToken' | 'issueAgentToken' | 'clearAgentTokens'>;
   crs: ChangeRequests | null;
   workspace: (slug: string) => Promise<McpWorkspace | null>;
+  // create_cr for an agent on main (handoff.ts); null: it may not.
+  handoff?: Handoff | null;
 };
 
 // The caller, and the change request it is held to (a run's own).
@@ -72,7 +76,7 @@ const mayUse = (caller: ToolCaller, access: StudioTool['access']) =>
 // in one change request and never on main; files go through the path policy.
 // POST /api/mcp/tokens makes an agent token for the signed-in person,
 // DELETE ends them all.
-export function createMcpApi({ tools, grants, auth, crs, workspace }: McpHostOptions): Handler {
+export function createMcpApi({ tools, grants, auth, crs, workspace, handoff = null }: McpHostOptions): Handler {
   async function whoIs(request: IncomingMessage): Promise<Who> {
     const header = request.headers.authorization ?? '';
     const token = /^Bearer\s+(\S+)$/i.exec(header)?.[1] ?? null;
@@ -93,13 +97,17 @@ export function createMcpApi({ tools, grants, auth, crs, workspace }: McpHostOpt
     return { caller: { kind: 'person', login: null, role: 'admin' }, slug: null };
   }
 
+  // An agent the Studio started on main: it reads main, and create_cr hands its work to a change request.
+  const onMain = (who: Who) => who.caller.kind === 'run' && who.slug === MAIN;
+
   // The change request a call works in: the run's own, else the one named.
+  // An agent on main works on main, which its role (a reviewer) keeps to reading.
   async function crOf(who: Who, given: unknown) {
     if (given !== undefined && typeof given !== 'string') throw new ToolError('cr must be a change request\'s slug');
-    if (who.slug !== null && given !== undefined && given !== who.slug) throw new ToolError(`this agent works in the change request ${who.slug} only`);
+    if (who.slug !== null && given !== undefined && given !== who.slug && !(onMain(who) && given === 'main')) throw new ToolError(`this agent works in ${who.slug === MAIN ? 'main' : `the change request ${who.slug}`} only`);
     const slug = who.slug ?? given;
     if (slug === undefined || slug === '') throw new ToolError('name the change request: cr (list_crs lists them; main is read only)');
-    if (slug === MAIN || slug === 'main') throw new ToolError('main is read only: work in a change request (list_crs, create_cr)');
+    if ((slug === MAIN || slug === 'main') && !onMain(who)) throw new ToolError('main is read only: work in a change request (list_crs, create_cr)');
     const found = await workspace(slug);
     if (found === null) throw new ToolError(`no such change request: ${slug}`);
     return { slug, found };
@@ -128,11 +136,23 @@ export function createMcpApi({ tools, grants, auth, crs, workspace }: McpHostOpt
     },
   };
 
+  // create_cr as an agent on main sees it: the brief goes with the work.
+  const handoffTool = {
+    description: 'Main is read only: when a change is needed, opens a change request and starts an author chat there with the same agent and your brief as its first message. Answers its slug, name, branch and url (where the person opens it). Once per message.',
+    input: z.object({
+      name: z.string().min(1).max(80).describe('What the change is about, in a few words'),
+      brief: z.string().min(1).max(20_000).describe('What to change, in which notes and why: everything the author chat needs, as it remembers nothing of this one'),
+    }),
+  };
+
   function list(who: Who): Tool[] {
     const { caller } = who;
-    // An agent the Studio started works in its own change request only.
+    // An agent the Studio started works in its own change request only;
+    // one on main may hand its work to a new one.
     const own = caller.kind === 'run' ? [] : Object.entries(crTools).filter(([, tool]) => !tool.write || atLeast(caller.role, 'writer'));
+    const handing = onMain(who) && handoff !== null ? [{ name: 'create_cr', description: handoffTool.description, inputSchema: schemaOf(handoffTool.input, false) }] : [];
     return [
+      ...handing,
       ...own.map(([name, tool]) => ({ name, description: tool.description, inputSchema: schemaOf(tool.input, false) })),
       ...tools.filter((tool) => mayUse(who.caller, tool.access)).map((tool) => ({ name: tool.name, description: tool.description, inputSchema: schemaOf(tool.input, true) })),
     ];
@@ -140,6 +160,12 @@ export function createMcpApi({ tools, grants, auth, crs, workspace }: McpHostOpt
 
   async function call(who: Who, name: string, args: Record<string, unknown>, signal: AbortSignal): Promise<CallToolResult> {
     try {
+      if (name === 'create_cr' && onMain(who) && handoff !== null && who.caller.kind === 'run') {
+        const parsed = handoffTool.input.safeParse(args);
+        if (!parsed.success) throw new ToolError(`invalid input: ${z.prettifyError(parsed.error)}`);
+        const value = await handoff(who.caller.runId, parsed.data);
+        return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], structuredContent: value };
+      }
       if (Object.hasOwn(crTools, name)) {
         const tool = crTools[name as keyof typeof crTools];
         if (who.caller.kind === 'run') throw new ToolError(`${name} is for a person's agent: an agent the Studio started works in its own change request`);
@@ -151,7 +177,10 @@ export function createMcpApi({ tools, grants, auth, crs, workspace }: McpHostOpt
       }
       const tool = tools.find((candidate) => candidate.name === name);
       if (tool === undefined) throw new ToolError(`no such tool: ${name}`);
-      if (!mayUse(who.caller, tool.access)) throw new ToolError(who.caller.kind === 'run' ? `${name} is for an author: a reviewer reads and comments` : `${name} needs write access`);
+      if (!mayUse(who.caller, tool.access)) {
+        if (onMain(who)) throw new ToolError(`${name} changes files and main is read only: call create_cr to carry the work on in a change request`);
+        throw new ToolError(who.caller.kind === 'run' ? `${name} is for an author: a reviewer reads and comments` : `${name} needs write access`);
+      }
       const { cr, ...rest } = args;
       const { slug, found } = await crOf(who, cr);
       const parsed = tool.input.safeParse(rest);

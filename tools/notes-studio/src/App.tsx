@@ -120,7 +120,8 @@ export function App() {
   const currentCr = crs.list?.crs.find((cr) => cr.slug === CURRENT_CR) ?? null;
   // Agents run in the change request this page edits (#84).
   const agentsClient = useMemo(() => createAgentsClient(), []);
-  const agents = useAgents(agentsClient, crMode && CURRENT_CR !== null);
+  // On main too: its chats only read (server/agents/main-only.ts).
+  const agents = useAgents(agentsClient, crMode);
   const { answering, asking, asks } = useAsking(agents, rights.agents);
   // What agents proposed and commented (#85), as it comes.
   const proposalsClient = useMemo(() => createProposalsClient(), []);

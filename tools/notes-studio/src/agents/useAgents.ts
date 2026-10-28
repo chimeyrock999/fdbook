@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '../actions/toasts';
 import { isConflict } from '../api/json';
+import { OPENED_CHAT } from '../api/workspace';
 import type { AgentId, AgentInfo, AgentRole, AgentsClient, MessageContext } from '../api/agents';
 import { EMPTY_CONVERSATIONS, reading, unheld, unread, withEvent, withList, withRead, type ConversationsState } from './transcript';
 
@@ -27,7 +28,9 @@ function keep(key: string, value: unknown) {
   }
 }
 
+// Open when kept open, or when the page opens a chat (`?chat=`).
 function readPanel() {
+  if (OPENED_CHAT !== null) return true;
   try {
     return localStorage.getItem(PANEL_KEY) === 'true';
   } catch {
@@ -49,9 +52,10 @@ export function pickOf(agents: AgentInfo[] | null, picks: Picks, role: AgentRole
 }
 
 // The agents this Studio can run, the one picked per role (kept in this
-// browser), whether the agent panel is open, and, in a change request
-// (`inCr`), its conversations as they stream in (server/agents/conversations.ts).
-export function useAgents(client: AgentsClient, inCr: boolean) {
+// browser), whether the agent panel is open, and, with change requests on
+// (`enabled`: main and each change request), the conversations here as
+// they stream in (server/agents/conversations.ts).
+export function useAgents(client: AgentsClient, enabled: boolean) {
   const [agents, setAgents] = useState<AgentInfo[] | null>(null);
   const [picks, setPicks] = useState(readPicks);
   const [open, setOpen] = useState(readPanel);
@@ -89,7 +93,7 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
   }, [client]);
 
   const reload = useCallback(async () => {
-    if (!inCr) return;
+    if (!enabled) return;
     try {
       const listed = await client.conversations();
       setState((before) => withList(before, listed));
@@ -98,16 +102,16 @@ export function useAgents(client: AgentsClient, inCr: boolean) {
     } catch (reason) {
       toast.error(reason);
     }
-  }, [client, inCr, read]);
+  }, [client, enabled, read]);
 
   useEffect(() => {
-    if (!inCr) return undefined;
+    if (!enabled) return undefined;
     return client.subscribe((event) => {
       setState((before) => withEvent(before, event));
       // A turn of a conversation the page does not hold (another page sent it a message).
       if (unheld(current.current, event)) void read(event.conversationId);
     }, () => { void reload(); });
-  }, [client, inCr, reload, read]);
+  }, [client, enabled, reload, read]);
 
   const pick = useCallback((role: AgentRole, id: AgentId) => {
     setPicks((current) => {
