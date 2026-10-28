@@ -146,16 +146,23 @@ function Card({ hunk, index, total, readOnly, decisions }: { hunk: PlacedHunk; i
   );
 }
 
+const authorOf = (comment: NoteComment) => (comment.by.kind === 'run' ? agentName(comment.by.agent) : (comment.by.login ?? 'You'));
+
+// Resolves a comment, once while the request is out.
+function Resolve({ comment, onResolve }: { comment: NoteComment; onResolve: (id: string) => Promise<void> }) {
+  const action = useBusy();
+  return <PendingButton className="studio-button" pending={action.busy} pendingLabel="Resolving…" disabled={action.busy} onClick={() => { void action.run(() => onResolve(comment.id)); }}>Resolve feedback</PendingButton>;
+}
+
 function Bubble({ comment, readOnly, onResolve }: { comment: NoteComment; readOnly: boolean; onResolve: (id: string) => Promise<void> }) {
   const [open, setOpen] = useState(false);
-  const action = useBusy();
-  const who = comment.by.kind === 'run' ? agentName(comment.by.agent) : (comment.by.login ?? 'You');
+  const who = authorOf(comment);
   return (
     <>
       <button type="button" className="studio-suggest-icon" aria-expanded={open} aria-label={`Comment from ${who}`} onClick={() => { setOpen(!open); }}>
         <MessageSquare size={13} aria-hidden />
       </button>
-      {open && <div className="studio-suggest-comment-pop" role="note"><strong>{who}</strong><p>{comment.body}</p>{!readOnly && <PendingButton className="studio-button" pending={action.busy} pendingLabel="Resolving…" disabled={action.busy} onClick={() => { void action.run(() => onResolve(comment.id)); }}>Resolve feedback</PendingButton>}</div>}
+      {open && <div className="studio-suggest-comment-pop" role="note"><strong>{who}</strong><p>{comment.body}</p>{!readOnly && <Resolve comment={comment} onResolve={onResolve} />}</div>}
     </>
   );
 }
@@ -182,13 +189,16 @@ export function VisualSuggestions({ layer, placement, focus, readOnly, decisions
 }
 
 // Comments on the note as a whole, or on a block that is gone: under the bar.
-export function NoteComments({ placement }: { placement: Placement }) {
+export function NoteComments({ placement, readOnly, onResolve }: { placement: Placement; readOnly: boolean; onResolve: (id: string) => Promise<void> }) {
   const loose = placement.comments.filter((each) => each.block === null);
   if (loose.length === 0) return null;
   return (
     <ul className="studio-suggest-notes" aria-label="Comments on the note">
       {loose.map(({ comment }) => (
-        <li key={comment.id}><MessageSquare size={13} aria-hidden /> <strong>{comment.by.kind === 'run' ? agentName(comment.by.agent) : (comment.by.login ?? 'You')}</strong> {comment.body}</li>
+        <li key={comment.id}>
+          <span><MessageSquare size={13} aria-hidden /> <strong>{authorOf(comment)}</strong> {comment.body}</span>
+          {!readOnly && <Resolve comment={comment} onResolve={onResolve} />}
+        </li>
       ))}
     </ul>
   );
