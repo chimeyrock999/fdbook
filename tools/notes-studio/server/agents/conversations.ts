@@ -15,7 +15,7 @@ import { sentIn, type Attachments } from './attachments.ts';
 import { connectAgent, type AgentHooks, type AgentSession } from './connection.ts';
 import { contextOf, promptWith } from './context.ts';
 import { writeForAgent } from './fs-policy.ts';
-import { fencedRole, mainNote, refuseChanges } from './main-only.ts';
+import { checkOnMain, fencedRole, mainNote, refusedChanges } from './main-only.ts';
 import type { AgentProfile } from './profiles.ts';
 import { IDLE_MS, idlest, MAX_LIVE_AGENTS } from './sessions.ts';
 import { PERMISSION_TIMEOUT_MS, summaryOf, type Conversation, type ConversationEvent, type ConversationRead, type Cost, type MessageContext, type PermissionAsk, type StreamEvent, type TurnEnd } from './shared.ts';
@@ -128,8 +128,7 @@ export type AgentConversationsOptions = {
   propose?: ((input: { path: string; content: string; runId: string; agent: string; model: string | null }) => Promise<unknown>) | null;
   // Documents attached to messages (attachments.ts); none without it.
   attachments?: Attachments | null;
-  // Main (main-only.ts): every agent fenced as a reviewer, no file listed
-  // as changed, nothing to keep or revert; context checked in `contextRoot`.
+  // Main (main-only.ts); its context is checked in `contextRoot`.
   readOnly?: boolean;
   contextRoot?: string;
 };
@@ -458,7 +457,7 @@ export function createAgentConversations(
     }
   };
 
-  const turnChanges = createTurnChanges(root, {
+  const turnChanges = readOnly ? refusedChanges : createTurnChanges(root, {
     slug,
     transcripts,
     lock,
@@ -478,17 +477,16 @@ export function createAgentConversations(
   };
 
   return {
-    // A message's context as sent (context.ts), checked against this worktree.
+    // A message's context as sent (context.ts), checked against this
+    // worktree; whether a turn goes on in any conversation here.
     context: (value: unknown): Promise<GivenContext> => contextOf(value, contextRoot, slug, attachments),
-
-    // Whether a turn goes on in any conversation here.
     answering: () => [...live.values()].some((conversation) => conversation.turn !== null),
 
-    // A new conversation, with its first message. `from`: the chat on main
-    // it carries on from (mcp/handoff.ts).
+    // A new conversation, with its first message (`from`: a chat on main, mcp/handoff.ts).
     start({ agent, role, prompt, by, context = null, from = null }: { agent: unknown; role: unknown; prompt: unknown; by: string | null; context?: GivenContext; from?: string | null }): Conversation {
       if (closed) throw new HttpError(409, 'this change request is closing');
       const profile = profileOf(agent);
+      if (readOnly) checkOnMain(profile);
       if (role !== 'author' && role !== 'reviewer') throw new HttpError(400, 'role must be author or reviewer');
       const text = promptOf(prompt);
       makeRoom();
@@ -593,14 +591,13 @@ export function createAgentConversations(
       return context?.note == null || context.selection === null ? null : { path: context.note, lines: context.selection.lines, source: context.selection.source };
     },
 
-    // The turn going on: its number, its agent and who sent it; null between turns.
+    // The turn going on (number, agent, sender), null between turns; and
+    // the change request it opened to carry the work on (mcp/handoff.ts).
     turnOf(id: string) {
       const conversation = live.get(id);
       const current = conversation?.turn ?? null;
       return conversation === undefined || current === null || current.stopping ? null : { index: current.index, agent: conversation.profile.id, by: current.by };
     },
-
-    // A change request a turn opened to carry the work on (mcp/handoff.ts).
     handedOff(id: string, handoff: Omit<Extract<ConversationEvent, { type: 'handoff' }>, 'type' | 'at'>) {
       const conversation = live.get(id);
       if (conversation !== undefined) record(conversation, { type: 'handoff', at: Date.now(), ...handoff });
@@ -623,9 +620,9 @@ export function createAgentConversations(
     savedByPerson,
 
     // Keep/Revert of an ended turn's changes (turn-changes.ts).
-    changes: (id: string, turn: number) => (readOnly ? refuseChanges() : turnChanges.changes(id, turn)),
-    before: (id: string, turn: number, path: string) => (readOnly ? refuseChanges() : turnChanges.before(id, turn, path)),
-    decide: (id: string, turn: number, path: string, op: unknown) => (readOnly ? refuseChanges() : turnChanges.decide(id, turn, path, op)),
+    changes: (id: string, turn: number) => turnChanges.changes(id, turn),
+    before: (id: string, turn: number, path: string) => turnChanges.before(id, turn, path),
+    decide: (id: string, turn: number, path: string, op: unknown) => turnChanges.decide(id, turn, path, op),
 
     // Deletes a conversation and its transcript, stopping its process. Not
     // while a turn runs. The agent's own record of the session stays.

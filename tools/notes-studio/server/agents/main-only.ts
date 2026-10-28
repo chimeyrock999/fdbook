@@ -1,12 +1,16 @@
 import { HttpError } from '../http.ts';
-import type { AgentRole } from './shared.ts';
+import type { AgentProfile } from './profiles.ts';
+import { mainRefusal, type AgentRole } from './shared.ts';
 
-// What holds an agent on main to reading. The role a person picks there
-// (author, reviewer) shapes what the agent is told, never what it may do:
-// it runs fenced as a reviewer everywhere (its tools, ACP writes, the
-// questions it asks, the Studio's MCP tools), in a copy of main reset
-// before each turn (cr/manager.ts), so even an agent whose own tools write
-// without asking leaves main as it was.
+// What holds an agent on main to reading. Only an agent whose own tools
+// can be held to reading runs there (`fencesReviewer`: Claude Code,
+// Codex); omp and Hermes could write anywhere their user can, and move
+// branches through git, whatever folder they start in. The role a person
+// picks (author, reviewer) shapes what the agent is told, never what it
+// may do: it runs fenced as a reviewer everywhere (its tools, ACP writes,
+// the questions it asks, the Studio's MCP tools). It starts in a copy of
+// main (cr/manager.ts), scratch space that keeps main's own folder out
+// of the way of what it tries.
 export const fencedRole = (readOnly: boolean, role: AgentRole): AgentRole => (readOnly ? 'reviewer' : role);
 
 // The Studio's line after each message on main. One line: the fake agent
@@ -18,7 +22,16 @@ export function mainNote(role: AgentRole) {
   return `\n\n---\nNotes Studio: this chat is on main, which is read only. Read, search and answer; edits, commands and writes are refused here. ${ask}`;
 }
 
+// Refuses an agent main cannot hold to reading.
+export function checkOnMain(profile: AgentProfile) {
+  const refusal = mainRefusal(profile);
+  if (refusal !== null) throw new HttpError(409, refusal);
+}
+
 // Keep/Revert has nothing to act on: a turn on main changes no file.
-export function refuseChanges(): never {
+function refuseChanges(): never {
   throw new HttpError(409, 'main is read only: its chats change no files');
 }
+
+// In place of the turns' changes (turn-changes.ts) on main.
+export const refusedChanges = { changes: refuseChanges, before: refuseChanges, decide: refuseChanges, draft: () => Promise.resolve(false) };

@@ -473,15 +473,17 @@ agent is started in the change request's worktree without the Studio's own
 | omp | `omp acp` | its own permission prompts |
 | Hermes Agent | `hermes acp` | the toolsets in your `~/.hermes/config.yaml` |
 
-- **On main** (`main-only.ts`). A chat on main may pick either role, but
-  every agent runs fenced as a reviewer (its tools, ACP writes, the
-  questions it asks, its MCP token), whatever it was told. It runs in
-  `worktrees/_main-agents`, a detached worktree that `cr/manager.ts` checks
-  out at `_main`'s commit and cleans (`git clean -dfx`) before a turn
-  starts while no other turn on main runs (the chats share it), so even
-  omp or Hermes, whose own tools may write without asking, leave `_main`
-  and every branch as they were. A message's context is checked against
-  `_main` itself. A turn on main lists no changed
+- **On main** (`main-only.ts`). Only agents whose own tools can be held
+  to reading (`fencesReviewer`: Claude Code, Codex) chat on main; omp and
+  Hermes are refused (`409`), and the picker shows them unavailable there.
+  Their tools could write anywhere the Studio's user can and move branches
+  through git, whatever folder they start in. A chat on main may pick
+  either role, but every agent runs fenced as a reviewer (its tools, ACP
+  writes, the questions it asks, its MCP token), whatever it was told. It
+  starts in `worktrees/_main-agents`, scratch space: a detached worktree
+  that `cr/manager.ts` checks out at `_main`'s commit and cleans (`git
+  clean -dfx`) before a turn starts while no other turn on main runs (the
+  chats share it). A message's context is checked against `_main` itself. A turn on main lists no changed
   files and has nothing to keep or revert. After each message the Studio
   adds one line saying the chat is on main and how to hand work on: an
   agent there gets `create_cr { name, brief }` (`server/mcp/handoff.ts`),

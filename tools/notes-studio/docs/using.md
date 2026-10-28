@@ -755,8 +755,10 @@ agents answering and the questions waiting; the picker beside it chooses
 the agent for each role, kept in this browser.
 
 - **Where.** In a change request, the agent works in its worktree. On
-  main, chats only read: either role, any agent, but nothing it does
-  changes main, and the panel offers no actions and no **New note**. When
+  main, chats only read: either role, but only an agent whose own tools
+  the Studio can hold to reading (Claude Code, Codex; the picker shows omp
+  and Hermes as unavailable there), and the panel offers no actions and
+  no **New note**. When
   a change is needed, the agent opens a change request (`create_cr`) and
   starts an author chat there with its brief; the chat on main shows
   **Continued in a change request** with **Open**, and the new chat links

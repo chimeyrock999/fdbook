@@ -69,7 +69,7 @@ export function fakeClient(conversations: Conversation[] = [], changes: TurnChan
 
 export function Harness({ client, inCr = true, canRun = true, onOpenDiff = () => undefined, onOpenNote = () => undefined }: { client: AgentsClient; inCr?: boolean; canRun?: boolean; onOpenDiff?: (path: string) => void; onOpenNote?: (path: string) => void }) {
   // As the app: chats on main too (`inCr` false).
-  const agents = useAgents(client, true);
+  const agents = useAgents(client, true, !inCr);
   const live = agents.conversations.filter((conversation) => conversation.status === 'running').length;
   const { asking, asks } = useAsking(agents, canRun);
   return (

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '../actions/toasts';
 import { isConflict } from '../api/json';
+import { onMainInfo } from '../../server/agents/shared';
 import { OPENED_CHAT } from '../api/workspace';
 import type { AgentId, AgentInfo, AgentRole, AgentsClient, MessageContext } from '../api/agents';
 import { EMPTY_CONVERSATIONS, reading, unheld, unread, withEvent, withList, withRead, type ConversationsState } from './transcript';
@@ -55,7 +56,7 @@ export function pickOf(agents: AgentInfo[] | null, picks: Picks, role: AgentRole
 // browser), whether the agent panel is open, and, with change requests on
 // (`enabled`: main and each change request), the conversations here as
 // they stream in (server/agents/conversations.ts).
-export function useAgents(client: AgentsClient, enabled: boolean) {
+export function useAgents(client: AgentsClient, enabled: boolean, onMain = false) {
   const [agents, setAgents] = useState<AgentInfo[] | null>(null);
   const [picks, setPicks] = useState(readPicks);
   const [open, setOpen] = useState(readPanel);
@@ -86,11 +87,11 @@ export function useAgents(client: AgentsClient, enabled: boolean) {
   useEffect(() => {
     let current = true;
     client.agents().then(
-      (list) => { if (current) setAgents(list); },
+      (list) => { if (current) setAgents(onMain ? onMainInfo(list) : list); },
       (reason: unknown) => { if (current) setListError((reason as Error).message); },
     );
     return () => { current = false; };
-  }, [client]);
+  }, [client, onMain]);
 
   const reload = useCallback(async () => {
     if (!enabled) return;

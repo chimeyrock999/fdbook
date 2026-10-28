@@ -121,7 +121,7 @@ export function App() {
   // Agents run in the change request this page edits (#84).
   const agentsClient = useMemo(() => createAgentsClient(), []);
   // On main too: its chats only read (server/agents/main-only.ts).
-  const agents = useAgents(agentsClient, crMode);
+  const agents = useAgents(agentsClient, crMode, onMain);
   const { answering, asking, asks } = useAsking(agents, rights.agents);
   // What agents proposed and commented (#85), as it comes.
   const proposalsClient = useMemo(() => createProposalsClient(), []);

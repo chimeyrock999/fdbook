@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Conversation, ConversationEvent } from '../../../server/agents/shared';
 import type { ChangeRequest } from '../../../server/cr/manager';
 import { git } from '../../../server/cr/git';
+import { onMainInfo } from '../../../server/agents/shared';
 import { fakeProfile, messagesOf } from '../../support/agents';
 import { sender } from '../../support/auth';
 import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '../../support/git-repo';
@@ -45,7 +46,7 @@ describe('agents on main', () => {
 
   beforeAll(async () => {
     repo = await makeGitRepo();
-    studio = await startCrStudio(repo, { agents: [fakeProfile()] });
+    studio = await startCrStudio(repo, { agents: [fakeProfile(), fakeProfile({}, 'omp', false)] });
     const worktrees = await realpath(join(repo.home, 'worktrees'));
     mainRoot = join(worktrees, '_main');
     copy = join(worktrees, '_main-agents');
@@ -82,6 +83,22 @@ describe('agents on main', () => {
     // The next turn finds the copy as main is.
     const next = await say(started.id, `read ${join(copy, NOTE)}`);
     expect(messagesOf(next.events).join('').endsWith(`read:${before}`)).toBe(true);
+  });
+
+  it('runs only an agent whose own tools can be held to reading, in a change request the others still', async () => {
+    const response = await send('/api/agents/conversations', 'POST', { agent: 'omp', role: 'reviewer', prompt: 'env' });
+    expect(response.status).toBe(409);
+    expect((json(response) as { error: string }).error).toBe('Fake Agent cannot be held to reading: chat with it in a change request');
+    const info = { name: 'omp', version: '1', note: null };
+    expect(onMainInfo([
+      { ...info, id: 'claude', fencesReviewer: true, available: true, reason: null },
+      { ...info, id: 'omp', fencesReviewer: false, available: true, reason: null },
+      { ...info, id: 'hermes', fencesReviewer: false, available: false, reason: 'hermes is not installed' },
+    ]).map((agent) => [agent.id, agent.available, agent.reason])).toEqual([
+      ['claude', true, null],
+      ['omp', false, 'omp cannot be held to reading: chat with it in a change request'],
+      ['hermes', false, 'hermes is not installed'],
+    ]);
   });
 
   it('commits nothing anyone keeps, and follows main: a commit in the copy is on no branch and goes with the next turn', async () => {

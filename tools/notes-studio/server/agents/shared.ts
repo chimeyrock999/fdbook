@@ -27,6 +27,18 @@ export type AgentInfo = {
   version: string | null;
 };
 
+// Why an agent cannot chat on main: its own tools cannot be held to
+// reading there (agents/main-only.ts). Null when it can.
+export const mainRefusal = (agent: Pick<AgentInfo, 'name' | 'fencesReviewer'>) =>
+  (agent.fencesReviewer ? null : `${agent.name} cannot be held to reading: chat with it in a change request`);
+
+// The agents as main offers them: those it cannot hold to reading cannot run there.
+export const onMainInfo = (agents: AgentInfo[]) =>
+  agents.map((agent) => {
+    const refusal = mainRefusal(agent);
+    return refusal === null || !agent.available ? agent : { ...agent, available: false, reason: refusal };
+  });
+
 // A question nobody answers is rejected after this long, as the agent would on its own.
 export const PERMISSION_TIMEOUT_MS = 5 * 60_000;
 
