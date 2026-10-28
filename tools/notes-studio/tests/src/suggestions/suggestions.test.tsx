@@ -59,8 +59,15 @@ describe('placeAll', () => {
   });
 });
 
-function review(proposals: ProposalView[], act = vi.fn(() => Promise.resolve())): NoteReview & { act: typeof act } {
-  return { proposals, comments: [], act };
+function review(proposals: ProposalView[], act = vi.fn(() => Promise.resolve()), resolveComment = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve())): NoteReview & { act: typeof act; resolveComment: typeof resolveComment } {
+  return { proposals, comments: [], act, resolveComment };
+}
+
+// The comment bubble drawn into the editor.
+function bubble(prose: HTMLElement) {
+  const found = prose.querySelector<HTMLElement>('.studio-suggest-comment');
+  if (found === null) throw new Error('no comment bubble yet');
+  return found;
 }
 
 // The bar over `text`, deciding as NoteEditor does.
@@ -138,7 +145,7 @@ function Layer({ container, text, decide }: { container: RefObject<HTMLElement |
   const layer = useMemo(createSuggestionLayer, []);
   useEditorPlugin(container, layer.plugin);
   const { placement, focus, decisions } = useNoteSuggestions(decide, text);
-  return <VisualSuggestions layer={layer} placement={placement} focus={focus} readOnly={false} decisions={decisions} />;
+  return <VisualSuggestions layer={layer} placement={placement} focus={focus} readOnly={false} decisions={decisions} onResolveComment={decide.resolveComment} />;
 }
 
 describe('suggestions in Visual', () => {
@@ -159,9 +166,31 @@ describe('suggestions in Visual', () => {
     expect(card.querySelector('strong')?.textContent).toBe('rewritten');
     // The card sits right after the block it replaces.
     expect(prose.querySelector('.studio-suggest-removed')?.nextElementSibling).toBe(card);
-    expect(prose.querySelector('.studio-suggest-comment button')?.getAttribute('aria-label')).toBe('Comment from Codex');
+    const commentUi = within(bubble(prose));
+    const commentButton = commentUi.getByRole('button', { name: 'Comment from Codex' });
+    await act(async () => { commentButton.click(); await Promise.resolve(); });
+    await act(async () => { commentUi.getByRole('button', { name: 'Resolve feedback' }).click(); await Promise.resolve(); });
+    expect(decide.resolveComment).toHaveBeenCalledWith('c9');
     await act(async () => { within(card).getByRole('button', { name: 'Accept suggestion' }).click(); await Promise.resolve(); });
     expect(decide.act).toHaveBeenCalledWith('p1', 'accept', ['1']);
+  });
+
+  it('resolves feedback once while the request is out, and says why it failed in a toast', async () => {
+    const decide = review([]);
+    decide.comments = [comment({ index: 2, text: 'First paragraph.' })];
+    let fail: (reason: Error) => void = () => undefined;
+    decide.resolveComment.mockImplementation(() => new Promise<void>((_resolve, reject) => { fail = reject; }));
+    render(<ToastStack />);
+    const { prose } = await mountVisual(NOTE, { extra: (container) => <Layer container={container} text={NOTE} decide={decide} /> });
+    const commentUi = within(await waitFor(() => bubble(prose)));
+    await act(async () => { commentUi.getByRole('button', { name: 'Comment from Codex' }).click(); await Promise.resolve(); });
+    const resolve = commentUi.getByRole('button', { name: 'Resolve feedback' });
+    await act(async () => { resolve.click(); resolve.click(); await Promise.resolve(); });
+    expect(decide.resolveComment).toHaveBeenCalledTimes(1);
+    expect(commentUi.getByRole('button', { name: /Resolv/ })).toHaveProperty('disabled', true);
+    await act(async () => { fail(new Error('no such comment: c9')); await Promise.resolve(); });
+    expect((await screen.findByRole('alert')).textContent).toContain('no such comment: c9');
+    expect(commentUi.getByRole('button', { name: 'Resolve feedback' })).toHaveProperty('disabled', false);
   });
 });
 
@@ -183,5 +212,23 @@ describe('useProposals', () => {
     listing = () => Promise.reject(new Error('offline'));
     renderHook(() => useProposals(client, true));
     expect((await screen.findByRole('alert')).textContent).toContain('offline');
+  });
+
+  it('drops a resolved comment, its own and one another client resolved', async () => {
+    const comments = [comment(null, 'One.'), comment(null, 'Two two.'), comment(null, 'Three three three.')];
+    let resolved: (comment: { id: string }) => void = () => undefined;
+    const resolveComment = vi.fn(() => Promise.resolve());
+    const client = {
+      list: () => Promise.resolve([]),
+      comments: () => Promise.resolve(comments),
+      subscribe: (_merge: unknown, reopened: () => void, _onComment: unknown, onResolved: typeof resolved) => { resolved = onResolved; reopened(); return () => undefined; },
+      resolveComment,
+    } as unknown as ProposalsClient;
+    const { result } = renderHook(() => useProposals(client, true));
+    await waitFor(() => { expect(result.current.comments).toHaveLength(3); });
+    await act(() => result.current.resolveComment(comments[0].id));
+    expect(resolveComment).toHaveBeenCalledWith(comments[0].id);
+    act(() => { resolved({ id: comments[1].id }); });
+    expect(result.current.comments.map((each) => each.id)).toEqual([comments[2].id]);
   });
 });

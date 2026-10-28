@@ -29,6 +29,7 @@ export function createProposalStream() {
     send: (proposal: ProposalView) => { send(`data: ${JSON.stringify(proposal)}\n\n`); },
     // A comment, as a `comment` event.
     sendComment: (comment: NoteComment) => { send(`event: comment\ndata: ${JSON.stringify(comment)}\n\n`); },
+    sendCommentResolved: (id: string) => { send(`event: comment-resolved\ndata: ${JSON.stringify({ id })}\n\n`); },
     subscribe(response: ServerResponse, viewer: Viewer) {
       if (closed) {
         sendJson(response, 409, { error: 'this change request is closing' });
@@ -51,6 +52,7 @@ export function createProposalStream() {
 export type ProposalStream = ReturnType<typeof createProposalStream>;
 const NO_CR = 'Proposals live in a change request: open one first.';
 const ONE = /^\/api\/proposals\/([a-z0-9-]+)$/;
+const COMMENT = /^\/api\/comments\/([a-z0-9-]+)$/;
 
 // The proposals and comments of one change request (store.ts, comments.ts),
 // or null where there are none (main):
@@ -59,6 +61,7 @@ const ONE = /^\/api\/proposals\/([a-z0-9-]+)$/;
 // POST /api/proposals/<id> { op: accept | reject | rebase | drop, hunks? }
 // GET  /api/proposals/events     server-sent events (createProposalStream)
 // GET  /api/comments[?path=…]
+// DELETE /api/comments/<id>     resolves it: gone, as a `comment-resolved` event
 export function createProposalsApi(state: { proposals: Proposals; comments: Comments; stream: ProposalStream } | null): Handler {
   async function answer(pathname: string, request: Parameters<Handler>[0]): Promise<unknown> {
     if (state === null) throw new HttpError(409, NO_CR);
@@ -66,6 +69,12 @@ export function createProposalsApi(state: { proposals: Proposals; comments: Comm
     if (pathname === '/api/comments' || pathname === '/api/proposals') {
       if (request.method !== 'GET') throw new HttpError(405, 'method not allowed');
       return pathname === '/api/comments' ? { comments: await state.comments.list(path) } : { proposals: await state.proposals.list(path) };
+    }
+    const commentId = COMMENT.exec(pathname)?.[1];
+    if (commentId !== undefined) {
+      if (request.method !== 'DELETE') throw new HttpError(405, 'method not allowed');
+      await state.comments.resolve(commentId);
+      return { ok: true };
     }
     const id = ONE.exec(pathname)?.[1] ?? '';
     if (request.method === 'GET') return { proposal: await state.proposals.read(id) };
@@ -83,7 +92,7 @@ export function createProposalsApi(state: { proposals: Proposals; comments: Comm
       else state.stream.subscribe(response, viewerOf(request));
       return true;
     }
-    if (pathname !== '/api/proposals' && pathname !== '/api/comments' && !ONE.test(pathname)) return false;
+    if (pathname !== '/api/proposals' && pathname !== '/api/comments' && !ONE.test(pathname) && !COMMENT.test(pathname)) return false;
     try {
       sendJson(response, 200, await answer(pathname, request));
     } catch (error) {

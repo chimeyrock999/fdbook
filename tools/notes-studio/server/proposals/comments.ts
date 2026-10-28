@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { appendFile, mkdir, readFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { createKeyedLock } from '../files/store.ts';
+import { createKeyedLock, writeAtomic } from '../files/store.ts';
+import { HttpError } from '../http.ts';
 import type { ProposalAuthor } from './shared.ts';
 
 // A comment on a note of the change request, from an agent or a person,
@@ -20,7 +21,7 @@ const MAX_BODY = 10_000;
 
 // The comments of one change request, one JSON line each in `file`,
 // outside its worktree.
-export function createComments(file: string, onAdd?: (comment: NoteComment) => void) {
+export function createComments(file: string, onAdd?: (comment: NoteComment) => void, onResolve?: (id: string) => void) {
   const lock = createKeyedLock();
   const read = async (): Promise<NoteComment[]> => {
     const text = await readFile(file, 'utf8').catch(() => '');
@@ -45,6 +46,16 @@ export function createComments(file: string, onAdd?: (comment: NoteComment) => v
         await appendFile(file, `${JSON.stringify(stored)}\n`);
         onAdd?.(stored);
         return stored;
+      });
+    },
+    // Drops comment `id`, written whole to a temp file and renamed, so a
+    // crash leaves the old list and not half of one.
+    resolve(id: string) {
+      return lock('append', async () => {
+        const comments = await read();
+        if (!comments.some((comment) => comment.id === id)) throw new HttpError(404, `no such comment: ${id}`);
+        await writeAtomic(file, comments.filter((comment) => comment.id !== id).map((comment) => `${JSON.stringify(comment)}\n`).join(''));
+        onResolve?.(id);
       });
     },
     remove: () => rm(file, { force: true }),

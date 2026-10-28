@@ -188,6 +188,26 @@ describe('Studio MCP server', () => {
     expect(comments).toEqual([expect.objectContaining({ body: 'Say more here.', block: { index: 1, text: expect.stringContaining('A first look') as string } })]);
   });
 
+  it('resolves a comment for every open client, once', async () => {
+    const added = await call(client, 'add_comment', { cr: cr.slug, path: NOTE, body: 'Resolve me.' });
+    const { id } = added.value as NoteComment;
+    const controller = new AbortController();
+    const response = await fetch(`${studio.origin}/cr/${cr.slug}/api/proposals/events`, { signal: controller.signal });
+    const reader = (response.body ?? new ReadableStream()).pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    while (!buffer.includes('retry:')) buffer += (await reader.read()).value ?? '';
+    expect((await send(`/cr/${cr.slug}/api/comments/${id}`, 'POST')).status).toBe(405);
+    expect((await send(`/cr/${cr.slug}/api/comments/${id}`, 'DELETE')).status).toBe(200);
+    while (!buffer.includes('event: comment-resolved')) buffer += (await reader.read()).value ?? '';
+    controller.abort();
+    expect(buffer).toContain(`event: comment-resolved\ndata: ${JSON.stringify({ id })}`);
+    const { comments } = json(await send(`/cr/${cr.slug}/api/comments?path=${NOTE}`)) as { comments: NoteComment[] };
+    expect(comments.map((each) => each.id)).not.toContain(id);
+    expect((await send(`/cr/${cr.slug}/api/comments/${id}`, 'DELETE')).status).toBe(404);
+    // Main is read only: its writes are refused before any route.
+    expect((await send(`/api/comments/${id}`, 'DELETE')).status).toBe(403);
+  });
+
   it('gives an agent run the tools over stdio or HTTP, held to its change request', async () => {
     for (const agent of ['claude', 'codex']) {
       const run = await runAgent(`mcp-servers\nmcp read_note {"path": "${NOTE}"}\nmcp read_note {"cr": "from-a-terminal", "path": "${NOTE}"}\nmcp list_crs {}`, 'author', agent);
