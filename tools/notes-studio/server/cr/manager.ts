@@ -79,6 +79,8 @@ export type ChangeRequestOptions = {
 const BASE = `${REMOTE}/main`;
 // Not a slug (slugs start with a letter or digit), so no change request takes it.
 const MAIN_DIR = '_main';
+// Where agents on main run: a copy of `_main` they may scribble in.
+const MAIN_AGENTS_DIR = '_main-agents';
 const NAME_MAX = 80;
 const NOTES = 'content/notes/';
 const DAY_MS = 24 * 3600_000;
@@ -137,6 +139,7 @@ export async function openChangeRequests({
   // As git prints it, so the paths it lists compare equal (macOS's /var is /private/var).
   const root = await realpath(worktrees);
   const mainRoot = join(root, MAIN_DIR);
+  const mainAgentsRoot = join(root, MAIN_AGENTS_DIR);
   const dirOf = (slug: string) => join(root, slug);
   const readPullRequests = createPullRequestReader(pullRequests);
   // Creating, discarding and adding worktrees run one at a time.
@@ -279,6 +282,28 @@ export async function openChangeRequests({
     await inRepo('worktree', 'add', '--quiet', '--detach', mainRoot, BASE);
   }
 
+  // The agents' copy of `_main` at its commit, with whatever an agent
+  // left there (an edit, a commit, a new file) gone: `_main` itself and
+  // every branch stay as they were, whatever an agent's own tools do. Not
+  // a branch: a commit made there is on no branch and goes with the reset.
+  function resetMainAgents() {
+    return lock('main-agents', async () => {
+      const head = (await git(mainRoot, 'rev-parse', 'HEAD')).trim();
+      if (!(await listWorktrees()).some((tree) => tree.path === mainAgentsRoot)) {
+        // Adding a worktree waits for the others' adds, prunes and removes.
+        await lock('cr', async () => {
+          await rm(mainAgentsRoot, { recursive: true, force: true });
+          await inRepo('worktree', 'prune');
+          await inRepo('worktree', 'add', '--quiet', '--detach', mainAgentsRoot, head);
+        });
+        return mainAgentsRoot;
+      }
+      await git(mainAgentsRoot, 'checkout', '--quiet', '--detach', '--force', head);
+      await git(mainAgentsRoot, 'clean', '--quiet', '-d', '--force', '-x');
+      return mainAgentsRoot;
+    });
+  }
+
   async function create(value: unknown): Promise<ChangeRequest> {
     if (typeof value !== 'string') throw new HttpError(400, 'name must be a string');
     const name = value.replace(/\s+/g, ' ').trim();
@@ -399,8 +424,12 @@ export async function openChangeRequests({
     throw new Error(`Notes Studio reads ${BASE} and could not check it out: ${(error as Error).message}`, { cause: error });
   }
 
+  await resetMainAgents();
+
   return {
     mainRoot,
+    mainAgentsRoot,
+    resetMainAgents,
     list,
     create,
     discard,

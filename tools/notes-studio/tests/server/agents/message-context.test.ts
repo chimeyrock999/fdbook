@@ -120,12 +120,12 @@ describe('message context', () => {
     expect((await start({ note: 3 })).status).toBe(400);
   });
 
-  it('lists mentions best first, and refuses on main', async () => {
+  it('lists mentions best first, on main too', async () => {
     const { mentions } = json(await send(api('/mentions?q=help'))) as { mentions: { kind: string; path: string }[] };
     expect(mentions).toEqual([{ kind: 'file', path: 'lib/helper.ts' }]);
     const notes = (json(await send(api('/mentions?q=first'))) as { mentions: { kind: string; path: string }[] }).mentions;
     expect(notes[0]).toEqual({ kind: 'note', path: NOTE });
-    expect((await send('/api/agents/mentions?q=x')).status).toBe(409);
+    expect((json(await send('/api/agents/mentions?q=first')) as { mentions: { kind: string; path: string }[] }).mentions[0]).toEqual({ kind: 'note', path: NOTE });
   });
 
   it('deletes a chat\'s attachments with it, but not one another chat sent too', async () => {

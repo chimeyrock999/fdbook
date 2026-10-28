@@ -228,7 +228,7 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
         {review !== null && opened && (
           <>
             <SuggestionBar placement={suggestions.placement} focus={suggestions.focus} onStep={stepTo} decisions={suggestions.decisions} />
-            <NoteComments placement={suggestions.placement} />
+            <NoteComments placement={suggestions.placement} readOnly={!canDecide} onResolve={review.resolveComment} />
           </>
         )}
         {mode === 'visual' ? (

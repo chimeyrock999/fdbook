@@ -442,6 +442,40 @@
   .studio-agent-tool[data-status='asking'] {
     border-color: var(--fde-info);
   }
+  /* The change request an agent on main opened, with the chat it started there. */
+  .studio-agent-handoff {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 9px 11px;
+    border: 1px solid color-mix(in srgb, var(--fde-success) 50%, var(--fde-border));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--fde-success) 9%, var(--fde-card));
+    font-size: 12.5px;
+  }
+  .studio-agent-handoff > strong {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .studio-agent-handoff-meta {
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-agent-handoff-meta code {
+    font: 11px var(--font-mono);
+  }
+  /* On main: chats read only. */
+  .studio-agent-strip[data-tone='info'] {
+    align-items: flex-start;
+    border-color: color-mix(in srgb, var(--fde-info) 45%, var(--fde-border));
+    background: color-mix(in srgb, var(--fde-info) 9%, var(--fde-card));
+  }
+  .studio-agent-strip[data-tone='info'] > svg {
+    margin-top: 2px;
+    color: var(--fde-info);
+  }
   .studio-agent-tool[data-status='wrote'] {
     border-color: color-mix(in srgb, var(--fde-warning) 45%, var(--fde-border));
   }

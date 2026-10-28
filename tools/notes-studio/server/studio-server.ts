@@ -12,6 +12,7 @@ import { createChangeRequestsApi } from './cr/api.ts';
 import { openChangeRequests, type ChangeRequestOptions, type ChangeRequests } from './cr/manager.ts';
 import { apiNotFound, HttpError, pathnameOf } from './http.ts';
 import { createRunGrants } from './mcp/grants.ts';
+import { createHandoff } from './mcp/handoff.ts';
 import { createMcpApi } from './mcp/http.ts';
 import { diagramTools } from './mcp/diagram-tools.ts';
 import { writingTools } from './mcp/writing-tools.ts';
@@ -45,8 +46,11 @@ function closeServer(server: Server) {
 // (see workspace.ts). Without it, it edits the one worktree at `root`.
 // With `auth`, everyone signs in with GitHub first and may do what their
 // access to the repository allows (auth/auth.ts). Agents (`agents`, the
-// Studio's profiles by default) run only in change requests, their
-// transcripts in the Studio home (agents/).
+// Studio's profiles by default) run in change requests, and read only on
+// main (agents/main-only.ts), their transcripts in the Studio home (agents/).
+// Main's slug for its agents' transcripts and MCP tokens: no change request takes it.
+const MAIN_SLUG = '_main';
+
 export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEFAULT_STUDIO_PORT, root = repoRoot, changeRequests, auth: authOptions = null, agents = PROFILES, tools = [] }: {
   host?: string;
   port?: number;
@@ -96,19 +100,20 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
     pullRequests: changeRequests?.branchPullRequests ?? createBranchPullRequestReader(ghPullRequest),
     pagesProject: changeRequests?.pagesProject ?? null,
   };
-  const main = createWorkspace(crs?.mainRoot ?? root, hosts, { readOnly: crs !== null, preview });
   const transcripts = changeRequests ? createTranscripts(changeRequests.home) : null;
   const shared = [createIconsApi(), createAgentsInfoApi(createAgentInfo(agents), transcripts), apiNotFound];
   // The Studio's MCP server (mcp/http.ts): each agent run gets a token for it.
   const grants = createRunGrants();
   const mcpUrl = `http://${hosts[0]}/api/mcp`;
-  const workspaces = createWorkspaceRouter(
-    hosts,
-    (slug) => crs?.worktreeOf(slug) ?? Promise.resolve(null),
-    shared,
+  const workspaceAgents = transcripts && changeRequests ? { profiles: agents, transcripts, home: changeRequests.home, mcp: { url: mcpUrl, grants } } : null;
+  // Main's agents run in a copy of it, made fresh before each turn.
+  const main = createWorkspace(crs?.mainRoot ?? root, hosts, {
+    readOnly: crs !== null,
     preview,
-    transcripts && changeRequests ? { profiles: agents, transcripts, home: changeRequests.home, mcp: { url: mcpUrl, grants } } : null,
-  );
+    agents: workspaceAgents === null ? null : { ...workspaceAgents, slug: MAIN_SLUG },
+    mainAgents: crs === null ? null : { root: crs.mainAgentsRoot, prepare: crs.resetMainAgents },
+  });
+  const workspaces = createWorkspaceRouter(hosts, (slug) => crs?.worktreeOf(slug) ?? Promise.resolve(null), shared, preview, workspaceAgents);
   // A discarded change request's agents, watchers and sync close before its
   // worktree goes; its transcripts, proposals and comments go with it, so a
   // new one with the slug starts empty.
@@ -121,13 +126,14 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
     }
   });
   const reviewOf = async (slug: string) => {
+    if (slug === MAIN_SLUG) throw new HttpError(409, 'main is read only: it has no suggestions or comments (create_cr opens a change request)');
     const review = (await workspaces.open(slug))?.review ?? null;
     if (review === null) throw new HttpError(404, `no such change request: ${slug}`);
     return review;
   };
   const mcp = createMcpApi({
     tools: createNoteTools({
-      proposalsOf: async (slug) => (await reviewOf(slug)).proposals,
+      proposalsOf: async (slug) => (slug === MAIN_SLUG ? null : (await reviewOf(slug)).proposals),
       commentsOf: async (slug) => (await reviewOf(slug)).comments,
       // An MCP caller's `runId` is its conversation (agents/conversations.ts).
       modelOf: (slug, runId) => workspaces.peek(slug)?.conversations?.modelOf(runId) ?? null,
@@ -137,7 +143,14 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
     grants,
     auth,
     crs,
-    workspace: async (slug) => (crs === null ? null : workspaces.open(slug)),
+    workspace: async (slug) => (crs === null ? null : slug === MAIN_SLUG ? main : workspaces.open(slug)),
+    handoff: crs === null || main.conversations === null ? null : createHandoff({
+      crs,
+      main: main.conversations,
+      open: async (slug) => (await workspaces.open(slug))?.conversations ?? null,
+      // The page opens a change request with ?cr= and a chat with ?chat= (src/api/workspace.ts).
+      link: (slug, conversationId) => `http://${hosts[0]}/?cr=${slug}${conversationId === null ? '' : `&chat=${conversationId}`}`,
+    }),
   });
 
   server.on('request', createRequestListener(hosts, [workspaces.handle, createChangeRequestsApi(crs), mcp, ...main.handlers, ...shared], vite.middlewares, auth));

@@ -10,7 +10,8 @@ import type { Conversation, ConversationEvent, ConversationRead, MessageContext 
 export type PlanEntry = { content: string; status: 'pending' | 'in_progress' | 'completed' };
 
 export type TranscriptItem =
-  | { kind: 'prompt'; key: string; text: string; by: string | null; at: number; context: MessageContext | null }
+  // `from`: the chat on main that started this one (its first message).
+  | { kind: 'prompt'; key: string; text: string; by: string | null; at: number; context: MessageContext | null; from: string | null }
   | { kind: 'message'; key: string; text: string }
   | { kind: 'thought'; key: string; text: string }
   | { kind: 'tool'; key: string; call: ToolCallUpdate }
@@ -20,6 +21,8 @@ export type TranscriptItem =
   // A process took the session up after the first: only shown then.
   | { kind: 'session'; key: string; how: Exclude<SessionStart, 'new'> }
   | { kind: 'proposal'; key: string; path: string; hunks: number }
+  // The change request the agent opened from main, and the chat it started there.
+  | { kind: 'handoff'; key: string; slug: string; name: string; branch: string; chat: string | null }
   | { kind: 'turn-end'; key: string; turn: TurnEnd; index: number; ms: number };
 
 export function transcriptOf(events: ConversationEvent[]): TranscriptItem[] {
@@ -43,7 +46,7 @@ export function transcriptOf(events: ConversationEvent[]): TranscriptItem[] {
       turns += 1;
       turnAt = event.at;
       plan = null;
-      items.push({ kind: 'prompt', key: key('prompt'), text: event.prompt, by: event.by, at: event.at, context: event.context ?? null });
+      items.push({ kind: 'prompt', key: key('prompt'), text: event.prompt, by: event.by, at: event.at, context: event.context ?? null, from: event.from ?? null });
     } else if (event.type === 'session') {
       if (event.how !== 'new') items.push({ kind: 'session', key: key('session'), how: event.how });
     } else if (event.type === 'end') {
@@ -57,6 +60,7 @@ export function transcriptOf(events: ConversationEvent[]): TranscriptItem[] {
       if (item) item.answer = { optionId: event.optionId, by: event.by };
     } else if (event.type === 'write') items.push({ kind: 'write', key: key('write'), path: event.path });
     else if (event.type === 'proposal') items.push({ kind: 'proposal', key: `proposal-${event.id}`, path: event.path, hunks: event.hunks });
+    else if (event.type === 'handoff') items.push({ kind: 'handoff', key: `handoff-${event.slug}`, slug: event.slug, name: event.name, branch: event.branch, chat: event.chat });
     else if (event.type === 'changed') for (const path of event.paths) items.push({ kind: 'write', key: key('write'), path });
     else if (event.type === 'update') {
       const { update } = event;

@@ -16,7 +16,8 @@ import type { StudioTool, StudioToolContext, ToolResult } from './tool.ts';
 
 // What the note tools need of a change request besides its worktree.
 export type NoteToolDeps = {
-  proposalsOf: (slug: string) => Promise<Proposals>;
+  // Null on main, which has none.
+  proposalsOf: (slug: string) => Promise<Proposals | null>;
   commentsOf: (slug: string) => Promise<Comments>;
   // The model a run says it runs, when it said.
   modelOf: (slug: string, runId: string) => string | null;
@@ -167,7 +168,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
       } catch {
         // A note that does not parse is shown whole.
       }
-      const waiting = (await (await deps.proposalsOf(ctx.slug)).list(at)).filter((proposal) => !proposal.done);
+      const waiting = ((await (await deps.proposalsOf(ctx.slug))?.list(at)) ?? []).filter((proposal) => !proposal.done);
       return json({
         path: at,
         mtimeMs: note.mtimeMs,
@@ -272,6 +273,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
         return json({ written: true, path: at, lint: issues.map((issue) => ({ rule: issue.rule, severity: issue.severity, message: issue.message, line: issue.start.line })) });
       }
       const proposals = await deps.proposalsOf(ctx.slug);
+      if (proposals === null) throw new Error('main is read only: edit in a change request');
       const selection = ctx.caller.kind === 'run' ? (deps.selectionOf?.(ctx.slug, ctx.caller.runId) ?? null) : null;
       const before = selection?.path === at ? await ctx.files.read(at) : null;
       const proposal = await proposals.propose({ path: at, content, edits, by: authorOf(ctx, deps), summary: summary ?? null });

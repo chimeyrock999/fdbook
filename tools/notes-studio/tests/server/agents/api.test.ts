@@ -70,11 +70,6 @@ describe('agents API', () => {
     expect(json(await send(`${base}/api/agents`))).toMatchObject({ agents: [{ id: 'claude' }] });
   });
 
-  it('starts no agent on main', async () => {
-    expect((await send('/api/agents/conversations')).status).toBe(409);
-    expect((await send('/api/agents/conversations', 'POST', { agent: 'claude', role: 'author', prompt: 'env' })).status).toBe(403);
-  });
-
   it('runs an agent in the change request\'s worktree, proposing an edit to a note there and streaming it', async () => {
     const note = join(cr.worktree ?? '', 'content/notes/guide/first-look.mdx');
     const before = await readFile(note, 'utf8');

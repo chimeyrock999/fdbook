@@ -10,7 +10,7 @@ import type { NoteComment, ProposalHunk, ProposalsClient, ProposalView } from '.
 import { useEditorPlugin } from '../../../src/editor/decorations';
 import { placeAll } from '../../../src/suggestions/places';
 import { sourceSuggestions } from '../../../src/suggestions/source';
-import { SuggestionBar, VisualSuggestions, type NoteReview } from '../../../src/suggestions/Suggestions';
+import { NoteComments, SuggestionBar, VisualSuggestions, type NoteReview } from '../../../src/suggestions/Suggestions';
 import { useNoteSuggestions } from '../../../src/suggestions/useNoteSuggestions';
 import { useProposals } from '../../../src/suggestions/useProposals';
 import { createSuggestionLayer } from '../../../src/suggestions/visual';
@@ -191,6 +191,21 @@ describe('suggestions in Visual', () => {
     await act(async () => { fail(new Error('no such comment: c9')); await Promise.resolve(); });
     expect((await screen.findByRole('alert')).textContent).toContain('no such comment: c9');
     expect(commentUi.getByRole('button', { name: 'Resolve feedback' })).toHaveProperty('disabled', false);
+  });
+});
+
+describe('NoteComments', () => {
+  it('resolves a comment on the note as a whole, or on a block that is gone, and offers no Resolve to a reader', async () => {
+    const resolveComment = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve());
+    const loose = comment({ index: 9, text: 'Gone.' }, 'Rewrite the opening.');
+    const placement = placeAll(NOTE, [], [loose]);
+    const { rerender } = render(<NoteComments placement={placement} readOnly={false} onResolve={resolveComment} />);
+    const item = within(screen.getByRole('list', { name: 'Comments on the note' }));
+    expect(item.getByText('Rewrite the opening.')).toBeTruthy();
+    await act(async () => { item.getByRole('button', { name: 'Resolve feedback' }).click(); await Promise.resolve(); });
+    expect(resolveComment).toHaveBeenCalledWith(loose.id);
+    rerender(<NoteComments placement={placement} readOnly onResolve={resolveComment} />);
+    expect(screen.queryByRole('button', { name: 'Resolve feedback' })).toBeNull();
   });
 });
 
