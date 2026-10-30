@@ -9,7 +9,7 @@ import { groupDeleted } from '../../../src/history/versions';
 afterEach(cleanup);
 
 const deleted = (path: string, title: string, digit: string, folderGone = false): DeletedPage =>
-  ({ path, title, sha: digit.repeat(40), date: '2026-10-01T10:00:00Z', author: 'Studio Test', message: `drop ${digit}`, folderGone });
+  ({ path, title, sha: digit.repeat(40), date: '2026-10-01T10:00:00Z', author: 'Studio Test', message: `drop ${digit}`, folderGone, committed: true });
 const pages = [
   deleted('content/notes/shelf/one.mdx', 'Shelf one', 'b', true),
   deleted('content/notes/shelf/two.mdx', 'Shelf two', 'b', true),
@@ -35,6 +35,18 @@ describe('DeletedPagesPage', () => {
     expect(page.queryByText('Shelf one')).toBeNull();
     await user.click(page.getByText('Beta'));
     expect(onOpen).toHaveBeenCalledWith('content/notes/lab/beta.mdx');
+  });
+
+  it('puts the deletes not committed yet first, in one group', () => {
+    const pending = { ...deleted('content/notes/lab/alpha.mdx', 'Alpha', 'c'), committed: false };
+    const other = { ...deleted('content/notes/lab/gamma.mdx', 'Gamma', 'd'), committed: false };
+    expect(groupDeleted([pending, other, ...pages]).map((group) => [group.committed, group.pages.map((page) => page.title)])).toEqual([
+      [false, ['Alpha', 'Gamma']],
+      [true, ['Shelf one', 'Shelf two']],
+      [true, ['Beta']],
+    ]);
+    render(<DeletedPagesPage pages={[pending, ...pages]} error={null} readOnly={false} onOpen={vi.fn()} />);
+    expect(screen.getByText('Not committed')).toBeTruthy();
   });
 
   it('says when nothing was deleted, and when the list failed', () => {

@@ -7,7 +7,7 @@ import { useAsking } from './agents/useAsking';
 import { useAgents } from './agents/useAgents';
 import { ToastStack } from './actions/ToastStack';
 import { createAgentsClient, type ConversationTotals } from './api/agents';
-import { createProposalsClient } from './api/proposals';
+import { createProposalsClient, type DeleteProposalView } from './api/proposals';
 import type { NoteReview } from './suggestions/Suggestions';
 import { useProposals } from './suggestions/useProposals';
 import type { AssetAnswer, AssetUsage } from './api/assets';
@@ -20,7 +20,7 @@ import { createFilesClient } from './api/files';
 import { classifyPath } from '../server/security/asset-types';
 import { createLintClient } from './api/lint';
 import { createPreviewClient, type Preview } from './api/preview';
-import { createTreeClient } from './api/tree';
+import { createTreeClient, type TreeAnswer } from './api/tree';
 import { CURRENT_CR } from './api/workspace';
 import { movedTo } from './assets/asset-changes';
 import { AssetPage } from './assets/AssetPage';
@@ -61,6 +61,7 @@ import { Sidebar, type IssueCount } from './sidebar/Sidebar';
 import { useSidebar, type SidebarView } from './sidebar/useSidebar';
 import { rightsOf, useSession } from './session/session';
 import { UserMenu } from './session/UserMenu';
+import { DeleteDialog, type DeleteTarget } from './tree/DeleteDialog';
 import { PageTree } from './tree/PageTree';
 import { useTree } from './tree/useTree';
 
@@ -126,16 +127,25 @@ export function App() {
   // What agents proposed and commented (#85), as it comes.
   const proposalsClient = useMemo(() => createProposalsClient(), []);
   const proposals = useProposals(proposalsClient, crMode && CURRENT_CR !== null);
-  const { act: actOnProposal, proposals: allProposals, comments: allComments, resolveComment } = proposals;
+  const { act: actOnProposal, proposals: allProposals, comments: allComments, resolveComment, deleting, actOnDelete } = proposals;
+  // A delete to review from the bar over the note (the tree's menu opens its own).
+  const [reviewDelete, setReviewDelete] = useState<{ target: DeleteTarget; proposal: DeleteProposalView } | null>(null);
   const review = useMemo<NoteReview | null>(() => {
     if (active === null || CURRENT_CR === null) return null;
+    const note = syncPath(active);
+    const proposal = [...deleting.values()].find((each) => note === each.path || note.startsWith(`${each.path}/`)) ?? null;
     return {
-      proposals: allProposals.filter((proposal) => proposal.path === active && !proposal.done),
+      proposals: allProposals.filter((each) => each.path === active && !each.done),
       comments: allComments.filter((comment) => comment.path === active),
+      deletion: proposal === null ? null : {
+        proposal,
+        onReview: () => { setReviewDelete({ target: { path: proposal.path, title: proposal.path === note ? (titles.get(active) ?? note) : proposal.path, folder: !proposal.path.endsWith('.mdx') }, proposal }); },
+        onReject: () => actOnDelete(proposal.id, 'reject'),
+      },
       act: actOnProposal,
       resolveComment,
     };
-  }, [active, allProposals, allComments, actOnProposal, resolveComment]);
+  }, [active, allProposals, allComments, actOnProposal, resolveComment, deleting, actOnDelete, titles, setReviewDelete]);
   const [agentTotals, setAgentTotals] = useState<Record<string, ConversationTotals>>({});
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);
@@ -288,6 +298,15 @@ export function App() {
     setPage(next);
   };
 
+  // A delete went through: what lists files loads again, and a page it
+  // took leaves the main pane for Deleted pages, where it can be restored.
+  const afterDelete = (answer: TreeAnswer) => {
+    void git.reload();
+    deleted.reload();
+    const gone = new Set((answer.deleted ?? []).map((note) => NOTES_PREFIX + note));
+    if (page !== null && !isList(page) && gone.has(page.path)) go({ kind: 'deleted' });
+  };
+
   const pagePath = page === null || isList(page) ? null : page.path;
   // A history restore wrote files: what lists them loads again.
   const restored = () => {
@@ -398,6 +417,10 @@ export function App() {
                 unsaved={unsaved}
                 marks={marks}
                 suggested={proposals.counts}
+                deleting={deleting}
+                onDeleted={afterDelete}
+                onShowDeleted={() => { go({ kind: 'deleted' }); }}
+                onDecideDelete={actOnDelete}
                 readOnly={readOnly}
                 onChanged={reload}
               />
@@ -503,6 +526,21 @@ export function App() {
           taken={crs.list?.taken ?? []}
           onCreated={(cr) => { switchTo(cr.slug); }}
           onClose={() => { setCrDialog(null); }}
+        />
+      )}
+      {reviewDelete !== null && (
+        <DeleteDialog
+          client={treeClient}
+          target={reviewDelete.target}
+          proposal={reviewDelete.proposal}
+          onAccept={(base) => actOnDelete(reviewDelete.proposal.id, 'accept', base)}
+          onReject={() => actOnDelete(reviewDelete.proposal.id, 'reject')}
+          onClose={() => { setReviewDelete(null); }}
+          onDone={(answer) => {
+            setReviewDelete(null);
+            void reload();
+            afterDelete(answer);
+          }}
         />
       )}
       {publishing && preview.preview !== null && (

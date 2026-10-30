@@ -11,7 +11,8 @@ import { API_BASE } from './workspace';
 export type PageVersion = { sha: string; date: string; author: string; message: string; path: string; status: 'A' | 'M' | 'R'; from?: string; inChangeRequest: boolean };
 export type DeletedIn = { sha: string; date: string; author: string; message: string };
 export type PageHistory = { path: string; mtimeMs: number | null; deleted: DeletedIn | null; generated: boolean; versions: PageVersion[] };
-export type DeletedPage = { path: string; title: string; sha: string; date: string; author: string; message: string; folderGone: boolean };
+// `committed: false`: deleted in the worktree, not committed yet (`sha` is the version to restore).
+export type DeletedPage = { path: string; title: string; sha: string; date: string; author: string; message: string; folderGone: boolean; committed: boolean };
 export type DeletedRestore = { path: string; open: string; changes: { type: 'add' | 'change'; path: string; detail?: string }[] };
 export type VersionRef = { version: string; path: string };
 export type Comparison = { path: string; from: VersionRef | null; to: VersionRef; before: DiffSide | null; after: DiffSide | null };

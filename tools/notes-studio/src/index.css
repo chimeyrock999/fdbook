@@ -739,7 +739,32 @@
   .studio-tree-changes [data-change='move'] {
     color: var(--fde-warning);
   }
+  .studio-tree-changes [data-change='delete'] {
+    color: var(--fde-error);
+  }
   .studio-tree-changes span {
+    color: var(--fde-muted-foreground);
+  }
+  /* The delete dialog (src/tree/DeleteDialog.tsx): who proposed it, and the links it breaks. */
+  .studio-delete-by {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--fde-muted);
+    font-size: 12.5px;
+  }
+  .studio-delete-links {
+    padding: 8px 10px;
+    border: 1px solid color-mix(in oklab, var(--fde-warning) 45%, var(--fde-border));
+    border-radius: 8px;
+    font-size: 12.5px;
+  }
+  .studio-delete-links ul {
+    margin-top: 4px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+  }
+  .studio-delete-links span {
     color: var(--fde-muted-foreground);
   }
   @media (prefers-reduced-motion: reduce) {

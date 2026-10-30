@@ -1,9 +1,10 @@
-import { FilePen, FileText, GitBranch, Search, Square, Terminal, Wrench } from 'lucide-react';
+import { FilePen, FileText, GitBranch, Search, Square, Terminal, Trash2, Wrench } from 'lucide-react';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { ToolCallUpdate } from '../../server/agents/shared';
 import { PendingButton, Spinner } from '../actions/PendingButton';
 import type { AgentsClient, Conversation, ConversationEvent } from '../api/agents';
 import { chatHref } from '../api/workspace';
+import { NOTES_PREFIX } from '../notes/notes';
 import { AgentLogo } from './AgentLogo';
 import { AskCard, AskLine } from './AskCard';
 import { ContextChips } from './ContextChips';
@@ -80,6 +81,19 @@ function Item({ item, context }: { item: TranscriptItem; context: ItemContext })
         <span className="studio-agent-tool-title" title={item.path}>{item.path}</span>
         <span className="studio-agent-tool-state">{item.hunks === 1 ? '1 suggestion' : `${String(item.hunks)} suggestions`}</span>
         <button type="button" className="studio-agent-link" onClick={() => { onOpenNote(item.path); }}>Review in editor</button>
+      </div>
+    );
+  }
+  if (item.kind === 'delete-proposal') {
+    const page = item.path.endsWith('.mdx');
+    return (
+      <div className="studio-agent-tool" data-status="proposal">
+        <Trash2 size={14} aria-hidden />
+        <span className="studio-agent-tool-title" title={item.path}>{item.path}</span>
+        <span className="studio-agent-tool-state">{page ? 'delete proposed' : 'folder delete proposed'}</span>
+        {page
+          ? <button type="button" className="studio-agent-link" onClick={() => { onOpenNote(`${NOTES_PREFIX}${item.path}`); }}>Review</button>
+          : <span className="studio-agent-meta">Review it from the tree</span>}
       </div>
     );
   }

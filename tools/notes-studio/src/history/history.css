@@ -225,6 +225,9 @@
   .studio-history-tag[data-tag='deleted'] {
     --tag: var(--fde-error);
   }
+  .studio-history-tag[data-tag='uncommitted'] {
+    --tag: var(--fde-warning);
+  }
   /* The commit that deleted the page: on the rail, not a version to pick. */
   .studio-history-version[data-gone] .studio-history-rail::after {
     border-style: dashed;

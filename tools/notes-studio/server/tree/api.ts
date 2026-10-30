@@ -1,6 +1,7 @@
 import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '../http.ts';
 import { createKeyedLock } from '../files/store.ts';
 import { loadTree } from './build.ts';
+import { runDelete } from './delete.ts';
 import { applyPlan, planCreate, planMove, planRename, planSetOpen, planVisibility, type Plan } from './ops.ts';
 import type { TreeFolder } from './types.ts';
 
@@ -11,11 +12,15 @@ type Body = Record<string, unknown>;
 // GET /api/tree: the page tree. POST /api/tree with a JSON body
 // { op: 'create' | 'rename' | 'move' | 'set-open' | 'visibility', dryRun?, ... } changes it and answers
 // { changes, open } (see server/tree/ops.ts); with dryRun it only answers.
+// { op: 'delete', path, base?, dryRun? } deletes a page, folder page or
+// folder; its dry run answers { changes, base, links, deleted } too, and the
+// delete must send that `base` back (server/tree/delete.ts). `onDeleted` is
+// told what a delete took (the proposals on those notes are dropped).
 // Page tree changes go through here, never through the notes sync, which
 // cannot update meta.yaml. `lock` runs one change at a time, each planned
 // from the disk it then writes; asset changes (server/assets/api.ts) share
 // it, since both write notes.
-export function createTreeApi(root: string, lock = createKeyedLock()): Handler {
+export function createTreeApi(root: string, lock = createKeyedLock(), { onDeleted }: { onDeleted?: (target: string, notes: string[]) => Promise<void> | void } = {}): Handler {
 
   function plan(tree: TreeFolder, body: Body): Promise<Plan> {
     const folder = typeof body.folder === 'string' ? body.folder : '';
@@ -31,11 +36,12 @@ export function createTreeApi(root: string, lock = createKeyedLock()): Handler {
       case 'visibility':
         return planVisibility(root, tree, { path: body.path, visible: body.visible });
       default:
-        throw new HttpError(400, 'op must be create, rename, move, set-open or visibility');
+        throw new HttpError(400, 'op must be create, rename, move, set-open, visibility or delete');
     }
   }
 
   async function change(body: Body) {
+    if (body.op === 'delete') return runDelete(root, lock, { path: body.path, base: body.base, dryRun: body.dryRun === true }, onDeleted);
     const answer = (planned: Plan) => ({ changes: planned.changes, open: planned.open, ...(planned.created === undefined ? {} : { created: planned.created }) });
     // A dry run only reads, so it does not wait behind the changes.
     if (body.dryRun === true) return answer(await plan(await loadTree(root), body));

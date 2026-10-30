@@ -219,7 +219,7 @@ Raw bodies are capped too: 25 MB for an asset, 10 MB for an attachment.
 | `POST /api/lint` | Takes `{ path, content }` for a note and returns `{ path, issues }` (see [lint.md](lint.md)). Writes nothing. |
 | `GET /api/icons` | The lucide names a note's `icon` can take: `{ names }` |
 | `GET /api/tree` | The page tree: `{ tree }` |
-| `POST /api/tree` | Takes `{ op: "create" \| "rename" \| "move" \| "set-open" \| "visibility", dryRun?, … }`, changes the tree and returns `{ changes, open, created? }`. With `dryRun` it writes nothing. |
+| `POST /api/tree` | Takes `{ op: "create" \| "rename" \| "move" \| "set-open" \| "visibility", dryRun?, … }`, changes the tree and returns `{ changes, open, created? }`. With `dryRun` it writes nothing. `{ op: "delete", path, base?, dryRun? }` deletes a page, folder page or folder (`server/tree/delete.ts`): its dry run also answers `{ base, links, deleted }`, and the delete must send that `base` back (`400` without, `409` when anything it read changed since). |
 | `GET /api/assets` | Every file under `public/notes`, then every `diagrams/**/*.diagram.json`, with where notes use it (a diagram: the `<Diagram src>` that draw it) and the diagram sources that generate it: `{ assets: [{ path, mtimeMs, size, usages: [{ note, line, column, length, text, unsure }], sources: [{ path, line, text }] }] }` |
 | `POST /api/assets` | Takes `{ op: "rename" \| "delete" \| "replace", path, name?, extension?, baseMtime, dryRun? }`, changes the asset and the notes that use it, and returns `{ changes, usages }`. A replace is a dry run only here. |
 | `PUT /api/assets?path=…&extension=…&baseMtime=…` | Replaces the asset's content with the raw bytes (`X-Studio-Write: 1`, up to 25 MB), at its path or, with another extension, at its name with that one, and returns `{ changes, usages, mtimeMs }` |
@@ -236,12 +236,16 @@ Raw bodies are capped too: 25 MB for an asset, 10 MB for an attachment.
 | `GET /api/history?path=…` | `{ path, mtimeMs, deleted, generated, versions }`: `deleted` names the commit that deleted a file the worktree no longer has, `generated` whether a diagram source generates the asset |
 | `GET /api/history/compare?path=&to=[&from=]` | Each a full sha or `now`; without `from`, nothing is before |
 | `POST /api/history/restore` | `{ path, sha, mtimeMs }`, answers `{ path, mtimeMs }`, `path` being where the file is now; `409` when the file changed since its mtime |
-| `GET /api/history/deleted` | `{ pages: [{ path, title, sha, date, author, message, folderGone }] }`, the latest 200 |
+| `GET /api/history/deleted` | `{ pages: [{ path, title, sha, date, author, message, folderGone, committed }] }`, the latest 200; deletes not committed yet first (`committed: false`, `sha` the last commit with the page) |
 | `POST /api/history/restore-deleted` | `{ path, sha, dryRun? }`, answers `{ path, open, changes }`; `409` for a path the worktree has |
 
 A sha must be one of the file's versions, and the path read at it comes
 from git. History reads `git log --follow --cc --topo-order` on `HEAD`;
-deleted pages read `git log -M --diff-filter=D` under `content/notes`.
+deleted pages read `git log -M --diff-filter=D` under `content/notes`, and
+the deletes not committed yet from `git diff --cached -M --diff-filter=D
+HEAD` in a scratch index (`GIT_INDEX_FILE`) holding the worktree's notes,
+so a page the Studio renamed (a delete plus an untracked file to git
+status) is no delete, and the real index is never touched.
 Restores write under the notes lock; main and a reader answer `403`.
 
 ### Preview and publish
@@ -313,7 +317,9 @@ A flow that is not enabled answers `404`.
 | `GET /api/proposals[?path=…]` | A change request's proposals (of one note), oldest first: `{ proposals }`, each `{ id, path, by, summary, createdMs, mtimeMs, stale, done, hunks: [{ id, removed, added, state, from, to }] }` |
 | `GET /api/proposals/<id>` | `{ proposal }` |
 | `POST /api/proposals/<id>` | `{ op: "accept" \| "reject" \| "rebase" \| "drop", hunks? }` (all undecided hunks by default), answers `{ proposal }`. A stale hunk is not accepted (`409`) until rebased. |
-| `GET /api/proposals/events` | Server-sent events: each proposal when it is made or changes, and `comment` events |
+| `GET /api/proposals/events` | Server-sent events: each proposal when it is made or changes, `comment` events, and `delete-proposal` events |
+| `GET /api/delete-proposals` | The delete proposals (`propose_delete`): `{ proposals }`, each `{ id, path, by, summary, createdMs, decided, state }`, `state` being `open`, `accepted`, `rejected` or `gone` (still open, but the page or folder is not there) |
+| `POST /api/delete-proposals/<id>` | `{ op: "accept" \| "reject", base? }`: accept runs the tree's delete with the `base` of the dry run shown; answers `{ proposal }`. A decided one answers `409`. |
 | `GET /api/comments[?path=…]` | `{ comments: [{ id, path, block: { index, text } \| null, body, by, createdMs }] }` |
 | `POST /api/mcp` | The MCP server, Streamable HTTP, stateless (see [MCP server](#mcp-server)). `GET` and `DELETE` answer `405`. |
 | `POST`, `DELETE /api/mcp/tokens` | With sign-in on, makes an agent token for the signed-in person (`{ token }`), or ends all of theirs; any role, with the csrf header. Sign-in off answers `409`. |
@@ -362,10 +368,14 @@ Page tree and asset changes never go through it, since it cannot update
 
 Known gap: its tree `delete` command still removes an existing note,
 without updating `meta.yaml` or checking the mtime, because the scope
-cannot tell it apart from a save on the same path. Do not wire the editor's
-tree delete until upstream can authorize tree commands separately
-(fuma-nama/fumadocs-editor#24). The sync server has no write hook either,
-so edits typed during an agent turn are not marked for that turn.
+cannot tell it apart from a save on the same path. fuma-nama/fumadocs-editor#24
+was closed by a fix for `mkdir` only (fuma-nama/fumadocs-editor#25, in core 0.4.2):
+`SyncScope` still has no rule for tree commands, so `authenticate` cannot
+refuse them. The Studio never sends one: pages and folders are deleted
+through `POST /api/tree` (`op: "delete"`), which updates `meta.yaml`,
+checks every mtime and takes the notes lock. Do not wire the editor's tree
+delete. The sync server has no write hook either, so edits typed during an
+agent turn are not marked for that turn.
 
 ## Connection watch
 
@@ -577,6 +587,7 @@ the chats the Studio starts and your own agents in a terminal (see
 | `note_vocabulary` | read | Every tag, keyword and graph keyword the notes use, with how many notes use each, most used first |
 | `related_notes` | read | The notes most related to one (10 by default, at most 30), ranked by shared tags and keywords, links either way and title words; each with its href from the note, why, and whether the note already links there |
 | `propose_edit` | write | A proposal: the whole new text, or up to 100 find/replace edits; answers its hunks, lint issues, and `outsideSelection` when the message selected other lines. Nothing is written. A note that does not exist yet is created with `content`; the same turn's later edits to a note it created are written too (`written: true`), until someone else changes it. |
+| `propose_delete` | write | Proposes deleting a page (`x.mdx`) or folder (`x`); answers the dry run (`deleted`, `changes`, `linksLeft`). Nothing is deleted: a person accepts it with the delete dialog, or rejects it. One open proposal per path. Kept in `<STUDIO_HOME>/proposals/<slug>/deletes/`. |
 | `add_comment` | read, but a person needs write access | A comment on a note, or on one of its blocks, kept in `<STUDIO_HOME>/comments/<slug>.jsonl` |
 | `list_assets` | read | The assets under `public/notes` and the notes that use them |
 | `diagram_list`, `diagram_read`, `diagram_validate`, `diagram_render_png` | read | The diagrams; one as JSON with its checks; the checks alone; a PNG the agent can look at |

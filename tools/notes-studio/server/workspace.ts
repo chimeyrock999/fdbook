@@ -23,8 +23,11 @@ import { createStudioFiles } from './files/studio-files.ts';
 import type { ToolCaller } from './mcp/tool.ts';
 import { createProposalsApi, createProposalStream, type ProposalStream } from './proposals/api.ts';
 import { createComments, type Comments } from './proposals/comments.ts';
+import { createDeleteProposals, type DeleteProposals } from './proposals/deletes.ts';
 import { createProposals, type Proposals } from './proposals/store.ts';
 import { createTreeApi } from './tree/api.ts';
+import { runDelete } from './tree/delete.ts';
+import { NOTES_DIR } from './security/paths.ts';
 
 // Methods that change nothing, and the one POST that writes nothing.
 const READS = new Set(['GET', 'HEAD']);
@@ -80,7 +83,14 @@ export function createWorkspace(
   const fileEvents = createFileEvents(root);
   const sync = createNotesSync(root, hosts, { readOnly });
   // A change request's proposals and comments, and the stream of their changes.
-  let review: { proposals: Proposals; comments: Comments; stream: ProposalStream } | null = null;
+  let review: { proposals: Proposals; deletes: DeleteProposals; comments: Comments; stream: ProposalStream } | null = null;
+  // What a delete took: the proposals on those notes have nowhere to go,
+  // and the delete proposals it covers are done.
+  const onDeleted = async (target: string, notes: string[]) => {
+    await review?.proposals.dropNotes(notes.map((note) => `${NOTES_DIR}/${note}`));
+    await review?.deletes.settle(target);
+  };
+  const deleter = (request: { path: string; base?: string; dryRun?: boolean }) => runDelete(root, notesLock, request, onDeleted);
   const runs = agents !== null && (!readOnly || mainAgents !== null);
   const attachments = agents === null || !runs ? null : createAttachments(agents.home);
   const conversations = agents === null || !runs
@@ -102,6 +112,14 @@ export function createWorkspace(
     review = {
       stream,
       comments: createComments(commentsFileOf(agents.home, agents.slug), stream.sendComment, stream.sendCommentResolved),
+      deletes: createDeleteProposals(root, {
+        dir: join(proposalsDirOf(agents.home, agents.slug), 'deletes'),
+        deleter,
+        onChange: (proposal, proposed) => {
+          if (proposed && proposal.by.kind === 'run') conversations?.deleteProposed(proposal.by.runId, proposal);
+          stream.sendDelete(proposal);
+        },
+      }),
       proposals: createProposals(root, {
         dir: proposalsDirOf(agents.home, agents.slug),
         notesLock,
@@ -119,7 +137,7 @@ export function createWorkspace(
     // A person's save is never reverted by a turn going on (agents/watch.ts).
     createFilesApi(root, pathLock, conversations === null ? undefined : (path) => { conversations.savedByPerson(path); }),
     createLintApi(root),
-    createTreeApi(root, notesLock),
+    createTreeApi(root, notesLock, { onDeleted }),
     createAssetsApi(root, notesLock),
     createChangesApi(root, notesLock),
     createPageHistoryApi(root, notesLock),

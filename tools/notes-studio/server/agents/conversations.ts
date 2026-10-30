@@ -571,6 +571,12 @@ export function createAgentConversations(
       if (conversation !== undefined) record(conversation, { type: 'proposal', at: Date.now(), id: proposal.id, path: proposal.path, hunks: proposal.hunks.length });
     },
 
+    // A delete an agent proposed (mcp/note-tools.ts propose_delete): in its transcript.
+    deleteProposed(id: string, proposal: { id: string; path: string }) {
+      const conversation = live.get(id);
+      if (conversation !== undefined) record(conversation, { type: 'delete-proposal', at: Date.now(), id: proposal.id, path: proposal.path });
+    },
+
     // Whether the turn going on created `path` itself (mcp/note-tools.ts
     // writes to it directly instead of proposing).
     created: (id: string, path: string) => {

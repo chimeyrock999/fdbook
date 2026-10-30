@@ -21,6 +21,8 @@ export type TranscriptItem =
   // A process took the session up after the first: only shown then.
   | { kind: 'session'; key: string; how: Exclude<SessionStart, 'new'> }
   | { kind: 'proposal'; key: string; path: string; hunks: number }
+  // A page (`x.mdx`) or folder it proposed to delete, relative to content/notes.
+  | { kind: 'delete-proposal'; key: string; path: string }
   // The change request the agent opened from main, and the chat it started there.
   | { kind: 'handoff'; key: string; slug: string; name: string; branch: string; chat: string | null }
   | { kind: 'turn-end'; key: string; turn: TurnEnd; index: number; ms: number };
@@ -60,6 +62,7 @@ export function transcriptOf(events: ConversationEvent[]): TranscriptItem[] {
       if (item) item.answer = { optionId: event.optionId, by: event.by };
     } else if (event.type === 'write') items.push({ kind: 'write', key: key('write'), path: event.path });
     else if (event.type === 'proposal') items.push({ kind: 'proposal', key: `proposal-${event.id}`, path: event.path, hunks: event.hunks });
+    else if (event.type === 'delete-proposal') items.push({ kind: 'delete-proposal', key: `delete-proposal-${event.id}`, path: event.path });
     else if (event.type === 'handoff') items.push({ kind: 'handoff', key: `handoff-${event.slug}`, slug: event.slug, name: event.name, branch: event.branch, chat: event.chat });
     else if (event.type === 'changed') for (const path of event.paths) items.push({ kind: 'write', key: key('write'), path });
     else if (event.type === 'update') {

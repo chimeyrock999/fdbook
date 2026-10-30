@@ -8,8 +8,9 @@ const matches = (page: DeletedPage, query: string) => {
   return words === '' || page.title.toLowerCase().includes(words) || page.path.toLowerCase().includes(words);
 };
 
-// The pages deleted on HEAD (#114), in the main pane: grouped by the commit
-// that deleted them, newest first. Opening one shows its history, where a
+// The pages deleted on HEAD (#114), in the main pane: those deleted but
+// not committed yet first, then grouped by the commit that deleted them,
+// newest first. Opening one shows its history, where a
 // version of it can be restored. `pages` is null while they load.
 export function DeletedPagesPage({ pages, error, readOnly, onOpen }: {
   pages: DeletedPage[] | null;
@@ -33,8 +34,7 @@ export function DeletedPagesPage({ pages, error, readOnly, onOpen }: {
       <div className="min-h-0 flex-1 overflow-auto">
         <div className="studio-deleted-list">
           <p className="text-[13px] text-[var(--fde-muted-foreground)]">
-            Pages deleted in a commit, newest first. Open one to see its versions{readOnly ? '; restoring one needs a change request.' : ' and restore one into this change request.'}
-            {' '}Pages deleted but not committed yet are in Changes.
+            Pages deleted, newest first; those not committed yet come first. Open one to see its versions{readOnly ? '; restoring one needs a change request.' : ' and restore one into this change request.'}
           </p>
           {error !== null && <p role="alert" className="studio-diff-note studio-changes-error">Could not load the deleted pages: {error}</p>}
           {pages === null ? (
@@ -53,12 +53,19 @@ export function DeletedPagesPage({ pages, error, readOnly, onOpen }: {
               />
               {shown.length === 0 && <p className="studio-diff-note">No deleted page matches “{query}”.</p>}
               {shown.map((group) => (
-                <div key={group.sha} className="studio-deleted-group">
-                  <p className="studio-deleted-head">
-                    <b className="font-mono text-[var(--fde-primary)]">{shortVersion(group.sha)}</b>
-                    <span className="font-semibold">{group.message}</span>
-                    <time dateTime={group.date} title={new Date(group.date).toLocaleString()}>{group.author} · {timeAgo(group.date)}</time>
-                  </p>
+                <div key={group.committed ? group.sha : 'uncommitted'} className="studio-deleted-group">
+                  {group.committed ? (
+                    <p className="studio-deleted-head">
+                      <b className="font-mono text-[var(--fde-primary)]">{shortVersion(group.sha)}</b>
+                      <span className="font-semibold">{group.message}</span>
+                      <time dateTime={group.date} title={new Date(group.date).toLocaleString()}>{group.author} · {timeAgo(group.date)}</time>
+                    </p>
+                  ) : (
+                    <p className="studio-deleted-head">
+                      <span className="studio-history-tag" data-tag="uncommitted">Not committed</span>
+                      <span className="font-semibold">Deleted in this change request</span>
+                    </p>
+                  )}
                   {group.pages.map((page) => (
                     <button key={page.path} type="button" className="studio-deleted-row" onClick={() => { onOpen(page.path); }}>
                       <span className="truncate text-[13.5px] font-medium">{page.title}</span>

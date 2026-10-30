@@ -216,6 +216,7 @@ describe('useProposals', () => {
     const client = {
       list: () => listing(),
       comments: () => Promise.resolve([]),
+      listDeletes: () => Promise.resolve([]),
       subscribe: (_merge: unknown, reopened: () => void) => { reopened(); return () => undefined; },
       act: () => Promise.reject(new Error('nothing left to decide in these hunks')),
     } as unknown as ProposalsClient;
@@ -236,6 +237,7 @@ describe('useProposals', () => {
     const client = {
       list: () => Promise.resolve([]),
       comments: () => Promise.resolve(comments),
+      listDeletes: () => Promise.resolve([]),
       subscribe: (_merge: unknown, reopened: () => void, _onComment: unknown, onResolved: typeof resolved) => { resolved = onResolved; reopened(); return () => undefined; },
       resolveComment,
     } as unknown as ProposalsClient;

@@ -364,7 +364,8 @@ describe('PageTree', () => {
       expect(screen.getByRole('menu').textContent).toContain('unsaved changes');
       // Hiding the note writes its frontmatter; hiding its folder only meta.yaml.
       expect(hide().disabled).toBe(name === 'Two');
-      expect(screen.getByRole('menu').textContent.includes('Rename or hide it once it shows Saved.')).toBe(name === 'Two');
+      expect(screen.getByRole('menu').textContent.includes('Rename, hide or delete it once it shows Saved.')).toBe(name === 'Two');
+      expect(screen.getByRole<HTMLButtonElement>('menuitem', { name: 'Delete…' }).disabled).toBe(true);
       await userEvent.keyboard('{Escape}');
     }
     await userEvent.click(screen.getByRole('button', { name: 'Actions for One' }));

@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { findBlock } from '../../src/frontmatter/block.ts';
@@ -16,8 +17,10 @@ import { checkVersion, logPage, versionIn } from './page-history.ts';
 // and its entry in the folder's meta.yaml.
 
 // A page the worktree no longer has, with the commit that deleted it.
-// `folderGone`: its folder went too.
-export type DeletedPage = { path: string; title: string; sha: string; date: string; author: string; message: string; folderGone: boolean };
+// `folderGone`: its folder went too. `committed: false`: a delete not
+// committed yet, and `sha` the last commit that has the page (its version
+// to restore).
+export type DeletedPage = { path: string; title: string; sha: string; date: string; author: string; message: string; folderGone: boolean; committed: boolean };
 // What a restore writes, by worktree path; `open` is the restored page.
 export type DeletedRestore = { path: string; open: string; changes: { type: 'add' | 'change'; path: string; detail?: string }[] };
 
@@ -54,26 +57,56 @@ export function titleOf(source: string, path: string) {
 // Whether the worktree has folder `path` (a worktree path from git's log).
 const hasFolder = async (root: string, path: string) => (await statOrNull(join(root, path)))?.isDirectory() === true;
 
+// The pages HEAD has that the worktree deleted, not committed yet. A page
+// the Studio renamed shows as a delete and an untracked file: git tells it
+// apart (-M) in a scratch index holding the worktree's notes as they are,
+// so the real index is never touched.
+export async function uncommittedDeletes(root: string): Promise<string[]> {
+  // No HEAD yet: nothing was committed to delete.
+  if ((await runGit(root, ['rev-parse', '--verify', '--quiet', 'HEAD']).catch(() => '')).trim() === '') return [];
+  const dir = await mkdtemp(join(tmpdir(), 'studio-deleted-'));
+  const env = { GIT_INDEX_FILE: join(dir, 'index') };
+  try {
+    await runGit(root, ['read-tree', 'HEAD'], env);
+    await runGit(root, ['add', '-A', '--', NOTES_DIR], env);
+    const output = await runGit(root, ['diff', '--cached', '-M', '--name-only', '-z', '--diff-filter=D', 'HEAD', '--', NOTES_DIR], env);
+    return output.split('\0').filter((path) => path !== '' && classifyPath(path) === 'note');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 // The pages deleted on HEAD, newest delete first: each page once, at its
 // last delete, and none the worktree has again. A rename is no delete (-M).
+// Deletes not committed yet come first.
 export async function loadDeletedPages(root: string): Promise<{ pages: DeletedPage[] }> {
   await assertWorktreeTop(root);
   const format = `--format=${RECORD}%H${FIELD}%cI${FIELD}%an${FIELD}%s`;
-  const output = await runGit(root, ['log', '-M', '--diff-filter=D', '--name-only', '-z', format, 'HEAD', '--', NOTES_DIR]);
+  const [output, pending] = await Promise.all([
+    runGit(root, ['log', '-M', '--diff-filter=D', '--name-only', '-z', format, 'HEAD', '--', NOTES_DIR]),
+    uncommittedDeletes(root),
+  ]);
   const seen = new Set<string>();
-  const found: (Omit<Deletion, 'paths'> & { path: string })[] = [];
+  const found: (Omit<Deletion, 'paths'> & { path: string; committed: boolean })[] = [];
+  // The last commit that has each page: what a restore brings back.
+  const lastCommits = await Promise.all(pending.map(async (path) => ({ path, commit: parseDeletions(await runGit(root, ['log', '-1', '-z', format, 'HEAD', '--', path])).at(0) })));
+  for (const { path, commit } of lastCommits) {
+    if (commit === undefined) continue;
+    seen.add(path);
+    found.push({ sha: commit.sha, date: commit.date, author: commit.author, message: commit.message, path, committed: false });
+  }
   for (const { paths, ...commit } of parseDeletions(output)) {
     for (const path of paths) {
       if (seen.has(path) || classifyPath(path) !== 'note') continue;
       seen.add(path);
-      found.push({ ...commit, path });
+      found.push({ ...commit, path, committed: true });
     }
   }
   const gone = await Promise.all(found.map(async (page) => ((await statOrNull(checked(root, page.path))) === null ? page : null)));
   // Titles are read from git one page at a time: only for the pages shown.
   const pages = await Promise.all(gone.filter((page) => page !== null).slice(0, LIMIT).map(async (page): Promise<DeletedPage> => {
     const folder = page.path.slice(0, page.path.lastIndexOf('/'));
-    const source = await readBlob(root, `${page.sha}^`, page.path).then((data) => data.toString('utf8'), () => '');
+    const source = await readBlob(root, page.committed ? `${page.sha}^` : page.sha, page.path).then((data) => data.toString('utf8'), () => '');
     return { ...page, title: titleOf(source, page.path), folderGone: !(await hasFolder(root, folder)) };
   }));
   return { pages };

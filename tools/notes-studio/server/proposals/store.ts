@@ -189,6 +189,20 @@ export function createProposals(root: string, { dir, notesLock = createKeyedLock
       });
     },
 
+    // The notes at `paths` were deleted: their undecided hunks have no note
+    // to go to, so they are dropped.
+    async dropNotes(paths: string[]) {
+      const gone = new Set(paths);
+      for (const proposal of await list()) {
+        if (!gone.has(proposal.path) || proposal.done) continue;
+        await lock(proposal.id, async () => {
+          const stored = await load(proposal.id);
+          for (const hunk of stored.hunks) hunk.decided ??= 'dropped';
+          await save(stored);
+        });
+      }
+    },
+
     remove: () => rm(dir, { recursive: true, force: true }),
   };
 }

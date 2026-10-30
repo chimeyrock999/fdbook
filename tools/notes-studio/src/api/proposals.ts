@@ -2,13 +2,13 @@
 // the page edits (src/api/workspace.ts). Types are server/proposals/shared.ts.
 
 import type { NoteComment } from '../../server/proposals/comments';
-import type { ProposalHunk, ProposalOp, ProposalView } from '../../server/proposals/shared';
+import type { DeleteProposalView, ProposalHunk, ProposalOp, ProposalView } from '../../server/proposals/shared';
 import { watchEvents } from './connection';
 import { errorOf, readJson } from './json';
 import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
-export type { NoteComment, ProposalHunk, ProposalOp, ProposalView };
+export type { DeleteProposalView, NoteComment, ProposalHunk, ProposalOp, ProposalView };
 
 async function answer<T>(response: Response): Promise<T> {
   if (!response.ok) throw await errorOf(response);
@@ -31,15 +31,25 @@ export function createProposalsClient(base = API_BASE) {
       const response = await studioFetch(`${base}/api/proposals/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op, hunks }) });
       return (await answer<{ proposal: ProposalView }>(response)).proposal;
     },
+    async listDeletes(): Promise<DeleteProposalView[]> {
+      return (await answer<{ proposals: DeleteProposalView[] }>(await studioFetch(`${base}/api/delete-proposals`))).proposals;
+    },
+    // Accept (the delete runs, with `base` from the dry run shown) or reject.
+    async actOnDelete(id: string, op: 'accept' | 'reject', deleteBase?: string): Promise<DeleteProposalView> {
+      const response = await studioFetch(`${base}/api/delete-proposals/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op, base: deleteBase }) });
+      return (await answer<{ proposal: DeleteProposalView }>(response)).proposal;
+    },
     // Each proposal as it is made or changes. `onOpen` runs on every
     // connect, so the caller reads again what changed while it was down.
-    // Comments come as `comment` events. The stream opens again after a
-    // drop, under the page's connection watch (connection.ts).
-    subscribe(listener: (proposal: ProposalView) => void, onOpen: () => void = () => undefined, onComment: (comment: NoteComment) => void = () => undefined, onCommentResolved: (comment: { id: string }) => void = () => undefined): () => void {
+    // Comments come as `comment` events, delete proposals as
+    // `delete-proposal` ones. The stream opens again after a drop, under
+    // the page's connection watch (connection.ts).
+    subscribe(listener: (proposal: ProposalView) => void, onOpen: () => void = () => undefined, onComment: (comment: NoteComment) => void = () => undefined, onCommentResolved: (comment: { id: string }) => void = () => undefined, onDelete: (proposal: DeleteProposalView) => void = () => undefined): () => void {
       return watchEvents(`${base}/api/proposals/events`, (events) => {
         events.onmessage = (message: MessageEvent<string>) => { listener(JSON.parse(message.data) as ProposalView); };
         events.addEventListener('comment', (message: MessageEvent<string>) => { onComment(JSON.parse(message.data) as NoteComment); });
         events.addEventListener('comment-resolved', (message: MessageEvent<string>) => { onCommentResolved(JSON.parse(message.data) as { id: string }); });
+        events.addEventListener('delete-proposal', (message: MessageEvent<string>) => { onDelete(JSON.parse(message.data) as DeleteProposalView); });
       }, onOpen);
     },
   };
