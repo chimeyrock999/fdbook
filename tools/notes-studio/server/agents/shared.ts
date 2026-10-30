@@ -153,6 +153,8 @@ export type ConversationEvent =
   | { type: 'changed'; at: number; paths: string[] }
   // An edit it proposed (propose_edit, or a write to a note): `hunks` wait for a person.
   | { type: 'proposal'; at: number; id: string; path: string; hunks: number }
+  // A page or folder it proposed to delete (propose_delete), relative to content/notes.
+  | { type: 'delete-proposal'; at: number; id: string; path: string }
   // The agent opened a change request to carry the work on (on main):
   // `url` opens `chat`, the author chat started there (null: it could not
   // start, and `url` opens the change request).

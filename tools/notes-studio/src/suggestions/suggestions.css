@@ -259,4 +259,19 @@
     border-radius: 50%;
     background: currentColor;
   }
+  /* A delete an agent proposed (propose_delete): on its tree row, and over its note. */
+  .studio-delete-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 17px;
+    height: 17px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--fde-error) 14%, transparent);
+    color: var(--fde-error);
+  }
+  .studio-suggest-bar[data-kind='delete'] {
+    background: color-mix(in srgb, var(--fde-error) 7%, var(--fde-background));
+  }
 }

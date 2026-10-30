@@ -6,7 +6,7 @@ import { git } from '../../support/git';
 import { json, rawRequest } from '../../support/http';
 import { startTestStudio, type TestStudio } from '../../support/studio';
 
-type DeletedPage = { path: string; title: string; sha: string; message: string; folderGone: boolean };
+type DeletedPage = { path: string; title: string; sha: string; message: string; folderGone: boolean; committed: boolean };
 type Restore = { path: string; open: string; changes: { type: string; path: string; detail?: string }[] };
 
 const LAB = 'content/notes/restore-lab';
@@ -195,6 +195,23 @@ describe('page history API: deleted pages', () => {
     const response = await restore({ path: `${IDX}/one.mdx`, sha: betaFirst });
     expect((json(response) as Restore).changes.map((change) => change.path)).toEqual([`${IDX}/one.mdx`, `${IDX}/meta.yaml`, `${IDX}/index.mdx`]);
     expect(await read(`${IDX}/meta.yaml`)).toBe('title: "Idx"\npages:\n  - "index"\n  - "one"\n');
+  });
+
+  it('lists a page deleted from the tree and not committed first, not a page renamed there, and restores it', async () => {
+    const tree = (body: unknown) => rawRequest(`${studio.url}api/tree`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: studio.origin }, body: JSON.stringify(body) });
+    const before = await read(`${LAB}/meta.yaml`);
+    const { base } = json(await tree({ op: 'delete', path: 'restore-lab/alpha.mdx', dryRun: true })) as { base: string };
+    expect((await tree({ op: 'delete', path: 'restore-lab/alpha.mdx', base })).status).toBe(200);
+    // A folder of committed pages, renamed: its pages are moved, not deleted.
+    expect((await tree({ op: 'rename', path: 'distributed-systems/mapreduce', slug: 'map-reduce' })).status).toBe(200);
+    const pages = await deleted();
+    expect(pages[0]).toMatchObject({ path: `${LAB}/alpha.mdx`, title: 'alpha', sha: betaFirst, committed: false, folderGone: false });
+    expect(pages.filter((each) => !each.committed).map((each) => each.path)).toEqual([`${LAB}/alpha.mdx`]);
+    expect(pages.find((each) => each.path === `${SHELF}/two.mdx`)?.committed).toBe(true);
+    expect((await restore({ path: `${LAB}/alpha.mdx`, sha: betaFirst })).status).toBe(200);
+    expect(await read(`${LAB}/alpha.mdx`)).toBe(page('alpha', 'alpha'));
+    expect(await read(`${LAB}/meta.yaml`)).toBe(before);
+    expect((await deleted()).some((each) => !each.committed)).toBe(false);
   });
 
   it('refuses a page that is in the worktree, a version not of the page, a path that is no page and a cross-site post', async () => {

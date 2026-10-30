@@ -7,6 +7,7 @@ import { loadLintContext } from '../lint/context.ts';
 import { lintNote, parseNote } from '../lint/lint.ts';
 import { pageUrl, resolveHref } from '../lint/rules/links.ts';
 import type { Comments } from '../proposals/comments.ts';
+import type { DeleteProposals } from '../proposals/deletes.ts';
 import { blocksOf, lineAt } from '../proposals/hunks.ts';
 import type { ProposalAuthor } from '../proposals/shared.ts';
 import { applyEdits, type Proposals } from '../proposals/store.ts';
@@ -18,6 +19,8 @@ import type { StudioTool, StudioToolContext, ToolResult } from './tool.ts';
 export type NoteToolDeps = {
   // Null on main, which has none.
   proposalsOf: (slug: string) => Promise<Proposals | null>;
+  // Null on main too.
+  deletesOf: (slug: string) => Promise<DeleteProposals | null>;
   commentsOf: (slug: string) => Promise<Comments>;
   // The model a run says it runs, when it said.
   modelOf: (slug: string, runId: string) => string | null;
@@ -60,6 +63,13 @@ export const json = (value: unknown): ToolResult => ({ content: [{ type: 'text',
 export function notePath(path: string) {
   const trimmed = path.trim().replace(/^\/+/, '');
   return trimmed.startsWith(`${NOTES_DIR}/`) ? trimmed : `${NOTES_DIR}/${trimmed}`;
+}
+
+// A page or folder as the tree deletes it, relative to content/notes, from
+// what an agent passes: `content/notes/x.mdx`, `x.mdx`, `x` or `x/`.
+export function treePath(path: string) {
+  const trimmed = path.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  return trimmed.startsWith(`${NOTES_DIR}/`) ? trimmed.slice(NOTES_DIR.length + 1) : trimmed;
 }
 
 export const strings = (value: unknown) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
@@ -320,6 +330,31 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
     },
   } satisfies StudioTool<z.ZodObject<{ path: typeof path; block: z.ZodOptional<z.ZodNumber>; body: z.ZodString }>>;
 
+  const proposeDelete = {
+    name: 'propose_delete',
+    description: 'Proposes deleting a page (<path>.mdx) or a folder (<path>, with every page in it). Nothing is deleted: a person sees the proposal in the Studio with what the delete takes, and accepts or rejects it. Answers the proposal and that list: the files deleted, the meta.yaml entries removed, the images deleted or kept (another note still uses them), and the notes that still link there, which the delete leaves broken: fix them with propose_edit, or say so.',
+    input: z.object({
+      path: z.string().min(1).describe('A page: content/notes/<path>.mdx or <path>.mdx; a folder: content/notes/<path> or <path>'),
+      summary: z.string().max(2000).optional().describe('Why it should go, shown to the person'),
+    }),
+    access: 'write',
+    async run({ path: given, summary }, ctx) {
+      const deletes = await deps.deletesOf(ctx.slug);
+      if (deletes === null) throw new Error('main is read only: propose in a change request');
+      const at = treePath(given);
+      const { proposal, plan } = await deletes.propose({ path: at, by: authorOf(ctx, deps), summary: summary ?? null });
+      return json({
+        id: proposal.id,
+        path: at,
+        state: proposal.state,
+        deleted: plan.deleted,
+        changes: plan.changes,
+        linksLeft: plan.links,
+        message: 'Nothing was deleted: a person accepts or rejects this in the Studio.',
+      });
+    },
+  } satisfies StudioTool<z.ZodObject<{ path: z.ZodString; summary: z.ZodOptional<z.ZodString> }>>;
+
   const listAssetsTool: StudioTool<z.ZodObject<Record<string, never>>> = {
     name: 'list_assets',
     description: 'Lists the assets under public/notes: path, size, and the notes (with line) that use each one.',
@@ -332,5 +367,5 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
     },
   };
 
-  return [listNotes, readNoteTool, searchNotes, noteGraph, proposeEdit, addComment, listAssetsTool] as StudioTool[];
+  return [listNotes, readNoteTool, searchNotes, noteGraph, proposeEdit, proposeDelete, addComment, listAssetsTool] as StudioTool[];
 }

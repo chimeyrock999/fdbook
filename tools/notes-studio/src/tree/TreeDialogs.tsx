@@ -37,7 +37,7 @@ function usePreview(client: TreeClient, request: TreeRequest | null) {
   return request === null ? null : preview;
 }
 
-function Changes({ changes }: { changes: TreeChange[] }) {
+export function Changes({ changes }: { changes: TreeChange[] }) {
   return (
     <ul className="studio-tree-changes" aria-label="Files to write">
       {changes.map((change) => (

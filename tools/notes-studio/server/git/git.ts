@@ -10,18 +10,19 @@ const MAX_OUTPUT = 16 * 1024 * 1024;
 // reads take no optional locks (a status refresh never makes a git command
 // in a terminal fail on index.lock), git never prompts, and its messages
 // stay in English for the UI. A failure throws its stderr as a 500.
-export function runGit(root: string, args: string[]) {
-  return runGitBytes(root, args).then((stdout) => stdout.toString('utf8'));
+// `env` adds to git's environment (a scratch GIT_INDEX_FILE).
+export function runGit(root: string, args: string[], env: Record<string, string> = {}) {
+  return runGitBytes(root, args, MAX_OUTPUT, env).then((stdout) => stdout.toString('utf8'));
 }
 
 // runGit for output that may not be text: a file as a commit holds it.
 // `maxOutput` raises the cap for a file as large as an asset may be.
-export function runGitBytes(root: string, args: string[], maxOutput = MAX_OUTPUT) {
+export function runGitBytes(root: string, args: string[], maxOutput = MAX_OUTPUT, env: Record<string, string> = {}) {
   return new Promise<Buffer>((resolve, reject) => {
     execFile(
       'git',
       ['--literal-pathspecs', '--no-optional-locks', '-c', 'core.quotePath=false', ...args],
-      { cwd: root, timeout: TIMEOUT_MS, maxBuffer: maxOutput, encoding: 'buffer', env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' } },
+      { cwd: root, timeout: TIMEOUT_MS, maxBuffer: maxOutput, encoding: 'buffer', env: { ...process.env, ...env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' } },
       (error, stdout, stderr) => {
         // git says some refusals ("nothing to commit") on stdout.
         if (error) reject(new HttpError(500, `git ${args[0] ?? ''} failed: ${(stderr.toString('utf8').trim() || stdout.toString('utf8').trim() || error.message).trim()}`));

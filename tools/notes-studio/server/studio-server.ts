@@ -134,6 +134,7 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
   const mcp = createMcpApi({
     tools: createNoteTools({
       proposalsOf: async (slug) => (slug === MAIN_SLUG ? null : (await reviewOf(slug)).proposals),
+      deletesOf: async (slug) => (slug === MAIN_SLUG ? null : (await reviewOf(slug)).deletes),
       commentsOf: async (slug) => (await reviewOf(slug)).comments,
       // An MCP caller's `runId` is its conversation (agents/conversations.ts).
       modelOf: (slug, runId) => workspaces.peek(slug)?.conversations?.modelOf(runId) ?? null,

@@ -1,7 +1,7 @@
 import { Check, ChevronLeft, ChevronRight, MessageSquare, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { AGENT_NAMES, type AgentId } from '../../server/agents/shared';
+import type { AgentId } from '../../server/agents/shared';
 import { useBusy, useShownAfter } from '../actions/busy';
 import { PendingButton, Spinner } from '../actions/PendingButton';
 import { AgentLogo } from '../agents/AgentLogo';
@@ -9,6 +9,8 @@ import type { NoteComment, ProposalOp, ProposalView } from '../api/proposals';
 import { diffFrontmatter } from '../diff/diff-blocks';
 import { FrontmatterTable, NotePart } from '../diff/RenderedDiff';
 import { findBlock } from '../frontmatter/block';
+import { authorName } from './authors';
+import type { NoteDeletion } from './DeleteProposalBar';
 import type { Placement, PlacedHunk } from './places';
 import type { Decisions } from './useNoteSuggestions';
 import type { SuggestionLayer, VisualMarks } from './visual';
@@ -20,16 +22,14 @@ import type { SuggestionLayer, VisualMarks } from './visual';
 export type NoteReview = {
   proposals: ProposalView[];
   comments: NoteComment[];
+  // A delete proposed for the note or its folder, if any.
+  deletion?: NoteDeletion | null;
   act: (id: string, op: ProposalOp, hunks?: string[]) => Promise<void>;
   resolveComment: (id: string) => Promise<void>;
 };
 
 const VERBS: Record<ProposalOp, string> = { accept: 'Accepting', reject: 'Rejecting', rebase: 'Rebasing', drop: 'Dropping' };
 
-// An agent's name, or its id for one the Studio does not know.
-const agentName = (id: string) => (AGENT_NAMES as Partial<Record<string, string>>)[id] ?? id;
-
-const authorName = (proposal: ProposalView) => (proposal.by.kind === 'run' ? agentName(proposal.by.agent) : (proposal.by.login ?? 'You'));
 
 function Author({ proposal }: { proposal: ProposalView }) {
   return (
@@ -146,7 +146,7 @@ function Card({ hunk, index, total, readOnly, decisions }: { hunk: PlacedHunk; i
   );
 }
 
-const authorOf = (comment: NoteComment) => (comment.by.kind === 'run' ? agentName(comment.by.agent) : (comment.by.login ?? 'You'));
+const authorOf = (comment: NoteComment) => authorName(comment);
 
 // Resolves a comment, once while the request is out.
 function Resolve({ comment, onResolve }: { comment: NoteComment; onResolve: (id: string) => Promise<void> }) {

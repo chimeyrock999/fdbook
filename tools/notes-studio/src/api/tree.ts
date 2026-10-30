@@ -48,10 +48,17 @@ export type TreeRequest =
   | { op: 'move'; folder: string; from: number; to: number; baseMtime: number | null }
   | { op: 'set-open'; folder: string; defaultOpen: boolean; baseMtime: number | null }
   // `visible: false` in the page's frontmatter or the folder's meta.yaml, or out again.
-  | { op: 'visibility'; path: string; visible: boolean };
+  | { op: 'visibility'; path: string; visible: boolean }
+  // A page `x.mdx`, folder page `x/index.mdx` or folder `x`; `base` from its dry run.
+  | { op: 'delete'; path: string; base?: string };
 
-// `created`: the page or folder a create added.
-export type TreeAnswer = { changes: TreeChange[]; open: string | null; created?: string };
+// A note that still links to what a delete takes (relative to content/notes).
+export type IncomingLink = { note: string; line: number; href: string };
+
+// `created`: the page or folder a create added. A delete answers `base`
+// (send it back to delete), the `links` it leaves broken, and the notes it
+// takes (`deleted`).
+export type TreeAnswer = { changes: TreeChange[]; open: string | null; created?: string; base?: string; links?: IncomingLink[]; deleted?: string[] };
 
 export function createTreeClient(base = API_BASE) {
   async function failed(response: Response): Promise<never> {

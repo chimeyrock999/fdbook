@@ -41,3 +41,18 @@ export type ProposalView = Omit<Proposal, 'hunks'> & { hunks: ProposalHunk[]; mt
 
 export type ProposalOp = 'accept' | 'reject' | 'rebase' | 'drop';
 export const PROPOSAL_OPS: ProposalOp[] = ['accept', 'reject', 'rebase', 'drop'];
+
+// A delete an agent proposed (propose_delete): the page (`x.mdx`) or folder
+// (`x`) the tree deletes, relative to content/notes. `decided` is null
+// until a person accepts (the delete ran) or rejects it.
+export type DeleteProposal = {
+  id: string;
+  path: string;
+  by: ProposalAuthor;
+  summary: string | null;
+  createdMs: number;
+  decided: 'accepted' | 'rejected' | null;
+};
+
+// As listed: `gone` when it is still open but its page or folder is not there.
+export type DeleteProposalView = DeleteProposal & { state: 'open' | 'accepted' | 'rejected' | 'gone' };

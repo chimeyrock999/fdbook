@@ -242,10 +242,11 @@ separators (`---Label---`), links, nested entries (`a/b`), `...`, `z...a`,
   note is saved.
 - Change marks: a note's status after its title, a dot on a closed folder
   that holds a change or on any folder whose `meta.yaml` changed, `D` on a
-  `meta.yaml` entry whose page was deleted, and a mark on notes with
-  suggestions waiting.
+  `meta.yaml` entry whose page was deleted, a mark on notes with
+  suggestions waiting, and a red bin on a page or folder an agent proposed
+  to delete.
 
-New page and Rename show what they will write (a dry run) before you
+New page, Rename and Delete show what they will write (a dry run) before you
 confirm; reorder, Hide/Show and Open by default write at once. Every change
 refuses with `409` when a file it writes changed on disk meanwhile. A
 note open in the editor follows the change through its sync; while it has
@@ -293,12 +294,34 @@ unsaved edits, a change that touches it waits.
   `/notes/a/page/x.png` (an image in the page's asset folder) and a folder
   `page/` next to `page.mdx` keep their paths. JSX `href`s are not
   rewritten, and neither are notes that do not parse.
+- **Delete…** (last in the row menu of a page or folder; not the root page
+  or folder) deletes a page `x.mdx`, a folder page `x/index.mdx` (the
+  folder stays, as a plain folder or with its other pages), or a folder
+  with every page and `meta.yaml` in it. A folder whose `meta.yaml` does
+  not list `index` has no row for its page: its menu has **Delete folder
+  page…** for that page alone. Every `meta.yaml` entry that reached what
+  goes (`x`, `!x`, `...x`, `a/x` in another folder's list) and reaches
+  nothing once it is gone comes out; an entry `x` for a page `x.mdx` next
+  to a folder `x/` still reaches the other one, so it stays. The other
+  entries keep their order. The page's images in
+  `public/notes/<path>/` (a folder page's own files in
+  `public/notes/<folder>/`, a folder's whole `public/notes/<folder>/`) go
+  too, unless a note that stays uses one, or a diagram source generates
+  it: those stay, and the dialog says which note uses each. The dialog
+  groups what is deleted, changed and kept, and lists the notes whose links
+  still reach what goes (by file or URL): those links break, and lint
+  shows them. The delete takes exactly what the dialog showed: when a file
+  changed or a page was added since, it reads the list again and asks you
+  to check it. It waits for the open note to be saved, as Rename does.
+  Afterwards the tree says where to restore it from: **Deleted pages**,
+  which lists deletes not committed yet first. A page open in the main
+  pane that went moves it to Deleted pages.
 
 A rename does not move the page's images: they stay in
 `public/notes/<old path>/`, the links to them keep working, and the dry run
 lists the folder as staying. New images go to the folder of the new path.
-The tree does not move a page to another folder, delete it, or edit a
-folder's title or icon.
+The tree does not move a page to another folder, or edit a folder's title
+or icon.
 
 ## Graph markers
 
@@ -714,8 +737,9 @@ new content starts a new history.
 
 **Deleted pages**, at the foot of the activity bar, lists the pages deleted
 on `HEAD`, grouped by the commit that deleted them, newest first (a rename
-is no delete, and a page the worktree has again is left out). A page
-deleted but not committed yet is in Changes instead. Opening one shows its
+is no delete, and a page the worktree has again is left out). Pages deleted
+but not committed yet (from the tree, or on disk) come first, under **Not
+committed**; a page renamed in the tree is not among them. Opening one shows its
 history with the delete on top (**Deleted**). **Restore page…** first lists
 every file it writes, then brings the picked version back, uncommitted, and
 opens it:
@@ -876,6 +900,17 @@ written into the note until a person accepts it.
 - **Comments.** A comment on a block is a bubble at the block's right; one
   on the note, or on a block that is gone, is listed under the bar. Threads,
   answers and states are planned in #87.
+- **Deletes.** An agent proposes deleting a page or folder with
+  `propose_delete`; nothing is deleted. The tree marks the row with a red
+  bin (a folder row for its own page too), a bar over the note (or any note
+  in the folder) says who proposed it and why, and the row menu's Delete…
+  becomes **Review proposed delete…**.
+  **Review delete…** opens the delete dialog with its dry run (it waits
+  while the note, or one in the folder, has unsaved changes); Delete there
+  accepts the proposal and deletes exactly what the dialog showed. **Reject**
+  closes the proposal and leaves the files. Deleting the page or folder
+  from the tree settles its proposal too. Suggestions waiting on a note
+  that is deleted are dropped.
 
 ## Buttons, dialogs and errors
 

@@ -29,6 +29,7 @@ import { SourceEditor } from './SourceEditor';
 import { ConflictDialog, SaveStatus } from './SyncState';
 import { useUnsaved } from './unsaved';
 import { UnsavedNotice } from './UnsavedNotice';
+import { DeleteProposalBar } from '../suggestions/DeleteProposalBar';
 import { NoteComments, SuggestionBar, VisualSuggestions, type NoteReview } from '../suggestions/Suggestions';
 import { useNoteSuggestions } from '../suggestions/useNoteSuggestions';
 import { sourceSuggestions } from '../suggestions/source';
@@ -225,6 +226,7 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
             </Tab>
           </div>
         </div>
+        {review?.deletion != null && <DeleteProposalBar deletion={review.deletion} readOnly={!canDecide} />}
         {review !== null && opened && (
           <>
             <SuggestionBar placement={suggestions.placement} focus={suggestions.focus} onStep={stepTo} decisions={suggestions.decisions} />

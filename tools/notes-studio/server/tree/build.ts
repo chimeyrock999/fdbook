@@ -84,6 +84,28 @@ function resolveEntry(context: Context, folder: string, item: string): string | 
   return page ? `page:${page}` : false;
 }
 
+// Where entries can reach: the folders and pages of `paths` (relative to
+// content/notes, notes and meta.yaml files), as makeContext has them.
+export function notesIndex(paths: Iterable<string>): Pick<Context, 'folders' | 'pageAt'> {
+  const pages = new Set<string>();
+  const folders = new Set<string>();
+  for (const path of paths) {
+    if (path.endsWith('.mdx')) pages.add(path);
+    for (let dir = dirOf(path); dir !== ''; dir = dirOf(dir)) folders.add(dir);
+  }
+  return { folders, pageAt: (path: string) => (pages.has(`${path}.mdx`) ? `${path}.mdx` : path.endsWith('.mdx') && pages.has(path) ? path : null) };
+}
+
+// Whether entry `item` of the meta.yaml in `folder` reaches a folder or a
+// page, as resolveEntry looks (`!x` and `x` either, `...x` a folder only);
+// null for one that names neither (`...`, a separator, a link).
+export function entryReaches(where: Pick<Context, 'folders' | 'pageAt'>, folder: string, item: string): boolean | null {
+  if (REST.has(item) || SEPARATOR.test(item) || LINK.test(item)) return null;
+  if (item.startsWith('...')) return where.folders.has(joinPath(folder, item.slice(3)));
+  const path = joinPath(folder, item.startsWith('!') ? item.slice(1) : item);
+  return where.folders.has(path) || where.pageAt(path) !== null;
+}
+
 // Node names are React nodes in fumadocs; the loader makes them strings.
 const nameOf = (node: { name?: unknown }) => (typeof node.name === 'string' ? node.name : '');
 

@@ -1,16 +1,18 @@
-import { ArrowDown, ArrowUp, Check, ChevronRight, ExternalLink, Eye, EyeOff, FileText, Folder, GripVertical, icons, Lock, MoreHorizontal, Pencil, Plus, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronRight, ExternalLink, Eye, EyeOff, FileText, Folder, GripVertical, icons, Lock, MoreHorizontal, Pencil, Plus, Trash2, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { createElement, useEffect, useRef, useState, type DragEvent } from 'react';
 import { useBusy } from '../actions/busy';
 import { Spinner } from '../actions/PendingButton';
-import type { TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
+import type { DeleteProposalView } from '../api/proposals';
+import type { TreeAnswer, TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '../api/tree';
 import { CHANGE_NAME, folderMarked, missingStatus, type TreeMarks } from '../changes/marks';
+import { DeleteDialog, type DeleteTarget } from './DeleteDialog';
 import { CreateDialog, RenameDialog } from './TreeDialogs';
 import { dropIndex, filterTree, folderAt, movable, noteOf, renamedPath, stepIndex, titleOf } from './tree';
 import { useOpenFolders } from './useOpenFolders';
 
 type Named = Extract<TreeNode, { kind: 'page' | 'folder' }>;
 type Menu = { node: TreeNode; parent: TreeFolder; top: number; left: number };
-type Dialog = { kind: 'create'; parent: TreeFolder; after: number | null } | { kind: 'rename'; node: Named };
+type Dialog = { kind: 'create'; parent: TreeFolder; after: number | null } | { kind: 'rename'; node: Named } | { kind: 'delete'; target: DeleteTarget; proposal: DeleteProposalView | null };
 type Drop = { id: string; place: 'before' | 'after' };
 
 const HIDDEN_WHY = {
@@ -48,6 +50,7 @@ type View = {
   readOnly: boolean;
   marks: TreeMarks | null;
   suggested: ReadonlyMap<string, number> | null;
+  deleting: ReadonlyMap<string, DeleteProposalView> | null;
   // A change from a row menu or a drop is out (#138): rows neither move
   // nor open their menu until the tree is read again; `changing` is the
   // row it is about.
@@ -61,7 +64,7 @@ type View = {
 const iconOf = (name: string | null): LucideIcon | undefined => (name === null ? undefined : (icons as Partial<Record<string, LucideIcon>>)[name]);
 
 function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; dim: boolean; view: View }) {
-  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu, readOnly, marks, suggested, busy, changing } = view;
+  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu, readOnly, marks, suggested, deleting, busy, changing } = view;
   const hidden = 'hidden' in node ? node.hidden : null;
   const note = noteOf(node);
   const open = node.kind === 'folder' && (filtering || isOpen(node));
@@ -71,6 +74,8 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
   const change = marks === null ? null : node.kind === 'missing' ? missingStatus(marks, node) : note === null ? null : (marks.notes.get(note) ?? null);
   const dot = marks !== null && node.kind === 'folder' && folderMarked(marks, node, open);
   const waiting = note === null ? 0 : (suggested?.get(note) ?? 0);
+  // A delete proposed for the row, or for the folder page it opens.
+  const proposedDelete = node.kind === 'page' || node.kind === 'folder' ? (deleting?.get(node.path) ?? (node.kind === 'folder' && node.index !== null ? deleting?.get(node.index) : undefined) ?? null) : null;
   const select = () => {
     if (node.kind === 'folder' && (node.index === null || note === active)) toggle(node);
     else if (note !== null) onOpen(note);
@@ -127,6 +132,9 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
         {dot && <span className="studio-tree-dot" title="Changes inside" />}
         {change !== null && <span className="studio-change-mark" data-change={change} title={CHANGE_NAME[change]}>{change}</span>}
         {waiting > 0 && <span className="studio-suggest-mark" title={waiting === 1 ? '1 suggestion waiting' : `${String(waiting)} suggestions waiting`}>{waiting}</span>}
+        {proposedDelete !== null && (
+          <span className="studio-delete-mark" title={`${proposedDelete.by.kind === 'run' ? 'An agent' : 'Someone'} proposed deleting ${node.kind === 'folder' && proposedDelete.path === node.index ? 'its folder page' : 'it'}`}><Trash2 size={11} aria-label="Delete proposed" /></span>
+        )}
         {canMove ? (
           <span className="studio-tree-grip" aria-hidden="true"><GripVertical size={13} /></span>
         ) : !readOnly && node.entry === null && hidden !== 'unlisted' && node.kind !== 'missing' ? (
@@ -165,7 +173,7 @@ function Items({ folder, nested = false, dim, view }: { folder: TreeFolder; nest
 // site hides. Pages can be created, renamed, reordered, hidden and shown here; every change
 // goes through /api/tree. `active` and paths are relative to content/notes.
 // `readOnly` (main) shows the tree only: no new page, row menu or drag.
-export function PageTree({ root, client, active, unsaved = null, readOnly = false, marks = null, suggested = null, onOpen, onRenamed, onChanged }: {
+export function PageTree({ root, client, active, unsaved = null, readOnly = false, marks = null, suggested = null, deleting = null, onOpen, onRenamed, onChanged, onDeleted, onShowDeleted, onDecideDelete }: {
   root: TreeFolder | null;
   client: TreeClient;
   active: string | null;
@@ -177,16 +185,25 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
   marks?: TreeMarks | null;
   // Agent suggestions waiting per note, by path relative to content/notes (#85).
   suggested?: ReadonlyMap<string, number> | null;
+  // Open delete proposals, by the page or folder they would delete.
+  deleting?: ReadonlyMap<string, DeleteProposalView> | null;
   onOpen: (path: string) => void;
   onRenamed: (from: string, to: string) => void;
   // Reloads the tree; resolves whether the load set one.
   onChanged: () => Promise<boolean>;
+  // A delete went through (it reloads the tree), and where to restore from.
+  onDeleted?: (answer: TreeAnswer) => void;
+  onShowDeleted?: () => void;
+  // Accepts (with the dry run's base) or rejects a delete proposal.
+  onDecideDelete?: (id: string, op: 'accept' | 'reject', base?: string) => Promise<void>;
 }) {
   const [query, setQuery] = useState('');
   const [menu, setMenu] = useState<Menu | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   // What the last change did; a failed one says why in a toast.
-  const [status, setStatus] = useState<string | null>(null);
+  // `restore`: it was a delete, so the status points to Deleted pages.
+  const [status, setStatus] = useState<{ text: string; restore: boolean } | null>(null);
+  const say = (text: string | null, restore = false) => { setStatus(text === null ? null : { text, restore }); };
   const action = useBusy();
   const [dragging, setDragging] = useState<{ node: TreeNode; parent: TreeFolder } | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
@@ -226,10 +243,10 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
   // change goes out on what the first one changed (its meta.yaml mtime).
   const send = (node: TreeNode, request: TreeRequest, report: (changes: TreeChange[]) => string) => {
     setMenu(null);
-    setStatus(null);
+    say(null);
     void action.run(async () => {
       try {
-        setStatus(report((await client.change(request)).changes));
+        say(report((await client.change(request)).changes));
       } finally {
         await onChanged();
       }
@@ -263,13 +280,16 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
     setDrop(null);
   };
 
-  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu, readOnly, marks, suggested, busy: action.busy, changing: action.running };
+  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu, readOnly, marks, suggested, deleting, busy: action.busy, changing: action.running };
   const menuNode = menu?.node ?? null;
   const movesUnsaved =
     unsaved !== null && (menuNode?.kind === 'page' || menuNode?.kind === 'folder') && renamedPath(unsaved, menuNode.path, menuNode.path) !== null;
   // Hiding or showing a page writes its frontmatter; a folder's only its
   // meta.yaml. An unlisted page counts too: it may also say visible: false.
   const writesUnsaved = movesUnsaved && menuNode.kind === 'page';
+  // A folder's own page when no row of its own shows it (its meta.yaml does
+  // not list `index`): the folder's menu deletes it alone.
+  const ownIndex = menuNode?.kind === 'folder' && menuNode.index !== null && !menuNode.children.some((child) => child.kind === 'page' && child.path === menuNode.index) ? menuNode.index : null;
   return (
     <nav ref={navRef} aria-label="Page tree" className="flex min-h-0 flex-1 flex-col gap-2 p-2.5">
       <div className="flex gap-1.5">
@@ -292,7 +312,12 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
       ) : (
         <div className="min-h-0 overflow-auto"><Items folder={shown} dim={false} view={view} /></div>
       )}
-      {status !== null && <p role="status" className="studio-tree-status">{status}</p>}
+      {status !== null && (
+        <p role="status" className="studio-tree-status">
+          {status.text}
+          {status.restore && onShowDeleted && <> <button type="button" className="studio-agent-link" onClick={onShowDeleted}>Restore it from Deleted pages</button></>}
+        </p>
+      )}
       {menu !== null && menuNode !== null && (
         <div ref={menuRef} role="menu" className="studio-menu" style={{ top: menu.top, left: menu.left }}>
           {menuNode.kind === 'folder' && (
@@ -331,7 +356,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
           )}
           {movesUnsaved && (
             <p className="studio-menu-hint">
-              The open note has unsaved changes. {writesUnsaved ? `Rename or ${menuNode.hidden !== null ? 'show' : 'hide'} it` : 'Rename'} once it shows Saved.
+              The open note has unsaved changes. {writesUnsaved ? `Rename, ${menuNode.hidden !== null ? 'show' : 'hide'} or delete it` : 'Rename or delete'} once it shows Saved.
             </p>
           )}
           {menuNode.kind === 'folder' && (
@@ -361,6 +386,37 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
           </button>
           {!movable(menuNode) && menuNode.kind !== 'missing' && <p className="studio-menu-hint">{lockedWhy(menuNode, menu.parent)}</p>}
           {filtering && <p className="studio-menu-hint">Clear the filter to reorder.</p>}
+          {(menuNode.kind === 'page' || menuNode.kind === 'folder') && (
+            <>
+              <hr />
+              <button
+                type="button"
+                role="menuitem"
+                className="studio-menu-danger"
+                disabled={menuNode.path === 'index.mdx' || menuNode.path === '' || movesUnsaved}
+                onClick={() => {
+                  setMenu(null);
+                  setDialog({ kind: 'delete', target: { path: menuNode.path, title: menuNode.title, folder: menuNode.kind === 'folder' }, proposal: deleting?.get(menuNode.path) ?? null });
+                }}
+              >
+                <Trash2 size={14} /> {deleting?.has(menuNode.path) === true ? 'Review proposed delete…' : 'Delete…'}
+              </button>
+              {ownIndex !== null && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="studio-menu-danger"
+                  disabled={movesUnsaved}
+                  onClick={() => {
+                    setMenu(null);
+                    setDialog({ kind: 'delete', target: { path: ownIndex, title: menuNode.title, folder: false }, proposal: deleting?.get(ownIndex) ?? null });
+                  }}
+                >
+                  <Trash2 size={14} /> {deleting?.has(ownIndex) === true ? 'Review proposed delete of its page…' : 'Delete folder page…'}
+                </button>
+              )}
+            </>
+          )}
         </div>
       )}
       {dialog?.kind === 'create' && (
@@ -374,16 +430,33 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
             setDialog(null);
             const reloaded = onChanged();
             if ('open' in created) {
-              setStatus(`Created ${created.open}.`);
+              say(`Created ${created.open}.`);
               onOpen(created.open);
             } else {
               openFolder({ id: `folder:${created.folder}` });
               reveal.current = created.folder;
-              setStatus(`Created ${created.folder}/.`);
+              say(`Created ${created.folder}/.`);
               void reloaded.then((loaded) => {
                 if (!loaded && reveal.current === created.folder) reveal.current = null;
               });
             }
+          }}
+        />
+      )}
+      {dialog?.kind === 'delete' && (
+        <DeleteDialog
+          client={client}
+          target={dialog.target}
+          unsaved={unsaved}
+          proposal={dialog.proposal}
+          onAccept={dialog.proposal === null || !onDecideDelete ? undefined : (base) => onDecideDelete(dialog.proposal?.id ?? '', 'accept', base)}
+          onReject={dialog.proposal === null || !onDecideDelete ? undefined : () => onDecideDelete(dialog.proposal?.id ?? '', 'reject')}
+          onClose={() => { setDialog(null); }}
+          onDone={(answer) => {
+            setDialog(null);
+            say(`Deleted ${dialog.target.folder ? `${dialog.target.path}/` : dialog.target.path}.`, true);
+            void onChanged();
+            onDeleted?.(answer);
           }}
         />
       )}
@@ -395,7 +468,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
           onClose={() => { setDialog(null); }}
           onDone={(from, to) => {
             setDialog(null);
-            setStatus(`Renamed to ${to}.`);
+            say(`Renamed to ${to}.`);
             void onChanged();
             onRenamed(from, to);
           }}

@@ -1,9 +1,9 @@
-import { readFile, rename, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile, rename, rm, rmdir } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { HttpError } from '../http.ts';
 import { buildTree, readNotesContent } from './build.ts';
 import { listEditableFiles, statOrNull, writeAtomic } from '../files/store.ts';
-import { ASSETS_DIR, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
+import { ASSETS_DIR, EDITABLE_AREAS, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 import { knownTargets, replaceSegment, rewriteLinks, type Rename } from './links.ts';
 import { insertEntry, metaTemplate, MetaEditError, moveEntry, pagesTemplate, readPages, replaceEntry, setDefaultOpen } from './meta-edit.ts';
 import { slugify } from '../../src/slug.ts';
@@ -12,7 +12,8 @@ import { writeMetaVisible, writePageVisible } from './visible-edit.ts';
 import type { TreeFolder, TreeNode, TreePage } from './types.ts';
 
 // Page tree changes: create a page, rename a page or folder, move an entry
-// within its folder, hide or show a page or folder. Each is planned against the disk first (the files to
+// within its folder, hide or show a page or folder (a delete is in
+// delete.ts). Each is planned against the disk first (the files to
 // write, with the mtime each was read at), so a dry run can show it, then
 // applied. Paths are relative to content/notes.
 
@@ -30,6 +31,9 @@ export type Plan = {
   writes: Write[];
   // A file to remove, with the mtime it was read at.
   remove?: { path: string; baseMtime: number };
+  // Files a delete removes, by worktree path (content/notes/…, public/notes/…),
+  // with the mtime each was read at; their folders go once empty.
+  deletes?: { path: string; baseMtime: number }[];
   move: { from: string; to: string } | null;
   changes: TreeChange[];
   // The note to open afterwards.
@@ -39,7 +43,7 @@ export type Plan = {
 };
 
 const slugOf = (path: string) => path.slice(path.lastIndexOf('/') + 1).replace(/\.mdx$/, '');
-const dirOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
+export const dirOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
 const inDir = (dir: string, name: string) => (dir === '' ? name : `${dir}/${name}`);
 const absolute = (root: string, path: string) => join(root, NOTES_DIR, path);
 
@@ -57,7 +61,7 @@ async function readText(root: string, path: string) {
   return { content: await readFile(file, 'utf8'), mtimeMs: info.mtimeMs };
 }
 
-function findNode(folder: TreeFolder, match: (node: TreeNode) => boolean): TreeNode | null {
+export function findNode(folder: TreeFolder, match: (node: TreeNode) => boolean): TreeNode | null {
   for (const child of folder.children) {
     if (match(child)) return child;
     if (child.kind === 'folder') {
@@ -89,7 +93,7 @@ async function checkFree(root: string, dir: string, slug: string) {
   }
 }
 
-function metaError<T>(task: () => T): T {
+export function metaError<T>(task: () => T): T {
   try {
     return task();
   } catch (error) {
@@ -361,8 +365,12 @@ export async function applyPlan(root: string, plan: Plan) {
     if ((info?.mtimeMs ?? null) !== baseMtime) throw new HttpError(409, `${NOTES_DIR}/${path} changed on disk`);
     return info;
   };
+  const checkFile = async (path: string, baseMtime: number) => {
+    if ((await statOrNull(worktreeFile(root, path)))?.mtimeMs !== baseMtime) throw new HttpError(409, `${path} changed on disk`);
+  };
   for (const write of plan.writes) await check(write.path, write.baseMtime);
   if (plan.remove) await check(plan.remove.path, plan.remove.baseMtime);
+  for (const file of plan.deletes ?? []) await checkFile(file.path, file.baseMtime);
   if (plan.move) {
     if (!(await statOrNull(absolute(root, plan.move.from)))) throw new HttpError(409, `${NOTES_DIR}/${plan.move.from} is gone`);
     if (await statOrNull(absolute(root, plan.move.to))) throw new HttpError(409, `${NOTES_DIR}/${plan.move.to} already exists`);
@@ -380,5 +388,29 @@ export async function applyPlan(root: string, plan: Plan) {
   if (plan.remove) {
     await check(plan.remove.path, plan.remove.baseMtime);
     await rm(guarded(root, plan.remove.path));
+  }
+  for (const file of plan.deletes ?? []) {
+    await checkFile(file.path, file.baseMtime);
+    await rm(worktreeFile(root, file.path));
+  }
+  await removeEmptyFolders(root, (plan.deletes ?? []).map((file) => file.path));
+}
+
+function worktreeFile(root: string, path: string) {
+  const resolved = resolveWorktreePath(root, path);
+  if (!resolved) throw new HttpError(403, `not an editable path: ${path}`);
+  return resolved.absolute;
+}
+
+// The folders the deleted files leave empty, deepest first, up to (not
+// including) content/notes or public/notes. One that still holds anything
+// (a file the Studio does not manage) stays.
+async function removeEmptyFolders(root: string, paths: string[]) {
+  const folders = new Set<string>();
+  for (const path of paths) {
+    for (let dir = dirname(path); dir.includes('/') && !EDITABLE_AREAS.includes(dir); dir = dirname(dir)) folders.add(dir);
+  }
+  for (const dir of [...folders].sort((a, b) => b.split('/').length - a.split('/').length)) {
+    await rmdir(join(root, dir)).catch(() => undefined);
   }
 }

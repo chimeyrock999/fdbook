@@ -3,14 +3,16 @@ import { atLeast } from '../auth/shared.ts';
 import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '../http.ts';
 import { viewerOf, type Viewer } from '../security/access.ts';
 import type { Comments, NoteComment } from './comments.ts';
-import { PROPOSAL_OPS, type ProposalOp, type ProposalView } from './shared.ts';
+import type { DeleteProposals } from './deletes.ts';
+import { PROPOSAL_OPS, type DeleteProposalView, type ProposalOp, type ProposalView } from './shared.ts';
 import type { Proposals } from './store.ts';
 
 const MAX_BODY_BYTES = 16 * 1024;
 const HEARTBEAT_MS = 25_000;
 
-// GET /api/proposals/events: each proposal as it is made or changes, and
-// each comment as a `comment` event, to whoever may still read.
+// GET /api/proposals/events: each proposal as it is made or changes, each
+// delete proposal as a `delete-proposal` event, and each comment as a
+// `comment` event, to whoever may still read.
 export function createProposalStream() {
   const streams = new Map<ServerResponse, Viewer>();
   let closed = false;
@@ -27,6 +29,7 @@ export function createProposalStream() {
   heartbeat.unref();
   return {
     send: (proposal: ProposalView) => { send(`data: ${JSON.stringify(proposal)}\n\n`); },
+    sendDelete: (proposal: DeleteProposalView) => { send(`event: delete-proposal\ndata: ${JSON.stringify(proposal)}\n\n`); },
     // A comment, as a `comment` event.
     sendComment: (comment: NoteComment) => { send(`event: comment\ndata: ${JSON.stringify(comment)}\n\n`); },
     sendCommentResolved: (id: string) => { send(`event: comment-resolved\ndata: ${JSON.stringify({ id })}\n\n`); },
@@ -53,6 +56,7 @@ export type ProposalStream = ReturnType<typeof createProposalStream>;
 const NO_CR = 'Proposals live in a change request: open one first.';
 const ONE = /^\/api\/proposals\/([a-z0-9-]+)$/;
 const COMMENT = /^\/api\/comments\/([a-z0-9-]+)$/;
+const ONE_DELETE = /^\/api\/delete-proposals\/([a-z0-9-]+)$/;
 
 // The proposals and comments of one change request (store.ts, comments.ts),
 // or null where there are none (main):
@@ -62,13 +66,28 @@ const COMMENT = /^\/api\/comments\/([a-z0-9-]+)$/;
 // GET  /api/proposals/events     server-sent events (createProposalStream)
 // GET  /api/comments[?path=…]
 // DELETE /api/comments/<id>     resolves it: gone, as a `comment-resolved` event
-export function createProposalsApi(state: { proposals: Proposals; comments: Comments; stream: ProposalStream } | null): Handler {
+// GET  /api/delete-proposals     every delete proposal (deletes.ts)
+// POST /api/delete-proposals/<id> { op: accept | reject, base? }: accept
+//                                deletes, with the base of the dry run shown
+export function createProposalsApi(state: { proposals: Proposals; deletes: DeleteProposals; comments: Comments; stream: ProposalStream } | null): Handler {
   async function answer(pathname: string, request: Parameters<Handler>[0]): Promise<unknown> {
     if (state === null) throw new HttpError(409, NO_CR);
     const path = new URL(request.url ?? '/', 'http://studio').searchParams.get('path') ?? undefined;
     if (pathname === '/api/comments' || pathname === '/api/proposals') {
       if (request.method !== 'GET') throw new HttpError(405, 'method not allowed');
       return pathname === '/api/comments' ? { comments: await state.comments.list(path) } : { proposals: await state.proposals.list(path) };
+    }
+    if (pathname === '/api/delete-proposals') {
+      if (request.method !== 'GET') throw new HttpError(405, 'method not allowed');
+      return { proposals: await state.deletes.list() };
+    }
+    const deleteId = ONE_DELETE.exec(pathname)?.[1];
+    if (deleteId !== undefined) {
+      if (request.method === 'GET') return { proposal: await state.deletes.read(deleteId) };
+      if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
+      const { op, base } = await readJsonObject(request, MAX_BODY_BYTES, 'a decision');
+      if (op !== 'accept' && op !== 'reject') throw new HttpError(400, 'op must be accept or reject');
+      return { proposal: await state.deletes.act(deleteId, op, base) };
     }
     const commentId = COMMENT.exec(pathname)?.[1];
     if (commentId !== undefined) {
@@ -92,7 +111,7 @@ export function createProposalsApi(state: { proposals: Proposals; comments: Comm
       else state.stream.subscribe(response, viewerOf(request));
       return true;
     }
-    if (pathname !== '/api/proposals' && pathname !== '/api/comments' && !ONE.test(pathname) && !COMMENT.test(pathname)) return false;
+    if (pathname !== '/api/proposals' && pathname !== '/api/comments' && pathname !== '/api/delete-proposals' && !ONE.test(pathname) && !COMMENT.test(pathname) && !ONE_DELETE.test(pathname)) return false;
     try {
       sendJson(response, 200, await answer(pathname, request));
     } catch (error) {

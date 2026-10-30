@@ -33,15 +33,18 @@ export function restoreBlocked({ selected, readOnly, reader = false, mtimeMs, as
   return null;
 }
 
-type Group = { sha: string; message: string; author: string; date: string; pages: DeletedPage[] };
+// `committed: false`: the deletes not committed yet, one group first.
+type Group = { sha: string; message: string; author: string; date: string; committed: boolean; pages: DeletedPage[] };
 
-// The pages in commit order, one group per commit that deleted them.
+// The pages in commit order, one group per commit that deleted them, after
+// one group of the deletes not committed yet.
 export function groupDeleted(pages: readonly DeletedPage[]): Group[] {
   const groups: Group[] = [];
   for (const page of pages) {
     const last = groups.at(-1);
-    if (last?.sha === page.sha) last.pages.push(page);
-    else groups.push({ sha: page.sha, message: page.message, author: page.author, date: page.date, pages: [page] });
+    if (!page.committed && last?.committed === false) last.pages.push(page);
+    else if (page.committed && last?.committed === true && last.sha === page.sha) last.pages.push(page);
+    else groups.push({ sha: page.sha, message: page.message, author: page.author, date: page.date, committed: page.committed, pages: [page] });
   }
   return groups;
 }

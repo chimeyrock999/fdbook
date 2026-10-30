@@ -34,6 +34,18 @@ describe('agent transcripts', () => {
     expect(items[5]).toMatchObject({ text: 'Done, shorter now.' });
   });
 
+  it('shows the edits and deletes an agent proposed', () => {
+    const items = transcriptOf([
+      { type: 'start', at: 0, conversation: summary() },
+      { type: 'proposal', at: 1, id: 'p1', path: 'content/notes/intro.mdx', hunks: 2 },
+      { type: 'delete-proposal', at: 2, id: 'd1', path: 'guide/old.mdx' },
+    ]);
+    expect(items).toEqual([
+      { kind: 'proposal', key: 'proposal-p1', path: 'content/notes/intro.mdx', hunks: 2 },
+      { kind: 'delete-proposal', key: 'delete-proposal-d1', path: 'guide/old.mdx' },
+    ]);
+  });
+
   it('marks each turn with its message and its end, and a session taken up again', () => {
     const items = transcriptOf([
       { type: 'start', at: 0, conversation: summary() },
