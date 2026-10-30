@@ -74,6 +74,8 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
   const change = marks === null ? null : node.kind === 'missing' ? missingStatus(marks, node) : note === null ? null : (marks.notes.get(note) ?? null);
   const dot = marks !== null && node.kind === 'folder' && folderMarked(marks, node, open);
   const waiting = note === null ? 0 : (suggested?.get(note) ?? 0);
+  // A delete proposed for the row, or for the folder page it opens.
+  const proposedDelete = node.kind === 'page' || node.kind === 'folder' ? (deleting?.get(node.path) ?? (node.kind === 'folder' && node.index !== null ? deleting?.get(node.index) : undefined) ?? null) : null;
   const select = () => {
     if (node.kind === 'folder' && (node.index === null || note === active)) toggle(node);
     else if (note !== null) onOpen(note);
@@ -130,8 +132,8 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
         {dot && <span className="studio-tree-dot" title="Changes inside" />}
         {change !== null && <span className="studio-change-mark" data-change={change} title={CHANGE_NAME[change]}>{change}</span>}
         {waiting > 0 && <span className="studio-suggest-mark" title={waiting === 1 ? '1 suggestion waiting' : `${String(waiting)} suggestions waiting`}>{waiting}</span>}
-        {(node.kind === 'page' || node.kind === 'folder') && deleting?.has(node.path) === true && (
-          <span className="studio-delete-mark" title={`${deleting.get(node.path)?.by.kind === 'run' ? 'An agent' : 'Someone'} proposed deleting it`}><Trash2 size={11} aria-label="Delete proposed" /></span>
+        {proposedDelete !== null && (
+          <span className="studio-delete-mark" title={`${proposedDelete.by.kind === 'run' ? 'An agent' : 'Someone'} proposed deleting ${node.kind === 'folder' && proposedDelete.path === node.index ? 'its folder page' : 'it'}`}><Trash2 size={11} aria-label="Delete proposed" /></span>
         )}
         {canMove ? (
           <span className="studio-tree-grip" aria-hidden="true"><GripVertical size={13} /></span>
@@ -285,6 +287,9 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
   // Hiding or showing a page writes its frontmatter; a folder's only its
   // meta.yaml. An unlisted page counts too: it may also say visible: false.
   const writesUnsaved = movesUnsaved && menuNode.kind === 'page';
+  // A folder's own page when no row of its own shows it (its meta.yaml does
+  // not list `index`): the folder's menu deletes it alone.
+  const ownIndex = menuNode?.kind === 'folder' && menuNode.index !== null && !menuNode.children.some((child) => child.kind === 'page' && child.path === menuNode.index) ? menuNode.index : null;
   return (
     <nav ref={navRef} aria-label="Page tree" className="flex min-h-0 flex-1 flex-col gap-2 p-2.5">
       <div className="flex gap-1.5">
@@ -396,6 +401,20 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
               >
                 <Trash2 size={14} /> {deleting?.has(menuNode.path) === true ? 'Review proposed delete…' : 'Delete…'}
               </button>
+              {ownIndex !== null && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="studio-menu-danger"
+                  disabled={movesUnsaved}
+                  onClick={() => {
+                    setMenu(null);
+                    setDialog({ kind: 'delete', target: { path: ownIndex, title: menuNode.title, folder: false }, proposal: deleting?.get(ownIndex) ?? null });
+                  }}
+                >
+                  <Trash2 size={14} /> {deleting?.has(ownIndex) === true ? 'Review proposed delete of its page…' : 'Delete folder page…'}
+                </button>
+              )}
             </>
           )}
         </div>
@@ -428,6 +447,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
         <DeleteDialog
           client={client}
           target={dialog.target}
+          unsaved={unsaved}
           proposal={dialog.proposal}
           onAccept={dialog.proposal === null || !onDecideDelete ? undefined : (base) => onDecideDelete(dialog.proposal?.id ?? '', 'accept', base)}
           onReject={dialog.proposal === null || !onDecideDelete ? undefined : () => onDecideDelete(dialog.proposal?.id ?? '', 'reject')}

@@ -63,6 +63,7 @@ import { rightsOf, useSession } from './session/session';
 import { UserMenu } from './session/UserMenu';
 import { DeleteDialog, type DeleteTarget } from './tree/DeleteDialog';
 import { PageTree } from './tree/PageTree';
+import { renamedPath } from './tree/tree';
 import { useTree } from './tree/useTree';
 
 // Below this width the sidebar is a drawer (see .studio-sidebar).
@@ -139,13 +140,14 @@ export function App() {
       comments: allComments.filter((comment) => comment.path === active),
       deletion: proposal === null ? null : {
         proposal,
+        waiting: unsaved !== null && renamedPath(unsaved, proposal.path, proposal.path) !== null,
         onReview: () => { setReviewDelete({ target: { path: proposal.path, title: proposal.path === note ? (titles.get(active) ?? note) : proposal.path, folder: !proposal.path.endsWith('.mdx') }, proposal }); },
         onReject: () => actOnDelete(proposal.id, 'reject'),
       },
       act: actOnProposal,
       resolveComment,
     };
-  }, [active, allProposals, allComments, actOnProposal, resolveComment, deleting, actOnDelete, titles, setReviewDelete]);
+  }, [active, allProposals, allComments, actOnProposal, resolveComment, deleting, actOnDelete, titles, setReviewDelete, unsaved]);
   const [agentTotals, setAgentTotals] = useState<Record<string, ConversationTotals>>({});
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);
@@ -532,6 +534,7 @@ export function App() {
         <DeleteDialog
           client={treeClient}
           target={reviewDelete.target}
+          unsaved={unsaved}
           proposal={reviewDelete.proposal}
           onAccept={(base) => actOnDelete(reviewDelete.proposal.id, 'accept', base)}
           onReject={() => actOnDelete(reviewDelete.proposal.id, 'reject')}

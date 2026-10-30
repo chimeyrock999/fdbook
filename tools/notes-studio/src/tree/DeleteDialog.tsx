@@ -7,6 +7,7 @@ import { isConflict } from '../api/json';
 import type { DeleteProposalView } from '../api/proposals';
 import type { TreeAnswer, TreeClient } from '../api/tree';
 import { authorName } from '../suggestions/authors';
+import { renamedPath } from './tree';
 import { Changes, Dialog } from './TreeDialogs';
 
 // What a delete takes: a page `x.mdx`, a folder page `x/index.mdx` or a
@@ -28,9 +29,12 @@ const GROUPS = [
 // since, the list is read again and the person asked to look again. With a
 // `proposal` (an agent's propose_delete), it says who proposed it and why,
 // Delete accepts it (`onAccept`) and it can be rejected.
-export function DeleteDialog({ client, target, proposal = null, onAccept, onReject, onDone, onClose }: {
+export function DeleteDialog({ client, target, unsaved = null, proposal = null, onAccept, onReject, onDone, onClose }: {
   client: TreeClient;
   target: DeleteTarget;
+  // The open note while it has edits not on disk yet: deleting it (or its
+  // folder) would drop them, so the delete waits, as a rename does.
+  unsaved?: string | null;
   proposal?: DeleteProposalView | null;
   onAccept?: (base: string) => Promise<void>;
   onReject?: () => Promise<void>;
@@ -48,8 +52,9 @@ export function DeleteDialog({ client, target, proposal = null, onAccept, onReje
   useEffect(() => { void load(); }, [load]);
 
   const base = plan?.answer?.base ?? null;
+  const waiting = unsaved !== null && renamedPath(unsaved, target.path, target.path) !== null;
   const submit = () => {
-    if (base === null) return;
+    if (base === null || waiting) return;
     void action.run(async () => {
       try {
         // An accepted proposal deletes on the server what the dry run showed.
@@ -108,12 +113,13 @@ export function DeleteDialog({ client, target, proposal = null, onAccept, onReje
           </ul>
         </div>
       )}
+      {waiting && <p role="status" className="studio-tree-error">The open note has unsaved changes. Delete once it shows Saved.</p>}
       <div className="flex flex-wrap justify-end gap-2">
         {proposal !== null && onReject && (
           <PendingButton className="studio-button mr-auto" pending={action.is('reject')} pendingLabel="Rejecting…" disabled={action.busy} onClick={reject}>Reject proposal</PendingButton>
         )}
         <button type="button" className="studio-button" disabled={action.busy} onClick={onClose}>Cancel</button>
-        <PendingButton type="submit" className="studio-button studio-button-danger" pending={action.is('delete')} pendingLabel="Deleting…" disabled={base === null}>
+        <PendingButton type="submit" className="studio-button studio-button-danger" pending={action.is('delete')} pendingLabel="Deleting…" disabled={base === null || waiting}>
           <Trash2 size={13} aria-hidden /> {target.folder ? 'Delete folder' : 'Delete'}
         </PendingButton>
       </div>

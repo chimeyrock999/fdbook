@@ -141,6 +141,23 @@ describe('deleting from the tree', () => {
     expect(await exists('content/notes/hidden.mdx')).toBe(false);
   });
 
+  it('keeps the entry of a page next to a folder of the same name: it still reaches the other one', async () => {
+    await writeFile(at('content/notes/meta.yaml'), 'pages:\n  - x\n  - solo\n');
+    await writeFile(at('content/notes/x.mdx'), page('X page'));
+    await mkdir(at('content/notes/x'), { recursive: true });
+    await writeFile(at('content/notes/x/meta.yaml'), 'title: X\npages: [a]\n');
+    await writeFile(at('content/notes/x/a.mdx'), page('A'));
+    // The page goes: `x` reaches the folder still.
+    expect((await dryRun('x.mdx')).changes).toEqual([{ type: 'delete', path: 'x.mdx' }]);
+    // The folder goes: `x` then reaches the page.
+    expect((await dryRun('x')).changes).toEqual([{ type: 'delete', path: 'x/a.mdx' }, { type: 'delete', path: 'x/meta.yaml' }]);
+    await remove('x');
+    expect(await text('content/notes/meta.yaml')).toBe('pages:\n  - x\n  - solo\n');
+    // Both gone: the entry reaches nothing and goes too.
+    await remove('x.mdx');
+    expect(await text('content/notes/meta.yaml')).toBe('pages:\n  - solo\n');
+  });
+
   it('tells onDeleted what went', async () => {
     const told: unknown[] = [];
     await runDelete(root, lock, { path: 'guide/deep', base: (await dryRun('guide/deep')).base }, (target, notes) => { told.push(target, notes); });

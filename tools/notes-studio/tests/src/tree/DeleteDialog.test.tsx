@@ -93,6 +93,15 @@ describe('DeleteDialog', () => {
     expect(change).toHaveBeenCalledTimes(1);
   });
 
+  it('waits while a note it takes has unsaved changes', async () => {
+    const { client } = fakeClient(() => PLAN);
+    render(<DeleteDialog client={client} target={{ path: 'guide', title: 'Guide', folder: true }} unsaved="guide/setup.mdx" onDone={vi.fn()} onClose={vi.fn()} />);
+    const dialog = screen.getByRole('dialog');
+    await within(dialog).findByText('Deleted');
+    expect(within(dialog).getByRole('status').textContent).toContain('once it shows Saved');
+    expect(within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Delete folder' }).disabled).toBe(true);
+  });
+
   it('cannot delete while the dry run is refused', async () => {
     const { client } = fakeClient(() => Object.assign(new Error('the root page and folder cannot be deleted'), { status: 400 }));
     render(<DeleteDialog client={client} target={{ path: 'index.mdx', title: 'Home', folder: false }} onDone={vi.fn()} onClose={vi.fn()} />);
@@ -153,5 +162,24 @@ describe('PageTree delete', () => {
     await within(dialog).findByText('Deleted');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
     await waitFor(() => { expect(onDecideDelete).toHaveBeenCalledWith('p1', 'accept', 'base-one'); });
+  });
+
+  it("deletes a folder's own page from the folder row, and shows a proposal for it there", async () => {
+    const withIndex: TreeFolder = { ...root, children: root.children.map((child) => (child.kind === 'folder' ? { ...child, index: 'guide/index.mdx' } : child)) };
+    const { client, change } = fakeClient(() => PLAN);
+    const indexProposal = { ...proposal, id: 'p2', path: 'guide/index.mdx' };
+    const { rerender } = render(<PageTree root={withIndex} client={client} active="guide/setup.mdx" onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={vi.fn(() => Promise.resolve(true))} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Guide' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete folder page…' }));
+    await within(screen.getByRole('dialog', { name: 'Delete “Guide”?' })).findByText('Deleted');
+    expect(change).toHaveBeenLastCalledWith({ op: 'delete', path: 'guide/index.mdx' }, true);
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    rerender(<PageTree root={withIndex} client={client} active="guide/setup.mdx" deleting={new Map([[indexProposal.path, indexProposal]])} onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={vi.fn(() => Promise.resolve(true))} />);
+    expect(screen.getByRole('button', { name: 'Guide' }).closest('.studio-tree-row')?.querySelector('[aria-label="Delete proposed"]')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Guide' }));
+    expect(screen.getByRole('menuitem', { name: 'Delete…' })).toBeTruthy();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Review proposed delete of its page…' }));
+    expect(within(screen.getByRole('dialog')).getByText(/proposed this delete/)).toBeTruthy();
   });
 });

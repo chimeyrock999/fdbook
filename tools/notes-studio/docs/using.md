@@ -297,9 +297,13 @@ unsaved edits, a change that touches it waits.
 - **Delete…** (last in the row menu of a page or folder; not the root page
   or folder) deletes a page `x.mdx`, a folder page `x/index.mdx` (the
   folder stays, as a plain folder or with its other pages), or a folder
-  with every page and `meta.yaml` in it. Every `meta.yaml` entry that
-  reached it (`x`, `!x`, `...x`, `a/x` in another folder's list) comes out;
-  the other entries keep their order. The page's images in
+  with every page and `meta.yaml` in it. A folder whose `meta.yaml` does
+  not list `index` has no row for its page: its menu has **Delete folder
+  page…** for that page alone. Every `meta.yaml` entry that reached what
+  goes (`x`, `!x`, `...x`, `a/x` in another folder's list) and reaches
+  nothing once it is gone comes out; an entry `x` for a page `x.mdx` next
+  to a folder `x/` still reaches the other one, so it stays. The other
+  entries keep their order. The page's images in
   `public/notes/<path>/` (a folder page's own files in
   `public/notes/<folder>/`, a folder's whole `public/notes/<folder>/`) go
   too, unless a note that stays uses one, or a diagram source generates
@@ -898,9 +902,11 @@ written into the note until a person accepts it.
   answers and states are planned in #87.
 - **Deletes.** An agent proposes deleting a page or folder with
   `propose_delete`; nothing is deleted. The tree marks the row with a red
-  bin, a bar over the note (or any note in the folder) says who proposed it
-  and why, and the row menu's Delete… becomes **Review proposed delete…**.
-  **Review delete…** opens the delete dialog with its dry run; Delete there
+  bin (a folder row for its own page too), a bar over the note (or any note
+  in the folder) says who proposed it and why, and the row menu's Delete…
+  becomes **Review proposed delete…**.
+  **Review delete…** opens the delete dialog with its dry run (it waits
+  while the note, or one in the folder, has unsaved changes); Delete there
   accepts the proposal and deletes exactly what the dialog showed. **Reject**
   closes the proposal and leaves the files. Deleting the page or folder
   from the tree settles its proposal too. Suggestions waiting on a note

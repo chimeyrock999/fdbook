@@ -8,8 +8,9 @@ import { authorName } from './authors';
 
 // What the editor shows of a delete an agent proposed for the open note (or
 // its folder): who, why, and Review delete… (the delete dialog, with its
-// dry run) or Reject. A reader sees it without the actions.
-export type NoteDeletion = { proposal: DeleteProposalView; onReview: () => void; onReject: () => Promise<void> };
+// dry run) or Reject. A reader sees it without the actions. `waiting`: the
+// note has edits not on disk yet, which the delete would drop: Review waits.
+export type NoteDeletion = { proposal: DeleteProposalView; waiting: boolean; onReview: () => void; onReject: () => Promise<void> };
 
 export function DeleteProposalBar({ deletion, readOnly }: { deletion: NoteDeletion; readOnly: boolean }) {
   const { proposal } = deletion;
@@ -26,9 +27,10 @@ export function DeleteProposalBar({ deletion, readOnly }: { deletion: NoteDeleti
       {!readOnly && (
         <span className="ml-auto flex gap-2">
           <PendingButton className="studio-button" pending={action.busy} pendingLabel="Rejecting…" onClick={() => { void action.run(deletion.onReject); }}>Reject</PendingButton>
-          <button type="button" className="studio-button studio-button-danger" disabled={action.busy} onClick={deletion.onReview}>Review delete…</button>
+          <button type="button" className="studio-button studio-button-danger" disabled={action.busy || deletion.waiting} onClick={deletion.onReview}>Review delete…</button>
         </span>
       )}
+      {!readOnly && deletion.waiting && <span className="studio-suggest-summary">The note has unsaved changes. Review the delete once it shows Saved.</span>}
     </div>
   );
 }

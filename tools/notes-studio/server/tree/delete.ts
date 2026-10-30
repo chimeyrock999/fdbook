@@ -7,9 +7,9 @@ import { findAssetSources, type AssetSource } from '../assets/sources.ts';
 import { listEditableFiles, type createKeyedLock } from '../files/store.ts';
 import { HttpError } from '../http.ts';
 import { parseNote } from '../lint/lint.ts';
-import { joinPath, pageUrl, resolveHref } from '../lint/rules/links.ts';
+import { pageUrl, resolveHref } from '../lint/rules/links.ts';
 import { ASSETS_DIR, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
-import { loadTree } from './build.ts';
+import { entryReaches, loadTree, notesIndex } from './build.ts';
 import { keepEntries, readPages } from './meta-edit.ts';
 import { applyPlan, dirOf, findNode, metaError, type Plan, type TreeChange } from './ops.ts';
 import { CHANGED_SINCE, type TreeFolder } from './types.ts';
@@ -30,6 +30,7 @@ export type IncomingLink = { note: string; line: number; href: string };
 export type DeleteAnswer = { changes: TreeChange[]; open: null; base: string; links: IncomingLink[]; deleted: string[] };
 
 type Target = { kind: 'page' | 'folder-page' | 'folder'; path: string };
+type Where = ReturnType<typeof notesIndex>;
 
 const withoutMdx = (path: string) => path.replace(/\.mdx$/, '');
 const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
@@ -54,33 +55,13 @@ function targetOf(root: string, tree: TreeFolder, path: unknown): Target {
   throw new HttpError(404, `no such page or folder: ${NOTES_DIR}/${path}`);
 }
 
-const inside = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
-
-// Whether `path` (relative to content/notes, without `.mdx` for a page) is
-// what goes: the page itself, or the folder or anything in it, or a folder
-// the delete leaves empty (`emptied`), which goes with it.
-function reaches(target: Target, emptied: string[], path: string) {
-  if (emptied.some((folder) => inside(path, folder))) return true;
-  if (target.kind === 'folder') return inside(path, target.path);
-  return path === withoutMdx(target.path) || path === target.path;
-}
-
-// Whether the entry of the meta.yaml in `dir` names what goes: `x`, also as
-// `!x` or `...x`. Separators, links and `...` name nothing.
-function entryReaches(target: Target, emptied: string[], dir: string, value: unknown) {
-  if (typeof value !== 'string' || value === '...' || value === 'z...a' || value.startsWith('---') || value.startsWith('[')) return false;
-  const raw = value.replace(/^(!|\.\.\.)/, '');
-  return raw !== '' && reaches(target, emptied, joinPath(dir, raw));
-}
-
-// The folders a page delete leaves without any page or meta.yaml (its own,
-// then each one above that holds nothing else): they go too, with the
-// entries that name them, or those would reach nothing.
-function emptiedBy(target: Target, left: readonly string[]) {
-  if (target.kind === 'folder') return [];
-  const emptied: string[] = [];
-  for (let dir = dirOf(target.path); dir !== '' && !left.some((path) => path.startsWith(`${dir}/`)); dir = dirOf(dir)) emptied.push(dir);
-  return emptied;
+// Whether a delete takes out the entry of the meta.yaml in `dir`: it
+// reached a folder or page before (`before`) and reaches none once the
+// delete is done (`after`). An entry `x` for a page `x.mdx` next to a folder
+// `x/` keeps reaching the folder, so it stays; one that reached nothing
+// already is not the delete's to remove.
+function goesWith(before: Where, after: Where, dir: string, value: unknown) {
+  return typeof value === 'string' && entryReaches(before, dir, value) === true && entryReaches(after, dir, value) === false;
 }
 
 // The images that go with the target: a page's folder under public/notes,
@@ -141,7 +122,10 @@ export async function planDelete(root: string, tree: TreeFolder, request: { path
   const gone = new Set(goes.filter((file) => file.kind === 'note').map((file) => notesPath(file.path)));
 
   const left = inNotes.filter((file) => !goneFiles.has(file.path)).map((file) => notesPath(file.path));
-  const emptied = emptiedBy(target, left);
+  // An entry goes when it reaches nothing once the files are gone: the
+  // target's, and a folder the delete leaves empty (it goes too).
+  const before = notesIndex(inNotes.map((file) => notesPath(file.path)));
+  const after = notesIndex(left);
   const writes: Plan['writes'] = [];
   const changes: TreeChange[] = goes.map((file) => ({ type: 'delete', path: notesPath(file.path) }));
   const links: IncomingLink[] = [];
@@ -161,9 +145,9 @@ export async function planDelete(root: string, tree: TreeFolder, request: { path
     if (file.kind === 'meta') {
       const dir = dirOf(path);
       const listed = metaError(() => readPages(content)) ?? [];
-      const removed = listed.filter((value) => entryReaches(target, emptied, dir, value));
+      const removed = listed.filter((value) => goesWith(before, after, dir, value));
       if (removed.length === 0) continue;
-      writes.push({ path, content: metaError(() => keepEntries(content, (value) => !entryReaches(target, emptied, dir, value))), baseMtime: file.mtimeMs });
+      writes.push({ path, content: metaError(() => keepEntries(content, (value) => !goesWith(before, after, dir, value))), baseMtime: file.mtimeMs });
       changes.push({ type: 'change', path, detail: `removes ${removed.map((value) => `"${String(value)}"`).join(', ')}` });
       continue;
     }
