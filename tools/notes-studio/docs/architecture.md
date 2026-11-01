@@ -369,17 +369,15 @@ through the file API), and merges changes made on disk into open documents.
 Page tree and asset changes never go through it, since it cannot update
 `meta.yaml`.
 
-Known gap: its tree `delete` command still removes an existing note,
-without updating `meta.yaml` or checking the mtime, because the scope
-cannot tell it apart from a save on the same path. fuma-nama/fumadocs-editor#24
-was closed by a fix for `mkdir` only (fuma-nama/fumadocs-editor#25, in core 0.4.2):
-`SyncScope` still has no rule for tree commands, so `authenticate` cannot
-refuse them. The Studio never sends one: pages and folders are deleted
-through `POST /api/tree` (`op: "delete"`), which updates `meta.yaml`,
-checks every mtime and takes the notes lock. Do not wire the editor's tree
-delete. Each note a connection saves (`sync.onChange`) counts as a
-person's save for an agent turn going on, as a save through the file API
-does.
+Its tree `delete` command is refused by the storage the Studio gives it
+(`delete denied: <path>`): `SyncScope` has no rule for tree commands
+(fuma-nama/fumadocs-editor#24 was closed by a fix for `mkdir` only,
+fuma-nama/fumadocs-editor#25), and in core 0.5.0 `storage.delete` is
+called by that command alone. Pages and folders are deleted through
+`POST /api/tree` (`op: "delete"`), which updates `meta.yaml`, checks every
+mtime and takes the notes lock; the editor's tree delete stays unwired.
+Each note a connection saves (`sync.onChange`) counts as a person's save
+for an agent turn going on, as a save through the file API does.
 
 ## Connection watch
 

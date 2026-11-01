@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
-import { createSyncServer } from '@fumadocs-editor/core/node';
+import { createSyncServer, fsStorage } from '@fumadocs-editor/core/node';
 import { atLeast } from '../auth/shared.ts';
 import { viewerOf } from '../security/access.ts';
 import { rejectForeignRequest } from '../security/guard.ts';
@@ -39,7 +39,11 @@ export function createNotesSync(root: string, hosts: string[], { readOnly = fals
     return absolute !== null && existsSync(absolute);
   };
   const server = createSyncServer({
-    root: join(root, NOTES_DIR),
+    // Its tree `delete` is the only caller of `storage.delete`, and the scope
+    // cannot tell it from a save on the same path: refused here, since it
+    // would leave meta.yaml as it was. Pages and folders are deleted through
+    // the file API (#171).
+    storage: { ...fsStorage(join(root, NOTES_DIR)), delete: (path) => Promise.reject(new Error(`delete denied: ${path}`)) },
     // The upgrade already passed the guard; checking again here keeps the
     // sync server safe even if it is mounted somewhere else later.
     authenticate: ({ request }) => {
