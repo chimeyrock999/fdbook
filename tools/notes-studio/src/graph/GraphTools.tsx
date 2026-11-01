@@ -1,3 +1,5 @@
+import type { Editor } from '@tiptap/core';
+import type { BubbleItem } from '@fumadocs-editor/ui';
 import type { EditorView } from '@tiptap/pm/view';
 import { Eraser, Highlighter, PencilLine, Sprout, Tag, TriangleAlert } from 'lucide-react';
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type RefObject } from 'react';
@@ -15,6 +17,22 @@ function shortcut(key: string) {
 }
 
 const LABELS: Record<Marker['kind'], string> = { Keyword: 'Keyword', Tag: 'Tag', GraphMeta: 'Graph node' };
+
+// The editor's own format bubble owns actions that only make sense for a
+// text selection. `GraphTools` retains caret/marker actions and the fields
+// dialog, whose lifecycle/positioning exceeds BubbleItem's single button.
+function graphBubbleAction(action: 'Keyword' | 'Tag') {
+  return (editor: Editor) => { graphCommand(action)(editor.state, editor.view.dispatch, editor.view); };
+}
+
+function graphBubbleEnabled(action: 'Keyword' | 'Tag') {
+  return (editor: Editor) => graphCommand(action)(editor.state, undefined, editor.view);
+}
+
+export const graphBubbleItems: BubbleItem[] = [
+  { label: 'Keyword', icon: <Highlighter size={14} aria-hidden />, shortcut: 'Mod-Alt-k', isEnabled: graphBubbleEnabled('Keyword'), run: graphBubbleAction('Keyword') },
+  { label: 'Tag', icon: <Tag size={14} aria-hidden />, shortcut: 'Mod-Alt-t', isEnabled: graphBubbleEnabled('Tag'), run: graphBubbleAction('Tag') },
+];
 
 // The graph bar (wrap the selection as a Keyword or Tag, mark the heading
 // as a graph node, edit or remove the marker there) and the fields of a
@@ -49,18 +67,16 @@ export function GraphTools({ container, source, graph }: { container: RefObject<
   const listed = listedIn(graph, marker?.attrs.id ?? '');
   if (open !== null && marker) return <GraphFields key={seq} view={view} container={container} marker={marker} listed={listed} />;
   if (!view.hasFocus() || view.composing) return null;
-  const canWrap = wrapRange(view.state) !== null;
   const canMark = graphMetaTarget(view.state) !== null;
-  if (!canWrap && !canMark && !marker) return null;
-  return <GraphBar view={view} container={container} marker={marker} listed={listed} canWrap={canWrap} canMark={canMark} />;
+  if (!canMark && !marker) return null;
+  return <GraphBar view={view} container={container} marker={marker} listed={listed} canMark={canMark} />;
 }
 
-function GraphBar({ view, container, marker, listed, canWrap, canMark }: {
+function GraphBar({ view, container, marker, listed, canMark }: {
   view: EditorView;
   container: RefObject<HTMLElement | null>;
   marker: Marker | null;
   listed: string[];
-  canWrap: boolean;
   canMark: boolean;
 }) {
   const run = (action: GraphAction) => { graphCommand(action)(view.state, view.dispatch, view); };
@@ -78,8 +94,6 @@ function GraphBar({ view, container, marker, listed, canWrap, canMark }: {
       className="studio-popup fixed top-0 left-0 z-40 flex max-w-[calc(100vw-16px)] flex-wrap gap-0.5 p-[3px]"
       style={{ visibility: waiting ? 'hidden' : 'visible' }}
     >
-      <BarButton icon={<Highlighter size={14} aria-hidden />} label="Keyword" keys="K" disabled={!canWrap} onRun={() => { run('Keyword'); }} />
-      <BarButton icon={<Tag size={14} aria-hidden />} label="Tag" keys="T" disabled={!canWrap} onRun={() => { run('Tag'); }} />
       <BarButton icon={<Sprout size={14} aria-hidden />} label="Graph node" keys="G" disabled={!canMark} onRun={() => { run('GraphMeta'); }} />
       {marker && (
         <>
