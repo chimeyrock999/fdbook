@@ -10,7 +10,7 @@ import { viewerOf } from '../../../server/security/access';
 import { fakeAuth, sender, signInWith, startAuthStudio, testAuthConfig, type AuthStudio, type FakeGitHub } from '../../support/auth';
 import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '../../support/git-repo';
 import { json } from '../../support/http';
-import { syncWith, TextEditor } from '../../support/sync';
+import { syncSignedIn, syncWith, TextEditor } from '../../support/sync';
 
 const PAGE = 'streaming/index.mdx';
 const CHECK_MS = 50;
@@ -116,6 +116,44 @@ describe('open sync sockets once the session ends', () => {
   });
 });
 
+// The scope's write check reads the role live, but the editor learns
+// `writable` only when it subscribes: a writer turned reader is closed, and
+// comes back read only.
+describe('open sync sockets of a writer turned reader', () => {
+  let studio: AuthStudio;
+  let role: 'writer' | 'reader' = 'writer';
+  const roles = Object.assign(() => Promise.resolve(role), { peek: () => role });
+
+  beforeAll(async () => {
+    studio = await startAuthStudio({ checkEveryMs: CHECK_MS, roles });
+    studio.gh.addUser('alice', 'write');
+  });
+
+  afterAll(async () => {
+    await studio.close();
+  });
+
+  it('closes them, and the note opens again read only', async () => {
+    role = 'writer';
+    const client = syncSignedIn(studio.origin, { cookie: (await studio.signIn('alice')).cookie });
+    try {
+      const seen = statuses(client);
+      const doc = client.open(PAGE, { editor: new TextEditor() });
+      expect((await doc.opened).writable).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, CHECK_MS * 3));
+      expect(seen).not.toContain('offline');
+      role = 'reader';
+      await until(() => seen.includes('offline'), 'the writer’s socket to close');
+      await until(() => client.status() === 'online' && !doc.writable(), 'the note to come back read only');
+      // Watched as a reader now: it stays open.
+      await new Promise((resolve) => setTimeout(resolve, CHECK_MS * 3));
+      expect(seen.filter((status) => status === 'offline')).toHaveLength(1);
+    } finally {
+      client.close();
+    }
+  });
+});
+
 describe('open sync sockets of a change request', () => {
   let repo: GitRepo;
   let studio: CrStudio;
@@ -179,6 +217,26 @@ describe('a viewer watched for its end', () => {
     await until(() => lost.mock.calls.length > 0, 'the viewer to end');
     expect(lost).toHaveBeenCalledTimes(1);
     stop();
+    await options.sessions.saved();
+  });
+
+  it('ends once the role falls below the level it is watched at', async () => {
+    const { auth: options } = fakeAuth(home, testAuthConfig(), { checkEveryMs: CHECK_MS });
+    let role: 'writer' | 'reader' = 'writer';
+    const roles = Object.assign(() => Promise.resolve(role), { peek: () => role });
+    const auth = createAuth({ ...options, roles }, 4310);
+    const { id } = await options.sessions.create({ id: 1, login: 'alice', name: 'Alice', avatarUrl: '' });
+    const request = { headers: { cookie: `studio_session_4310=${id}` } } as unknown as IncomingMessage;
+    expect(await auth.gateUpgrade(request, 'reader')).toBeNull();
+    const asReader = vi.fn();
+    const asWriter = vi.fn();
+    const stops = [viewerOf(request).watch(asReader), viewerOf(request).watch(asWriter, 'writer')];
+    role = 'reader';
+    await until(() => asWriter.mock.calls.length > 0, 'the writer watch to end');
+    await new Promise((resolve) => setTimeout(resolve, CHECK_MS * 3));
+    expect(asWriter).toHaveBeenCalledTimes(1);
+    expect(asReader).not.toHaveBeenCalled();
+    for (const stop of stops) stop();
     await options.sessions.saved();
   });
 

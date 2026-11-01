@@ -33,10 +33,10 @@ export function requiredRole(method: string, pathname: string): Role {
 // is what the gate checked; `current()` is the role now, for a websocket
 // that outlives the check: `none` once the session is gone, and access taken
 // away on GitHub within the role cache's minutes. `watch` calls `onLost`
-// once when the viewer may no longer read: at once on sign-out, at the
-// next check after the session expired or the role fell below reader. It
-// answers a function that stops watching.
-export type Viewer = { user: GitHubUser | null; role: Role; current: () => Role; watch: (onLost: () => void) => () => void };
+// once when the viewer falls below `level` (reader by default): at once on
+// sign-out, at the next check after the session expired or the role fell
+// below it. It answers a function that stops watching.
+export type Viewer = { user: GitHubUser | null; role: Role; current: () => Role; watch: (onLost: () => void, level?: Role) => () => void };
 
 const FULL: Viewer = { user: null, role: 'admin', current: () => 'admin', watch: () => () => undefined };
 const viewers = new WeakMap<IncomingMessage, Viewer>();

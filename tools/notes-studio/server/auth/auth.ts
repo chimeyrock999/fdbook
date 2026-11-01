@@ -92,8 +92,9 @@ export function createAuth(options: AuthOptions | null, port: number, host = `12
   const repoName = () => repo.name().catch(() => null);
 
   // Viewers watched for their end (Viewer.watch), by the session id they
-  // came with. Checked on a timer while there are any.
-  type Watched = { id: string; current: () => Role; onLost: () => void };
+  // came with, each down to the role it needs. Checked on a timer while
+  // there are any.
+  type Watched = { id: string; current: () => Role; level: Role; onLost: () => void };
   const watched = new Set<Watched>();
   let checking: NodeJS.Timeout | null = null;
   const unwatch = (entry: Watched) => {
@@ -109,14 +110,14 @@ export function createAuth(options: AuthOptions | null, port: number, host = `12
   };
   // A viewer already lost (signed out between the gate and the upgrade) ends at once.
   const watch = (entry: Watched) => {
-    if (!atLeast(entry.current(), 'reader')) {
+    if (!atLeast(entry.current(), entry.level)) {
       entry.onLost();
       return () => undefined;
     }
     watched.add(entry);
     if (checking === null) {
       checking = setInterval(() => {
-        for (const each of [...watched]) if (!atLeast(each.current(), 'reader')) lose(each);
+        for (const each of [...watched]) if (!atLeast(each.current(), each.level)) lose(each);
       }, checkEveryMs);
       checking.unref();
     }
@@ -257,7 +258,7 @@ export function createAuth(options: AuthOptions | null, port: number, host = `12
     }
     const { login } = session.user;
     const current = () => (sessions.get(id) === null ? 'none' : (roles.peek(login) ?? role));
-    const viewer: Viewer = { user: session.user, role, current, watch: (onLost) => watch({ id, current, onLost }) };
+    const viewer: Viewer = { user: session.user, role, current, watch: (onLost, level = 'reader') => watch({ id, current, level, onLost }) };
     setViewer(request, viewer);
     if (!atLeast(role, needed)) {
       return { status: 403, error: role === 'none' ? `@${session.user.login} has no access to this repository.` : `This needs ${needed} access; @${session.user.login} is a ${role}.` };
@@ -287,7 +288,7 @@ export function createAuth(options: AuthOptions | null, port: number, host = `12
       const { login } = session.user;
       const role = await roles(login);
       const current = () => (sessions.byAgentToken(token) === null ? 'none' : (roles.peek(login) ?? role));
-      return { user: session.user, role, current, watch: (onLost) => watch({ id: '', current, onLost }) };
+      return { user: session.user, role, current, watch: (onLost, level = 'reader') => watch({ id: '', current, level, onLost }) };
     },
     // After the Host/Origin guard: answers the sign-in API itself, refuses
     // what the session may not do, and returns false to pass the rest on.

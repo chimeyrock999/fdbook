@@ -1,37 +1,27 @@
 // @vitest-environment jsdom
-import { cleanup, renderHook } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { decorationsPlugin, useEditorPlugin } from '../../../src/editor/decorations';
+import { MdxEditor } from '@fumadocs-editor/ui';
+import { cleanup, render } from '@testing-library/react';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { decorationsExtension } from '../../../src/editor/decorations';
 import { editorConfig } from '../../../src/plugins';
-import { mountEditor } from '../../support/live-editor';
+import { stubLayout } from '../../support/visual-editor';
 
+beforeAll(stubLayout);
+afterAll(() => { vi.unstubAllGlobals(); });
 afterEach(cleanup);
 
 const NOTE = 'A <Keyword id="grain" displayName="Grain">grain</Keyword> and :keyword[fact]{id="fact" displayName="Fact"}.\n';
 
-const keywords = (container: HTMLElement) => [...container.querySelectorAll('.studio-keyword')].map((node) => node.textContent);
+const keywords = (container: HTMLElement) => [...container.querySelectorAll('.ProseMirror[contenteditable] .studio-keyword')].map((node) => node.textContent);
 
-describe('useEditorPlugin', () => {
-  it('decorates the live editor, follows a replaced one and lets go on unmount', async () => {
-    const container = document.createElement('div');
-    document.body.append(container);
-    const plugin = decorationsPlugin(editorConfig.decorators);
-    const first = mountEditor(container, NOTE);
-    const { unmount } = renderHook(() => { useEditorPlugin({ current: container }, plugin); });
-
-    expect(keywords(container)).toEqual(['grain', 'fact']);
-    expect(container.querySelectorAll('.studio-hidden')).toHaveLength(3);
-
-    // A Source/Visual switch: the old editor goes, a new one mounts later.
-    first.destroy();
-    container.replaceChildren();
-    const second = mountEditor(container, NOTE);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(keywords(container)).toEqual(['grain', 'fact']);
-
-    unmount();
-    expect(keywords(container)).toEqual([]);
-    expect(second.state.plugins).not.toContain(plugin);
-    second.destroy();
+describe('decorationsExtension', () => {
+  it('decorates the live editor as one of the root\'s extensions', async () => {
+    const { container } = render(
+      <MdxEditor.Root defaultValue={NOTE} components={editorConfig.components} syntax={editorConfig.syntax} extensions={[decorationsExtension(editorConfig.decorators)]}>
+        <MdxEditor.Visual />
+      </MdxEditor.Root>,
+    );
+    await vi.waitFor(() => { expect(keywords(container)).toEqual(['grain', 'fact']); }, { timeout: 3000 });
+    expect(container.querySelectorAll('.ProseMirror[contenteditable] .studio-hidden')).toHaveLength(3);
   });
 });

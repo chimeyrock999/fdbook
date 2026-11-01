@@ -15,6 +15,7 @@ import { fakeProfile, messagesOf } from '../../support/agents';
 import { fakeAuth, sender, signInWith } from '../../support/auth';
 import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '../../support/git-repo';
 import { json } from '../../support/http';
+import { syncWith, TextEditor } from '../../support/sync';
 
 const NOTE = 'content/notes/guide/first-look.mdx';
 
@@ -348,6 +349,33 @@ describe('Studio MCP server', () => {
     expect((await send(base, 'POST', { path: page, op: 'revert' })).status).toBe(409);
     expect(await readFile(worktree(page), 'utf8')).toBe('By a person.\n');
     await rm(worktree(marker));
+  }, 20_000);
+
+  // The editor saves through the notes sync, not the file API.
+  it('never reverts a note a person saved in the editor during the run', async () => {
+    const page = 'content/notes/guide/typed.mdx';
+    await committed(page, 'As found.\n');
+    const marker = 'content/notes/guide/marker.mdx';
+    const sync = syncWith(studio.origin, '', `/cr/${cr.slug}`);
+    try {
+      const run = await hangingRun(`sneak ${worktree(marker)} started`, async () => {
+        await changed(marker, '');
+        const editor = new TextEditor();
+        const doc = sync.open('guide/typed.mdx', { editor });
+        editor.text = `${(await doc.opened).text}Typed by a person.\n`;
+        doc.changed();
+        await doc.flush();
+        await changed(page, 'As found.\n');
+      });
+      const base = `/cr/${cr.slug}/api/agents/conversations/${run.id}/turns/1/changes`;
+      const { changes } = json(await send(base)) as { changes: TurnChange[] };
+      expect(changes).toContainEqual({ path: page, existed: true, decided: null, reason: 'also saved by a person during the turn: revert it by hand' });
+      expect((await send(base, 'POST', { path: page, op: 'revert' })).status).toBe(409);
+      expect(await readFile(worktree(page), 'utf8')).toBe('As found.\nTyped by a person.\n');
+    } finally {
+      sync.close();
+      await rm(worktree(marker));
+    }
   }, 20_000);
 
   it('answers no such tool for a name only inherited', async () => {

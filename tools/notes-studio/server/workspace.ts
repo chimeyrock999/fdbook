@@ -81,7 +81,6 @@ export function createWorkspace(
   // Saves to one file, one at a time, from the editor and from agents alike.
   const pathLock = createKeyedLock();
   const fileEvents = createFileEvents(root);
-  const sync = createNotesSync(root, hosts, { readOnly });
   // A change request's proposals and comments, and the stream of their changes.
   let review: { proposals: Proposals; deletes: DeleteProposals; comments: Comments; stream: ProposalStream } | null = null;
   // What a delete took: the proposals on those notes have nowhere to go,
@@ -131,6 +130,8 @@ export function createWorkspace(
       }),
     };
   }
+  // A person's save through the editor counts like one through the file API.
+  const sync = createNotesSync(root, hosts, { readOnly, onSaved: conversations === null ? undefined : (path) => { conversations.savedByPerson(path); } });
   const handlers: Handler[] = [
     ...(readOnly ? [refuseWrites] : []),
     fileEvents.handle,

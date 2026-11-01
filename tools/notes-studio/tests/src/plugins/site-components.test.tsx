@@ -3,8 +3,7 @@ import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { getCalloutVariables } from '@site/components/notes-callout';
 import { keywordClassName, tagClassName } from '@site/components/graph-objects';
-import type { RefObject } from 'react';
-import { decorationsPlugin, useEditorPlugin } from '../../../src/editor/decorations';
+import { decorationsExtension } from '../../../src/editor/decorations';
 import { editorConfig } from '../../../src/plugins';
 import { defined } from '../../support/editor-state';
 import { mountVisual, stubLayout } from '../../support/visual-editor';
@@ -18,11 +17,7 @@ afterAll(() => { vi.unstubAllGlobals(); });
 afterEach(cleanup);
 
 // The decorations NoteEditor adds over the editor.
-const plugin = decorationsPlugin(editorConfig.decorators);
-function Decorations({ container }: { container: RefObject<HTMLElement | null> }) {
-  useEditorPlugin(container, plugin);
-  return null;
-}
+const decorations = [decorationsExtension(editorConfig.decorators)];
 
 const NOTE = [
   ':::warn[Mind the gap]',
@@ -47,7 +42,7 @@ describe('site components in the editor', () => {
   });
 
   it('draws keywords and tags with the classes of components/graph-objects.tsx', async () => {
-    const { prose } = await mountVisual(NOTE, { extra: (container) => <Decorations container={container} /> });
+    const { prose } = await mountVisual(NOTE, { extensions: decorations });
     await vi.waitFor(() => { expect(prose.querySelectorAll('.studio-keyword')).toHaveLength(2); });
     const [keyword, tag] = [...prose.querySelectorAll<HTMLElement>('.studio-keyword')];
     for (const name of keywordClassName.split(' ')) expect(keyword.classList.contains(name), name).toBe(true);

@@ -2,10 +2,10 @@
 import { Text } from '@codemirror/state';
 import { useSourceText } from '@fumadocs-editor/ui';
 import { act, cleanup, renderHook } from '@testing-library/react';
-import type { RefObject } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEditorPlaces, editorPlaces } from '../../../src/agents/editor-place';
-import { useReportPlace } from '../../../src/editor/report-place';
+import { pluginsExtension } from '../../../src/editor/extensions';
+import { createPlaceSource, useReportPlace } from '../../../src/editor/report-place';
 import { mountVisual, stubLayout, textAt } from '../../support/visual-editor';
 
 const NOTE = 'content/notes/guide/first-look.mdx';
@@ -33,11 +33,12 @@ describe('editor place', () => {
 
   it('follows the Visual editor: the blocks selected, the caret, and stays when focus leaves', async () => {
     stubLayout();
-    function Reporter({ container }: { container: RefObject<HTMLElement | null> }) {
-      useReportPlace(container, NOTE, useSourceText().value, true);
+    const place = createPlaceSource();
+    function Reporter() {
+      useReportPlace(place, NOTE, useSourceText().value, true);
       return null;
     }
-    const { editor } = await mountVisual(TEXT, { extra: (container) => <Reporter container={container} /> });
+    const { editor } = await mountVisual(TEXT, { extensions: [pluginsExtension('studioNote', [place.plugin])], extra: () => <Reporter /> });
     act(() => { editor.commands.setTextSelection({ from: textAt(editor, 'first'), to: textAt(editor, 'lines') + 5 }); });
     await vi.waitFor(() => { expect(editorPlaces.get()).toEqual({ note: NOTE, selection: { lines: [5, 8], source: 'A first look.\n\nTwo\nlines here.', text: 'first look.\nTwo lines' }, caret: null }); });
     // Focus going to the chat leaves the editor's selection as it was.
@@ -49,8 +50,8 @@ describe('editor place', () => {
   });
 
   it('follows the Source editor at once, and goes when the note closes', () => {
-    const container = { current: null };
-    const { result, unmount } = renderHook(() => useReportPlace(container, NOTE, TEXT, true));
+    const place = createPlaceSource();
+    const { result, unmount } = renderHook(() => useReportPlace(place, NOTE, TEXT, true));
     act(() => { result.current(TEXT.indexOf('Two'), TEXT.indexOf('here') + 4, DOC); });
     expect(editorPlaces.get()).toEqual({ note: NOTE, selection: { lines: [7, 8], source: 'Two\nlines here.', text: 'Two\nlines here' }, caret: null });
     act(() => { result.current(TEXT.indexOf('one'), TEXT.indexOf('one'), DOC); });
@@ -60,8 +61,8 @@ describe('editor place', () => {
   });
 
   it('tells nothing before the note is open', () => {
-    const container = { current: null };
-    const { result } = renderHook(() => useReportPlace(container, NOTE, TEXT, false));
+    const place = createPlaceSource();
+    const { result } = renderHook(() => useReportPlace(place, NOTE, TEXT, false));
     act(() => { result.current(0, 3, DOC); });
     expect(editorPlaces.get()).toBeNull();
   });

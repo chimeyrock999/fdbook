@@ -3,17 +3,16 @@ import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { act, cleanup, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useMemo, type RefObject } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { hunksOf } from '../../../server/proposals/hunks';
 import type { NoteComment, ProposalHunk, ProposalsClient, ProposalView } from '../../../src/api/proposals';
-import { useEditorPlugin } from '../../../src/editor/decorations';
+import { pluginsExtension } from '../../../src/editor/extensions';
 import { placeAll } from '../../../src/suggestions/places';
 import { sourceSuggestions } from '../../../src/suggestions/source';
 import { NoteComments, SuggestionBar, VisualSuggestions, type NoteReview } from '../../../src/suggestions/Suggestions';
 import { useNoteSuggestions } from '../../../src/suggestions/useNoteSuggestions';
 import { useProposals } from '../../../src/suggestions/useProposals';
-import { createSuggestionLayer } from '../../../src/suggestions/visual';
+import { createSuggestionLayer, type SuggestionLayer } from '../../../src/suggestions/visual';
 import { ToastStack } from '../../../src/actions/ToastStack';
 import { mountVisual, stubLayout } from '../../support/visual-editor';
 
@@ -141,11 +140,15 @@ describe('suggestions in Source', () => {
 });
 
 // The real Visual editor with the suggestion layer, as NoteEditor mounts it.
-function Layer({ container, text, decide }: { container: RefObject<HTMLElement | null>; text: string; decide: NoteReview }) {
-  const layer = useMemo(createSuggestionLayer, []);
-  useEditorPlugin(container, layer.plugin);
+function Layer({ layer, text, decide }: { layer: SuggestionLayer; text: string; decide: NoteReview }) {
   const { placement, focus, decisions } = useNoteSuggestions(decide, text);
   return <VisualSuggestions layer={layer} placement={placement} focus={focus} readOnly={false} decisions={decisions} onResolveComment={decide.resolveComment} />;
+}
+
+// Made with the editor root, which takes its plugin as an extension.
+function mountWithLayer(decide: NoteReview) {
+  const layer = createSuggestionLayer();
+  return mountVisual(NOTE, { extensions: [pluginsExtension('studioNote', [layer.plugin])], extra: () => <Layer layer={layer} text={NOTE} decide={decide} /> });
 }
 
 describe('suggestions in Visual', () => {
@@ -155,7 +158,7 @@ describe('suggestions in Visual', () => {
     const next = NOTE.replace('Second paragraph.', 'Second, **rewritten**.');
     const decide = review([proposal(next)]);
     decide.comments = [comment({ index: 2, text: 'First paragraph.' })];
-    const { prose } = await mountVisual(NOTE, { extra: (container) => <Layer container={container} text={NOTE} decide={decide} /> });
+    const { prose } = await mountWithLayer(decide);
     await waitFor(() => { expect(prose.querySelector('.studio-suggest-removed')?.textContent).toBe('Second paragraph.'); });
     const card = await waitFor(() => {
       const found = prose.querySelector<HTMLElement>('.studio-suggest-card');
@@ -181,7 +184,7 @@ describe('suggestions in Visual', () => {
     let fail: (reason: Error) => void = () => undefined;
     decide.resolveComment.mockImplementation(() => new Promise<void>((_resolve, reject) => { fail = reject; }));
     render(<ToastStack />);
-    const { prose } = await mountVisual(NOTE, { extra: (container) => <Layer container={container} text={NOTE} decide={decide} /> });
+    const { prose } = await mountWithLayer(decide);
     const commentUi = within(await waitFor(() => bubble(prose)));
     await act(async () => { commentUi.getByRole('button', { name: 'Comment from Codex' }).click(); await Promise.resolve(); });
     const resolve = commentUi.getByRole('button', { name: 'Resolve feedback' });

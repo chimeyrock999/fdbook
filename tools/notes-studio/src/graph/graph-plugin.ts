@@ -4,6 +4,7 @@ import type { EditorView } from '@tiptap/pm/view';
 import { composing } from '../keyboard';
 import { addGraphMeta, markerAt, removeMarker, wrapSelection, type Marker } from './markers';
 import { OPEN_GRAPH_FIELDS } from './meta';
+import { createRelay } from '../editor/extensions';
 
 // The marker at the selection; which marker the graph fields are open for,
 // by the position it starts at, and `seq`, counting each time they open; and
@@ -53,9 +54,10 @@ const keys = keydownHandler({
 });
 
 // The graph actions on a live editor: their shortcuts and the open/closed
-// state of the fields. `onUpdate` gets the view after every update (null
-// when the plugin goes), for the UI that draws the bar and the fields.
-export function graphPlugin(onUpdate: (view: EditorView | null) => void): Plugin<GraphState> {
+// state of the fields. `onUpdate` gets the view after every update, and
+// once more `gone` when its editor goes, for the UI that draws the bar and
+// the fields.
+export function graphPlugin(onUpdate: (view: EditorView, gone: boolean) => void): Plugin<GraphState> {
   return new Plugin<GraphState>({
     key: graphKey,
     state: {
@@ -84,11 +86,25 @@ export function graphPlugin(onUpdate: (view: EditorView | null) => void): Plugin
       handleKeyDown: (view, event) => !composing(event) && keys(view, event),
     },
     view(view) {
-      onUpdate(view);
+      onUpdate(view, false);
       return {
-        update: (next) => { onUpdate(next); },
-        destroy: () => { onUpdate(null); },
+        update: (next) => { onUpdate(next, false); },
+        destroy: () => { onUpdate(view, true); },
       };
     },
   });
 }
+
+// The graph plugin, for the editor root's `extensions`, and the live
+// editor it is on, for GraphTools: null once that editor went (a Source/
+// Visual switch may build the next one before the last one goes).
+export function createGraphSource() {
+  const view = createRelay<EditorView | null>(null);
+  const plugin = graphPlugin((next, gone) => {
+    if (!gone) view.set(next);
+    else if (view.get() === next) view.set(null);
+  });
+  return { plugin, listen: view.listen };
+}
+
+export type GraphSource = ReturnType<typeof createGraphSource>;

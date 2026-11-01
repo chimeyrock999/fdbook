@@ -1,21 +1,17 @@
 import { MdxEditor } from '@fumadocs-editor/ui';
-import { useMemo, useRef, useState } from 'react';
-import { decorationsPlugin, useEditorPlugin } from '../editor/decorations';
+import { useMemo, useState } from 'react';
+import { decorationsExtension } from '../editor/decorations';
 import { editorConfig, editorSyntax } from '../plugins';
 import { diffNote, foldSame, type DiffItem, type FrontmatterChange } from './diff-blocks';
 
-const decorations = decorationsPlugin(editorConfig.decorators);
+const extensions = [decorationsExtension(editorConfig.decorators)];
 
 // A stretch of a note rendered as the editor shows it, read only.
 export function NotePart({ source }: { source: string }) {
-  const container = useRef<HTMLDivElement>(null);
-  useEditorPlugin(container, decorations);
   return (
-    <div ref={container}>
-      <MdxEditor.Root defaultValue={source} components={editorConfig.components} syntax={editorConfig.syntax} editable={false}>
-        <MdxEditor.Visual className="studio-prose notes-prose" />
-      </MdxEditor.Root>
-    </div>
+    <MdxEditor.Root defaultValue={source} components={editorConfig.components} syntax={editorConfig.syntax} extensions={extensions} editable={false}>
+      <MdxEditor.Visual className="studio-prose notes-prose" />
+    </MdxEditor.Root>
   );
 }
 

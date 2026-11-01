@@ -15,10 +15,17 @@ import { NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 // stay out. Its media endpoints are not mounted: assets go through the file
 // API into public/. A `readOnly` sync (main) opens notes but writes none,
 // and neither does a connection from someone signed in as a reader.
-// The sync server asks `read` only when a document opens, then relays every
-// update of it: a socket is closed once its viewer may no longer read
-// (Viewer.watch), and its reconnect meets the sign-in gate (#115).
-export function createNotesSync(root: string, hosts: string[], { readOnly = false } = {}) {
+//
+// The sync server asks for the scope once per connection and relays every
+// update of an open document from then on, so each connection is watched
+// (Viewer.watch) down to the role it was let in with: one whose viewer may
+// no longer read, or no longer write, is closed. The client reconnects and
+// meets the sign-in gate (#115), or comes back with its new scope, and the
+// editor locks on `writable: false`.
+//
+// `onSaved` hears each note a person saved through it, as a worktree path,
+// for an agent turn going on (agents/watch.ts).
+export function createNotesSync(root: string, hosts: string[], { readOnly = false, onSaved }: { readOnly?: boolean; onSaved?: (path: string) => void } = {}) {
   const note = (path: string) => {
     const resolved = resolveWorktreePath(root, `${NOTES_DIR}/${path}`);
     return resolved?.kind === 'note' ? resolved.absolute : null;
@@ -37,24 +44,34 @@ export function createNotesSync(root: string, hosts: string[], { readOnly = fals
     // sync server safe even if it is mounted somewhere else later.
     authenticate: ({ request }) => {
       if (rejectForeignRequest(request, hosts)) return null;
-      // Asked on every open and write, so a writer turned reader writes no more.
       const viewer = viewerOf(request);
+      const role = viewer.current();
+      if (!atLeast(role, 'reader')) return null;
+      // A writer is watched as a writer: turned reader, the connection
+      // closes and comes back read only. On main nobody writes.
+      const level = !readOnly && atLeast(role, 'writer') ? 'writer' : 'reader';
+      const stop = viewer.watch(() => {
+        for (const connection of server.connections()) if (connection.request === request) connection.close();
+      }, level);
+      // One request, one websocket: its socket ends with the connection.
+      if (request.socket.destroyed) stop();
+      else request.socket.once('close', stop);
+      // Asked on every open and write too, so nothing waits for the next check.
       return {
         read: (path) => atLeast(viewer.current(), 'reader') && note(path) !== null,
-        write: (path) => !readOnly && atLeast(viewer.current(), 'writer') && writable(path),
+        write: (path) => level === 'writer' && atLeast(viewer.current(), 'writer') && writable(path),
       };
     },
+    setup: (sync) => (onSaved === undefined ? undefined : sync.onChange(({ path }) => { onSaved(`${NOTES_DIR}/${path}`); })),
   });
   return {
     handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer) {
       // The gate and the change request lookup ran before: the browser may
-      // have gone, or the session ended since.
-      const viewer = viewerOf(request);
-      if (socket.destroyed || !atLeast(viewer.current(), 'reader')) {
+      // have gone, or the session ended since. No connection exists yet.
+      if (socket.destroyed || !atLeast(viewerOf(request).current(), 'reader')) {
         socket.destroy();
         return;
       }
-      socket.once('close', viewer.watch(() => { socket.destroy(); }));
       server.handleUpgrade(request, socket, head);
     },
     close: () => server.close(),

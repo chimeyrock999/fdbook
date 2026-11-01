@@ -110,10 +110,12 @@ export function fakeAuth(home: string, config = testAuthConfig(), { checkEveryMs
 // A Studio with sign-in on, over a throwaway worktree (with `git`, a
 // repository on a change request branch), GitHub faked. `signIn` goes
 // through the device flow and answers the cookie and csrf token to send.
-export async function startAuthStudio({ git = false, config = testAuthConfig(), checkEveryMs }: { git?: boolean; config?: AuthConfig; checkEveryMs?: number } = {}) {
+// `roles` replaces the role reader, to change a role at once.
+export async function startAuthStudio({ git = false, config = testAuthConfig(), checkEveryMs, roles }: { git?: boolean; config?: AuthConfig; checkEveryMs?: number; roles?: AuthOptions['roles'] } = {}) {
   const worktree = git ? await makeGitWorktree() : await makeWorktree();
   const home = await mkdtemp(join(tmpdir(), 'notes-studio-home-'));
   const { gh, auth } = fakeAuth(home, config, { checkEveryMs });
+  if (roles !== undefined) auth.roles = roles;
   const studio = await startStudioServer({ port: 0, root: worktree.root, auth });
   const port = String((studio.server.address() as AddressInfo).port);
   const origin = `http://127.0.0.1:${port}`;

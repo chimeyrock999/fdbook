@@ -177,10 +177,13 @@ are enforced (`server/auth/`).
   role) is retried on the next poll without a new code. At most 200
   sign-ins may be pending at once (`429` beyond).
 - The notes sync checks on every document it opens and every write that
-  its session still exists and its role allows it. Its socket is closed
-  when the session signs out, and within 15 seconds once the session
-  expired or the role fell below reader (while gh cannot answer, the last
-  role read stands). The file events stream ends at its next event or
+  its session still exists and its role allows it. Its connection is
+  closed when the session signs out, and within 15 seconds once the
+  session expired or the role fell below reader, or below writer for a
+  connection let in as a writer (while gh cannot answer, the last role
+  read stands). The client reconnects: a reader comes back with the note
+  read only, and the editor locks on `writable: false`. The file events
+  stream ends at its next event or
   heartbeat (every 25 seconds) once the session is gone.
 - The page asks `GET /api/session` before it loads the Studio
   (`src/session/SessionGate.tsx`). Before each sync connection, reconnects
@@ -374,8 +377,9 @@ was closed by a fix for `mkdir` only (fuma-nama/fumadocs-editor#25, in core 0.4.
 refuse them. The Studio never sends one: pages and folders are deleted
 through `POST /api/tree` (`op: "delete"`), which updates `meta.yaml`,
 checks every mtime and takes the notes lock. Do not wire the editor's tree
-delete. The sync server has no write hook either, so edits typed during an
-agent turn are not marked for that turn.
+delete. Each note a connection saves (`sync.onChange`) counts as a
+person's save for an agent turn going on, as a save through the file API
+does.
 
 ## Connection watch
 
@@ -722,9 +726,10 @@ export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] })
   text directives, verbatim blocks) with ProseMirror decorations. It
   changes how the document looks, never the document.
   `src/editor/decorations.ts` puts every plugin's decorator on the live
-  editor (`MdxEditor.Root` takes no extra extensions, so it is registered
-  on the TipTap editor itself). Cards share `src/plugins/cards.css`;
-  `.studio-hidden` hides the source a card covers.
+  editor, as one of `MdxEditor.Root`'s `extensions` (the suggestion
+  layer, the graph tools and the agent panel's place come the same way,
+  made with the root in `NoteEditor.tsx`). Cards share
+  `src/plugins/cards.css`; `.studio-hidden` hides the source a card covers.
 - A plugin must export a default; two plugins may not share an `id` or
   define the same component.
 - `tests/src/plugins/round-trip.test.ts` parses and writes back every note

@@ -19,11 +19,13 @@ import { NOTES_PREFIX } from '../notes/notes';
 import { useSession } from '../session/session';
 import type { IssueCount } from '../sidebar/Sidebar';
 import { assetCompletion } from './asset-completion';
+import { createGraphSource } from '../graph/graph-plugin';
 import { GraphTools } from '../graph/GraphTools';
 import { editorConfig } from '../plugins';
-import { decorationsPlugin, useEditorPlugin } from './decorations';
+import { decorationsExtension } from './decorations';
+import { pluginsExtension } from './extensions';
 import { NoteHeader } from './NoteHeader';
-import { useReportPlace } from './report-place';
+import { createPlaceSource, useReportPlace } from './report-place';
 import type { RevealRequest } from './reveal';
 import { SourceEditor } from './SourceEditor';
 import { ConflictDialog, SaveStatus } from './SyncState';
@@ -72,22 +74,23 @@ export function NoteEditor({ path, assets, onStatus, place = null, review = null
 } & Panels & Clients) {
   const notePath = `${NOTES_PREFIX}${path}`;
   const uploads = useAssetUploads(rest.files, notePath, assets);
-  // Null until the server sent the file. A denied open never reports it, so
-  // the status, not `writable` alone, decides whether editing is allowed.
+  // Whether the server takes edits: asked again on every reconnect, so a
+  // writer turned reader locks (the server closes their connection). Null
+  // until the note opened or was refused.
   const [writable, setWritable] = useState<boolean | null>(null);
-  // The note as the server sent it when it opened.
+  // The note as the server sent it when it opened; null until then.
   const [disk, setDisk] = useState<string | null>(null);
   const [status, setStatus] = useState<DocumentStatus | null>(null);
+  const opened = disk !== null;
   const locked = writable === false || status === 'denied';
+  const [parts] = useState(createParts);
   return (
     <MdxEditor.Root
       sync={{
         path,
         client: workspaceSyncClient(),
-        onOpen: (opened) => {
-          setWritable(opened.writable);
-          setDisk(opened.text);
-        },
+        onOpen: (result) => { setDisk(result.text); },
+        onWritable: setWritable,
         onStatus: (next) => {
           setStatus(next);
           onStatus?.(next);
@@ -98,18 +101,20 @@ export function NoteEditor({ path, assets, onStatus, place = null, review = null
       components={editorConfig.components}
       syntax={editorConfig.syntax}
       media={uploads.media}
+      extensions={parts.extensions}
       editable={!locked}
     >
       <EditorLayout
+        parts={parts}
         path={path}
         notePath={notePath}
         disk={disk}
         assets={assets}
         uploads={uploads}
-        opened={writable !== null}
-        status={writable === null && status !== 'denied' && status !== 'offline' ? null : (status ?? 'synced')}
+        opened={opened}
+        status={!opened && status !== 'denied' && status !== 'offline' ? null : status}
         locked={locked}
-        readOnly={writable === false}
+        readOnly={opened && writable === false}
         place={place}
         review={review}
         {...rest}
@@ -119,9 +124,22 @@ export function NoteEditor({ path, assets, onStatus, place = null, review = null
 }
 
 // The plugins' decorations, one ProseMirror plugin for every editor.
-const decorations = decorationsPlugin(editorConfig.decorators);
+const decorations = decorationsExtension(editorConfig.decorators);
 
-function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, locked, readOnly, place, review, issuesSlot, onIssueCount, onShowIssues, onIssueShown, onShowHistory, files, lint }: {
+// What the Studio adds to one note's live editors, made with its root (which
+// takes `extensions` once): the decorations, agent suggestions (#85), the
+// graph tools, and where the person is, for the agent panel (#86).
+function createParts() {
+  const layer = createSuggestionLayer();
+  const graph = createGraphSource();
+  const place = createPlaceSource();
+  return { layer, graph, place, extensions: [decorations, pluginsExtension('studioNote', [layer.plugin, graph.plugin, place.plugin])] };
+}
+
+type Parts = ReturnType<typeof createParts>;
+
+function EditorLayout({ parts, path, notePath, disk, assets, uploads, opened, status, locked, readOnly, place, review, issuesSlot, onIssueCount, onShowIssues, onIssueShown, onShowHistory, files, lint }: {
+  parts: Parts;
   path: string;
   notePath: string;
   disk: string | null;
@@ -145,13 +163,11 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
   const [reveal, setReveal] = useState<RevealRequest | null>(null);
   const [field, setField] = useState<FieldReveal | null>(null);
   const editor = useRef<HTMLElement>(null);
-  useEditorPlugin(editor, decorations);
   // Agent suggestions: placed on the text as it is now (#85).
   const suggestions = useNoteSuggestions(review, opened ? source.value : '');
-  const layer = useMemo(() => createSuggestionLayer(), []);
-  useEditorPlugin(editor, layer.plugin);
+  const { layer } = parts;
   // Where the person is, for the agent panel (#86).
-  const onSourceSelect = useReportPlace(editor, notePath, source.value, opened);
+  const onSourceSelect = useReportPlace(parts.place, notePath, source.value, opened);
   const canDecide = !locked && !source.readOnly;
   const { decide } = suggestions.decisions;
   // Source offers what can still be decided: a landing hunk is accepted.
@@ -245,7 +261,7 @@ function EditorLayout({ path, notePath, disk, assets, uploads, opened, status, l
               />
               <MdxEditor.Visual className="studio-prose notes-prose" />
               {review !== null && <VisualSuggestions layer={layer} placement={suggestions.placement} focus={suggestions.focus} readOnly={!canDecide} decisions={suggestions.decisions} onResolveComment={review.resolveComment} />}
-              <GraphTools container={editor} graph={frontmatter.status === 'ok' ? frontmatter.data.graph : undefined} />
+              <GraphTools container={editor} source={parts.graph} graph={frontmatter.status === 'ok' ? frontmatter.data.graph : undefined} />
             </div>
           </div>
         ) : (

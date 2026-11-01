@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import type { Editor } from '@tiptap/core';
-import { cleanup, renderHook, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CircleDashed, icons } from 'lucide';
 import { accordionKindIcons, accordionKindVariables } from '@site/lib/notes-accordion';
 import { ACCORDION_KINDS } from '@site/lib/notes-syntax';
-import { decorationsPlugin, useEditorPlugin } from '../../../src/editor/decorations';
+import { decorationsExtension } from '../../../src/editor/decorations';
 import { kindIcon } from '../../../src/plugins/site-directives/decorate';
 import { editorConfig } from '../../../src/plugins';
 import { defined } from '../../support/editor-state';
@@ -40,8 +40,7 @@ afterEach(() => {
 function mount(note = NOTE) {
   const container = document.createElement('div');
   document.body.append(container);
-  editor = mountEditor(container, note);
-  renderHook(() => { useEditorPlugin({ current: container }, decorationsPlugin(editorConfig.decorators)); });
+  editor = mountEditor(container, note, [decorationsExtension(editorConfig.decorators)]);
   return { container, editor };
 }
 

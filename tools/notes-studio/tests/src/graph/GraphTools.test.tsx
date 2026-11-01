@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
-import type { RefObject } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { decorationsPlugin, useEditorPlugin } from '../../../src/editor/decorations';
-import { graphCommand } from '../../../src/graph/graph-plugin';
+import { decorationsExtension } from '../../../src/editor/decorations';
+import { pluginsExtension } from '../../../src/editor/extensions';
+import { createGraphSource, graphCommand } from '../../../src/graph/graph-plugin';
 import { GraphTools } from '../../../src/graph/GraphTools';
 import { editorConfig } from '../../../src/plugins';
 import { defined } from '../../support/editor-state';
@@ -13,16 +13,13 @@ beforeAll(stubLayout);
 afterAll(() => { vi.unstubAllGlobals(); });
 afterEach(cleanup);
 
-const decorations = decorationsPlugin(editorConfig.decorators);
+const decorations = decorationsExtension(editorConfig.decorators);
 
 // GraphTools beside the editor, with the decorations NoteEditor adds.
-function Tools({ container, graph }: { container: RefObject<HTMLElement | null>; graph?: unknown }) {
-  useEditorPlugin(container, decorations);
-  return <GraphTools container={container} graph={graph} />;
-}
-
 async function mount(source: string, editable = true, graph?: unknown) {
-  const view = await mountVisual(source, { editable, extra: (container) => <Tools container={container} graph={graph} /> });
+  const tools = createGraphSource();
+  const extensions = [decorations, pluginsExtension('studioNote', [tools.plugin])];
+  const view = await mountVisual(source, { editable, extensions, extra: (container) => <GraphTools container={container} source={tools} graph={graph} /> });
   // The toolbar registers after the live editor is up.
   await vi.waitFor(() => { expect(view.editor.state.plugins.some((plugin) => (plugin.spec.key as { key?: string } | undefined)?.key?.startsWith('studioGraph'))).toBe(true); });
   const select = (needle: string, nth = 0) => {

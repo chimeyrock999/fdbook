@@ -1,5 +1,5 @@
 import { MdxEditor, type MdxEditorRef } from '@fumadocs-editor/ui';
-import type { Editor } from '@tiptap/core';
+import type { AnyExtension, Editor } from '@tiptap/core';
 import { act, render } from '@testing-library/react';
 import { createRef, useRef, type ReactNode } from 'react';
 import { vi } from 'vitest';
@@ -29,15 +29,16 @@ function Visual({ children }: { children: (container: React.RefObject<HTMLElemen
 }
 
 // The Visual editor with the Studio's plugins, as NoteEditor mounts it, plus
-// whatever `extra` draws next to it (e.g. the graph tools). Resolves once
-// the live editor replaced the static first paint.
-export async function mountVisual(source: string, { editable = true, extra }: {
+// the `extensions` given and whatever `extra` draws next to it (e.g. the
+// graph tools). Resolves once the live editor replaced the static first paint.
+export async function mountVisual(source: string, { editable = true, extensions, extra }: {
   editable?: boolean;
+  extensions?: AnyExtension[];
   extra?: (container: React.RefObject<HTMLElement | null>) => ReactNode;
 } = {}) {
   const ref = createRef<MdxEditorRef>();
   const result = render(
-    <MdxEditor.Root defaultValue={source} ref={ref} components={editorConfig.components} syntax={editorConfig.syntax} editable={editable}>
+    <MdxEditor.Root defaultValue={source} ref={ref} components={editorConfig.components} syntax={editorConfig.syntax} extensions={extensions} editable={editable}>
       <Visual>{(container) => extra?.(container)}</Visual>
     </MdxEditor.Root>,
   );

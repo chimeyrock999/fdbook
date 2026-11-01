@@ -1,11 +1,10 @@
 import type { EditorView } from '@tiptap/pm/view';
 import { Eraser, Highlighter, PencilLine, Sprout, Tag, TriangleAlert } from 'lucide-react';
-import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { useEditorPlugin } from '../editor/decorations';
 import { composing } from '../keyboard';
 import { useDock } from './dock';
-import { closeGraphFields, graphCommand, graphKey, graphPlugin, type GraphAction } from './graph-plugin';
+import { closeGraphFields, graphCommand, graphKey, type GraphAction, type GraphSource } from './graph-plugin';
 import { listedIn } from './listed';
 import { defaults, graphMetaTarget, markerAt, updateMarker, wrapRange, type Marker } from './markers';
 
@@ -20,17 +19,18 @@ const LABELS: Record<Marker['kind'], string> = { Keyword: 'Keyword', Tag: 'Tag',
 // The graph bar (wrap the selection as a Keyword or Tag, mark the heading
 // as a graph node, edit or remove the marker there) and the fields of a
 // marker's id and displayName. The bar docks under the editor's own format
-// bubble when that sits under the selection (see dock.ts). Both live on the
-// live editor inside `container`, through the graph plugin. `graph` is the
-// note's graph frontmatter, to say where it lists the marker's id.
-export function GraphTools({ container, graph }: { container: RefObject<HTMLElement | null>; graph?: unknown }) {
+// bubble when that sits under the selection (see dock.ts); it is not one of
+// the bubble's items, since it also shows for a caret on a marker or a
+// heading, and warns where the frontmatter lists the marker. Both live on
+// the live editor inside `container`, through `source`'s plugin. `graph` is
+// the note's graph frontmatter, to say where it lists the marker's id.
+export function GraphTools({ container, source, graph }: { container: RefObject<HTMLElement | null>; source: GraphSource; graph?: unknown }) {
   const [view, setView] = useState<EditorView | null>(null);
   const [, redraw] = useState(0);
-  const plugin = useMemo(() => graphPlugin((next) => {
+  useEffect(() => source.listen((next) => {
     setView(next);
     redraw((count) => count + 1);
-  }), []);
-  useEditorPlugin(container, plugin);
+  }), [source]);
   // The bar shows only while the editor has the focus.
   useEffect(() => {
     const again = () => { redraw((count) => count + 1); };

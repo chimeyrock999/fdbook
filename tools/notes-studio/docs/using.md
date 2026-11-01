@@ -135,8 +135,10 @@ may no longer write can copy them.
 
 A reader's Studio is read only, as main is: no New change request, Commit,
 Preview, Publish or Discard, but a change request's **Open preview**. A
-writer sees Discard and Clean up off, with the reason, on a change request
-that is on origin. Agents are an admin's (see [Agents](#agents)).
+writer made a reader on GitHub while a note is open sees that note lock
+(Read only) within 15 seconds of the Studio reading the new role. A
+writer sees Discard and Clean up off, with the reason, on a change
+request that is on origin. Agents are an admin's (see [Agents](#agents)).
 
 A commit from the UI has the signed-in person as its author, `Name
 <id+login@users.noreply.github.com>`, so GitHub links it to them; the
@@ -844,12 +846,10 @@ the agent for each role, kept in this browser.
   back as it was when the turn began. Revert writes nothing over a file
   changed again since the turn ended (a later turn's edit included), and
   does not touch files outside the notes, their assets and the diagrams,
-  files over 25 MB, or files a person saved through the file API during the
-  turn (it says so: revert those by hand). Other writes during the turn (a
-  proposal accepted, an asset change, a restore, a tree change) are not
-  marked, and Revert puts those files back too. Edits typed
-  in the editor during a turn are not marked: look at the diff before
-  reverting a note you edited meanwhile.
+  files over 25 MB, or files a person saved during the turn, in the editor
+  or through the file API (it says so: revert those by hand). Other writes
+  during the turn (a proposal accepted, an asset change, a restore, a tree
+  change) are not marked, and Revert puts those files back too.
 - **Questions.** When the agent asks permission, a card in the thread shows
   what it would run or touch, the agent's own options (less "allow always",
   which would outlive the chat) and the time left; nobody answering within
