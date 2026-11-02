@@ -10,8 +10,8 @@ import { wrapRange } from './markers';
 // selection inside an existing marker leaves them off, and the graph bar
 // under the bubble edits that marker instead. The bubble is not mounted
 // when the editor is read-only. `shortcut` only shows in the tooltip; the
-// keys are bound by the graph plugin (`graphKeymap`), which also edits a
-// marker at the caret.
+// keys are bound by the graph plugin's keydown handler (`keys` in
+// graph-plugin.ts), which also edits a marker at the caret.
 function wrapItem(kind: 'Keyword' | 'Tag', icon: BubbleItem['icon'], shortcut: string): BubbleItem {
   return {
     label: kind,
