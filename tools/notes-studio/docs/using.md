@@ -337,16 +337,19 @@ in Visual:
   (`/mermaid`; `/diagram` lists it next to SVG diagram and Diagram) inserts
   a ` ```mermaid ` code block with a starter flowchart, drawn under the code
   as you type, with the caret in the code.
-- Select text and the graph bar under it wraps it as a **Keyword**
-  (`Mod-Alt-K`) or **Tag** (`Mod-Alt-T`). With the caret in a heading,
-  **Graph node** (`Mod-Alt-G`) adds `:graph-meta{…}` from its title. Some
-  systems take a shortcut before the page sees it (`Ctrl-Alt-T` opens a
-  terminal on GNOME, `Cmd-Opt-K` the Firefox console on macOS); the bar
-  buttons work everywhere. The bar sits under the selection, below the
-  editor's own format bar, or above it with no room left
-  (`src/graph/dock.ts`). It is a popup of its own because the editor has
-  no way to add buttons to its format bar yet; a request for that is
-  drafted upstream.
+- Select text and the editor's format bar wraps it as a **Keyword**
+  (`Mod-Alt-K`) or **Tag** (`Mod-Alt-T`); both are off for a selection
+  inside a marker, which the graph bar edits instead. With the caret in a
+  heading, the graph bar's **Graph node** (`Mod-Alt-G`) adds
+  `:graph-meta{…}` from its title. Some systems take a shortcut before the
+  page sees it (`Ctrl-Alt-T` opens a terminal on GNOME, `Cmd-Opt-K` the
+  Firefox console on macOS); the buttons work everywhere. The graph bar
+  shows for a caret or a selection in a heading or a marker, and also
+  carries Edit/Remove and the frontmatter note, so it is a popup of its
+  own rather than buttons in the format bar. When both show (a selection
+  in a heading or a marker, or on touch, where the format bar shows at a
+  caret) it sits under the format bar, else under the selection, or above
+  it with no room left (`src/graph/dock.ts`).
 - The id is slugged from the text (Vietnamese marks dropped, `đ` → `d`)
   and the displayName is the text. The fields open right after, and again
   from **Edit … id** on the bar (caret in a keyword or a marked heading) or

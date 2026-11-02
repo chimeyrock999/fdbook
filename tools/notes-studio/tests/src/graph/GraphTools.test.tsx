@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { decorationsExtension } from '../../../src/editor/decorations';
 import { pluginsExtension } from '../../../src/editor/extensions';
 import { createGraphSource, graphCommand } from '../../../src/graph/graph-plugin';
+import { graphBubbleItems } from '../../../src/graph/bubble-items';
 import { GraphTools } from '../../../src/graph/GraphTools';
 import { editorConfig } from '../../../src/plugins';
 import { defined } from '../../support/editor-state';
@@ -19,7 +20,7 @@ const decorations = decorationsExtension(editorConfig.decorators);
 async function mount(source: string, editable = true, graph?: unknown) {
   const tools = createGraphSource();
   const extensions = [decorations, pluginsExtension('studioNote', [tools.plugin])];
-  const view = await mountVisual(source, { editable, extensions, extra: (container) => <GraphTools container={container} source={tools} graph={graph} /> });
+  const view = await mountVisual(source, { editable, extensions, bubbleItems: graphBubbleItems, extra: (container) => <GraphTools container={container} source={tools} graph={graph} /> });
   // The toolbar registers after the live editor is up.
   await vi.waitFor(() => { expect(view.editor.state.plugins.some((plugin) => (plugin.spec.key as { key?: string } | undefined)?.key?.startsWith('studioGraph'))).toBe(true); });
   const select = (needle: string, nth = 0) => {
@@ -33,16 +34,31 @@ async function mount(source: string, editable = true, graph?: unknown) {
   // The bar draws after the editor's update.
   const press = async (name: RegExp) => {
     const button = await screen.findByRole('button', { name });
-    act(() => { fireEvent.mouseDown(button); });
+    act(() => {
+      fireEvent.mouseDown(button);
+      fireEvent.click(button);
+    });
   };
   const input = (label: string) => screen.getByRole('textbox', { name: label });
   return { ...view, select, caret, press, input };
 }
 
 describe('GraphTools', () => {
-  it("docks to the editor's own format bubble, found the way the Studio finds it", async () => {
+  it('puts Keyword and Tag in the editor format bubble for a text selection', async () => {
     const view = await mount('Mỗi process có một Process Control Block lưu trạng thái.\n');
     view.select('Process Control Block');
+    const keyword = await screen.findByRole('button', { name: 'Keyword' });
+    expect(keyword).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: 'Tag' })).toHaveProperty('disabled', false);
+    // The selection-only actions are no longer duplicated in the custom bar.
+    expect(screen.queryByRole('toolbar', { name: 'Graph' })).toBeNull();
+  });
+
+  it("docks to the editor's own format bubble, found the way the Studio finds it", async () => {
+    // A selection in a heading: the bubble shows for it, with Keyword and
+    // Tag, and the bar shows too, for Graph node.
+    const view = await mount('### Hadoop Overview\n\nText.\n');
+    view.select('Overview');
     // The real BubbleMenu of @fumadocs-editor/ui shows for the selection, and
     // the bar finds it: if a tiptap or editor update changes how the bubble
     // is shown, the bar falls back to the selection and this fails.
@@ -50,11 +66,12 @@ describe('GraphTools', () => {
       expect(screen.getByRole('toolbar', { name: 'Graph' }).dataset.docked).toBe('bubble');
     }, { timeout: 2000 });
     expect(screen.getByRole('toolbar', { name: 'Graph' }).style.visibility).toBe('visible');
+    expect(screen.getByRole('button', { name: /Graph node/ })).toHaveProperty('disabled', false);
   });
 
   it('follows the bubble when it slides to a new place, and shows once it is there', async () => {
-    const view = await mount('Mỗi process có một Process Control Block lưu trạng thái.\n');
-    view.select('Process Control Block');
+    const view = await mount('### Hadoop Overview\n\nText.\n');
+    view.select('Overview');
     // Hidden from the accessibility tree while it waits for the bubble.
     const bar = await screen.findByRole('toolbar', { name: 'Graph', hidden: true });
     await vi.waitFor(() => { expect(bar.dataset.docked).toBe('bubble'); }, { timeout: 2000 });
@@ -78,6 +95,14 @@ describe('GraphTools', () => {
     expect(bar.style.visibility).toBe('visible');
   });
 
+  it('leaves the bubble\'s Keyword off inside a marker, where the bar edits it', async () => {
+    const view = await mount('A <Keyword id="fact" displayName="Fact">fact term</Keyword> here.\n');
+    view.select('term');
+    expect(await screen.findByRole('button', { name: 'Keyword' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Tag' })).toHaveProperty('disabled', true);
+    expect(await screen.findByRole('button', { name: /^Edit keyword id/ })).toBeTruthy();
+  });
+
   it('shows at once for a caret, which the bubble never shows for', async () => {
     const view = await mount('## Process Control Block\n\nText.\n');
     view.caret('Process', 2);
@@ -90,10 +115,8 @@ describe('GraphTools', () => {
   it('wraps a selection as a Keyword and writes the edited fields', async () => {
     const view = await mount('Mỗi process có một Process Control Block lưu trạng thái.\n');
     view.select('Process Control Block');
-    const bar = await screen.findByRole('toolbar', { name: 'Graph' });
-    expect(screen.getByRole('button', { name: /Graph node/ })).toHaveProperty('disabled', true);
-    expect(bar.textContent).toContain('Keyword');
-    await view.press(/^Keyword/);
+    expect(screen.queryByRole('toolbar', { name: 'Graph' })).toBeNull();
+    await view.press(/^Keyword$/);
 
     // The marker is written with its defaults, then its fields open.
     await view.written('Mỗi process có một <Keyword id="process-control-block" displayName="Process Control Block">Process Control Block</Keyword> lưu trạng thái.\n');
@@ -130,7 +153,7 @@ describe('GraphTools', () => {
   it('marks a heading from the bar and edits its title with the id', async () => {
     const view = await mount('### Hadoop Overview\n\nText.\n');
     view.caret('Overview', 2);
-    expect(await screen.findByRole('button', { name: /^Keyword/ })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: 'Keyword' })).toBeNull();
     await view.press(/Graph node/);
     const dialog = await screen.findByRole('dialog', { name: 'Graph node id' });
     fireEvent.change(view.input('Text'), { target: { value: 'Hadoop at a glance' } });
@@ -205,7 +228,8 @@ describe('GraphTools', () => {
   it('removes the marker at the caret from the bar, and only shows Remove on one', async () => {
     const view = await mount('A <Tag id="fact" displayName="Fact">fact</Tag> and a term.\n');
     view.select('term');
-    await screen.findByRole('toolbar', { name: 'Graph' });
+    await screen.findByRole('button', { name: 'Keyword' });
+    expect(screen.queryByRole('toolbar', { name: 'Graph' })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Remove/ })).toBeNull();
     view.caret('fact', 2);
     await view.press(/^Remove tag/);

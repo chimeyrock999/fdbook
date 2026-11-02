@@ -20,6 +20,7 @@ import { useSession } from '../session/session';
 import type { IssueCount } from '../sidebar/Sidebar';
 import { assetCompletion } from './asset-completion';
 import { createGraphSource } from '../graph/graph-plugin';
+import { graphBubbleItems } from '../graph/bubble-items';
 import { GraphTools } from '../graph/GraphTools';
 import { editorConfig } from '../plugins';
 import { decorationsExtension } from './decorations';
@@ -102,6 +103,7 @@ export function NoteEditor({ path, assets, onStatus, place = null, review = null
       syntax={editorConfig.syntax}
       media={uploads.media}
       extensions={parts.extensions}
+      bubbleItems={graphBubbleItems}
       editable={!locked}
     >
       <EditorLayout

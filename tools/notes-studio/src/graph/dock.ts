@@ -8,10 +8,12 @@ import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 // The bubble (@fumadocs-editor/ui 0.7.0) is a tiptap BubbleMenu: shown, it
 // is appended to the editor frame, placed "bottom-start" 6px from the
 // selection and flipped above when there is no room below; hidden, it is
-// removed. Its `bubbleItems` (fuma-nama/fumadocs-editor#40) are buttons for
-// a text selection only, while the graph bar also shows for a caret on a
-// marker or a heading and carries the fields and the frontmatter note, so
-// the bar stays a popup of its own. The editor gives no way to find the
+// removed. Keyword and Tag are among its `bubbleItems` (bubble-items.tsx),
+// which are buttons for a text selection only, while the graph bar also
+// shows for a caret on a marker or a heading and carries the fields and the
+// frontmatter note, so the bar stays a popup of its own and shows with the
+// bubble for a selection in a heading or a marker (and on touch, where the
+// bubble shows at a caret). The editor gives no way to find the
 // bubble, so the popups find it among the children of the editor's
 // ancestors and anchor to the box around the selection and the bubble.
 // Placed below that box, they sit under the bubble when the bubble is
