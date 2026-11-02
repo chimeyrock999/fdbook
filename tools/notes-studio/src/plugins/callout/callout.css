@@ -25,12 +25,12 @@
 .notes-prose .studio-callout .studio-callout-title {
   display: block;
   align-content: center;
-  padding-inline-start: 0.4375rem;
+  padding-inline-start: 0.5625rem;
   border-start-end-radius: 0.75rem;
 }
 .notes-prose .studio-callout .studio-callout-body {
   grid-column: 2;
-  padding-inline-start: 0.4375rem;
+  padding-inline-start: 0.5625rem;
   border-end-start-radius: 0.75rem;
   border-end-end-radius: 0.75rem;
 }

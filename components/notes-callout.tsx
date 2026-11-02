@@ -64,7 +64,6 @@ const LABELS: Record<SemanticCalloutType, string> = {
 export function getCalloutVariables(type: SemanticCalloutType) {
   return {
     '--notes-callout-color': `var(--color-callout-${type})`,
-    '--notes-callout-background': `var(--color-callout-${type}-bg)`,
     '--notes-callout-title-color': `var(--color-callout-${type}-title)`,
   };
 }
