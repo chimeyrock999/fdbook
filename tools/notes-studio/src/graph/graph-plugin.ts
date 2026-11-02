@@ -19,11 +19,32 @@ export const graphKey = new PluginKey<GraphState>('studioGraph');
 
 export type GraphAction = 'Keyword' | 'Tag' | 'GraphMeta' | 'remove';
 
+// Where the note's graph frontmatter lists an id, per live editor; set by
+// GraphTools from the note's `graph`.
+const listings = new WeakMap<EditorView, (id: string) => string[]>();
+
+export function setGraphListing(view: EditorView, listed: (id: string) => string[]) {
+  listings.set(view, listed);
+}
+
+// Takes `marker` off, unless the frontmatter lists its id: then its fields
+// open, which name those entries next to their Remove, so an entry is not
+// left behind unseen. For a pressed Keyword or Tag and Mod-Alt-X; the
+// fields' own Remove goes through removeMarker.
+export function takeOff(marker: Marker): Command {
+  return (state, dispatch, view) => {
+    const listed = view && marker.attrs.id ? listings.get(view)?.(marker.attrs.id) ?? [] : [];
+    if (listed.length > 0) dispatch?.(state.tr.setMeta(graphKey, { open: true }));
+    else dispatch?.(removeMarker(state, marker).scrollIntoView());
+    return true;
+  };
+}
+
 // What a graph action does at the selection, as a ProseMirror command:
 // Keyword and Tag wrap the selection, GraphMeta marks the caret's heading,
 // and each opens the fields of the marker it made. With nothing to make,
 // Keyword, Tag and GraphMeta open the fields of a marker already there of
-// that kind. `remove` takes the marker there off.
+// that kind. `remove` takes the marker there off (see takeOff).
 export function graphCommand(action: GraphAction): Command {
   return (state, dispatch, view) => {
     if (view && !view.editable) return false;
@@ -34,10 +55,7 @@ export function graphCommand(action: GraphAction): Command {
     }
     const marker = markerAt(state);
     if (!marker) return false;
-    if (action === 'remove') {
-      dispatch?.(removeMarker(state, marker).scrollIntoView());
-      return true;
-    }
+    if (action === 'remove') return takeOff(marker)(state, dispatch, view);
     if (marker.kind !== action) return false;
     dispatch?.(state.tr.setMeta(graphKey, { open: true }));
     return true;

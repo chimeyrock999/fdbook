@@ -277,5 +277,34 @@ describe('GraphTools', () => {
     act(() => { fireEvent.keyDown(view.input('id'), { key: 'Escape' }); });
     view.click(textAt(view.editor, 'other', 1) + 2, other);
     expect((await screen.findByRole('dialog', { name: 'Tag id' })).textContent).not.toContain('graph.');
+    act(() => { fireEvent.keyDown(view.input('id'), { key: 'Escape' }); });
+  });
+
+  it('opens the fields instead of removing a marker the frontmatter lists, and removes from there', async () => {
+    const graph = { keywords: [{ id: 'grain', displayName: 'Grain' }] };
+    const source = 'A <Keyword id="grain" displayName="Grain">grain size</Keyword> and <Keyword id="other" displayName="Other">other</Keyword>.\n';
+    const view = await mount(source, true, graph);
+    // A pressed Keyword in the bubble.
+    view.select('size');
+    const keyword = await screen.findByRole('button', { name: 'Keyword' });
+    await vi.waitFor(() => { expect(keyword.dataset.active).toBe('true'); });
+    await view.press(/^Keyword$/);
+    const dialog = await screen.findByRole('dialog', { name: 'Keyword id' });
+    expect(dialog.textContent).toContain('graph.keywords.0');
+    expect(view.markdown()).toBe(source);
+    act(() => { fireEvent.keyDown(view.input('id'), { key: 'Escape' }); });
+    // Mod-Alt-X at its caret.
+    view.caret('size', 1);
+    view.key('x', { ctrlKey: true, altKey: true });
+    await screen.findByRole('dialog', { name: 'Keyword id' });
+    expect(view.markdown()).toBe(source);
+    // The fields' Remove, next to the note, takes it off.
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Remove keyword' })); });
+    await view.written('A grain size and <Keyword id="other" displayName="Other">other</Keyword>.\n');
+    // A marker the frontmatter does not list goes at once.
+    const at = textAt(view.editor, 'other', 1) + 2;
+    act(() => { view.editor.chain().focus().setTextSelection(at).run(); });
+    view.key('x', { ctrlKey: true, altKey: true });
+    await view.written('A grain size and other.\n');
   });
 });

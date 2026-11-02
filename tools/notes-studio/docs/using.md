@@ -361,10 +361,11 @@ in Visual:
   (`Mod-Alt-X` at the caret), or a pressed Keyword or Tag in the format
   bar, takes the marker off and keeps what it marked: a keyword's text
   with its Markdown, a `:keyword[…]` label as the text it reads as, a
-  heading's title without the space its `:graph-meta` added. One undo puts it back. When the note's `graph`
-  frontmatter lists the marker's id (`graph.keywords`, `graph.sections`, a
-  section's `keywords`), the fields name those entries; Remove leaves
-  them.
+  heading's title without the space its `:graph-meta` added. One undo
+  puts it back. When the note's `graph` frontmatter lists the marker's id
+  (`graph.keywords`, `graph.sections`, a section's `keywords`), the
+  shortcut and the format bar open the fields instead, which name those
+  entries; their Remove takes the marker off and leaves the entries.
 - Only the marker's own source changes. Keyword text with mixed formatting,
   or a `:keyword[…]` label with Markdown in it, is kept as it is; the
   fields then change only the id and displayName. A label typed in the

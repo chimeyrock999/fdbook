@@ -4,9 +4,9 @@ import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { composing } from '../keyboard';
 import { usePlaceAt } from './place';
-import { closeGraphFields, graphCommand, graphKey, type GraphSource } from './graph-plugin';
+import { closeGraphFields, graphKey, setGraphListing, type GraphSource } from './graph-plugin';
 import { listedIn } from './listed';
-import { defaults, markerAt, updateMarker, type Marker } from './markers';
+import { defaults, markerAt, removeMarker, updateMarker, type Marker } from './markers';
 
 const LABELS: Record<Marker['kind'], string> = { Keyword: 'Keyword', Tag: 'Tag', GraphMeta: 'Graph node' };
 
@@ -22,6 +22,9 @@ export function GraphTools({ source, graph }: { source: GraphSource; graph?: unk
     setView(next);
     redraw((count) => count + 1);
   }), [source]);
+  useEffect(() => {
+    if (view) setGraphListing(view, (id) => listedIn(graph, id));
+  }, [view, graph]);
 
   if (!view || view.isDestroyed || !view.editable) return null;
   const state = graphKey.getState(view.state);
@@ -75,8 +78,10 @@ function GraphFields({ view, marker, listed }: { view: EditorView; marker: Marke
     view.focus();
   };
   const writeOnLeave = useEffectEvent(() => { close(true); });
+  // Here the note on the frontmatter is in view: Remove takes the marker off.
   const remove = () => {
-    if (!graphCommand('remove')(view.state, view.dispatch, view)) view.dispatch(closeGraphFields(view.state));
+    const current = markerAt(view.state);
+    view.dispatch(current && view.editable ? removeMarker(view.state, current).scrollIntoView() : closeGraphFields(view.state));
     view.focus();
   };
 
