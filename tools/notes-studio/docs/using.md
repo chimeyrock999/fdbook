@@ -338,34 +338,33 @@ in Visual:
   a ` ```mermaid ` code block with a starter flowchart, drawn under the code
   as you type, with the caret in the code.
 - Select text and the editor's format bar wraps it as a **Keyword**
-  (`Mod-Alt-K`) or **Tag** (`Mod-Alt-T`); both are off for a selection
-  inside a marker, which the graph bar edits instead. With the caret in a
-  heading, the graph bar's **Graph node** (`Mod-Alt-G`) adds
-  `:graph-meta{…}` from its title. Some systems take a shortcut before the
-  page sees it (`Ctrl-Alt-T` opens a terminal on GNOME, `Cmd-Opt-K` the
-  Firefox console on macOS); the buttons work everywhere. The graph bar
-  shows for a caret or a selection in a heading or a marker, and also
-  carries Edit/Remove and the frontmatter note, so it is a popup of its
-  own rather than buttons in the format bar. When both show (a selection
-  in a heading or a marker, or on touch, where the format bar shows at a
-  caret) it sits under the format bar, else under the selection, or above
-  it with no room left (`src/graph/dock.ts`).
+  (`Mod-Alt-K`) or **Tag** (`Mod-Alt-T`), the two green buttons at its
+  end. Like Bold they toggle: with the selection inside a keyword, Keyword
+  shows pressed and takes it off again (the same for a tag); the other one
+  is off there. A heading that can take a graph node gets a **Graph**
+  button at its end, shown while the pointer is over the heading or the
+  caret is in it (on touch, the caret only); it adds `:graph-meta{…}` from
+  the title, as `Mod-Alt-G` does with the caret in the heading. Some
+  systems take a shortcut before the page sees it (`Ctrl-Alt-T` opens a
+  terminal on GNOME, `Cmd-Opt-K` the Firefox console on macOS); the
+  buttons work everywhere.
 - The id is slugged from the text (Vietnamese marks dropped, `đ` → `d`)
   and the displayName is the text. The fields open right after, and again
-  from **Edit … id** on the bar (caret in a keyword or a marked heading) or
-  a click on a graph node marker or a `:keyword[…]` label. Change the text,
-  id or displayName; Enter or a click elsewhere writes them, Escape leaves
-  the marker as it is. A marker without an id (just inserted from `/`)
-  opens them when the caret reaches it, and takes its id from the text as
-  you type it.
-- **Remove keyword / tag / graph node** (`Mod-Alt-X`) on the bar, or Remove
-  at the foot of the fields, takes the marker at the caret off and keeps
-  what it marked: a keyword's text with its Markdown, a `:keyword[…]` label
-  as the text it reads as, a heading's title without the space its
-  `:graph-meta` added. One undo puts it back. When the note's `graph`
+  on a click on a keyword or tag (`<Keyword>` or `:keyword[…]`) or a graph
+  node marker, or with the marker's shortcut at its caret. Change the
+  text, id or displayName; Enter or a click elsewhere writes them, Escape
+  leaves the marker as it is. A marker without an id (just inserted from
+  `/`) opens them when the caret reaches it, and takes its id from the
+  text as you type it. They sit under the marker, or above it with no
+  room left.
+- **Remove keyword / tag / graph node** at the foot of the fields
+  (`Mod-Alt-X` at the caret), or a pressed Keyword or Tag in the format
+  bar, takes the marker off and keeps what it marked: a keyword's text
+  with its Markdown, a `:keyword[…]` label as the text it reads as, a
+  heading's title without the space its `:graph-meta` added. One undo puts it back. When the note's `graph`
   frontmatter lists the marker's id (`graph.keywords`, `graph.sections`, a
-  section's `keywords`), the bar and the fields name those entries; Remove
-  leaves them.
+  section's `keywords`), the fields name those entries; Remove leaves
+  them.
 - Only the marker's own source changes. Keyword text with mixed formatting,
   or a `:keyword[…]` label with Markdown in it, is kept as it is; the
   fields then change only the id and displayName. A label typed in the

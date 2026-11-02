@@ -1,28 +1,38 @@
 import type { BubbleItem } from '@fumadocs-editor/ui';
 import type { Editor } from '@tiptap/core';
-import { Hash, KeyRound } from 'lucide-react';
+import { Bean, Nut } from 'lucide-react';
 import { graphCommand } from './graph-plugin';
-import { wrapRange } from './markers';
+import { markerAt, removeMarker, wrapRange } from './markers';
 
 // Keyword and Tag in the editor's own format bubble, as `bubbleItems` of
-// `MdxEditor.Root`. They only wrap a text selection, which is when the
-// bubble shows, so they are enabled only where `wrapRange` finds one: a
-// selection inside an existing marker leaves them off, and the graph bar
-// under the bubble edits that marker instead. The bubble is not mounted
-// when the editor is read-only. `shortcut` only shows in the tooltip; the
-// keys are bound by the graph plugin's keydown handler (`keys` in
-// graph-plugin.ts), which also edits a marker at the caret.
-function wrapItem(kind: 'Keyword' | 'Tag', icon: BubbleItem['icon'], shortcut: string): BubbleItem {
+// `MdxEditor.Root`. Like Bold, each toggles: it wraps a plain text
+// selection, and with the selection inside a marker of its kind it shows
+// pressed and takes that marker off, keeping its text. Elsewhere inside a
+// marker it is off. The bubble is not mounted when the editor is
+// read-only. `shortcut` only shows in the tooltip; the keys are bound by
+// the graph plugin's keydown handler (`keys` in graph-plugin.ts), which
+// opens a marker's fields instead.
+function toggleItem(kind: 'Keyword' | 'Tag', icon: BubbleItem['icon'], shortcut: string): BubbleItem {
+  const around = (editor: Editor) => {
+    const marker = markerAt(editor.state);
+    return marker?.kind === kind ? marker : null;
+  };
   return {
     label: kind,
     icon,
     shortcut,
-    isEnabled: (editor: Editor) => editor.isEditable && wrapRange(editor.state) !== null,
-    run: (editor: Editor) => { graphCommand(kind)(editor.state, editor.view.dispatch, editor.view); },
+    isActive: (editor) => around(editor) !== null,
+    isEnabled: (editor) => editor.isEditable && (around(editor) !== null || wrapRange(editor.state) !== null),
+    run: (editor) => {
+      const marker = around(editor);
+      if (marker) editor.view.dispatch(removeMarker(editor.state, marker).scrollIntoView());
+      else graphCommand(kind)(editor.state, editor.view.dispatch, editor.view);
+    },
   };
 }
 
+// In the graph colour, apart from the formatting buttons.
 export const graphBubbleItems: BubbleItem[] = [
-  wrapItem('Keyword', <KeyRound size={14} aria-hidden />, 'Mod-Alt-k'),
-  wrapItem('Tag', <Hash size={14} aria-hidden />, 'Mod-Alt-t'),
+  toggleItem('Keyword', <Nut size={14} className="studio-graph-icon" aria-hidden />, 'Mod-Alt-k'),
+  toggleItem('Tag', <Bean size={14} className="studio-graph-icon" aria-hidden />, 'Mod-Alt-t'),
 ];
