@@ -1,6 +1,6 @@
 import type { BubbleItem } from '@fumadocs-editor/ui';
 import type { Editor } from '@tiptap/core';
-import { Highlighter, Tag } from 'lucide-react';
+import { Hash, KeyRound } from 'lucide-react';
 import { graphCommand } from './graph-plugin';
 import { wrapRange } from './markers';
 
@@ -23,6 +23,6 @@ function wrapItem(kind: 'Keyword' | 'Tag', icon: BubbleItem['icon'], shortcut: s
 }
 
 export const graphBubbleItems: BubbleItem[] = [
-  wrapItem('Keyword', <Highlighter size={14} aria-hidden />, 'Mod-Alt-k'),
-  wrapItem('Tag', <Tag size={14} aria-hidden />, 'Mod-Alt-t'),
+  wrapItem('Keyword', <KeyRound size={14} aria-hidden />, 'Mod-Alt-k'),
+  wrapItem('Tag', <Hash size={14} aria-hidden />, 'Mod-Alt-t'),
 ];
