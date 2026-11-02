@@ -2,8 +2,8 @@
    colours, borders, padding and type. The editor renders the title and body
    regions inside one hole element, so the head cannot wrap the icon and the
    title: the callout is a grid and the hole steps aside (display: contents).
-   The icon and the title are two head cells sharing the bar, the body spans
-   the row below. Not overflow: hidden as on the site, which would clip the
+   The icon and the title are two head cells, the body sits below the title,
+   as the site lines it up. Not overflow: hidden as on the site, which would clip the
    editor's controls, so each cell rounds its own corners. */
 .notes-prose .notes-callout.studio-callout {
   position: relative;
@@ -14,10 +14,10 @@
 .studio-callout > [data-fde-hole] {
   display: contents;
 }
-/* The picker button carries 4px of its own padding around the icon. */
+/* The picker button is the icon's badge. */
 .notes-prose .studio-callout .studio-callout-picker {
   position: relative;
-  padding-inline: calc(0.875rem - 4px) 0;
+  padding-inline: 1rem 0;
   border-start-start-radius: 0.75rem;
 }
 /* A head cell, but editable text, not a flex row of an icon and a title:
@@ -29,7 +29,14 @@
   border-start-end-radius: 0.75rem;
 }
 .notes-prose .studio-callout .studio-callout-body {
-  grid-column: 1 / -1;
+  grid-column: 2;
+  padding-inline-start: 0.4375rem;
   border-end-start-radius: 0.75rem;
   border-end-end-radius: 0.75rem;
+}
+/* The site sizes the icon in its badge (.notes-callout-icon svg); the
+   picker's chevron keeps its own size. */
+.notes-prose .studio-callout .studio-picker-chevron {
+  width: 10px;
+  height: 10px;
 }
