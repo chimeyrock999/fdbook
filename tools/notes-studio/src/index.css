@@ -57,47 +57,13 @@
     color: var(--fde-background);
     border-color: var(--fde-foreground);
   }
-  /* A popup over the note: the graph bar and fields (src/graph). */
+  /* A popup over the note: the graph fields (src/graph). */
   .studio-popup {
     border: 1px solid var(--fde-border);
     border-radius: 9px;
     background: var(--fde-popover);
     color: var(--fde-popover-foreground);
     box-shadow: 0 6px 24px rgb(0 0 0 / 0.14);
-  }
-  .studio-popup-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    border-radius: 6px;
-    padding: 4px 9px;
-    font-size: 12.5px;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-  .studio-popup-button:hover:not(:disabled),
-  .studio-popup-button:focus-visible {
-    background: var(--fde-accent);
-  }
-  .studio-popup-button:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-  .studio-popup-button svg {
-    flex: none;
-    color: var(--color-graph-primary);
-  }
-  .studio-popup-button kbd {
-    border: 1px solid var(--fde-border);
-    border-radius: 4px;
-    padding: 0 4px;
-    font: 10.5px var(--font-mono);
-    color: var(--fde-muted-foreground);
-  }
-  @media (pointer: coarse) {
-    .studio-popup-button kbd {
-      display: none;
-    }
   }
   .studio-link {
     font-size: 12px;

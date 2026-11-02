@@ -263,7 +263,7 @@ function EditorLayout({ parts, path, notePath, disk, assets, uploads, opened, st
               />
               <MdxEditor.Visual className="studio-prose notes-prose" />
               {review !== null && <VisualSuggestions layer={layer} placement={suggestions.placement} focus={suggestions.focus} readOnly={!canDecide} decisions={suggestions.decisions} onResolveComment={review.resolveComment} />}
-              <GraphTools container={editor} source={parts.graph} graph={frontmatter.status === 'ok' ? frontmatter.data.graph : undefined} />
+              <GraphTools source={parts.graph} graph={frontmatter.status === 'ok' ? frontmatter.data.graph : undefined} />
             </div>
           </div>
         ) : (

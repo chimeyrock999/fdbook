@@ -1,114 +1,37 @@
 import type { EditorView } from '@tiptap/pm/view';
-import { Eraser, PencilLine, Sprout, TriangleAlert } from 'lucide-react';
-import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { TriangleAlert } from 'lucide-react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { composing } from '../keyboard';
-import { useDock } from './dock';
-import { closeGraphFields, graphCommand, graphKey, type GraphAction, type GraphSource } from './graph-plugin';
+import { usePlaceAt } from './place';
+import { closeGraphFields, graphKey, setGraphListing, type GraphSource } from './graph-plugin';
 import { listedIn } from './listed';
-import { defaults, graphMetaTarget, markerAt, updateMarker, type Marker } from './markers';
-
-const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
-
-function shortcut(key: string) {
-  return MAC ? `⌘⌥${key}` : `Ctrl+Alt+${key}`;
-}
+import { defaults, markerAt, removeMarker, updateMarker, type Marker } from './markers';
 
 const LABELS: Record<Marker['kind'], string> = { Keyword: 'Keyword', Tag: 'Tag', GraphMeta: 'Graph node' };
 
-// The graph bar (mark the heading as a graph node, edit or remove the
-// marker there) and the fields of a marker's id and displayName. Wrapping a
-// selection as a Keyword or Tag is in the editor's own format bubble
-// (bubble-items.tsx). The bar is not one of the bubble's items, since it
-// also shows for a caret on a marker or a heading, and warns where the
-// frontmatter lists the marker; when both show (a selection in a heading or
-// a marker) it docks under the bubble (see dock.ts). Both live on the live
-// editor inside `container`, through `source`'s plugin. `graph` is the
-// note's graph frontmatter, to say where it lists the marker's id.
-export function GraphTools({ container, source, graph }: { container: RefObject<HTMLElement | null>; source: GraphSource; graph?: unknown }) {
+// The fields of a marker's id and displayName, on the live editor through
+// `source`'s plugin. The rest of the graph tools live in the editor: Keyword
+// and Tag in its format bubble (bubble-items.tsx), the Graph button of a
+// heading and a click on a marker in the plugin (graph-plugin.ts). `graph`
+// is the note's graph frontmatter, to say where it lists the marker's id.
+export function GraphTools({ source, graph }: { source: GraphSource; graph?: unknown }) {
   const [view, setView] = useState<EditorView | null>(null);
   const [, redraw] = useState(0);
   useEffect(() => source.listen((next) => {
     setView(next);
     redraw((count) => count + 1);
   }), [source]);
-  // The bar shows only while the editor has the focus.
   useEffect(() => {
-    const again = () => { redraw((count) => count + 1); };
-    document.addEventListener('focusin', again);
-    document.addEventListener('focusout', again);
-    return () => {
-      document.removeEventListener('focusin', again);
-      document.removeEventListener('focusout', again);
-    };
-  }, []);
+    if (view) setGraphListing(view, (id) => listedIn(graph, id));
+  }, [view, graph]);
 
   if (!view || view.isDestroyed || !view.editable) return null;
   const state = graphKey.getState(view.state);
   if (!state) return null;
   const { marker, open, seq } = state;
-  const listed = listedIn(graph, marker?.attrs.id ?? '');
-  if (open !== null && marker) return <GraphFields key={seq} view={view} container={container} marker={marker} listed={listed} />;
-  if (!view.hasFocus() || view.composing) return null;
-  const canMark = graphMetaTarget(view.state) !== null;
-  if (!canMark && !marker) return null;
-  return <GraphBar view={view} container={container} marker={marker} listed={listed} canMark={canMark} />;
-}
-
-function GraphBar({ view, container, marker, listed, canMark }: {
-  view: EditorView;
-  container: RefObject<HTMLElement | null>;
-  marker: Marker | null;
-  listed: string[];
-  canMark: boolean;
-}) {
-  const run = (action: GraphAction) => { graphCommand(action)(view.state, view.dispatch, view); };
-  const bar = useRef<HTMLDivElement>(null);
-  const { from, to } = view.state.selection;
-  // Hidden until the editor's bubble is placed, so the bar does not jump.
-  // The bubble never shows for a caret: nothing to wait for then.
-  const { docked, waiting } = useDock(view, container, bar, `${String(from)}-${String(to)}`, from !== to);
-  return createPortal(
-    <div
-      ref={bar}
-      role="toolbar"
-      aria-label="Graph"
-      data-docked={docked}
-      className="studio-popup fixed top-0 left-0 z-40 flex max-w-[calc(100vw-16px)] flex-wrap gap-0.5 p-[3px]"
-      style={{ visibility: waiting ? 'hidden' : 'visible' }}
-    >
-      <BarButton icon={<Sprout size={14} aria-hidden />} label="Graph node" keys="G" disabled={!canMark} onRun={() => { run('GraphMeta'); }} />
-      {marker && (
-        <>
-          <BarButton icon={<PencilLine size={14} aria-hidden />} label={`Edit ${LABELS[marker.kind].toLowerCase()} id`} onRun={() => { run('edit'); }} />
-          <span className="studio-popup-separator" aria-hidden />
-          <BarButton icon={<Eraser size={14} aria-hidden />} label={`Remove ${LABELS[marker.kind].toLowerCase()}`} keys="X" quiet onRun={() => { run('remove'); }} />
-          <ListedNote id={marker.attrs.id} listed={listed} />
-        </>
-      )}
-    </div>,
-    document.body,
-  );
-}
-
-function BarButton({ icon, label, keys, disabled, quiet, onRun }: { icon: ReactNode; label: string; keys?: string; disabled?: boolean; quiet?: boolean; onRun: () => void }) {
-  return (
-    <button
-      type="button"
-      className={quiet ? 'studio-popup-button studio-popup-button-quiet' : 'studio-popup-button'}
-      disabled={disabled}
-      title={keys ? `${label} (${shortcut(keys)})` : label}
-      // The editor keeps the focus and the selection.
-      onMouseDown={(event) => {
-        event.preventDefault();
-        if (!disabled) onRun();
-      }}
-    >
-      {icon}
-      {label}
-      {keys && <kbd>{shortcut(keys)}</kbd>}
-    </button>
-  );
+  if (open === null || !marker) return null;
+  return <GraphFields key={seq} view={view} marker={marker} listed={listedIn(graph, marker.attrs.id ?? '')} />;
 }
 
 // Where the frontmatter lists the marker's id: removing the marker leaves
@@ -129,7 +52,7 @@ function ListedNote({ id, listed }: { id: string | undefined; listed: string[] }
 // A new marker (no id yet) takes its id and displayName from the text until
 // they are edited. Enter or a click elsewhere writes them, Escape leaves
 // the marker as it is, Remove takes it off without writing them.
-function GraphFields({ view, container, marker, listed }: { view: EditorView; container: RefObject<HTMLElement | null>; marker: Marker; listed: string[] }) {
+function GraphFields({ view, marker, listed }: { view: EditorView; marker: Marker; listed: string[] }) {
   const fresh = !marker.attrs.id;
   const [text, setText] = useState(marker.text);
   const [id, setId] = useState(marker.attrs.id ?? '');
@@ -137,9 +60,10 @@ function GraphFields({ view, container, marker, listed }: { view: EditorView; co
   const [follow, setFollow] = useState(fresh);
   const root = useRef<HTMLFormElement>(null);
   const first = useRef<HTMLInputElement>(null);
-  // The bubble hides while the fields have the focus: under the selection,
-  // or above it with no room below.
-  useDock(view, container, root, 'fields', false);
+  // Under the marker (a heading's title with its graph node), or above it
+  // with no room below.
+  const anchor = marker.content?.type === 'range' && marker.kind === 'GraphMeta' ? marker.content.from : marker.extent.from;
+  usePlaceAt(view, root, anchor, marker.extent.to);
   const derived = defaults(text);
   const values = { id: follow ? derived.id : id, displayName: follow ? derived.displayName : name, text };
 
@@ -154,8 +78,10 @@ function GraphFields({ view, container, marker, listed }: { view: EditorView; co
     view.focus();
   };
   const writeOnLeave = useEffectEvent(() => { close(true); });
+  // Here the note on the frontmatter is in view: Remove takes the marker off.
   const remove = () => {
-    if (!graphCommand('remove')(view.state, view.dispatch, view)) view.dispatch(closeGraphFields(view.state));
+    const current = markerAt(view.state);
+    view.dispatch(current && view.editable ? removeMarker(view.state, current).scrollIntoView() : closeGraphFields(view.state));
     view.focus();
   };
 

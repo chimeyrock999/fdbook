@@ -251,14 +251,20 @@ export function wrapSelection(state: EditorState, kind: 'Keyword' | 'Tag'): Tran
   return tr.setSelection(TextSelection.create(tr.doc, range.to + open.length));
 }
 
-// Whether the caret's heading can take a :graph-meta: it has a title and
-// no marker of its own yet.
+// Whether a heading (its content at `start`) can take a :graph-meta: it
+// has a title and no marker of its own yet.
+export function headingTarget(block: PmNode, start: number): { pos: number; text: string } | null {
+  if (block.type.name !== 'heading') return null;
+  if (markersIn(block, start).some((marker) => marker.kind === 'GraphMeta')) return null;
+  const text = plainText(block).trim();
+  return slugify(text) === '' ? null : { pos: start + block.content.size, text };
+}
+
+// The caret's heading, when it can take a :graph-meta.
 export function graphMetaTarget(state: EditorState): { pos: number; text: string } | null {
   const { $from } = state.selection;
-  if ($from.parent.type.name !== 'heading' || !$from.sameParent(state.selection.$to)) return null;
-  if (markersIn($from.parent, $from.start()).some((marker) => marker.kind === 'GraphMeta')) return null;
-  const text = plainText($from.parent).trim();
-  return slugify(text) === '' ? null : { pos: $from.end(), text };
+  if (!$from.sameParent(state.selection.$to)) return null;
+  return headingTarget($from.parent, $from.start());
 }
 
 // Adds `:graph-meta{id=… displayName=…}` at the end of the caret's heading.

@@ -792,12 +792,15 @@ single button that runs on the editor; the bubble shows only for a text
 selection (and at a caret on touch) and is not mounted when the editor is
 read-only. Hence (#174):
 
-- **Graph tools.** Keyword and Tag, which only wrap a text selection, are
-  `bubbleItems` (`src/graph/bubble-items.tsx`). Graph node, Edit/Remove
-  and the frontmatter note stay in the graph bar (`GraphTools.tsx`), and
-  the id fields in its dialog: they also show for a caret, and the fields
-  keep their own state and focus. The bar docks under the bubble when
-  both show (`src/graph/dock.ts`).
+- **Graph tools.** Keyword and Tag, which wrap a text selection and
+  toggle the marker around it, are `bubbleItems`
+  (`src/graph/bubble-items.tsx`). Graph node is a widget button at the end
+  of a heading and a click on a keyword or tag opens its fields, both from
+  the graph plugin (`src/graph/graph-plugin.ts`), since they also work at
+  a caret, which the bubble does not show for. The fields
+  (`GraphTools.tsx`) keep their own state and focus, so they stay a React
+  popup, placed at the marker (`src/graph/place.ts`); Remove and the
+  frontmatter note are in them (#176).
 - **Suggestion decisions** stay custom. The cards and comment bubbles
   (`src/suggestions/visual.ts`, `Suggestions.tsx`) are drawn at blocks,
   several at once, whatever the selection, and also in read-only review;

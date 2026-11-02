@@ -1,8 +1,10 @@
 import { keydownHandler } from '@tiptap/pm/keymap';
-import { Plugin, PluginKey, type Command, type EditorState } from '@tiptap/pm/state';
-import type { EditorView } from '@tiptap/pm/view';
+import { Plugin, PluginKey, TextSelection, type Command, type EditorState } from '@tiptap/pm/state';
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
+import { Sprout } from 'lucide';
 import { composing } from '../keyboard';
-import { addGraphMeta, markerAt, removeMarker, wrapSelection, type Marker } from './markers';
+import { icon } from '../plugins/icon';
+import { addGraphMeta, headingTarget, markerAt, markersIn, removeMarker, wrapSelection, type Marker } from './markers';
 import { OPEN_GRAPH_FIELDS } from './meta';
 import { createRelay } from '../editor/extensions';
 
@@ -15,13 +17,34 @@ export type GraphState = { marker: Marker | null; open: number | null; seq: numb
 
 export const graphKey = new PluginKey<GraphState>('studioGraph');
 
-export type GraphAction = 'Keyword' | 'Tag' | 'GraphMeta' | 'edit' | 'remove';
+export type GraphAction = 'Keyword' | 'Tag' | 'GraphMeta' | 'remove';
+
+// Where the note's graph frontmatter lists an id, per live editor; set by
+// GraphTools from the note's `graph`.
+const listings = new WeakMap<EditorView, (id: string) => string[]>();
+
+export function setGraphListing(view: EditorView, listed: (id: string) => string[]) {
+  listings.set(view, listed);
+}
+
+// Takes `marker` off, unless the frontmatter lists its id: then its fields
+// open, which name those entries next to their Remove, so an entry is not
+// left behind unseen. For a pressed Keyword or Tag and Mod-Alt-X; the
+// fields' own Remove goes through removeMarker.
+export function takeOff(marker: Marker): Command {
+  return (state, dispatch, view) => {
+    const listed = view && marker.attrs.id ? listings.get(view)?.(marker.attrs.id) ?? [] : [];
+    if (listed.length > 0) dispatch?.(state.tr.setMeta(graphKey, { open: true }));
+    else dispatch?.(removeMarker(state, marker).scrollIntoView());
+    return true;
+  };
+}
 
 // What a graph action does at the selection, as a ProseMirror command:
 // Keyword and Tag wrap the selection, GraphMeta marks the caret's heading,
 // and each opens the fields of the marker it made. With nothing to make,
 // Keyword, Tag and GraphMeta open the fields of a marker already there of
-// that kind, and `edit` of any marker. `remove` takes the marker there off.
+// that kind. `remove` takes the marker there off (see takeOff).
 export function graphCommand(action: GraphAction): Command {
   return (state, dispatch, view) => {
     if (view && !view.editable) return false;
@@ -32,11 +55,8 @@ export function graphCommand(action: GraphAction): Command {
     }
     const marker = markerAt(state);
     if (!marker) return false;
-    if (action === 'remove') {
-      dispatch?.(removeMarker(state, marker).scrollIntoView());
-      return true;
-    }
-    if (action !== 'edit' && marker.kind !== action) return false;
+    if (action === 'remove') return takeOff(marker)(state, dispatch, view);
+    if (marker.kind !== action) return false;
     dispatch?.(state.tr.setMeta(graphKey, { open: true }));
     return true;
   };
@@ -53,10 +73,63 @@ const keys = keydownHandler({
   'Mod-Alt-x': graphCommand('remove'),
 });
 
-// The graph actions on a live editor: their shortcuts and the open/closed
-// state of the fields. `onUpdate` gets the view after every update, and
-// once more `gone` when its editor goes, for the UI that draws the bar and
-// the fields.
+const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
+// The Graph button at the end of a heading that can take a graph node: it
+// marks the heading as Mod-Alt-G does at its caret, and opens the fields.
+// CSS shows it while the heading is hovered or holds the caret
+// (`studio-graph-here`), and never in a locked editor.
+function graphButton(pos: number) {
+  return Decoration.widget(pos, (view, getPos) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'studio-graph-add';
+    button.contentEditable = 'false';
+    button.title = `Add graph node (${MAC ? '⌘⌥G' : 'Ctrl+Alt+G'})`;
+    button.append(icon(Sprout, 13), 'Graph');
+    button.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      const at = getPos();
+      if (at === undefined || !view.editable) return;
+      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)));
+      graphCommand('GraphMeta')(view.state, view.dispatch, view);
+      view.focus();
+    });
+    return button;
+  }, { side: 1, key: 'studio-graph-add', ignoreSelection: true, stopEvent: () => true });
+}
+
+function headingDecorations(state: EditorState) {
+  const out: Decoration[] = [];
+  const { $from, $to } = state.selection;
+  state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'heading') return !node.isTextblock;
+    const target = headingTarget(node, pos + 1);
+    if (target) out.push(graphButton(target.pos));
+    if ($from.parent === node && $to.parent === node) out.push(Decoration.node(pos, pos + node.nodeSize, { class: 'studio-graph-here' }));
+    return false;
+  });
+  return DecorationSet.create(state.doc, out);
+}
+
+// A plain click on a <Keyword> or <Tag> (the text the decorations colour)
+// opens its fields, as a click on a directive's label or a graph node
+// marker does: the caret goes there and the source shows.
+function clickKeyword(view: EditorView, pos: number, event: MouseEvent) {
+  if (!view.editable || event.button !== 0 || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return false;
+  if (!(event.target instanceof Element) || !event.target.closest('span.studio-keyword')) return false;
+  const $pos = view.state.doc.resolve(pos);
+  if (!$pos.parent.isTextblock) return false;
+  const marker = markersIn($pos.parent, $pos.start()).find((each) => each.kind !== 'GraphMeta' && each.source.type === 'tag' && pos >= each.source.to && pos <= (each.source.close?.from ?? -1));
+  if (!marker) return false;
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)).setMeta(graphKey, { open: true }));
+  return true;
+}
+
+// The graph actions on a live editor: their shortcuts, the Graph button of
+// each heading, a click on a keyword, and the open/closed state of the
+// fields. `onUpdate` gets the view after every update, and once more
+// `gone` when its editor goes, for the UI that draws the fields.
 export function graphPlugin(onUpdate: (view: EditorView, gone: boolean) => void): Plugin<GraphState> {
   return new Plugin<GraphState>({
     key: graphKey,
@@ -84,6 +157,8 @@ export function graphPlugin(onUpdate: (view: EditorView, gone: boolean) => void)
       // ProseMirror leaves out keydowns during a composition, but not the
       // one Safari sends right after it.
       handleKeyDown: (view, event) => !composing(event) && keys(view, event),
+      handleClick: clickKeyword,
+      decorations: headingDecorations,
     },
     view(view) {
       onUpdate(view, false);

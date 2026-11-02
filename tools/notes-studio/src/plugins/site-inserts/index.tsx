@@ -1,6 +1,6 @@
 import type { UiComponentSpec } from '@fumadocs-editor/ui';
 import type { JSONContent } from '@tiptap/core';
-import { CirclePlay, Hash, Heading3, KeyRound, ListCollapse, ListOrdered, PanelTop, Workflow } from 'lucide-react';
+import { Bean, CirclePlay, Heading3, ListCollapse, ListOrdered, Nut, PanelTop, Workflow } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { definePlugin } from '../plugin';
 import { accordions, graphHeading, keyword, mermaid, steps, tabs, youtube } from './inserts';
@@ -27,8 +27,8 @@ function insertSpec(name: string, label: string, icon: ReactNode, content: JSONC
 export default definePlugin({
   id: 'site-inserts',
   components: [
-    insertSpec('keyword', 'Keyword', <KeyRound size={15} aria-hidden />, keyword('Keyword')),
-    insertSpec('tag', 'Tag', <Hash size={15} aria-hidden />, keyword('Tag')),
+    insertSpec('keyword', 'Keyword', <Nut size={15} className="studio-graph-icon" aria-hidden />, keyword('Keyword')),
+    insertSpec('tag', 'Tag', <Bean size={15} className="studio-graph-icon" aria-hidden />, keyword('Tag')),
     insertSpec('graph-heading', 'Graph heading', <Heading3 size={15} aria-hidden />, graphHeading),
     insertSpec('accordions', 'Accordions (directive)', <ListCollapse size={15} aria-hidden />, accordions),
     insertSpec('tabs', 'Tabs (directive)', <PanelTop size={15} aria-hidden />, tabs),
