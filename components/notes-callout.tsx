@@ -1,4 +1,4 @@
-import { Bean, Broccoli, Bug, Cannabis, Carrot, type LucideIcon, Nut, PawPrint, Squirrel } from 'lucide-react';
+import { Bean, Broccoli, Bug, Carrot, type LucideIcon, Nut, PawPrint, Squirrel, Star } from 'lucide-react';
 import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import type { CalloutType } from '@/lib/notes-syntax';
@@ -71,7 +71,7 @@ export function getCalloutVariables(type: SemanticCalloutType) {
 
 // Garden-themed lucide glyphs: what grows and is gathered in the garden for
 // the neutral types (a carrot for info, a nut for notes, a bean for ideas,
-// broccoli for examples, a full plant for success), and the creatures that
+// broccoli for examples, a star for success), and the creatures that
 // visit it for the warnings (paw prints → squirrel → bug).
 export const CALLOUT_ICONS: Record<SemanticCalloutType, LucideIcon> = {
   caution: Squirrel,
@@ -80,7 +80,7 @@ export const CALLOUT_ICONS: Record<SemanticCalloutType, LucideIcon> = {
   idea: Bean,
   info: Carrot,
   note: Nut,
-  success: Cannabis,
+  success: Star,
   warning: PawPrint,
 };
 
