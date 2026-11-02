@@ -1,5 +1,6 @@
 /* components/accordion.tsx: a bordered card per item, tinted head with the
-   kind's icon, Show/Open on the right. The body is its MDX source. */
+   kind's icon on a badge, a cloud (closed) or a sun (open) on the right. The
+   body is its MDX source. */
 .studio-accordions {
   position: relative;
   display: flex;
@@ -26,6 +27,8 @@
 }
 .studio-accordion-kind {
   flex: none;
+  border-radius: 7px;
+  background: var(--acc-badge);
   color: var(--acc-title);
 }
 /* An input that reads as the title; its border shows on hover and focus. */
@@ -37,7 +40,7 @@
   border-radius: 5px;
   background: transparent;
   color: var(--fde-foreground);
-  font-size: 0.84375rem;
+  font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.5;
 }
@@ -51,12 +54,9 @@
 }
 .studio-accordion-state {
   flex: none;
-  padding: 4px 6px;
+  display: inline-flex;
+  padding: 4px;
   border-radius: 5px;
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--acc-title);
   cursor: pointer;
 }
