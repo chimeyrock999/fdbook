@@ -782,6 +782,31 @@ The plugins:
   live page, since the file API serves HTML assets sandboxed without
   scripts.
 
+### Next to the editor
+
+ProseMirror plugins reach the live editor through `MdxEditor.Root`'s
+`extensions`. What the Studio draws next to it is either one of the
+root's `bubbleItems`, a button in the editor's own format bubble, or a
+React overlay fed by a relay from such a plugin. A `BubbleItem` is a
+single button that runs on the editor; the bubble shows only for a text
+selection (and at a caret on touch) and is not mounted when the editor is
+read-only. Hence (#174):
+
+- **Graph tools.** Keyword and Tag, which only wrap a text selection, are
+  `bubbleItems` (`src/graph/bubble-items.tsx`). Graph node, Edit/Remove
+  and the frontmatter note stay in the graph bar (`GraphTools.tsx`), and
+  the id fields in its dialog: they also show for a caret, and the fields
+  keep their own state and focus. The bar docks under the bubble when
+  both show (`src/graph/dock.ts`).
+- **Suggestion decisions** stay custom. The cards and comment bubbles
+  (`src/suggestions/visual.ts`, `Suggestions.tsx`) are drawn at blocks,
+  several at once, whatever the selection, and also in read-only review;
+  `SuggestionBar` is a fixed bar over the editor with counts and
+  Accept all / Reject all. None of them is tied to the selection.
+- **Place reporting** (`src/editor/report-place.ts`) draws nothing: it
+  tells the agent panel where the selection is. It stays a plugin in
+  `extensions`.
+
 ## Write actions
 
 Every button or dialog that writes to the server follows one pattern

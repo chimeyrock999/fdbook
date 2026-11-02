@@ -4,7 +4,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { decorationsExtension } from '../../../src/editor/decorations';
 import { pluginsExtension } from '../../../src/editor/extensions';
 import { createGraphSource, graphCommand } from '../../../src/graph/graph-plugin';
-import { graphBubbleItems, GraphTools } from '../../../src/graph/GraphTools';
+import { graphBubbleItems } from '../../../src/graph/bubble-items';
+import { GraphTools } from '../../../src/graph/GraphTools';
 import { editorConfig } from '../../../src/plugins';
 import { defined } from '../../support/editor-state';
 import { mountVisual, stubLayout, textAt } from '../../support/visual-editor';
@@ -51,6 +52,55 @@ describe('GraphTools', () => {
     expect(screen.getByRole('button', { name: 'Tag' })).toHaveProperty('disabled', false);
     // The selection-only actions are no longer duplicated in the custom bar.
     expect(screen.queryByRole('toolbar', { name: 'Graph' })).toBeNull();
+  });
+
+  it("docks to the editor's own format bubble, found the way the Studio finds it", async () => {
+    // A selection in a heading: the bubble shows for it, with Keyword and
+    // Tag, and the bar shows too, for Graph node.
+    const view = await mount('### Hadoop Overview\n\nText.\n');
+    view.select('Overview');
+    // The real BubbleMenu of @fumadocs-editor/ui shows for the selection, and
+    // the bar finds it: if a tiptap or editor update changes how the bubble
+    // is shown, the bar falls back to the selection and this fails.
+    await vi.waitFor(() => {
+      expect(screen.getByRole('toolbar', { name: 'Graph' }).dataset.docked).toBe('bubble');
+    }, { timeout: 2000 });
+    expect(screen.getByRole('toolbar', { name: 'Graph' }).style.visibility).toBe('visible');
+    expect(screen.getByRole('button', { name: /Graph node/ })).toHaveProperty('disabled', false);
+  });
+
+  it('follows the bubble when it slides to a new place, and shows once it is there', async () => {
+    const view = await mount('### Hadoop Overview\n\nText.\n');
+    view.select('Overview');
+    // Hidden from the accessibility tree while it waits for the bubble.
+    const bar = await screen.findByRole('toolbar', { name: 'Graph', hidden: true });
+    await vi.waitFor(() => { expect(bar.dataset.docked).toBe('bubble'); }, { timeout: 2000 });
+    // The bubble BubbleMenu shows, as the bar found it.
+    const bubble = defined(
+      [...document.querySelectorAll<HTMLElement>('[style]')].find((element) => element.style.visibility === 'visible' && element.style.position === 'absolute' && !element.contains(view.prose)),
+      'bubble',
+    );
+    // It moves: its new inline place is set, then it slides there (a
+    // transition on top/left), still far from the selection when the style
+    // changes. Hidden meanwhile; docked again once the slide ends near it.
+    // jsdom puts the selection at 0.
+    bubble.getBoundingClientRect = () => new DOMRect(0, 500, 300, 38);
+    bubble.style.left = '12px';
+    await vi.waitFor(() => { expect(bar.dataset.docked).toBe('selection'); });
+    act(() => { bubble.dispatchEvent(new Event('transitionrun')); });
+    expect(bar.style.visibility).toBe('hidden');
+    bubble.getBoundingClientRect = () => new DOMRect(0, 20, 300, 38);
+    act(() => { bubble.dispatchEvent(new Event('transitionend')); });
+    await vi.waitFor(() => { expect(bar.dataset.docked).toBe('bubble'); });
+    expect(bar.style.visibility).toBe('visible');
+  });
+
+  it('leaves the bubble\'s Keyword off inside a marker, where the bar edits it', async () => {
+    const view = await mount('A <Keyword id="fact" displayName="Fact">fact term</Keyword> here.\n');
+    view.select('term');
+    expect(await screen.findByRole('button', { name: 'Keyword' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Tag' })).toHaveProperty('disabled', true);
+    expect(await screen.findByRole('button', { name: /^Edit keyword id/ })).toBeTruthy();
   });
 
   it('shows at once for a caret, which the bubble never shows for', async () => {
