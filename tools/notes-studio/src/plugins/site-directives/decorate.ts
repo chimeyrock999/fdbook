@@ -1,6 +1,6 @@
 import { NodeSelection, type EditorState } from '@tiptap/pm/state';
 import { Decoration, type EditorView } from '@tiptap/pm/view';
-import { ChevronDown, CircleDashed, CirclePlay, icons, type IconNode } from 'lucide';
+import { ChevronDown, CircleDashed, CirclePlay, Cloud, CloudSun, icons, type IconNode } from 'lucide';
 import { accordionKindIcons, accordionKindSemantic, accordionKindVariables } from '@site/lib/notes-accordion';
 import { ACCORDION_KINDS, type AccordionKind } from '@site/lib/notes-syntax';
 import { icon } from '../icon';
@@ -233,7 +233,7 @@ function kindPicker(cards: Cards, item: AccordionItem, index: number) {
   button.setAttribute('aria-haspopup', 'menu');
   button.setAttribute('aria-expanded', 'false');
   const known = item.kind && isAccordionKind(item.kind) ? kindIcon(item.kind) : CircleDashed;
-  button.append(icon(known, 17), chevron());
+  button.append(icon(known, 15), chevron());
   const key = `${String(index)}:kind`;
   register(cards, button, key);
 
@@ -333,7 +333,9 @@ function accordionCards(view: EditorView, getPos: () => number | undefined, item
       const isOpen = open.has(id);
       card.classList.toggle('is-open', isOpen);
       status.setAttribute('aria-expanded', String(isOpen));
-      status.textContent = isOpen ? 'Open' : 'Show';
+      // The site's toggle: closed under a cloud, open in the sun.
+      status.replaceChildren(icon(isOpen ? CloudSun : Cloud, 17));
+      status.setAttribute('aria-label', isOpen ? 'Hide the body' : 'Show the body');
       body.hidden = !isOpen;
     };
     status.addEventListener('click', () => {

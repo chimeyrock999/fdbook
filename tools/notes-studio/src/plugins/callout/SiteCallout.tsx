@@ -6,10 +6,10 @@ import { createPortal } from 'react-dom';
 import { floatMenu } from '../picker-menu';
 
 // components/notes-callout.tsx in the editor, with its classes, so the
-// site's callout CSS (styles/notes-prose.css) draws it: an icon and title bar
-// over a tinted body. The title and body regions render in `children` (see
-// callout.css for how they land in the bar and below it); the icon picks the
-// type.
+// site's callout CSS (styles/notes-prose.css) draws it: one tinted block, the
+// icon on a badge beside the title and the body under the title. The title
+// and body regions render in `children` (see callout.css for how they land
+// beside the icon and below the title); the icon picks the type.
 
 // Whether the editor around `element` takes edits: a locked note keeps its
 // callout types. The render props carry no editable flag.

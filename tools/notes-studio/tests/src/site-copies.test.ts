@@ -12,7 +12,7 @@ import { repoRoot } from '../../server/config';
 // one changes, this fails until the copy is checked against it and the hash
 // is updated. Edits elsewhere in the file leave it alone.
 const COPIES = [
-  { site: 'components/accordion.tsx', sha256: 'b829af8b610c34fa4e4d861c4027b4b0264684e5058e43c41646c10e70a21c0e' },
+  { site: 'components/accordion.tsx', sha256: 'f26116519f014db836a2b4fca0667f0f3b72c700b43e97302de9beea95dbcd53' },
   { site: 'components/codeblock.tsx', sha256: '55b86f2952bf791906e4fcae511b7b3d4260af763ac8acb14e9e463d6385d12b' },
   { site: 'components/mdx/svg-diagram.tsx', sha256: '40a429227384ecd79acdcfb6e830c81d6c92eb20bd2cdca8932cd6ea7a8ca015' },
   { site: 'components/mdx/youtube.tsx', sha256: '0d899e93e4320eac099755574130ae30c79249a04381865bb11f9a83ed4c7bca' },

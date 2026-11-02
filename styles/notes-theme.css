@@ -65,16 +65,6 @@
   --color-callout-danger-title: #932a3c;
   --color-callout-error-title: #932a3c;
   --color-callout-success-title: #4a7233;
-  --color-callout-idea-bg: rgb(176 138 46 / 0.08);
-  --color-callout-example-bg: rgb(63 140 116 / 0.07);
-  --color-callout-info-bg: rgb(78 134 168 / 0.07);
-  --color-callout-note-bg: rgb(122 140 116 / 0.07);
-  --color-callout-warning-bg: rgb(194 118 47 / 0.08);
-  --color-callout-caution-bg: rgb(176 85 44 / 0.08);
-  --color-callout-danger-bg: rgb(176 60 78 / 0.07);
-  --color-callout-error-bg: rgb(176 60 78 / 0.07);
-  --color-callout-success-bg: #e4edd5;
-  --color-callout-body-bg: #eff1e3;
   --color-callout-separator-alpha: 0.9;
 }
 
@@ -143,16 +133,6 @@
   --color-callout-danger-title: #f3a0ac;
   --color-callout-error-title: #f3a0ac;
   --color-callout-success-title: #b7dc8a;
-  --color-callout-idea-bg: rgb(235 208 138 / 0.07);
-  --color-callout-example-bg: rgb(143 220 198 / 0.07);
-  --color-callout-info-bg: rgb(163 207 230 / 0.07);
-  --color-callout-note-bg: rgb(195 212 188 / 0.06);
-  --color-callout-warning-bg: rgb(242 183 132 / 0.07);
-  --color-callout-caution-bg: rgb(240 168 127 / 0.07);
-  --color-callout-danger-bg: rgb(243 160 172 / 0.07);
-  --color-callout-error-bg: rgb(243 160 172 / 0.07);
-  --color-callout-success-bg: #263524;
-  --color-callout-body-bg: #1a261c;
   --color-callout-separator-alpha: 0.5;
 }
 

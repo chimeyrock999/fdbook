@@ -609,44 +609,55 @@ svg.pele {
 }
 
 /* ══════════════════════════════════════════════════════
-   Callouts — header-box style (icon + title bar, tinted body)
+   Callouts — one tinted block: icon on a badge beside the title, the body
+   lined up under the title
    ══════════════════════════════════════════════════════ */
 .notes-prose .notes-callout {
+  --notes-callout-surface: color-mix(in oklab, var(--notes-callout-color) 10%, var(--color-fd-background));
   margin-block: 1.125rem;
-  border: 1px solid var(--notes-callout-color);
+  border: 1px solid color-mix(in oklab, var(--notes-callout-color) 28%, var(--color-fd-background));
   border-radius: 0.75rem;
   overflow: hidden;
+  background: var(--notes-callout-surface);
 }
 
 .notes-prose .notes-callout-head {
   display: flex;
   align-items: center;
   gap: 0.5625rem;
-  padding: 0.5625rem 0.875rem;
-  background: var(--notes-callout-background);
-  border-bottom: 1px solid var(--notes-callout-color);
+  padding: 0.75rem 1rem 0;
 }
 
+/* 16px icon + 4px padding = a 24px badge; the body indent below is the
+   head's padding, the badge and the gap. */
 .notes-prose .notes-callout-icon {
   flex: none;
   display: inline-flex;
+  padding: 4px;
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--notes-callout-color) 24%, var(--color-fd-background));
   color: var(--notes-callout-title-color);
 }
 
+.notes-prose .notes-callout-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
 .notes-prose .notes-callout-title {
-  font-size: 0.8125rem;
+  font-size: 0.9rem;
   font-weight: 700;
   line-height: 1.2;
   color: var(--notes-callout-title-color);
 }
 
 .notes-prose .notes-callout-body {
-  --notes-diagram-bg: var(--color-callout-body-bg);
-  padding: 0.75rem 0.9375rem;
+  --notes-diagram-bg: var(--notes-callout-surface);
+  padding: 0.35rem 1rem 0.85rem calc(1rem + 24px + 0.5625rem);
   background: var(--notes-diagram-bg);
-  font-size: 0.84375rem;
-  line-height: 1.7;
-  color: var(--garden-ink-2, var(--color-fd-foreground));
+  font-size: 0.92rem;
+  line-height: 1.72;
+  color: var(--color-fd-foreground);
 }
 
 .notes-prose .notes-callout-body > :first-child {

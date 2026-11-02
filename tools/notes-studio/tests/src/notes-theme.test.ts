@@ -130,7 +130,7 @@ describe('notes prose', () => {
     expect(site).not.toMatch(/\[data-author-fill\] > :is\(.pele-label, .pele-cluster-label\)/);
     expect(await read('components/graph-view.module.css')).toMatch(/--notes-diagram-bg:[^;]+;\s*background: var\(--notes-diagram-bg\);/);
     const prose = await read('styles/notes-prose.css');
-    expect(prose).toContain('--notes-diagram-bg: var(--color-callout-body-bg);');
+    expect(prose).toContain('--notes-diagram-bg: var(--notes-callout-surface);');
     expect(prose).toContain('--notes-diagram-bg: var(--notes-tab-content-surface);');
     const studio = await read('tools/notes-studio/src/notes-prose.css');
     expect(studio.match(/--notes-diagram-bg:[^;]+;/g)).toHaveLength(2);

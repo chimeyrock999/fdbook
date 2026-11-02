@@ -3,7 +3,8 @@ import type { Editor } from '@tiptap/core';
 import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CircleDashed, icons } from 'lucide';
+import { CircleDashed, Cloud, CloudSun, icons } from 'lucide';
+import { icon } from '../../../src/plugins/icon';
 import { accordionKindIcons, accordionKindVariables } from '@site/lib/notes-accordion';
 import { ACCORDION_KINDS } from '@site/lib/notes-syntax';
 import { decorationsExtension } from '../../../src/editor/decorations';
@@ -101,6 +102,17 @@ describe('accordion cards', () => {
     for (const [card, kind] of [[cards[0], 'question'], [cards[1], 'tip']] as const) {
       for (const [name, value] of Object.entries(accordionKindVariables(kind))) expect(card.style.getPropertyValue(name), name).toBe(value);
     }
+  });
+
+  // The site's toggle: a cloud while closed, a sun once open.
+  it('shows a cloud on a closed item and a sun on an open one', async () => {
+    const { container } = mount();
+    const toggle = defined(toggles(container)[0]);
+    expect(toggle.innerHTML).toBe(icon(Cloud, 17).outerHTML);
+    expect(toggle.getAttribute('aria-label')).toBe('Show the body');
+    await userEvent.click(toggle);
+    expect(toggle.innerHTML).toBe(icon(CloudSun, 17).outerHTML);
+    expect(toggle.getAttribute('aria-label')).toBe('Hide the body');
   });
 
   it('writes a body when the focus leaves and hands the focus on after the rebuild', async () => {

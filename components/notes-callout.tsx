@@ -1,4 +1,4 @@
-import { Bird, Bug, Droplet, Flower2, Leaf, Rat, Snail, Sprout } from 'lucide-react';
+import { Bean, Broccoli, Bug, Carrot, type LucideIcon, Nut, PawPrint, Squirrel, Star } from 'lucide-react';
 import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import type { CalloutType } from '@/lib/notes-syntax';
@@ -64,27 +64,27 @@ const LABELS: Record<SemanticCalloutType, string> = {
 export function getCalloutVariables(type: SemanticCalloutType) {
   return {
     '--notes-callout-color': `var(--color-callout-${type})`,
-    '--notes-callout-background': `var(--color-callout-${type}-bg)`,
     '--notes-callout-title-color': `var(--color-callout-${type}-title)`,
   };
 }
 
-// Garden-themed lucide glyphs: a little bird brings info, a droplet for notes,
-// a sprout for ideas, a leaf for examples, a bloom for success, and the garden
-// pests (snail → bug → rat) escalating from caution to danger.
-export const CALLOUT_ICONS: Record<SemanticCalloutType, typeof Leaf> = {
-  caution: Snail,
-  danger: Rat,
-  example: Leaf,
-  idea: Sprout,
-  info: Bird,
-  note: Droplet,
-  success: Flower2,
-  warning: Bug,
+// Garden-themed lucide glyphs: what grows and is gathered in the garden for
+// the neutral types (a carrot for info, a nut for notes, a bean for ideas,
+// broccoli for examples, a star for success), and the creatures that
+// visit it for the warnings (paw prints → squirrel → bug).
+export const CALLOUT_ICONS: Record<SemanticCalloutType, LucideIcon> = {
+  caution: Squirrel,
+  danger: Bug,
+  example: Broccoli,
+  idea: Bean,
+  info: Carrot,
+  note: Nut,
+  success: Star,
+  warning: PawPrint,
 };
 
 function getCalloutIcon(type: SemanticCalloutType): ReactNode {
-  const Icon = CALLOUT_ICONS[type] ?? Bird;
+  const Icon = CALLOUT_ICONS[type] ?? Carrot;
   return <Icon width={18} height={18} aria-hidden="true" />;
 }
 
