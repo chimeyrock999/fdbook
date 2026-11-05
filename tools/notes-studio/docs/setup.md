@@ -57,7 +57,7 @@ start until sign-in is set up (below).
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `STUDIO_HOME` | `~/.chimey-studio` | Where the Studio keeps what is not in the branch: the worktrees (`worktrees/_main`, `worktrees/<slug>`), sessions, agent transcripts and attachments, proposals and comments. |
+| `STUDIO_HOME` | `~/.chimey-studio` | Where the Studio keeps what is not in the branch: the worktrees (`worktrees/_main`, `worktrees/<slug>`), sessions, agent transcripts and attachments, proposals and review threads. |
 | `STUDIO_PAGES_PROJECT` | unset | The Cloudflare Pages project, for a change request's preview link `https://cr-<slug>.<project>.pages.dev` when the build check has not named one. Unset, the Changes view and Open preview use the alias the build check names once there is one, and the change request list shows no preview link. |
 | `STUDIO_STALE_DAYS` | `30` | After how many days without an update an open change request is marked Stale: a whole number, 1 or more. |
 

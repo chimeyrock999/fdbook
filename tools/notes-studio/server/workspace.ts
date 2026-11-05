@@ -1,4 +1,5 @@
 import type { IncomingMessage } from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { createAgentConversationsApi } from './agents/api.ts';
@@ -22,12 +23,13 @@ import { createNotesSync } from './sync/notes-sync.ts';
 import { createStudioFiles } from './files/studio-files.ts';
 import type { ToolCaller } from './mcp/tool.ts';
 import { createProposalsApi, createProposalStream, type ProposalStream } from './proposals/api.ts';
-import { createComments, type Comments } from './proposals/comments.ts';
 import { createDeleteProposals, type DeleteProposals } from './proposals/deletes.ts';
 import { createProposals, type Proposals } from './proposals/store.ts';
+import { createThreadsApi } from './review/api.ts';
+import { createThreads, type Threads } from './review/threads.ts';
 import { createTreeApi } from './tree/api.ts';
 import { runDelete } from './tree/delete.ts';
-import { NOTES_DIR } from './security/paths.ts';
+import { classifyPath, NOTES_DIR, resolveWorktreePath } from './security/paths.ts';
 
 // Methods that change nothing, and the one POST that writes nothing.
 const READS = new Set(['GET', 'HEAD']);
@@ -54,14 +56,14 @@ const defaultPreview = (): PreviewOptions => ({ builds: createBuildReader(ghChec
 
 // What agent conversations need besides the worktree: its change request's
 // slug, the profiles and where transcripts go (agents/conversations.ts); and
-// the Studio home, where the change request's proposals and comments are kept.
+// the Studio home, where the change request's proposals and review threads are kept.
 export type WorkspaceAgents = Omit<AgentConversationsOptions, 'slug'> & { home: string };
 
 // Main's agents: where they run instead of the worktree (a copy of it),
 // and what makes that copy fresh before each turn (cr/manager.ts).
 export type MainAgents = { root: string; prepare: () => Promise<unknown> };
 
-// Where a change request's proposals and comments are kept, outside its worktree.
+// Where a change request's proposals and review threads are kept, outside its worktree.
 export const proposalsDirOf = (home: string, slug: string) => join(home, 'proposals', slug);
 export const commentsFileOf = (home: string, slug: string) => join(home, 'comments', `${slug}.jsonl`);
 
@@ -80,9 +82,16 @@ export function createWorkspace(
   const notesLock = createKeyedLock();
   // Saves to one file, one at a time, from the editor and from agents alike.
   const pathLock = createKeyedLock();
-  const fileEvents = createFileEvents(root);
-  // A change request's proposals and comments, and the stream of their changes.
-  let review: { proposals: Proposals; deletes: DeleteProposals; comments: Comments; stream: ProposalStream } | null = null;
+  // A change request's proposals and review threads, and the stream of their changes.
+  let review: { proposals: Proposals; deletes: DeleteProposals; threads: Threads; stream: ProposalStream } | null = null;
+  // The threads on a note follow its blocks, whoever changed it (the
+  // editor, an agent, a restore), and lose them when it goes.
+  const reanchor = async (path: string, gone: boolean) => {
+    const resolved = resolveWorktreePath(root, path);
+    if (review === null || resolved === null) return;
+    await review.threads.reanchor(path, () => (gone ? Promise.resolve(null) : readFile(resolved.absolute, 'utf8').catch(() => null))).catch(() => undefined);
+  };
+  const fileEvents = createFileEvents(root, { onChange: (event) => { if (classifyPath(event.path) === 'note') void reanchor(event.path, event.type === 'unlink'); } });
   // What a delete took: the proposals on those notes have nowhere to go,
   // and the delete proposals it covers are done.
   const onDeleted = async (target: string, notes: string[]) => {
@@ -110,7 +119,7 @@ export function createWorkspace(
     const stream = createProposalStream();
     review = {
       stream,
-      comments: createComments(commentsFileOf(agents.home, agents.slug), stream.sendComment, stream.sendCommentResolved),
+      threads: createThreads(commentsFileOf(agents.home, agents.slug), { onChange: stream.sendThread }),
       deletes: createDeleteProposals(root, {
         dir: join(proposalsDirOf(agents.home, agents.slug), 'deletes'),
         deleter,
@@ -129,6 +138,10 @@ export function createWorkspace(
         },
       }),
     };
+    // Notes may have changed while the Studio was not running.
+    void review.threads.list().then(async (threads) => {
+      for (const path of new Set(threads.map((thread) => thread.path))) await reanchor(path, false);
+    }, () => undefined);
   }
   // A person's save through the editor counts like one through the file API.
   const sync = createNotesSync(root, hosts, { readOnly, onSaved: conversations === null ? undefined : (path) => { conversations.savedByPerson(path); } });
@@ -138,7 +151,7 @@ export function createWorkspace(
     // A person's save is never reverted by a turn going on (agents/watch.ts).
     createFilesApi(root, pathLock, conversations === null ? undefined : (path) => { conversations.savedByPerson(path); }),
     createLintApi(root),
-    createTreeApi(root, notesLock, { onDeleted }),
+    createTreeApi(root, notesLock, { onDeleted, onMoved: (from, to) => review?.threads.moved(from, to) }),
     createAssetsApi(root, notesLock),
     createChangesApi(root, notesLock),
     createPageHistoryApi(root, notesLock),
@@ -147,6 +160,7 @@ export function createWorkspace(
     createAgentConversationsApi(conversations, mainAgents === null ? undefined : () => (conversations?.answering() === true ? Promise.resolve() : mainAgents.prepare())),
     createAgentContextApi(root, agents?.slug ?? '', attachments),
     createProposalsApi(review),
+    createThreadsApi(root, review?.threads ?? null),
   ];
   return {
     root,
@@ -170,6 +184,7 @@ export function createWorkspace(
     },
     close: async () => {
       await conversations?.close();
+      review?.threads.close();
       review?.stream.close();
       fileEvents.close();
       await sync.close();

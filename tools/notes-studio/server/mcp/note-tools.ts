@@ -1,12 +1,10 @@
 import { visit } from 'unist-util-visit';
 import { z } from 'zod';
 import { listAssets } from '../assets/ops.ts';
-import { atLeast } from '../auth/shared.ts';
 import { HttpError } from '../http.ts';
 import { loadLintContext } from '../lint/context.ts';
 import { lintNote, parseNote } from '../lint/lint.ts';
 import { pageUrl, resolveHref } from '../lint/rules/links.ts';
-import type { Comments } from '../proposals/comments.ts';
 import type { DeleteProposals } from '../proposals/deletes.ts';
 import { blocksOf, lineAt } from '../proposals/hunks.ts';
 import type { ProposalAuthor } from '../proposals/shared.ts';
@@ -21,7 +19,6 @@ export type NoteToolDeps = {
   proposalsOf: (slug: string) => Promise<Proposals | null>;
   // Null on main too.
   deletesOf: (slug: string) => Promise<DeleteProposals | null>;
-  commentsOf: (slug: string) => Promise<Comments>;
   // The model a run says it runs, when it said.
   modelOf: (slug: string, runId: string) => string | null;
   // Whether a run going on created the note itself (agents/watch.ts).
@@ -162,7 +159,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
 
   const readNoteTool = {
     name: 'read_note',
-    description: 'Reads a note: its whole MDX text, its top-level blocks (index, first line), and the proposals waiting on it. Block indexes are what add_comment takes.',
+    description: 'Reads a note: its whole MDX text, its top-level blocks (index, first line), and the proposals waiting on it. Block indexes are what add_comment (review-tools.ts) takes.',
     input: z.object({ path }),
     access: 'read',
     async run({ path: given }, ctx) {
@@ -303,33 +300,6 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
     },
   } satisfies StudioTool<z.ZodObject<{ path: typeof path; content: z.ZodOptional<z.ZodString>; edits: z.ZodOptional<z.ZodArray<z.ZodObject<{ find: z.ZodString; replace: z.ZodString }>>>; summary: z.ZodOptional<z.ZodString> }>>;
 
-  const addComment = {
-    name: 'add_comment',
-    description: 'Comments on a note, on one of its blocks (the index read_note gives) or on the note as a whole. A reviewer comments here instead of editing.',
-    input: z.object({ path, block: z.number().int().min(0).optional(), body: z.string().min(1).max(10_000) }),
-    access: 'read',
-    async run({ path: given, block, body }, ctx) {
-      // Read access, so a reviewer run may comment; a person needs write
-      // access, as for any other write of the Studio.
-      if (ctx.caller.kind === 'person' && !atLeast(ctx.caller.role, 'writer')) throw new HttpError(403, 'add_comment needs write access');
-      const at = notePath(given);
-      const note = await readNote(ctx, at);
-      let anchor = null;
-      if (block !== undefined) {
-        let blocks;
-        try {
-          blocks = blocksOf(note.content);
-        } catch {
-          throw new HttpError(422, `${at} does not parse: comment on the note as a whole`);
-        }
-        if (block >= blocks.length) throw new HttpError(400, `${at} has ${String(blocks.length)} blocks (0 to ${String(blocks.length - 1)})`);
-        anchor = { index: block, text: blocks[block].text };
-      }
-      const comment = await (await deps.commentsOf(ctx.slug)).add({ path: at, block: anchor, body, by: authorOf(ctx, deps) });
-      return json({ id: comment.id, path: at, block: anchor?.index ?? null });
-    },
-  } satisfies StudioTool<z.ZodObject<{ path: typeof path; block: z.ZodOptional<z.ZodNumber>; body: z.ZodString }>>;
-
   const proposeDelete = {
     name: 'propose_delete',
     description: 'Proposes deleting a page (<path>.mdx) or a folder (<path>, with every page in it). Nothing is deleted: a person sees the proposal in the Studio with what the delete takes, and accepts or rejects it. Answers the proposal and that list: the files deleted, the meta.yaml entries removed, the images deleted or kept (another note still uses them), and the notes that still link there, which the delete leaves broken: fix them with propose_edit, or say so.',
@@ -367,5 +337,5 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
     },
   };
 
-  return [listNotes, readNoteTool, searchNotes, noteGraph, proposeEdit, proposeDelete, addComment, listAssetsTool] as StudioTool[];
+  return [listNotes, readNoteTool, searchNotes, noteGraph, proposeEdit, proposeDelete, listAssetsTool] as StudioTool[];
 }
