@@ -150,8 +150,20 @@ svg.dg-svg {
 .dg-svg[data-focus] [data-edge-label]:not([data-related]) { opacity: 0.13; }
 .dg-svg[data-focus] [data-node-id][aria-pressed="true"] { filter: drop-shadow(0 0 10px var(--blue-stroke)); }
 
+/* The lens: a picked legend entry keeps what it names lit and dims the
+   rest as focus does; the node in focus stays lit. Both can dim at once. */
+.dg-svg [data-legend-kind][role="button"], .dg-svg [data-legend-variant][role="button"] { cursor: pointer; outline: none; transition: opacity 0.18s ease; }
+.dg-svg [role="button"]:is([data-legend-kind], [data-legend-variant]):is(:hover, :focus-visible) > :is(rect, path) { filter: drop-shadow(0 0 4px var(--blue-stroke)); }
+.dg-svg [role="button"]:is([data-legend-kind], [data-legend-variant]):focus-visible > text { text-decoration: underline; }
+.dg-svg[data-lens] :is([data-legend-kind], [data-legend-variant])[aria-pressed="false"] { opacity: 0.42; }
+.dg-svg[data-lens] [data-legend-kind][aria-pressed="true"] > rect { stroke-width: 2px; }
+.dg-svg[data-lens] :is([data-legend-kind], [data-legend-variant])[aria-pressed="true"] > text { fill: var(--text); font-weight: 650; }
+.dg-svg[data-lens] [data-node-id]:not([data-lens-lit]):not([aria-pressed="true"]),
+.dg-svg[data-lens] [data-edge-group]:not([data-lens-lit]),
+.dg-svg[data-lens] [data-edge-label]:not([data-lens-lit]) { opacity: 0.13; }
+
 @media (prefers-reduced-motion: reduce) {
-  .dg-svg [data-node-id], .dg-svg [data-edge-group], .dg-svg [data-edge-label] { transition: none; }
+  .dg-svg [data-node-id], .dg-svg [data-edge-group], .dg-svg [data-edge-label], .dg-svg [data-legend-kind], .dg-svg [data-legend-variant] { transition: none; }
 }
 
 
@@ -241,4 +253,46 @@ svg.dg-svg {
   padding: 0.125rem 0.5rem; border: 1px solid var(--panel-border); border-radius: 999px;
   background: color-mix(in srgb, var(--panel) 85%, transparent);
   font-family: var(--font-mono, monospace); font-size: 0.65rem; color: var(--text-muted);
+}
+
+/* The picked lens, at the top centre of the canvas: clear of the note card
+   and hint (top left), the inline drawer's edges and the expand and close
+   buttons. */
+.dg .dg-lens-chip {
+  position: absolute; left: 50%; top: 0.75rem; transform: translateX(-50%); white-space: nowrap; z-index: 11; display: inline-flex; align-items: center; gap: 0.375rem;
+  padding: 0.125rem 0.25rem 0.125rem 0.625rem; border: 1px solid var(--panel-border); border-radius: 999px; background: var(--panel);
+  font-family: var(--font-mono, monospace); font-size: 0.7rem; color: var(--text-muted);
+}
+.dg .dg-lens-chip button {
+  display: grid; place-items: center; width: 1.25rem; height: 1.25rem; border: 0; border-radius: 999px;
+  background: transparent; color: var(--text-muted); cursor: pointer;
+}
+.dg .dg-lens-chip button:hover { background: var(--dg-hover); color: var(--text); }
+.dg .dg-lens-chip button:focus-visible { outline: 2px solid var(--color-fd-ring, var(--blue-stroke)); outline-offset: 1px; }
+
+/* The expanded view's overview map: the drawing in the bottom right corner,
+   above the toolbar, with the shown part framed. It fades out while the
+   whole drawing is in view, and a phone has no room for it. */
+.dg .dg-minimap {
+  position: absolute; right: 0.75rem; bottom: 3.6rem; z-index: 12; padding: 4px;
+  border: 1px solid var(--panel-border); border-radius: 0.5rem; background: color-mix(in srgb, var(--panel) 94%, transparent);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 20px rgb(0 0 0 / 0.1);
+  transition: opacity 0.18s ease, visibility 0s;
+}
+.dg .dg-minimap[data-hidden] { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.18s ease, visibility 0s linear 0.18s; }
+.dg .dg-minimap-map { position: relative; overflow: hidden; border-radius: 0.3rem; background: var(--dg-bg); cursor: pointer; touch-action: none; }
+.dg .dg-minimap-drawing { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.dg .dg-minimap-drawing > svg { display: block; width: 100%; height: 100%; }
+.dg .dg-minimap-drawing [data-legend] { display: none; }
+.dg .dg-minimap-view {
+  position: absolute; border: 1.5px solid var(--blue-stroke); border-radius: 3px; cursor: grab; outline: none;
+  background: color-mix(in srgb, var(--blue-stroke) 12%, transparent);
+  box-shadow: 0 0 0 999px color-mix(in srgb, var(--panel) 38%, transparent);
+}
+.dg .dg-minimap-view:focus-visible { outline: 2px solid var(--color-fd-ring, var(--blue-stroke)); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .dg .dg-minimap { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dg .dg-minimap, .dg .dg-minimap[data-hidden] { transition: none; }
 }
