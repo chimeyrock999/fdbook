@@ -7,7 +7,6 @@ const history = (mtimeMs: number | null): PageHistory => ({
   path: 'content/notes/a.mdx',
   mtimeMs,
   deleted: null,
-  generated: false,
   versions: [sha('c'), sha('b'), sha('a')].map((each) => ({ sha: each, date: '2026-10-01T10:00:00Z', author: 'A', message: 'm', path: 'content/notes/a.mdx', status: 'M' as const, inChangeRequest: false })),
 });
 
@@ -38,7 +37,6 @@ describe('page versions', () => {
     // A deleted page comes back whole; a deleted asset does not.
     expect(restoreBlocked({ selected: sha('a'), readOnly: false, mtimeMs: null })).toBeNull();
     expect(restoreBlocked({ selected: sha('a'), readOnly: false, mtimeMs: null, asset: true })).toMatch(/not in this change request/);
-    expect(restoreBlocked({ selected: sha('a'), readOnly: false, mtimeMs: 1, asset: true, generated: true })).toBe('A diagram generates it: change the diagram instead');
     expect(shortVersion(NOW)).toBe('Now');
     expect(shortVersion(sha('a'))).toBe('aaaaaaa');
   });

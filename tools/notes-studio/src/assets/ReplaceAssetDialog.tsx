@@ -70,7 +70,6 @@ function Side({ label, name, source, size }: { label: string; name: string; sour
 // (`initial`). The old file and the new one show side by side with what
 // the server would write. Same extension: only the file changes. Another
 // one: the file takes it and every reference follows, as in a rename.
-// The asset page offers it only for an asset no diagram generates.
 export function ReplaceAssetDialog({ client, asset, initial, onDone, onClose }: {
   client: AssetsClient;
   asset: AssetInfo;

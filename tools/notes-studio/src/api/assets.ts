@@ -10,19 +10,14 @@ import { API_BASE } from './workspace';
 // note does not parse and the line holds the file name, or the path is
 // written with escapes it does not read).
 export type AssetUsage = { note: string; line: number; column: number; length: number; text: string; unsure: boolean };
-// A diagram source under diagrams/ that generates the asset, and the line
-// that names it.
-export type AssetSource = { path: string; line: number; text: string };
-export type AssetInfo = { path: string; mtimeMs: number; size: number; usages: AssetUsage[]; sources: AssetSource[] };
+export type AssetInfo = { path: string; mtimeMs: number; size: number; usages: AssetUsage[] };
 
 export type AssetChange =
   | { type: 'move'; path: string; to: string }
   | { type: 'change'; path: string; detail: string }
   | { type: 'delete'; path: string }
   // New content at `to`: the asset's own path, or its name with the new extension.
-  | { type: 'replace'; path: string; to: string }
-  // Left as it is: a diagram source that still names the old path.
-  | { type: 'keep'; path: string; detail: string };
+  | { type: 'replace'; path: string; to: string };
 
 export type AssetRequest =
   | { op: 'rename'; path: string; name: string; baseMtime: number }

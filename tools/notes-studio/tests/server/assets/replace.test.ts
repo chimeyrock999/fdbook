@@ -7,7 +7,6 @@ import { repoRoot } from '../../../server/config';
 import { lintWorktree } from '../../../server/lint/context';
 import { MAX_ASSET_BYTES } from '../../../server/security/asset-types';
 import { json, rawRequest } from '../../support/http';
-import { generatedAsset, plantGeneratedAsset } from '../../support/generated-asset';
 import { startTestStudio, type TestStudio } from '../../support/studio';
 import { CORPUS_TIMEOUT_MS } from '../../support/timeouts';
 
@@ -16,8 +15,9 @@ type Answer = { changes: { type: string; path: string; to?: string; detail?: str
 const SUPERSET = 'public/notes/data-platform/stacks-integration/superset-trino-impersonate.jpg';
 const SUPERSET_NOTE = 'content/notes/data-platform/stacks-integration/index.mdx';
 const WAREHOUSE = 'public/notes/data-modeling/data_warehouse_architecture.webp';
-// A generated asset the tests plant (support/generated-asset.ts).
-const GENERATED = generatedAsset('made');
+// An HTML asset a regen script of the retired Archify pipeline still
+// names: the Studio no longer reads those.
+const LEGACY = { asset: 'public/notes/legacy/made.html', script: 'diagrams/legacy/made.regen.sh' };
 const NEW_BYTES = Buffer.from('new image bytes');
 
 // Replacing an asset's content on a copy of the real content/notes,
@@ -56,7 +56,10 @@ describe('assets API: replace', () => {
     studio = await startTestStudio();
     await cp(join(repoRoot, 'public/notes'), file('public/notes'), { recursive: true });
     await cp(join(repoRoot, 'diagrams'), file('diagrams'), { recursive: true });
-    await plantGeneratedAsset(studio.root, 'made');
+    await mkdir(file('public/notes/legacy'), { recursive: true });
+    await mkdir(file('diagrams/legacy'), { recursive: true });
+    await writeFile(file(LEGACY.asset), '<!doctype html><html><body>legacy</body></html>\n');
+    await writeFile(file(LEGACY.script), `#!/bin/sh\nOUT="${LEGACY.asset}"\n`);
   });
 
   afterAll(async () => {
@@ -111,13 +114,13 @@ describe('assets API: replace', () => {
     expect(await missingAssets()).toEqual([]);
   }, 20_000);
 
-  it('refuses a generated asset, and names its source', async () => {
-    const before = await readFile(file(GENERATED.asset));
-    const response = await put({ path: GENERATED.asset, extension: 'html', baseMtime: await mtime(GENERATED.asset) });
-    expect(response.status).toBe(409);
-    expect((json(response) as { error: string }).error).toMatch(/made\.architecture\.json, .*made\.regen\.sh generates made\.html/);
-    expect((await dryRun({ path: GENERATED.asset, extension: 'html', baseMtime: await mtime(GENERATED.asset) })).status).toBe(409);
-    expect(await readFile(file(GENERATED.asset))).toEqual(before);
+  it('replaces an asset a leftover regen script names', async () => {
+    const plan = await dryRun({ path: LEGACY.asset, extension: 'html', baseMtime: await mtime(LEGACY.asset) });
+    expect(plan.status).toBe(200);
+    expect((json(plan) as Answer).changes).toEqual([{ type: 'replace', path: LEGACY.asset, to: LEGACY.asset }]);
+    const response = await put({ path: LEGACY.asset, extension: 'html', baseMtime: await mtime(LEGACY.asset) });
+    expect(response.status).toBe(200);
+    expect(await readFile(file(LEGACY.asset))).toEqual(NEW_BYTES);
   });
 
   it('refuses a type the Studio does not store, and a missing extension', async () => {

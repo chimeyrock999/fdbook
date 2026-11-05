@@ -57,13 +57,6 @@
     border-radius: 6px;
     text-align: left;
   }
-  .studio-asset-source {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 1px 8px;
-    padding: 4px 6px;
-    border-left: 2px solid var(--fde-border);
-  }
   .studio-asset-usages button:hover {
     background: var(--fde-accent);
   }

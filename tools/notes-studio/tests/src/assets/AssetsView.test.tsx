@@ -8,18 +8,12 @@ import { AssetsView } from '../../../src/assets/AssetsView';
 const usage = (note: string, line: number): AssetUsage => ({ note, line, column: 12, length: 20, text: `![x](/notes/guide/${String(line)}.png)`, unsure: false });
 
 const ASSETS: AssetInfo[] = [
-  { path: 'public/notes/guide/flow.html', mtimeMs: 5, size: 100, usages: [usage('content/notes/guide/intro.mdx', 17), usage('content/notes/guide/index.mdx', 40)], sources: [] },
-  { path: 'public/notes/guide/old_name.png', mtimeMs: 7, size: 100, usages: [usage('content/notes/guide/intro.mdx', 9)], sources: [] },
-  { path: 'public/notes/guide/spare.svg', mtimeMs: 9, size: 100, usages: [], sources: [] },
-  { path: 'public/notes/other/pic.png', mtimeMs: 1, size: 100, usages: [], sources: [] },
-  { path: 'public/notes/other/Photo.PNG', mtimeMs: 2, size: 100, usages: [], sources: [] },
-  {
-    path: 'public/notes/guide/made.html',
-    mtimeMs: 3,
-    size: 100,
-    usages: [],
-    sources: [{ path: 'diagrams/guide/made.architecture.json', line: 7, text: '"output": "public/notes/guide/made.html",' }],
-  },
+  { path: 'public/notes/guide/flow.html', mtimeMs: 5, size: 100, usages: [usage('content/notes/guide/intro.mdx', 17), usage('content/notes/guide/index.mdx', 40)] },
+  { path: 'public/notes/guide/old_name.png', mtimeMs: 7, size: 100, usages: [usage('content/notes/guide/intro.mdx', 9)] },
+  { path: 'public/notes/guide/spare.svg', mtimeMs: 9, size: 100, usages: [] },
+  { path: 'public/notes/other/pic.png', mtimeMs: 1, size: 100, usages: [] },
+  { path: 'public/notes/other/Photo.PNG', mtimeMs: 2, size: 100, usages: [] },
+  { path: 'public/notes/guide/made.html', mtimeMs: 3, size: 100, usages: [] },
 ];
 
 function setup({ unsaved = false, readOnly = false, active = 'content/notes/guide/intro.mdx', current = null }: { unsaved?: boolean; readOnly?: boolean; active?: string | null; current?: string | null } = {}) {
@@ -138,16 +132,6 @@ describe('AssetsView', () => {
     expect(within(dialog).getByText('Notes get /notes/other/photo-2.png; a query or hash after it stays.')).toBeTruthy();
   });
 
-  it('marks a file a diagram generates and refuses to delete it', async () => {
-    const { change } = setup();
-    expect(within(row(/^made/)).getByText('diagram')).toBeTruthy();
-    await userEvent.click(within(await openMenu('made.html')).getByRole('menuitem', { name: 'Delete…' }));
-    const dialog = screen.getByRole('dialog', { name: 'Delete “made.html”?' });
-    expect(within(dialog).getByRole('alert').textContent).toContain('A diagram generates it');
-    expect(within(dialog).queryByRole('button', { name: 'Delete' })).toBeNull();
-    expect(change).not.toHaveBeenCalled();
-  });
-
   it('refuses to delete a file still in use, and lists where', async () => {
     const { change, onOpenUsage } = setup();
     await userEvent.click(within(await openMenu('flow.html')).getByRole('menuitem', { name: 'Delete…' }));
@@ -186,7 +170,7 @@ describe('AssetsView', () => {
   });
 
   it('lists diagrams/ after public/notes, opening a diagram and offering only Open', async () => {
-    const diagram: AssetInfo = { path: 'diagrams/guide/flow.diagram.json', mtimeMs: 4, size: 900, usages: [usage('content/notes/guide/intro.mdx', 30)], sources: [] };
+    const diagram: AssetInfo = { path: 'diagrams/guide/flow.diagram.json', mtimeMs: 4, size: 900, usages: [usage('content/notes/guide/intro.mdx', 30)] };
     const onOpen = vi.fn();
     render(
       <AssetsView

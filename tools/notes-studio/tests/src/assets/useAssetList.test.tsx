@@ -7,7 +7,7 @@ import { useAssetList } from '../../../src/assets/useAssetList';
 
 function clients() {
   let listener: ((event: FileEvent) => void) | null = null;
-  const listAssets = vi.fn(() => Promise.resolve([{ path: 'public/notes/a.png', mtimeMs: 1, usages: [], sources: [] }]));
+  const listAssets = vi.fn(() => Promise.resolve([{ path: 'public/notes/a.png', mtimeMs: 1, usages: [] }]));
   const subscribeFileEvents = vi.fn((next: (event: FileEvent) => void) => {
     listener = next;
     return () => { listener = null; };

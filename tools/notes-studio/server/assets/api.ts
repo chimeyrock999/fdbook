@@ -48,7 +48,7 @@ export function createAssetsApi(root: string, lock = createKeyedLock()): Handler
   }
 
   // The request is planned once before its bytes are read, so a refused one
-  // (a stale mtime, a generated asset, a type not stored) is not uploaded
+  // (a stale mtime, a type not stored) is not uploaded
   // first; the bytes are read outside the lock, and planned again inside it.
   async function replace(request: IncomingMessage) {
     // A custom header, so a browser must preflight it and a foreign page cannot send one blind.

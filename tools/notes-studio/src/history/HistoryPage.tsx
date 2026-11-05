@@ -118,7 +118,7 @@ export function HistoryPage({ client, path, title, readOnly, reader = false, rev
   };
   const asset = isAsset(path);
   const gone = data !== null && data.mtimeMs === null;
-  const blocked = shown === null || data === null ? 'Loading.' : restoreBlocked({ selected: shown, readOnly, reader, mtimeMs: data.mtimeMs, asset, generated: data.generated });
+  const blocked = shown === null || data === null ? 'Loading.' : restoreBlocked({ selected: shown, readOnly, reader, mtimeMs: data.mtimeMs, asset });
 
   // A failure says why in a toast, and the history is read again.
   const restore = () => {
