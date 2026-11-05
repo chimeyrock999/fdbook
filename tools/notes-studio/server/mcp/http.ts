@@ -19,7 +19,7 @@ const INSTRUCTIONS = `Tools of the Notes Studio, for the notes under content/not
 - Every note tool takes \`cr\`, the change request's slug; an agent the Studio started has its CR already. Main is read only and refused: use list_crs, or create_cr for a new one.
 - An agent the Studio started on main reads main with the tools that read, and edits nothing. When a change is needed it calls create_cr with a name and a brief: the Studio opens a change request and starts an author chat there with the brief; the answer has its slug and url.
 - Edits go through propose_edit: they are not written, but shown to a person as suggestions to accept or reject. Read a note with read_note first.
-- A reviewer reads and comments (add_comment); it does not propose.
+- Review happens in threads on a note's blocks. A reviewer starts from cr_changes, reads the notes, and opens a thread per finding with add_comment (severity blocking or nit, a suggestion when it has the fix); it does not propose otherwise. An author answers each open thread (list_threads) with set_thread_state: addressed with the proposal that fixes it, or rejected with the reason.
 - A message from the Studio may end with the context it adds: the note open in the editor, the lines selected there (edit those), mentioned files and attached documents.`;
 
 // What the host needs of a change request's workspace (workspace.ts).

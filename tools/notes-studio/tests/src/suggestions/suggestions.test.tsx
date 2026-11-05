@@ -4,12 +4,14 @@ import { EditorView } from '@codemirror/view';
 import { act, cleanup, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { hunksOf } from '../../../server/proposals/hunks';
-import type { NoteComment, ProposalHunk, ProposalsClient, ProposalView } from '../../../src/api/proposals';
+import { blocksOf, hunksOf } from '../../../server/proposals/hunks';
+import { anchorAt } from '../../../server/review/anchors';
+import type { ProposalHunk, ProposalsClient, ProposalView, Thread, ThreadState } from '../../../src/api/proposals';
 import { pluginsExtension } from '../../../src/editor/extensions';
 import { placeAll } from '../../../src/suggestions/places';
 import { sourceSuggestions } from '../../../src/suggestions/source';
-import { NoteComments, SuggestionBar, VisualSuggestions, type NoteReview } from '../../../src/suggestions/Suggestions';
+import { SuggestionBar, VisualSuggestions, type NoteReview } from '../../../src/suggestions/Suggestions';
+import { NoteThreads } from '../../../src/review/ThreadMarks';
 import { useNoteSuggestions } from '../../../src/suggestions/useNoteSuggestions';
 import { useProposals } from '../../../src/suggestions/useProposals';
 import { createSuggestionLayer, type SuggestionLayer } from '../../../src/suggestions/visual';
@@ -25,7 +27,13 @@ function proposal(next: string, id = 'p1', base = NOTE): ProposalView {
   return { id, path: PATH, by: { kind: 'run', runId: 'r1', agent: 'claude', model: 'Opus 5.5' }, summary: 'Tighten the guide', createdMs: 1, hunks, mtimeMs: 1, stale: false, done: false };
 }
 
-const comment = (block: { index: number; text: string } | null, body = 'Say more.'): NoteComment => ({ id: `c${String(body.length)}`, path: PATH, block, body, by: { kind: 'run', runId: 'r2', agent: 'codex', model: null }, createdMs: 2 });
+// A thread from a reviewer on block `block` of `text`, or on the whole note.
+export function thread(block: number | null, body = 'Say more.', text = NOTE, extra: Partial<Thread> = {}): Thread {
+  return {
+    id: `t${String(body.length)}`, path: PATH, anchor: block === null ? null : anchorAt(blocksOf(text), block), orphaned: false, severity: 'nit', rule: null, state: 'open', suggestion: null,
+    comments: [{ id: 'c1', body, by: { kind: 'run', runId: 'r2', agent: 'codex', model: 'gpt-5', role: 'reviewer' }, createdMs: 2 }], createdMs: 2, updatedMs: 2, ...extra,
+  };
+}
 
 afterEach(cleanup);
 
@@ -47,25 +55,35 @@ describe('placeAll', () => {
     expect(placeAll(gone, [proposal(edited)]).lost.map((each) => each.hunk.id)).toEqual(['1']);
   });
 
-  it('leaves decided hunks out, places nothing in a note that does not parse, and finds comments by their block text', () => {
+  it('leaves decided hunks out, places nothing in a note that does not parse, and finds threads by their anchor', () => {
     const decided = proposal(edited);
     decided.hunks[0] = { ...decided.hunks[0], decided: 'accepted' };
     expect(placeAll(NOTE, [decided]).hunks).toHaveLength(1);
     expect(placeAll(`${NOTE}<Broken\n`, [decided]).parsed).toBe(false);
     const moved = NOTE.replace('# Guide\n\n', '# Guide\n\nAn intro.\n\n');
-    const { comments } = placeAll(moved, [], [comment({ index: 3, text: 'Second paragraph.' }), comment(null, 'On the note.'), comment({ index: 9, text: 'Gone.' }, 'Lost one.')]);
-    expect(comments.map((each) => each.block)).toEqual([4, null, null]);
+    const gone = NOTE.replace('Third paragraph.\n', '');
+    const { threads } = placeAll(moved.replace('Second paragraph.', 'Second paragraph, edited.'), [], [thread(3), thread(null, 'On the note.'), { ...thread(4, 'Lost one.'), anchor: anchorAt(blocksOf(NOTE), 4) }]);
+    expect(threads.map((each) => each.block)).toEqual([4, null, 5]);
+    // A block gone from the text being typed is gone, whatever the server said last.
+    expect(placeAll(gone, [], [thread(4, 'Lost one.')]).threads.map((each) => each.block)).toEqual([null]);
   });
 });
 
-function review(proposals: ProposalView[], act = vi.fn(() => Promise.resolve()), resolveComment = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve())): NoteReview & { act: typeof act; resolveComment: typeof resolveComment } {
-  return { proposals, comments: [], act, resolveComment };
+function review(proposals: ProposalView[], act = vi.fn(() => Promise.resolve())) {
+  return {
+    proposals,
+    threads: [] as Thread[],
+    act,
+    openThread: vi.fn(() => Promise.resolve()),
+    replyThread: vi.fn(() => Promise.resolve()),
+    moveThread: vi.fn<(id: string, state: ThreadState, body: string) => Promise<void>>(() => Promise.resolve()),
+  } satisfies NoteReview;
 }
 
-// The comment bubble drawn into the editor.
-function bubble(prose: HTMLElement) {
+// A thread's mark drawn into the editor.
+function mark(prose: HTMLElement) {
   const found = prose.querySelector<HTMLElement>('.studio-suggest-comment');
-  if (found === null) throw new Error('no comment bubble yet');
+  if (found?.querySelector('button') == null) throw new Error('no thread mark yet');
   return found;
 }
 
@@ -142,7 +160,8 @@ describe('suggestions in Source', () => {
 // The real Visual editor with the suggestion layer, as NoteEditor mounts it.
 function Layer({ layer, text, decide }: { layer: SuggestionLayer; text: string; decide: NoteReview }) {
   const { placement, focus, decisions } = useNoteSuggestions(decide, text);
-  return <VisualSuggestions layer={layer} placement={placement} focus={focus} readOnly={false} decisions={decisions} onResolveComment={decide.resolveComment} />;
+  const threads = { open: decide.openThread, reply: decide.replyThread, move: decide.moveThread };
+  return <VisualSuggestions layer={layer} placement={placement} focus={focus} readOnly={false} decisions={decisions} text={text} threads={threads} threadFocus={null} />;
 }
 
 // Made with the editor root, which takes its plugin as an extension.
@@ -157,7 +176,7 @@ describe('suggestions in Visual', () => {
   it('marks the replaced block in the editor, draws the proposed one after it, and decides it', async () => {
     const next = NOTE.replace('Second paragraph.', 'Second, **rewritten**.');
     const decide = review([proposal(next)]);
-    decide.comments = [comment({ index: 2, text: 'First paragraph.' })];
+    decide.threads = [thread(2)];
     const { prose } = await mountWithLayer(decide);
     await waitFor(() => { expect(prose.querySelector('.studio-suggest-removed')?.textContent).toBe('Second paragraph.'); });
     const card = await waitFor(() => {
@@ -169,46 +188,56 @@ describe('suggestions in Visual', () => {
     expect(card.querySelector('strong')?.textContent).toBe('rewritten');
     // The card sits right after the block it replaces.
     expect(prose.querySelector('.studio-suggest-removed')?.nextElementSibling).toBe(card);
-    const commentUi = within(bubble(prose));
-    const commentButton = commentUi.getByRole('button', { name: 'Comment from Codex' });
-    await act(async () => { commentButton.click(); await Promise.resolve(); });
-    await act(async () => { commentUi.getByRole('button', { name: 'Resolve feedback' }).click(); await Promise.resolve(); });
-    expect(decide.resolveComment).toHaveBeenCalledWith('c9');
+    // The thread opens from its mark, on the page, over the note.
+    await act(async () => { within(mark(prose)).getByRole('button', { name: '1 thread, from Codex' }).click(); await Promise.resolve(); });
+    const threadCard = within(await screen.findByRole('dialog', { name: 'Review thread' }));
+    expect(threadCard.getByText('gpt-5')).toBeTruthy();
+    await act(async () => { threadCard.getByRole('button', { name: 'Resolve' }).click(); await Promise.resolve(); });
+    expect(decide.moveThread).toHaveBeenCalledWith('t9', 'resolved', '');
     await act(async () => { within(card).getByRole('button', { name: 'Accept suggestion' }).click(); await Promise.resolve(); });
     expect(decide.act).toHaveBeenCalledWith('p1', 'accept', ['1']);
   });
 
-  it('resolves feedback once while the request is out, and says why it failed in a toast', async () => {
+  it('moves a thread once while the request is out, asks a rejection why, and says why it failed in a toast', async () => {
     const decide = review([]);
-    decide.comments = [comment({ index: 2, text: 'First paragraph.' })];
+    decide.threads = [thread(2)];
     let fail: (reason: Error) => void = () => undefined;
-    decide.resolveComment.mockImplementation(() => new Promise<void>((_resolve, reject) => { fail = reject; }));
+    decide.moveThread.mockImplementation(() => new Promise<void>((_resolve, reject) => { fail = reject; }));
     render(<ToastStack />);
     const { prose } = await mountWithLayer(decide);
-    const commentUi = within(await waitFor(() => bubble(prose)));
-    await act(async () => { commentUi.getByRole('button', { name: 'Comment from Codex' }).click(); await Promise.resolve(); });
-    const resolve = commentUi.getByRole('button', { name: 'Resolve feedback' });
-    await act(async () => { resolve.click(); resolve.click(); await Promise.resolve(); });
-    expect(decide.resolveComment).toHaveBeenCalledTimes(1);
-    expect(commentUi.getByRole('button', { name: /Resolv/ })).toHaveProperty('disabled', true);
-    await act(async () => { fail(new Error('no such comment: c9')); await Promise.resolve(); });
-    expect((await screen.findByRole('alert')).textContent).toContain('no such comment: c9');
-    expect(commentUi.getByRole('button', { name: 'Resolve feedback' })).toHaveProperty('disabled', false);
+    await act(async () => { within(await waitFor(() => mark(prose))).getByRole('button', { name: /thread/ }).click(); await Promise.resolve(); });
+    const card = within(await screen.findByRole('dialog', { name: 'Review thread' }));
+    await act(async () => { card.getByRole('button', { name: 'Reject' }).click(); await Promise.resolve(); });
+    expect(decide.moveThread).not.toHaveBeenCalled();
+    expect(card.getByRole('textbox', { name: 'Reply' }).getAttribute('placeholder')).toMatch(/Say why/);
+    await userEvent.type(card.getByRole('textbox', { name: 'Reply' }), 'It is right as it is.');
+    const reject = card.getByRole('button', { name: 'Reject' });
+    await act(async () => { reject.click(); reject.click(); await Promise.resolve(); });
+    expect(decide.moveThread).toHaveBeenCalledTimes(1);
+    expect(decide.moveThread).toHaveBeenCalledWith('t9', 'rejected', 'It is right as it is.');
+    await act(async () => { fail(new Error('a person cannot take a thread from resolved to rejected')); await Promise.resolve(); });
+    expect((await screen.findByRole('alert')).textContent).toContain('cannot take a thread');
+    // The reason stays, to send again.
+    expect(card.getByRole('textbox', { name: 'Reply' })).toHaveProperty('value', 'It is right as it is.');
   });
 });
 
-describe('NoteComments', () => {
-  it('resolves a comment on the note as a whole, or on a block that is gone, and offers no Resolve to a reader', async () => {
-    const resolveComment = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve());
-    const loose = comment({ index: 9, text: 'Gone.' }, 'Rewrite the opening.');
-    const placement = placeAll(NOTE, [], [loose]);
-    const { rerender } = render(<NoteComments placement={placement} readOnly={false} onResolve={resolveComment} />);
-    const item = within(screen.getByRole('list', { name: 'Comments on the note' }));
-    expect(item.getByText('Rewrite the opening.')).toBeTruthy();
-    await act(async () => { item.getByRole('button', { name: 'Resolve feedback' }).click(); await Promise.resolve(); });
-    expect(resolveComment).toHaveBeenCalledWith(loose.id);
-    rerender(<NoteComments placement={placement} readOnly onResolve={resolveComment} />);
-    expect(screen.queryByRole('button', { name: 'Resolve feedback' })).toBeNull();
+describe('NoteThreads', () => {
+  it('lists threads on the whole note and those whose block is gone, opens one, and offers no moves to a reader', async () => {
+    const actions = { reply: vi.fn(() => Promise.resolve()), move: vi.fn(() => Promise.resolve()) };
+    const orphan = { ...thread(4, 'Rewrite the opening.'), orphaned: true };
+    const placement = placeAll(NOTE.replace('Third paragraph.\n', ''), [], [orphan, thread(null, 'On the note.')]);
+    const { rerender } = render(<NoteThreads placement={placement} readOnly={false} actions={actions} focus={null} />);
+    const list = within(screen.getByRole('list', { name: 'Threads on the note' }));
+    expect(list.getByText('Block gone: Third paragraph.')).toBeTruthy();
+    await act(async () => { list.getByRole('button', { name: /Rewrite the opening/ }).click(); await Promise.resolve(); });
+    const card = within(screen.getByRole('dialog', { name: 'Review thread' }));
+    expect(card.getByText('Block gone')).toBeTruthy();
+    await act(async () => { card.getByRole('button', { name: 'Resolve' }).click(); await Promise.resolve(); });
+    expect(actions.move).toHaveBeenCalledWith(orphan.id, 'resolved', '');
+    rerender(<NoteThreads placement={placement} readOnly actions={actions} focus={null} />);
+    expect(screen.queryByRole('button', { name: 'Resolve' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Reply' })).toBeNull();
   });
 });
 
@@ -218,7 +247,7 @@ describe('useProposals', () => {
     let listing: () => Promise<ProposalView[]> = () => Promise.resolve([proposal(NOTE.replace('First paragraph.', 'One.')), other]);
     const client = {
       list: () => listing(),
-      comments: () => Promise.resolve([]),
+      threads: () => Promise.resolve([]),
       listDeletes: () => Promise.resolve([]),
       subscribe: (_merge: unknown, reopened: () => void) => { reopened(); return () => undefined; },
       act: () => Promise.reject(new Error('nothing left to decide in these hunks')),
@@ -233,22 +262,25 @@ describe('useProposals', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('offline');
   });
 
-  it('drops a resolved comment, its own and one another client resolved', async () => {
-    const comments = [comment(null, 'One.'), comment(null, 'Two two.'), comment(null, 'Three three three.')];
-    let resolved: (comment: { id: string }) => void = () => undefined;
-    const resolveComment = vi.fn(() => Promise.resolve());
+  it('keeps each thread as the stream and its own answers have it, the later copy winning', async () => {
+    const first = thread(null, 'One.');
+    let onThread: (thread: Thread) => void = () => undefined;
+    const moved = { ...first, state: 'resolved' as const, updatedMs: 10 };
     const client = {
       list: () => Promise.resolve([]),
-      comments: () => Promise.resolve(comments),
+      threads: () => Promise.resolve([first]),
       listDeletes: () => Promise.resolve([]),
-      subscribe: (_merge: unknown, reopened: () => void, _onComment: unknown, onResolved: typeof resolved) => { resolved = onResolved; reopened(); return () => undefined; },
-      resolveComment,
+      subscribe: (_merge: unknown, reopened: () => void, given: typeof onThread) => { onThread = given; reopened(); return () => undefined; },
+      move: vi.fn(() => Promise.resolve(moved)),
     } as unknown as ProposalsClient;
     const { result } = renderHook(() => useProposals(client, true));
-    await waitFor(() => { expect(result.current.comments).toHaveLength(3); });
-    await act(() => result.current.resolveComment(comments[0].id));
-    expect(resolveComment).toHaveBeenCalledWith(comments[0].id);
-    act(() => { resolved({ id: comments[1].id }); });
-    expect(result.current.comments.map((each) => each.id)).toEqual([comments[2].id]);
+    await waitFor(() => { expect(result.current.threads).toHaveLength(1); });
+    await act(() => result.current.moveThread(first.id, 'resolved', ''));
+    expect(result.current.threads[0].state).toBe('resolved');
+    // An older copy from the stream, after the answer: kept out.
+    act(() => { onThread({ ...first, updatedMs: 5 }); });
+    expect(result.current.threads[0].state).toBe('resolved');
+    act(() => { onThread(thread(null, 'Another one.')); });
+    expect(result.current.threads).toHaveLength(2);
   });
 });

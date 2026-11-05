@@ -34,7 +34,7 @@ the React app through Vite.
     request's workspace under `/cr/<slug>/`.
   - `workspace.ts` holds the handlers of one worktree: files, events, sync,
     lint, tree, assets, changes, diff and history, preview and publish,
-    agent chats and their context, proposals and comments.
+    agent chats and their context, proposals and review threads.
   - `config.ts` holds the host, the port, the root paths and the other
     `STUDIO_*` settings (see [setup.md](setup.md#other-settings)).
   - `routing.ts` runs the guard on every request and upgrade, then hands
@@ -65,9 +65,11 @@ the React app through Vite.
   - `agents/` runs chats with agents over ACP in a change request, with
     their context, file policy, transcripts and per-turn changes.
   - `mcp/` is the Studio's MCP server: its HTTP endpoint, the note,
-    writing and diagram tools, the grants, and the stdio bridge.
-  - `proposals/` keeps the edits agents propose and the comments they
-    leave, per change request.
+    writing, review and diagram tools, the grants, and the stdio bridge.
+  - `proposals/` keeps the edits agents propose, per change request.
+  - `review/` keeps the review threads of a change request (#87): their
+    anchors on blocks (`anchors.ts`, shared with the UI), states and who
+    may move them (`shared.ts`), the store and its HTTP API.
 - `src/`: the React UI.
   - `api/` holds the clients for the server; `workspace.ts` says which
     worktree the page edits (`?cr=`).
@@ -104,7 +106,9 @@ the React app through Vite.
   - `agents/` is the header's agent control, the agent panel, the actions,
     the chat history, agent replies as markdown and the Connect an agent
     dialog; `logos/` holds each agent's mark with its source in the file.
-  - `suggestions/` shows agents' proposals and comments in the editor.
+  - `suggestions/` shows agents' proposals in the editor.
+  - `review/` shows the review threads: their marks and cards in the
+    editor, Comment on the format bubble, and the Review view.
   - `actions/` is what every button that writes to the server uses (see
     [Write actions](#write-actions)).
   - `plugins/` holds the editor plugins (see [Plugins](#plugins)).
@@ -319,14 +323,18 @@ A flow that is not enabled answers `404`.
 | `GET /api/proposals[?path=…]` | A change request's proposals (of one note), oldest first: `{ proposals }`, each `{ id, path, by, summary, createdMs, mtimeMs, stale, done, hunks: [{ id, removed, added, state, from, to }] }` |
 | `GET /api/proposals/<id>` | `{ proposal }` |
 | `POST /api/proposals/<id>` | `{ op: "accept" \| "reject" \| "rebase" \| "drop", hunks? }` (all undecided hunks by default), answers `{ proposal }`. A stale hunk is not accepted (`409`) until rebased. |
-| `GET /api/proposals/events` | Server-sent events: each proposal when it is made or changes, `comment` events, and `delete-proposal` events |
+| `GET /api/proposals/events` | Server-sent events: each proposal when it is made or changes, `thread` events (each review thread whole, when it opens, changes or its anchor moves), and `delete-proposal` events |
 | `GET /api/delete-proposals` | The delete proposals (`propose_delete`): `{ proposals }`, each `{ id, path, by, summary, createdMs, decided, state }`, `state` being `open`, `accepted`, `rejected` or `gone` (still open, but the page or folder is not there) |
 | `POST /api/delete-proposals/<id>` | `{ op: "accept" \| "reject", base? }`: accept runs the tree's delete with the `base` of the dry run shown; answers `{ proposal }`. A decided one answers `409`. |
-| `GET /api/comments[?path=…]` | `{ comments: [{ id, path, block: { index, text } \| null, body, by, createdMs }] }` |
+| `GET /api/threads[?path=…]` | The review threads, oldest first: `{ threads }`, each `{ id, path, anchor: { index, text, before, after, seen } \| null, orphaned, severity, rule, state, suggestion, comments: [{ id, body, by, createdMs, state? }], createdMs, updatedMs }` (see [Review threads](#review-threads)) |
+| `POST /api/threads` | `{ path, anchor, body, severity?, rule? }` opens one as the person signed in; `anchor` (from `anchorAt` on the text the editor holds) or null for the whole note. Answers `{ thread }`. |
+| `GET /api/threads/<id>` | `{ thread }` |
+| `POST /api/threads/<id>/comments` | `{ body }`: a reply; answers `{ thread }` |
+| `POST /api/threads/<id>/state` | `{ state, body? }`: a move; `rejected` needs a body, a move the table does not allow answers `409` |
 | `POST /api/mcp` | The MCP server, Streamable HTTP, stateless (see [MCP server](#mcp-server)). `GET` and `DELETE` answer `405`. |
 | `POST`, `DELETE /api/mcp/tokens` | With sign-in on, makes an agent token for the signed-in person (`{ token }`), or ends all of theirs; any role, with the csrf header. Sign-in off answers `409`. |
 
-Proposals and comments answer `409` on main to reads and event streams,
+Proposals and review threads answer `409` on main to reads and event streams,
 and their writes never get there: main answers `403` to every write but
 `POST /api/lint` and the agent routes first. Agent chats work on main, read
 only (see [Agents](#agents)); their Keep/Revert routes answer `409` to a
@@ -428,7 +436,7 @@ instead of every stream retrying forever.
 - Discard removes origin's side first (`gh pr close` with a comment, `git
   push origin --delete`). Then `beforeDiscard` (set from `onDiscard` in
   `server/studio-server.ts`) closes the change request's agents, watchers
-  and sync and removes its transcripts, proposals and comments under
+  and sync and removes its transcripts, proposals and review threads under
   `STUDIO_HOME`; then the worktree and the local branch go
   (`server/cr/manager.ts`).
 - A commit (`server/git/commit.ts`) adds and commits the picked paths alone
@@ -586,7 +594,11 @@ the chats the Studio starts and your own agents in a terminal (see
 | `related_notes` | read | The notes most related to one (10 by default, at most 30), ranked by shared tags and keywords, links either way and title words; each with its href from the note, why, and whether the note already links there |
 | `propose_edit` | write | A proposal: the whole new text, or up to 100 find/replace edits; answers its hunks, lint issues, and `outsideSelection` when the message selected other lines. Nothing is written. A note that does not exist yet is created with `content`; the same turn's later edits to a note it created are written too (`written: true`), until someone else changes it. |
 | `propose_delete` | write | Proposes deleting a page (`x.mdx`) or folder (`x`); answers the dry run (`deleted`, `changes`, `linksLeft`). Nothing is deleted: a person accepts it with the delete dialog, or rejects it. One open proposal per path. Kept in `<STUDIO_HOME>/proposals/<slug>/deletes/`. |
-| `add_comment` | read, but a person needs write access | A comment on a note, or on one of its blocks, kept in `<STUDIO_HOME>/comments/<slug>.jsonl` |
+| `add_comment` | read, but a person needs write access | Opens a review thread on a note or one of its blocks, with `severity` (`blocking` or `nit`), `rule` (a style guide code) and a `suggestion` (`content` or `edits`, made a proposal); kept in `<STUDIO_HOME>/comments/<slug>.jsonl` |
+| `reply_to_thread` | read, but a person needs write access | A reply that leaves the state as it is |
+| `set_thread_state` | read, but a person needs write access | A move, with a comment and the `suggestion` (proposal id) that fixes it; held to the caller's part (see [Review threads](#review-threads)) |
+| `list_threads` | read | The threads (of a note, by state and severity; without `state` the ones not resolved) with every comment |
+| `cr_changes` | read | Every file changed against main at the merge base, committed or not; for each note its hunks (as proposals split them) and lint issues, up to 200 000 characters of hunks |
 | `list_assets` | read | The assets under `public/notes` and the notes that use them |
 | `diagram_list`, `diagram_read`, `diagram_validate`, `diagram_render_png` | read | The diagrams; one as JSON with its checks; the checks alone; a PNG the agent can look at |
 | `diagram_create` | write | A new diagram file (refused when one exists) |
@@ -603,7 +615,8 @@ the chats the Studio starts and your own agents in a terminal (see
 - **Access.** A `write` tool is refused to a reviewer chat and to a reader,
   and `tools/list` leaves out the tools a caller may not use; the others
   are open to anyone who may read. A reviewer comments instead of
-  proposing.
+  proposing; a suggestion it gives with a comment is a proposal a person
+  still accepts, so it writes nothing.
 - **Who.** From the bearer token: a chat's (`server/mcp/grants.ts`, made
   when its agent process starts, dropped when it stops, refused between
   turns; the grant's `runId` is the chat's id), or with sign-in on, a
@@ -625,6 +638,50 @@ the chats the Studio starts and your own agents in a terminal (see
   of a chat's `tools/list` and refused to it, but for `create_cr` with a
   brief to a chat on main. A chat on main reads main with the read tools;
   every write tool tells it to call `create_cr`.
+
+
+## Review threads
+
+One comment system for people and agents (#87), kept per change request
+in `<STUDIO_HOME>/comments/<slug>.jsonl` (one thread per line, the file
+written whole through a temp file), outside `content/`. A comment of #85
+(one line with `block`) is read as an open thread of one comment.
+
+- **Anchor.** A thread on a block keeps the block's text, the blocks
+  before and after it, and a hash of every block the note had
+  (`server/review/anchors.ts`). `locate` finds it again: the same text,
+  nearest where it was (a copy edited away is told apart by the count of
+  copies); else, among the blocks new since, the one still between both
+  old neighbours, or the one most like it (words shared, Dice ≥ 0.6, or
+  0.4 next to an old neighbour). A block that was there all along is never
+  taken for the one edited, so a deleted block orphans its thread instead
+  of moving it to a sibling that reads alike. The server moves the stored
+  anchor each time the note changes on disk (the file watcher, whoever
+  wrote it, and once when the workspace opens), so edits one after
+  another keep it; the editor places threads with the same `locate` on
+  the text being typed.
+- **Orphaned.** No block found: the thread keeps its anchor and state and
+  is listed over the note with what the block said. From then on only
+  that block coming back word for word finds it, so a sibling edited
+  later is never taken for it. A deleted note orphans its threads; a
+  tree rename or move takes them to the new path and places them there,
+  even when the watcher saw the rename first.
+- **States.** `open`, `addressed`, `rejected` (with a reason),
+  `resolved`, `needs-decision`. The author agent answers an open thread
+  (addressed, rejected); the reviewer agent judges the answer (resolved,
+  open again, or needs-decision when it keeps a finding the author
+  rejected); the reviewer resolves an open thread only when an agent
+  opened it (withdrawing its own finding), never a person's; only a
+  person decides a needs-decision thread or reopens a resolved one, and a
+  person may make any other move too
+  (`server/review/shared.ts`). Each move is a comment in the thread's
+  history.
+- **Who.** `by` is a person (their login) or an agent run with its agent,
+  model and role.
+- **Review this CR.** The Review view starts a reviewer chat with a fixed
+  message (`src/review/texts.ts`): `cr_changes`, `read_note`, the style
+  guide when the repository has one (#90), `list_threads`, then
+  `add_comment` per finding.
 
 ## Proposals
 
@@ -797,7 +854,7 @@ read-only. Hence (#174):
   (`GraphTools.tsx`) keep their own state and focus, so they stay a React
   popup, placed at the marker (`src/graph/place.ts`); Remove and the
   frontmatter note are in them (#176).
-- **Suggestion decisions** stay custom. The cards and comment bubbles
+- **Suggestion decisions** stay custom. The cards and thread marks
   (`src/suggestions/visual.ts`, `Suggestions.tsx`) are drawn at blocks,
   several at once, whatever the selection, and also in read-only review;
   `SuggestionBar` is a fixed bar over the editor with counts and

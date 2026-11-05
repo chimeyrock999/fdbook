@@ -118,3 +118,32 @@ export async function loadBaseFile(root: string, path: string, base: string | nu
   if (at === null || (await sizeAtBase(root, at, path)) === null) throw new HttpError(404, `not on main: ${path}`);
   return readBlob(root, at, path);
 }
+
+// Every editable file the change request changed against main at the merge
+// base, committed or not, new files git does not track yet included. Empty
+// when there is no main to compare with.
+export async function changedSinceBase(root: string): Promise<{ path: string; status: Exclude<DiffStatus, 'same'>; from?: string }[]> {
+  await assertWorktreeTop(root);
+  const base = await mergeBase(root);
+  if (base === null) return [];
+  const [diff, untracked] = await Promise.all([
+    runGit(root, ['diff', '-z', '--name-status', '--find-renames', base, '--', ...EDITABLE_AREAS]),
+    runGit(root, ['ls-files', '-z', '--others', '--exclude-standard', '--', ...EDITABLE_AREAS]),
+  ]);
+  const changed: { path: string; status: Exclude<DiffStatus, 'same'>; from?: string }[] = [];
+  const entries = diff.split('\0');
+  for (let index = 0; index < entries.length - 1; index += 1) {
+    const code = entries[index][0];
+    if (code === 'R') {
+      const [from, path] = [entries[index + 1], entries[index + 2]];
+      index += 2;
+      if (classifyPath(path) !== null) changed.push({ path, status: 'R', from });
+    } else if (code === 'M' || code === 'A' || code === 'D' || code === 'T') {
+      const path = entries[index + 1];
+      index += 1;
+      if (classifyPath(path) !== null) changed.push({ path, status: code === 'T' ? 'M' : code });
+    }
+  }
+  for (const path of untracked.split('\0')) if (path !== '' && classifyPath(path) !== null) changed.push({ path, status: 'A' });
+  return changed.sort((a, b) => a.path.localeCompare(b.path));
+}

@@ -15,12 +15,14 @@ type Body = Record<string, unknown>;
 // { op: 'delete', path, base?, dryRun? } deletes a page, folder page or
 // folder; its dry run answers { changes, base, links, deleted } too, and the
 // delete must send that `base` back (server/tree/delete.ts). `onDeleted` is
-// told what a delete took (the proposals on those notes are dropped).
+// told what a delete took (the proposals on those notes are dropped),
+// `onMoved` which page or folder a rename or move took where (its review
+// threads go with it), both relative to content/notes.
 // Page tree changes go through here, never through the notes sync, which
 // cannot update meta.yaml. `lock` runs one change at a time, each planned
 // from the disk it then writes; asset changes (server/assets/api.ts) share
 // it, since both write notes.
-export function createTreeApi(root: string, lock = createKeyedLock(), { onDeleted }: { onDeleted?: (target: string, notes: string[]) => Promise<void> | void } = {}): Handler {
+export function createTreeApi(root: string, lock = createKeyedLock(), { onDeleted, onMoved }: { onDeleted?: (target: string, notes: string[]) => Promise<void> | void; onMoved?: (from: string, to: string) => Promise<void> | void } = {}): Handler {
 
   function plan(tree: TreeFolder, body: Body): Promise<Plan> {
     const folder = typeof body.folder === 'string' ? body.folder : '';
@@ -48,6 +50,7 @@ export function createTreeApi(root: string, lock = createKeyedLock(), { onDelete
     return lock('notes', async () => {
       const planned = await plan(await loadTree(root), body);
       await applyPlan(root, planned);
+      if (planned.move) await onMoved?.(planned.move.from, planned.move.to);
       return answer(planned);
     });
   }

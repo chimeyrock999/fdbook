@@ -2,7 +2,7 @@ import type { ServerResponse } from 'node:http';
 import { atLeast } from '../auth/shared.ts';
 import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '../http.ts';
 import { viewerOf, type Viewer } from '../security/access.ts';
-import type { Comments, NoteComment } from './comments.ts';
+import type { Thread } from '../review/shared.ts';
 import type { DeleteProposals } from './deletes.ts';
 import { PROPOSAL_OPS, type DeleteProposalView, type ProposalOp, type ProposalView } from './shared.ts';
 import type { Proposals } from './store.ts';
@@ -11,8 +11,8 @@ const MAX_BODY_BYTES = 16 * 1024;
 const HEARTBEAT_MS = 25_000;
 
 // GET /api/proposals/events: each proposal as it is made or changes, each
-// delete proposal as a `delete-proposal` event, and each comment as a
-// `comment` event, to whoever may still read.
+// delete proposal as a `delete-proposal` event, and each review thread
+// (review/threads.ts) as a `thread` event, to whoever may still read.
 export function createProposalStream() {
   const streams = new Map<ServerResponse, Viewer>();
   let closed = false;
@@ -30,9 +30,7 @@ export function createProposalStream() {
   return {
     send: (proposal: ProposalView) => { send(`data: ${JSON.stringify(proposal)}\n\n`); },
     sendDelete: (proposal: DeleteProposalView) => { send(`event: delete-proposal\ndata: ${JSON.stringify(proposal)}\n\n`); },
-    // A comment, as a `comment` event.
-    sendComment: (comment: NoteComment) => { send(`event: comment\ndata: ${JSON.stringify(comment)}\n\n`); },
-    sendCommentResolved: (id: string) => { send(`event: comment-resolved\ndata: ${JSON.stringify({ id })}\n\n`); },
+    sendThread: (thread: Thread) => { send(`event: thread\ndata: ${JSON.stringify(thread)}\n\n`); },
     subscribe(response: ServerResponse, viewer: Viewer) {
       if (closed) {
         sendJson(response, 409, { error: 'this change request is closing' });
@@ -55,27 +53,24 @@ export function createProposalStream() {
 export type ProposalStream = ReturnType<typeof createProposalStream>;
 const NO_CR = 'Proposals live in a change request: open one first.';
 const ONE = /^\/api\/proposals\/([a-z0-9-]+)$/;
-const COMMENT = /^\/api\/comments\/([a-z0-9-]+)$/;
 const ONE_DELETE = /^\/api\/delete-proposals\/([a-z0-9-]+)$/;
 
-// The proposals and comments of one change request (store.ts, comments.ts),
-// or null where there are none (main):
+// The proposals of one change request (store.ts, deletes.ts), or null
+// where there are none (main):
 // GET  /api/proposals[?path=…]   every proposal (of one note), oldest first
 // GET  /api/proposals/<id>
 // POST /api/proposals/<id> { op: accept | reject | rebase | drop, hunks? }
 // GET  /api/proposals/events     server-sent events (createProposalStream)
-// GET  /api/comments[?path=…]
-// DELETE /api/comments/<id>     resolves it: gone, as a `comment-resolved` event
 // GET  /api/delete-proposals     every delete proposal (deletes.ts)
 // POST /api/delete-proposals/<id> { op: accept | reject, base? }: accept
 //                                deletes, with the base of the dry run shown
-export function createProposalsApi(state: { proposals: Proposals; deletes: DeleteProposals; comments: Comments; stream: ProposalStream } | null): Handler {
+export function createProposalsApi(state: { proposals: Proposals; deletes: DeleteProposals; stream: ProposalStream } | null): Handler {
   async function answer(pathname: string, request: Parameters<Handler>[0]): Promise<unknown> {
     if (state === null) throw new HttpError(409, NO_CR);
     const path = new URL(request.url ?? '/', 'http://studio').searchParams.get('path') ?? undefined;
-    if (pathname === '/api/comments' || pathname === '/api/proposals') {
+    if (pathname === '/api/proposals') {
       if (request.method !== 'GET') throw new HttpError(405, 'method not allowed');
-      return pathname === '/api/comments' ? { comments: await state.comments.list(path) } : { proposals: await state.proposals.list(path) };
+      return { proposals: await state.proposals.list(path) };
     }
     if (pathname === '/api/delete-proposals') {
       if (request.method !== 'GET') throw new HttpError(405, 'method not allowed');
@@ -88,12 +83,6 @@ export function createProposalsApi(state: { proposals: Proposals; deletes: Delet
       const { op, base } = await readJsonObject(request, MAX_BODY_BYTES, 'a decision');
       if (op !== 'accept' && op !== 'reject') throw new HttpError(400, 'op must be accept or reject');
       return { proposal: await state.deletes.act(deleteId, op, base) };
-    }
-    const commentId = COMMENT.exec(pathname)?.[1];
-    if (commentId !== undefined) {
-      if (request.method !== 'DELETE') throw new HttpError(405, 'method not allowed');
-      await state.comments.resolve(commentId);
-      return { ok: true };
     }
     const id = ONE.exec(pathname)?.[1] ?? '';
     if (request.method === 'GET') return { proposal: await state.proposals.read(id) };
@@ -111,7 +100,7 @@ export function createProposalsApi(state: { proposals: Proposals; deletes: Delet
       else state.stream.subscribe(response, viewerOf(request));
       return true;
     }
-    if (pathname !== '/api/proposals' && pathname !== '/api/comments' && pathname !== '/api/delete-proposals' && !ONE.test(pathname) && !COMMENT.test(pathname) && !ONE_DELETE.test(pathname)) return false;
+    if (pathname !== '/api/proposals' && pathname !== '/api/delete-proposals' && !ONE.test(pathname) && !ONE_DELETE.test(pathname)) return false;
     try {
       sendJson(response, 200, await answer(pathname, request));
     } catch (error) {

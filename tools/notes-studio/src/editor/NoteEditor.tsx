@@ -33,7 +33,10 @@ import { ConflictDialog, SaveStatus } from './SyncState';
 import { useUnsaved } from './unsaved';
 import { UnsavedNotice } from './UnsavedNotice';
 import { DeleteProposalBar } from '../suggestions/DeleteProposalBar';
-import { NoteComments, SuggestionBar, VisualSuggestions, type NoteReview } from '../suggestions/Suggestions';
+import { SuggestionBar, VisualSuggestions, type NoteReview } from '../suggestions/Suggestions';
+import { commentBubbleItem } from '../review/comment-draft';
+import { NoteThreads } from '../review/ThreadMarks';
+import type { NoteThreadActions, ThreadFocus } from '../review/texts';
 import { useNoteSuggestions } from '../suggestions/useNoteSuggestions';
 import { sourceSuggestions } from '../suggestions/source';
 import { createSuggestionLayer } from '../suggestions/visual';
@@ -65,13 +68,15 @@ export type SourcePlace = { line: number; column: number; length: number; seq: n
 // lists public/notes (useAssets), for the name check and Source. `onStatus`
 // follows the autosave state, so a rename can wait for it. `place` is
 // selected in Source once the note is open.
-export function NoteEditor({ path, assets, onStatus, place = null, review = null, ...rest }: {
+export function NoteEditor({ path, assets, onStatus, place = null, review = null, threadFocus = null, ...rest }: {
   path: string;
   assets: readonly string[];
   onStatus?: (status: DocumentStatus) => void;
   place?: SourcePlace | null;
-  // The note's agent suggestions and comments (src/suggestions), in a change request.
+  // The note's agent suggestions and review threads (src/suggestions, src/review), in a change request.
   review?: NoteReview | null;
+  // A thread the Review panel picked, shown in Visual.
+  threadFocus?: ThreadFocus | null;
 } & Panels & Clients) {
   const notePath = `${NOTES_PREFIX}${path}`;
   const uploads = useAssetUploads(rest.files, notePath, assets);
@@ -103,7 +108,7 @@ export function NoteEditor({ path, assets, onStatus, place = null, review = null
       syntax={editorConfig.syntax}
       media={uploads.media}
       extensions={parts.extensions}
-      bubbleItems={graphBubbleItems}
+      bubbleItems={review === null ? graphBubbleItems : REVIEW_BUBBLE_ITEMS}
       editable={!locked}
     >
       <EditorLayout
@@ -119,11 +124,15 @@ export function NoteEditor({ path, assets, onStatus, place = null, review = null
         readOnly={opened && writable === false}
         place={place}
         review={review}
+        threadFocus={threadFocus}
         {...rest}
       />
     </MdxEditor.Root>
   );
 }
+
+// In a change request, Comment opens a review thread on the selection's block.
+const REVIEW_BUBBLE_ITEMS = [...graphBubbleItems, commentBubbleItem];
 
 // The plugins' decorations, one ProseMirror plugin for every editor.
 const decorations = decorationsExtension(editorConfig.decorators);
@@ -140,13 +149,14 @@ function createParts() {
 
 type Parts = ReturnType<typeof createParts>;
 
-function EditorLayout({ parts, path, notePath, disk, assets, uploads, opened, status, locked, readOnly, place, review, issuesSlot, onIssueCount, onShowIssues, onIssueShown, onShowHistory, files, lint }: {
+function EditorLayout({ parts, path, notePath, disk, assets, uploads, opened, status, locked, readOnly, place, review, threadFocus, issuesSlot, onIssueCount, onShowIssues, onIssueShown, onShowHistory, files, lint }: {
   parts: Parts;
   path: string;
   notePath: string;
   disk: string | null;
   place: SourcePlace | null;
   review: NoteReview | null;
+  threadFocus: ThreadFocus | null;
   assets: readonly string[];
   uploads: ReturnType<typeof useAssetUploads>;
   opened: boolean;
@@ -179,6 +189,23 @@ function EditorLayout({ parts, path, notePath, disk, assets, uploads, opened, st
     const key = suggestions.step(by);
     if (key !== undefined && mode === 'visual') layer.element(key, 'studio-suggest-card').scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
+  // The review threads' actions; a thread's suggestion shows as the focused card.
+  const { setFocus } = suggestions;
+  const placedHunks = suggestions.placement.hunks;
+  const threadActions = useMemo<NoteThreadActions | null>(() => (review === null ? null : {
+    open: review.openThread,
+    reply: review.replyThread,
+    move: review.moveThread,
+    showSuggestion: (proposalId) => {
+      const hunk = placedHunks.find((each) => each.proposal.id === proposalId);
+      if (hunk === undefined) return;
+      setFocus(hunk.key);
+      if (mode === 'visual') layer.element(hunk.key, 'studio-suggest-card').scrollIntoView({ block: 'center', behavior: 'smooth' });
+    },
+  }), [review, placedHunks, setFocus, mode, layer]);
+  // A thread picked in the Review panel shows in Visual, where its block is marked.
+  const focusSeq = opened ? threadFocus?.seq : undefined;
+  useEffect(() => { if (focusSeq !== undefined && canShowVisual) setMode('visual'); }, [focusSeq, canShowVisual, setMode]);
   // The editor draws mermaid previews itself; mark the author's fills on
   // each one for the dark theme's label ink, as the site does.
   useEffect(() => (editor.current ? observeAuthorFills(editor.current) : undefined), []);
@@ -248,7 +275,7 @@ function EditorLayout({ parts, path, notePath, disk, assets, uploads, opened, st
         {review !== null && opened && (
           <>
             <SuggestionBar placement={suggestions.placement} focus={suggestions.focus} onStep={stepTo} decisions={suggestions.decisions} />
-            <NoteComments placement={suggestions.placement} readOnly={!canDecide} onResolve={review.resolveComment} />
+            {threadActions !== null && <NoteThreads placement={suggestions.placement} readOnly={!canDecide} actions={threadActions} focus={threadFocus} />}
           </>
         )}
         {mode === 'visual' ? (
@@ -262,7 +289,7 @@ function EditorLayout({ parts, path, notePath, disk, assets, uploads, opened, st
                 reveal={field}
               />
               <MdxEditor.Visual className="studio-prose notes-prose" />
-              {review !== null && <VisualSuggestions layer={layer} placement={suggestions.placement} focus={suggestions.focus} readOnly={!canDecide} decisions={suggestions.decisions} onResolveComment={review.resolveComment} />}
+              {threadActions !== null && <VisualSuggestions layer={layer} placement={suggestions.placement} focus={suggestions.focus} readOnly={!canDecide} decisions={suggestions.decisions} text={source.value} threads={threadActions} threadFocus={threadFocus} />}
               <GraphTools source={parts.graph} graph={frontmatter.status === 'ok' ? frontmatter.data.graph : undefined} />
             </div>
           </div>

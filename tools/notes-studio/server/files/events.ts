@@ -17,8 +17,9 @@ const HEARTBEAT_MS = 25_000;
 // server-sent events on GET /api/events. Saves made by the Studio show up
 // too; a client tells its own save apart by the mtime the save returned.
 // A stream ends once its viewer may no longer read (signed out, access
-// taken away), at the next event or heartbeat.
-export function createFileEvents(root: string) {
+// taken away), at the next event or heartbeat. `onChange` hears each event
+// too, on the server.
+export function createFileEvents(root: string, { onChange }: { onChange?: (event: FileEvent) => void } = {}) {
   const clients = new Map<ServerResponse, Viewer>();
   const send = (frame: string) => {
     for (const [client, viewer] of clients) {
@@ -35,6 +36,7 @@ export function createFileEvents(root: string) {
 
   const broadcast = (event: FileEvent) => {
     send(`data: ${JSON.stringify(event)}\n\n`);
+    onChange?.(event);
   };
 
   const emitChange = async (path: string) => {

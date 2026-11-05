@@ -9,7 +9,7 @@ import { git } from '../../../server/cr/git';
 import type { StudioTool } from '../../../server/mcp/tool';
 import type { Conversation, TurnChange } from '../../../server/agents/shared';
 import type { ChangeRequest } from '../../../server/cr/manager';
-import type { NoteComment } from '../../../server/proposals/comments';
+import type { Thread } from '../../../server/review/shared';
 import type { ProposalView } from '../../../server/proposals/shared';
 import { fakeProfile, messagesOf } from '../../support/agents';
 import { fakeAuth, sender, signInWith } from '../../support/auth';
@@ -80,7 +80,7 @@ describe('Studio MCP server', () => {
 
   it('lists the change request tools and the note tools, each note tool taking cr', async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((tool) => tool.name).filter((name) => !name.startsWith('diagram_')).sort()).toEqual(['add_comment', 'create_cr', 'list_assets', 'list_crs', 'list_notes', 'note_graph', 'note_vocabulary', 'propose_delete', 'propose_edit', 'read_note', 'related_notes', 'search_notes', 'test_write']);
+    expect(tools.map((tool) => tool.name).filter((name) => !name.startsWith('diagram_')).sort()).toEqual(['add_comment', 'cr_changes', 'create_cr', 'list_assets', 'list_crs', 'list_notes', 'list_threads', 'note_graph', 'note_vocabulary', 'propose_delete', 'propose_edit', 'read_note', 'related_notes', 'reply_to_thread', 'search_notes', 'set_thread_state', 'test_write']);
     expect(tools.filter((tool) => tool.name.startsWith('diagram_'))).toHaveLength(14);
     expect(tools.find((tool) => tool.name === 'read_note')?.inputSchema.properties).toHaveProperty('cr');
     expect(tools.find((tool) => tool.name === 'list_crs')?.inputSchema.properties ?? {}).not.toHaveProperty('cr');
@@ -172,41 +172,38 @@ describe('Studio MCP server', () => {
     expect(changes).toEqual([{ path: page, existed: false, decided: null, reason: null }]);
   }, 20_000);
 
-  it('keeps comments, anchored to a block', async () => {
+  it('opens review threads anchored to a block, and streams them', async () => {
     const controller = new AbortController();
     const response = await fetch(`${studio.origin}/cr/${cr.slug}/api/proposals/events`, { signal: controller.signal });
     const reader = (response.body ?? new ReadableStream()).pipeThrough(new TextDecoderStream()).getReader();
     let buffer = '';
     while (!buffer.includes('retry:')) buffer += (await reader.read()).value ?? '';
-    const added = await call(client, 'add_comment', { cr: cr.slug, path: NOTE, block: 1, body: 'Say more here.' });
+    const added = await call(client, 'add_comment', { cr: cr.slug, path: NOTE, block: 1, body: 'Say more here.', severity: 'nit' });
     expect(added.error).toBe(false);
-    // Comments stream too, as `comment` events.
-    while (!buffer.includes('event: comment')) buffer += (await reader.read()).value ?? '';
+    // Threads stream too, as `thread` events.
+    while (!buffer.includes('event: thread')) buffer += (await reader.read()).value ?? '';
     controller.abort();
     expect(buffer).toContain('Say more here.');
     expect((await call(client, 'add_comment', { cr: cr.slug, path: NOTE, block: 9, body: 'x' })).text).toMatch(/has 2 blocks/);
-    const { comments } = json(await send(`/cr/${cr.slug}/api/comments?path=${NOTE}`)) as { comments: NoteComment[] };
-    expect(comments).toEqual([expect.objectContaining({ body: 'Say more here.', block: { index: 1, text: expect.stringContaining('A first look') as string } })]);
+    const { threads } = json(await send(`/cr/${cr.slug}/api/threads?path=${NOTE}`)) as { threads: Thread[] };
+    expect(threads).toEqual([expect.objectContaining({ severity: 'nit', state: 'open', anchor: expect.objectContaining({ index: 1, text: expect.stringContaining('A first look') as string }) as unknown })]);
   });
 
-  it('resolves a comment for every open client, once', async () => {
+  it('moves a thread from the page, for every open client, and refuses that on main', async () => {
     const added = await call(client, 'add_comment', { cr: cr.slug, path: NOTE, body: 'Resolve me.' });
-    const { id } = added.value as NoteComment;
+    const { id } = added.value as { id: string };
     const controller = new AbortController();
     const response = await fetch(`${studio.origin}/cr/${cr.slug}/api/proposals/events`, { signal: controller.signal });
     const reader = (response.body ?? new ReadableStream()).pipeThrough(new TextDecoderStream()).getReader();
     let buffer = '';
     while (!buffer.includes('retry:')) buffer += (await reader.read()).value ?? '';
-    expect((await send(`/cr/${cr.slug}/api/comments/${id}`, 'POST')).status).toBe(405);
-    expect((await send(`/cr/${cr.slug}/api/comments/${id}`, 'DELETE')).status).toBe(200);
-    while (!buffer.includes('event: comment-resolved')) buffer += (await reader.read()).value ?? '';
+    expect((await send(`/cr/${cr.slug}/api/threads/${id}/state`, 'POST', { state: 'resolved' })).status).toBe(200);
+    while (!buffer.includes('event: thread')) buffer += (await reader.read()).value ?? '';
     controller.abort();
-    expect(buffer).toContain(`event: comment-resolved\ndata: ${JSON.stringify({ id })}`);
-    const { comments } = json(await send(`/cr/${cr.slug}/api/comments?path=${NOTE}`)) as { comments: NoteComment[] };
-    expect(comments.map((each) => each.id)).not.toContain(id);
-    expect((await send(`/cr/${cr.slug}/api/comments/${id}`, 'DELETE')).status).toBe(404);
+    expect(buffer).toContain('"state":"resolved"');
+    expect((await send(`/cr/${cr.slug}/api/threads/${id}`)).status).toBe(200);
     // Main is read only: its writes are refused before any route.
-    expect((await send(`/api/comments/${id}`, 'DELETE')).status).toBe(403);
+    expect((await send(`/api/threads/${id}/state`, 'POST', { state: 'open' })).status).toBe(403);
   });
 
   it('gives an agent run the tools over stdio or HTTP, held to its change request', async () => {

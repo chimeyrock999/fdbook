@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 
-export type SidebarView = 'notes' | 'assets' | 'issues' | 'changes';
+export type SidebarView = 'notes' | 'assets' | 'issues' | 'changes' | 'review';
 
 export const SIDEBAR_MIN = 220;
 export const SIDEBAR_MAX = 480;
@@ -17,7 +17,7 @@ function readStored(): Layout {
   try {
     const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<Record<keyof Layout, unknown>>;
     return {
-      view: value.view === 'issues' || value.view === 'assets' || value.view === 'changes' ? value.view : 'notes',
+      view: value.view === 'issues' || value.view === 'assets' || value.view === 'changes' || value.view === 'review' ? value.view : 'notes',
       shown: value.shown !== false,
       width: typeof value.width === 'number' && Number.isFinite(value.width) ? clampWidth(value.width) : fallback.width,
     };

@@ -16,6 +16,7 @@ import { createHandoff } from './mcp/handoff.ts';
 import { createMcpApi } from './mcp/http.ts';
 import { diagramTools } from './mcp/diagram-tools.ts';
 import { writingTools } from './mcp/writing-tools.ts';
+import { createReviewTools } from './mcp/review-tools.ts';
 import { createNoteTools } from './mcp/note-tools.ts';
 import type { StudioTool } from './mcp/tool.ts';
 import { createIconsApi } from './icons/api.ts';
@@ -115,7 +116,7 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
   });
   const workspaces = createWorkspaceRouter(hosts, (slug) => crs?.worktreeOf(slug) ?? Promise.resolve(null), shared, preview, workspaceAgents);
   // A discarded change request's agents, watchers and sync close before its
-  // worktree goes; its transcripts, proposals and comments go with it, so a
+  // worktree goes; its transcripts, proposals and review threads go with it, so a
   // new one with the slug starts empty.
   crs?.onDiscard(async (slug) => {
     await workspaces.close(slug);
@@ -126,7 +127,7 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
     }
   });
   const reviewOf = async (slug: string) => {
-    if (slug === MAIN_SLUG) throw new HttpError(409, 'main is read only: it has no suggestions or comments (create_cr opens a change request)');
+    if (slug === MAIN_SLUG) throw new HttpError(409, 'main is read only: it has no suggestions or review threads (create_cr opens a change request)');
     const review = (await workspaces.open(slug))?.review ?? null;
     if (review === null) throw new HttpError(404, `no such change request: ${slug}`);
     return review;
@@ -135,12 +136,20 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
     tools: createNoteTools({
       proposalsOf: async (slug) => (slug === MAIN_SLUG ? null : (await reviewOf(slug)).proposals),
       deletesOf: async (slug) => (slug === MAIN_SLUG ? null : (await reviewOf(slug)).deletes),
-      commentsOf: async (slug) => (await reviewOf(slug)).comments,
       // An MCP caller's `runId` is its conversation (agents/conversations.ts).
       modelOf: (slug, runId) => workspaces.peek(slug)?.conversations?.modelOf(runId) ?? null,
       createdBy: (slug, runId, path) => workspaces.peek(slug)?.conversations?.created(runId, path) ?? Promise.resolve(false),
       selectionOf: (slug, runId) => workspaces.peek(slug)?.conversations?.selection(runId) ?? null,
-    }).concat(writingTools, diagramTools, tools),
+    }).concat(
+      createReviewTools({
+        threadsOf: async (slug) => (await reviewOf(slug)).threads,
+        proposalsOf: async (slug) => (await reviewOf(slug)).proposals,
+        modelOf: (slug, runId) => workspaces.peek(slug)?.conversations?.modelOf(runId) ?? null,
+      }),
+      writingTools,
+      diagramTools,
+      tools,
+    ),
     grants,
     auth,
     crs,

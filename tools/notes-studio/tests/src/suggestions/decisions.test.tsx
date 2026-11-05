@@ -32,7 +32,7 @@ describe('deciding suggestions', () => {
   it('keeps an accepted card, waiting, until its text is in the editor', async () => {
     const call = deferred();
     const act_ = vi.fn(() => call.promise);
-    const review = (proposals: ProposalView[]): NoteReview => ({ proposals, comments: [], resolveComment: () => Promise.resolve(), act: act_ });
+    const review = (proposals: ProposalView[]): NoteReview => ({ proposals, threads: [], openThread: () => Promise.resolve(), replyThread: () => Promise.resolve(), moveThread: () => Promise.resolve(), act: act_ });
     const { result, rerender } = renderHook(({ decide, text }) => useNoteSuggestions(decide, text), { initialProps: { decide: review([proposal()]), text: NOTE } });
     const [first] = result.current.placement.hunks;
     let sent: Promise<boolean> = Promise.resolve(false);
@@ -57,7 +57,7 @@ describe('deciding suggestions', () => {
 
   it('lets a landing card go after a while, should the text never come', async () => {
     vi.useFakeTimers();
-    const review = (proposals: ProposalView[]): NoteReview => ({ proposals, comments: [], resolveComment: () => Promise.resolve(), act: () => Promise.resolve() });
+    const review = (proposals: ProposalView[]): NoteReview => ({ proposals, threads: [], openThread: () => Promise.resolve(), replyThread: () => Promise.resolve(), moveThread: () => Promise.resolve(), act: () => Promise.resolve() });
     const { result, rerender } = renderHook(({ decide }) => useNoteSuggestions(decide, NOTE), { initialProps: { decide: review([proposal()]) } });
     const [first] = result.current.placement.hunks;
     await act(async () => { await result.current.decisions.decide([first], 'accept'); });
@@ -69,7 +69,7 @@ describe('deciding suggestions', () => {
   });
 
   it('frees the cards and says why in a toast when a decision fails', async () => {
-    const review: NoteReview = { proposals: [proposal()], comments: [], resolveComment: () => Promise.resolve(), act: () => Promise.reject(new Error('guide.mdx changed while accepting: try again')) };
+    const review: NoteReview = { proposals: [proposal()], threads: [], openThread: () => Promise.resolve(), replyThread: () => Promise.resolve(), moveThread: () => Promise.resolve(), act: () => Promise.reject(new Error('guide.mdx changed while accepting: try again')) };
     render(<ToastStack />);
     const { result } = renderHook(() => useNoteSuggestions(review, NOTE));
     await act(async () => { expect(await result.current.decisions.decide(result.current.placement.hunks, 'accept')).toBe(false); });
@@ -80,7 +80,7 @@ describe('deciding suggestions', () => {
 
   it('decides a landing card no more: Accept all and Source leave it out', async () => {
     const act_ = vi.fn(() => Promise.resolve());
-    const review = (proposals: ProposalView[]): NoteReview => ({ proposals, comments: [], resolveComment: () => Promise.resolve(), act: act_ });
+    const review = (proposals: ProposalView[]): NoteReview => ({ proposals, threads: [], openThread: () => Promise.resolve(), replyThread: () => Promise.resolve(), moveThread: () => Promise.resolve(), act: act_ });
     const { result, rerender } = renderHook(({ decide }) => useNoteSuggestions(decide, NOTE), { initialProps: { decide: review([proposal()]) } });
     const [first, second] = result.current.placement.hunks;
     await act(async () => { await result.current.decisions.decide([first], 'accept'); });
@@ -97,7 +97,7 @@ describe('deciding suggestions', () => {
     const act_ = vi.fn((id: string) => (id === 'p2' ? second.promise : Promise.resolve()));
     const one = { ...proposal([null, 'rejected']), id: 'p1' };
     const two = { ...proposal(['rejected', null]), id: 'p2' };
-    const review = (proposals: ProposalView[]): NoteReview => ({ proposals, comments: [], resolveComment: () => Promise.resolve(), act: act_ });
+    const review = (proposals: ProposalView[]): NoteReview => ({ proposals, threads: [], openThread: () => Promise.resolve(), replyThread: () => Promise.resolve(), moveThread: () => Promise.resolve(), act: act_ });
     const { result, rerender } = renderHook(({ decide }) => useNoteSuggestions(decide, NOTE), { initialProps: { decide: review([one, two]) } });
     const [a, b] = result.current.placement.hunks;
     let sent: Promise<boolean> = Promise.resolve(false);
@@ -116,7 +116,7 @@ describe('deciding suggestions', () => {
   it('accepts all once however often it is clicked, and says what it is doing', () => {
     vi.useFakeTimers();
     const call = deferred();
-    const review: NoteReview = { proposals: [proposal()], comments: [], resolveComment: () => Promise.resolve(), act: vi.fn(() => call.promise) };
+    const review: NoteReview = { proposals: [proposal()], threads: [], openThread: () => Promise.resolve(), replyThread: () => Promise.resolve(), moveThread: () => Promise.resolve(), act: vi.fn(() => call.promise) };
     function Bar() {
       const suggestions = useNoteSuggestions(review, NOTE);
       return <SuggestionBar placement={suggestions.placement} focus={suggestions.focus} onStep={() => undefined} decisions={suggestions.decisions} />;
