@@ -7,7 +7,7 @@ import { startTestStudio, type TestStudio } from '../../support/studio';
 
 type Side = { kind: 'text'; text: string; size: number } | { kind: 'binary'; size: number };
 type Version = { sha: string; path: string; status: string; from?: string };
-type History = { path: string; mtimeMs: number | null; deleted: unknown; generated: boolean; versions: Version[] };
+type History = { path: string; mtimeMs: number | null; deleted: unknown; versions: Version[] };
 
 const PNG = 'public/notes/demo/pixel.png';
 const WEBP = 'public/notes/demo/pixel.webp';
@@ -119,20 +119,18 @@ describe('page history API: assets', () => {
     expect(await readFile(at(NOTE), 'utf8')).toContain('](/notes/demo/pixel.png)');
   });
 
-  it('says a diagram generates an asset, and refuses to restore it as Replace does', async () => {
-    const generated = 'public/notes/demo/generated.svg';
+  it('restores an asset a leftover regen script names', async () => {
+    const legacy = 'public/notes/demo/legacy.svg';
     await mkdir(at('diagrams'), { recursive: true });
-    await writeFile(at('diagrams/demo.regen.sh'), `OUT=${generated}\n`);
-    await writeFile(at(generated), '<svg xmlns="http://www.w3.org/2000/svg" width="1"/>');
-    const made = commit('docs: generate a shape');
-    await writeFile(at(generated), '<svg xmlns="http://www.w3.org/2000/svg" width="2"/>');
-    commit('docs: generate it again');
-    expect((await historyOf(generated)).generated).toBe(true);
-    expect((await historyOf(SVG)).generated).toBe(false);
-    const response = await restore({ path: generated, sha: made, mtimeMs: await mtimeOf(generated) });
-    expect(response.status).toBe(409);
-    expect((json(response) as { error: string }).error).toContain('diagrams/demo.regen.sh generates generated.svg');
-    expect(await readFile(at(generated), 'utf8')).toContain('width="2"');
+    await writeFile(at('diagrams/demo.regen.sh'), `OUT=${legacy}\n`);
+    await writeFile(at(legacy), '<svg xmlns="http://www.w3.org/2000/svg" width="1"/>');
+    const made = commit('docs: a legacy shape');
+    await writeFile(at(legacy), '<svg xmlns="http://www.w3.org/2000/svg" width="2"/>');
+    commit('docs: the legacy shape again');
+    expect(Object.keys(await historyOf(legacy)).sort()).toEqual(['deleted', 'mtimeMs', 'path', 'versions']);
+    const response = await restore({ path: legacy, sha: made, mtimeMs: await mtimeOf(legacy) });
+    expect(response.status).toBe(200);
+    expect(await readFile(at(legacy), 'utf8')).toContain('width="1"');
   });
 
   it('refuses a stale asset, and still refuses a meta.yaml', async () => {

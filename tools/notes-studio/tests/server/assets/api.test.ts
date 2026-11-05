@@ -6,12 +6,11 @@ import { applyAssetPlan, planAssetRename } from '../../../server/assets/ops';
 import { repoRoot } from '../../../server/config';
 import { lintWorktree } from '../../../server/lint/context';
 import { json, rawRequest } from '../../support/http';
-import { generatedAsset, plantGeneratedAsset } from '../../support/generated-asset';
 import { startTestStudio, type TestStudio } from '../../support/studio';
 import { CORPUS_TIMEOUT_MS } from '../../support/timeouts';
 
 type Usage = { note: string; line: number; column: number; text: string; unsure: boolean };
-type Asset = { path: string; mtimeMs: number; usages: Usage[]; sources: { path: string; line: number; text: string }[] };
+type Asset = { path: string; mtimeMs: number; usages: Usage[] };
 type Answer = { changes: { type: string; path: string; to?: string; detail?: string }[]; usages: Usage[] };
 
 class TextEditor implements DocumentEditor {
@@ -36,10 +35,10 @@ class TextEditor implements DocumentEditor {
 
 const SUPERSET = 'public/notes/data-platform/stacks-integration/superset-trino-impersonate.jpg';
 const WAREHOUSE = 'public/notes/data-modeling/data_warehouse_architecture.webp';
-// Generated assets the tests plant (support/generated-asset.ts): one to
-// list and rename, one to refuse a delete of.
-const MADE = generatedAsset('made');
-const KEPT = generatedAsset('kept');
+// An embedded HTML asset, and an unused one, each still named by a regen
+// script of the retired Archify pipeline: the Studio no longer reads those.
+const MADE = { asset: 'public/notes/legacy/made.html', note: 'content/notes/legacy-made.mdx', script: 'diagrams/legacy/made.regen.sh' };
+const KEPT = { asset: 'public/notes/legacy/kept.html', script: 'diagrams/legacy/kept.regen.sh' };
 
 // The assets API on a copy of the real content/notes and public/notes. The
 // tests run in order and build on each other's changes.
@@ -65,8 +64,13 @@ describe('assets API', () => {
     studio = await startTestStudio();
     await cp(join(repoRoot, 'public/notes'), file('public/notes'), { recursive: true });
     await cp(join(repoRoot, 'diagrams'), file('diagrams'), { recursive: true });
-    await plantGeneratedAsset(studio.root, 'made');
-    await plantGeneratedAsset(studio.root, 'kept', { embed: false });
+    await mkdir(file('public/notes/legacy'), { recursive: true });
+    await mkdir(file('diagrams/legacy'), { recursive: true });
+    for (const { asset, script } of [MADE, KEPT]) {
+      await writeFile(file(asset), '<!doctype html><html><body>legacy</body></html>\n');
+      await writeFile(file(script), `#!/bin/sh\nOUT="${asset}"\n`);
+    }
+    await writeFile(file(MADE.note), '---\ntitle: made\n---\n\n<HtmlEmbed src="/notes/legacy/made.html?embed=1" title="made" />\n');
   });
 
   afterAll(async () => {
@@ -97,14 +101,8 @@ describe('assets API', () => {
     expect(vantage?.usages[0].text).toMatch(/^<Diagram src="/);
   });
 
-  it('names the diagram sources that generate an asset', async () => {
-    const generated = await find(MADE.asset);
-    expect(generated?.usages.map((usage) => usage.note)).toEqual([MADE.note]);
-    expect(generated?.sources).toEqual([
-      { path: MADE.spec, line: 3, text: MADE.specLine },
-      { path: MADE.script, line: 2, text: MADE.scriptLine },
-    ]);
-    expect((await find(SUPERSET))?.sources).toEqual([]);
+  it('lists an asset a leftover regen script names like any other', async () => {
+    expect(await find(MADE.asset)).toEqual({ path: MADE.asset, mtimeMs: await mtime(MADE.asset), size: expect.any(Number) as number, usages: [expect.objectContaining({ note: MADE.note })] });
   });
 
   describe('rename', () => {
@@ -129,11 +127,11 @@ describe('assets API', () => {
       expect(await missingAssets()).toEqual([]);
     }, 20_000);
 
-    it('keeps the query of an embed, and says which diagram sources still name the old path', async () => {
+    it('keeps the query of an embed, and lists no regen script', async () => {
       const before = await text(MADE.note);
       const response = await post({ op: 'rename', path: MADE.asset, name: 'made-layers', baseMtime: await mtime(MADE.asset) });
       expect(response.status).toBe(200);
-      expect((json(response) as Answer).changes.filter((change) => change.type === 'keep').map((change) => change.path)).toEqual([MADE.spec, MADE.script]);
+      expect((json(response) as Answer).changes.map((change) => change.type)).toEqual(['move', 'change']);
       expect(await text(MADE.note)).toBe(before.replace('/made.html?embed=1', '/made-layers.html?embed=1'));
       expect(await missingAssets()).toEqual([]);
     }, 20_000);
@@ -267,11 +265,11 @@ describe('assets API', () => {
       expect(await exists('public/notes')).toBe(true);
     });
 
-    it('refuses to delete an asset a diagram source generates', async () => {
+    it('deletes an unused asset a leftover regen script names', async () => {
       const response = await post({ op: 'delete', path: KEPT.asset, baseMtime: await mtime(KEPT.asset) });
-      expect(response.status).toBe(409);
-      expect((json(response) as { error: string }).error).toMatch(/kept\.architecture\.json, .*kept\.regen\.sh generates kept\.html/);
-      expect(await exists(KEPT.asset)).toBe(true);
+      expect(response.status).toBe(200);
+      expect(await exists(KEPT.asset)).toBe(false);
+      expect(await exists(KEPT.script)).toBe(true);
     });
 
     it('refuses a stale delete', async () => {

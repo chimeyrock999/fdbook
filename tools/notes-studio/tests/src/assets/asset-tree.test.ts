@@ -3,7 +3,7 @@ import type { AssetInfo } from '../../../src/api/assets';
 import { buildAssetTree, foldersTo, type AssetFolder } from '../../../src/assets/asset-tree';
 
 const use = { note: 'content/notes/a.mdx', line: 1, column: 1, length: 1, text: '', unsure: false };
-const asset = (path: string, used = 0): AssetInfo => ({ path, mtimeMs: 1, size: 1, usages: Array.from({ length: used }, () => use), sources: [] });
+const asset = (path: string, used = 0): AssetInfo => ({ path, mtimeMs: 1, size: 1, usages: Array.from({ length: used }, () => use) });
 
 const ASSETS = [
   asset('public/notes/guide/b.png', 1),
@@ -38,7 +38,7 @@ describe('buildAssetTree', () => {
 
 describe('buildAssetTree under diagrams/', () => {
   it('builds the diagrams/ tree apart from public/notes', () => {
-    const diagram = { path: 'diagrams/guide/flow.diagram.json', mtimeMs: 1, size: 1, usages: [], sources: [] };
+    const diagram = { path: 'diagrams/guide/flow.diagram.json', mtimeMs: 1, size: 1, usages: [] };
     const tree = buildAssetTree([...ASSETS, diagram], { prefix: 'diagrams/' });
     expect(tree.path).toBe('diagrams');
     expect(tree.folders.map((folder) => folder.path)).toEqual(['diagrams/guide']);

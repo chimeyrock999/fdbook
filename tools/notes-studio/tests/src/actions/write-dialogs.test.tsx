@@ -19,7 +19,7 @@ const folder: TreeFolder = {
   defaultOpen: true, icon: null, hidden: null, entry: null, children: [],
 };
 const page = { kind: 'page' as const, id: 'page:guide/one.mdx', path: 'guide/one.mdx', title: 'One', icon: null, entry: 0, hidden: null };
-const asset: AssetInfo = { path: 'public/notes/guide/chart.png', mtimeMs: 5, size: 10, usages: [], sources: [] };
+const asset: AssetInfo = { path: 'public/notes/guide/chart.png', mtimeMs: 5, size: 10, usages: [] };
 
 // A promise the test settles.
 function deferred<T>() {

@@ -7,7 +7,6 @@ import { HttpError } from '../http.ts';
 import { DIAGRAM_SUFFIX } from '../security/asset-types.ts';
 import { ASSETS_DIR, classifyPath, DIAGRAMS_DIR, extensionOf, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 import { findAssetRefs, rewriteAssetRefs, type AssetRef } from './refs.ts';
-import { findAssetSources, type AssetSource } from './sources.ts';
 
 // Renaming and deleting files under public/notes, with every note that uses
 // them kept in step. Like the page tree changes (server/tree/ops.ts), each
@@ -20,8 +19,7 @@ import { findAssetSources, type AssetSource } from './sources.ts';
 // `length` is that of the path (or name) at `line` and `column`; `text` is
 // the line.
 export type AssetUsage = { note: string; line: number; column: number; length: number; text: string; unsure: boolean };
-// `sources` are the diagram sources that generate it (server/assets/sources.ts).
-export type AssetInfo = { path: string; mtimeMs: number; size: number; usages: AssetUsage[]; sources: AssetSource[] };
+export type AssetInfo = { path: string; mtimeMs: number; size: number; usages: AssetUsage[] };
 
 export type AssetChange =
   | { type: 'move'; path: string; to: string }
@@ -29,9 +27,7 @@ export type AssetChange =
   | { type: 'delete'; path: string }
   // New content for the asset, at `to`: its own path, or the same name with
   // the new file's extension.
-  | { type: 'replace'; path: string; to: string }
-  // Left as it is: a diagram source that still names the old path.
-  | { type: 'keep'; path: string; detail: string };
+  | { type: 'replace'; path: string; to: string };
 
 type Write = { path: string; content: string; baseMtime: number };
 
@@ -132,8 +128,7 @@ export function usagesIn(scan: NoteScan, assets: Iterable<string>) {
 export async function listAssets(root: string, scan: NoteScan = new Map()): Promise<AssetInfo[]> {
   const files = (await listEditableFiles(root)).filter((file) => file.kind === 'asset' || file.kind === 'diagram');
   const usages = usagesIn(await scanNotes(root, scan), files.map((file) => file.path));
-  const sources = await findAssetSources(root);
-  return files.map((file) => ({ path: file.path, mtimeMs: file.mtimeMs, size: file.size, usages: usages.get(file.path) ?? [], sources: sources.get(file.path) ?? [] }));
+  return files.map((file) => ({ path: file.path, mtimeMs: file.mtimeMs, size: file.size, usages: usages.get(file.path) ?? [] }));
 }
 
 function guarded(root: string, path: unknown) {
@@ -169,15 +164,13 @@ export async function planAssetRename(root: string, request: RenameRequest, scan
   }
   const to = `${path.slice(0, path.lastIndexOf('/'))}/${name}.${extensionOf(path)}`;
   if (to === path) throw new HttpError(400, 'the name did not change');
-  const sources = (await findAssetSources(root)).get(path) ?? [];
-  return planMove(root, { path, info }, to, scan, { type: 'move', path, to }, sources);
+  return planMove(root, { path, info }, to, scan, { type: 'move', path, to });
 }
 
 // The asset going from `asset.path` to `to`, and every reference to it
-// pointed there; `first` heads the changes, and `sources` (the diagram
-// sources that generate it) are listed as kept. Rename uses it, and a
-// replace that changes the extension.
-export async function planMove(root: string, asset: { path: string; info: Stats }, to: string, scan: NoteScan, first: AssetChange, sources: AssetSource[]): Promise<AssetPlan> {
+// pointed there; `first` heads the changes. Rename uses it, and a replace
+// that changes the extension.
+export async function planMove(root: string, asset: { path: string; info: Stats }, to: string, scan: NoteScan, first: AssetChange): Promise<AssetPlan> {
   const { path, info } = asset;
   const target = await statOrNull(guarded(root, to));
   // A name that differs only in case is the same file on a case-insensitive disk.
@@ -205,10 +198,6 @@ export async function planMove(root: string, asset: { path: string; info: Stats 
     writes.push({ path: note, content: result.next, baseMtime: before.mtimeMs });
     changes.push({ type: 'change', path: note, detail: plural(result.count, 'reference') });
   }
-  // The Studio does not write diagrams/: say what still names the old path.
-  for (const source of sources) {
-    changes.push({ type: 'keep', path: source.path, detail: `still writes ${baseOf(path)}: update it before regenerating` });
-  }
   return { asset: { path, baseMtime: info.mtimeMs }, to, writes, changes, usages };
 }
 
@@ -220,10 +209,6 @@ export async function planAssetDelete(root: string, request: DeleteRequest, scan
   const info = await checkAsset(root, path, request.baseMtime);
   const usages = usagesIn(await scanNotes(root, scan), [path]).get(path) ?? [];
   if (usages.length > 0) throw new HttpError(409, `${listed(usages)} still ${usages.length === 1 ? 'uses' : 'use'} ${baseOf(path)}: remove the references first`);
-  const sources = (await findAssetSources(root)).get(path) ?? [];
-  if (sources.length > 0) {
-    throw new HttpError(409, `${sources.map((source) => source.path).join(', ')} generates ${baseOf(path)}, and regenerating would write it again: change or remove the diagram first`);
-  }
   return { asset: { path, baseMtime: info.mtimeMs }, to: null, writes: [], changes: [{ type: 'delete', path }], usages };
 }
 

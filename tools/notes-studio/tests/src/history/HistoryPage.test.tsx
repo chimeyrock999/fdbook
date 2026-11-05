@@ -28,7 +28,6 @@ const pageHistory: PageHistory = {
   path: PAGE,
   mtimeMs: 42,
   deleted: null,
-  generated: false,
   versions: [
     { sha: sha('c'), date: '2026-10-20T10:00:00Z', author: 'Studio Test', message: 'docs: third', path: PAGE, status: 'M', inChangeRequest: true },
     { sha: sha('b'), date: '2026-10-10T10:00:00Z', author: 'Studio Test', message: 'docs: rename', path: PAGE, status: 'R', from: OLD, inChangeRequest: false },

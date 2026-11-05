@@ -40,7 +40,6 @@ describe('HistoryPage: assets', () => {
     path: ASSET,
     mtimeMs: 42,
     deleted: null,
-    generated: false,
     versions: [version('c', ASSET, 'docs: pixel as webp', 'R'), version('b', OLD_ASSET, 'docs: second pixel'), version('a', OLD_ASSET, 'docs: add pixel', 'A')],
   };
 
@@ -73,18 +72,9 @@ describe('HistoryPage: assets', () => {
     expect(onRestored).toHaveBeenCalledWith(OLD_ASSET);
   });
 
-  it('turns Restore off for an asset a diagram generates, as the asset page turns Replace off', async () => {
-    const client = clientFor({ ...history, generated: true }, () => ({ before: binary(10), after: binary(20) }));
-    render(<HistoryPage client={client as unknown as HistoryClient} path={ASSET} title="pixel.webp" readOnly={false} revision={1} onOpen={vi.fn()} onRestored={vi.fn()} />);
-    await userEvent.setup().click(await screen.findByText('docs: second pixel'));
-    const restore = screen.getByRole<HTMLButtonElement>('button', { name: 'Restore' });
-    expect(restore.disabled).toBe(true);
-    expect(restore.title).toBe('A diagram generates it: change the diagram instead');
-  });
-
   it('shows an SVG source too', async () => {
     const svg = 'public/notes/demo/shape.svg';
-    const client = clientFor({ path: svg, mtimeMs: 1, deleted: null, generated: false, versions: [version('b', svg, 'docs: wider'), version('a', svg, 'docs: shape', 'A')] }, (from, to) => ({
+    const client = clientFor({ path: svg, mtimeMs: 1, deleted: null, versions: [version('b', svg, 'docs: wider'), version('a', svg, 'docs: shape', 'A')] }, (from, to) => ({
       before: from === null ? null : text('<svg width="1"/>'),
       after: text(to === NOW ? '<svg width="3"/>' : '<svg width="2"/>'),
     }));
@@ -98,7 +88,6 @@ describe('HistoryPage: a deleted page', () => {
   const history: PageHistory = {
     path: PAGE,
     mtimeMs: null,
-    generated: false,
     deleted: { sha: sha('f'), date: '2026-10-02T10:00:00Z', author: 'Studio Test', message: 'docs: retire the shelf' },
     versions: [version('b', PAGE, 'docs: second one'), version('a', PAGE, 'docs: add one', 'A')],
   };

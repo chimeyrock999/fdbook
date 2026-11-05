@@ -50,9 +50,8 @@ the React app through Vite.
     [lint.md](lint.md)).
   - `tree/` builds the page tree and creates, renames, reorders, hides and
     shows pages.
-  - `assets/` finds where notes use the files under `public/notes` and the
-    diagram sources that generate them, and renames, replaces and deletes
-    them.
+  - `assets/` finds where notes use the files under `public/notes`, and
+    renames, replaces and deletes them.
   - `markdown/` parses link destinations, shared by the tree and asset
     rewrites.
   - `icons/` lists the lucide names a note's `icon` can take.
@@ -223,7 +222,7 @@ Raw bodies are capped too: 25 MB for an asset, 10 MB for an attachment.
 | `GET /api/icons` | The lucide names a note's `icon` can take: `{ names }` |
 | `GET /api/tree` | The page tree: `{ tree }` |
 | `POST /api/tree` | Takes `{ op: "create" \| "rename" \| "move" \| "set-open" \| "visibility", dryRun?, … }`, changes the tree and returns `{ changes, open, created? }`. With `dryRun` it writes nothing. `{ op: "delete", path, base?, dryRun? }` deletes a page, folder page or folder (`server/tree/delete.ts`): its dry run also answers `{ base, links, deleted }`, and the delete must send that `base` back (`400` without, `409` when anything it read changed since). |
-| `GET /api/assets` | Every file under `public/notes`, then every `diagrams/**/*.diagram.json`, with where notes use it (a diagram: the `<Diagram src>` that draw it) and the diagram sources that generate it: `{ assets: [{ path, mtimeMs, size, usages: [{ note, line, column, length, text, unsure }], sources: [{ path, line, text }] }] }` |
+| `GET /api/assets` | Every file under `public/notes`, then every `diagrams/**/*.diagram.json`, with where notes use it (a diagram: the `<Diagram src>` that draw it): `{ assets: [{ path, mtimeMs, size, usages: [{ note, line, column, length, text, unsure }] }] }` |
 | `POST /api/assets` | Takes `{ op: "rename" \| "delete" \| "replace", path, name?, extension?, baseMtime, dryRun? }`, changes the asset and the notes that use it, and returns `{ changes, usages }`. A replace is a dry run only here. |
 | `PUT /api/assets?path=…&extension=…&baseMtime=…` | Replaces the asset's content with the raw bytes (`X-Studio-Write: 1`, up to 25 MB), at its path or, with another extension, at its name with that one, and returns `{ changes, usages, mtimeMs }` |
 
@@ -236,7 +235,7 @@ Raw bodies are capped too: 25 MB for an asset, 10 MB for an attachment.
 | `GET /api/changes/history` | The change request's commits, newest first, no merges, up to 200: `{ base, commits }`, `base` being `origin/main`, else `main`, else `null` (no commits) |
 | `GET /api/changes/diff?path=…[&from=…]` | The file against main: `{ path, from?, base, status: "same" \| "M" \| "A" \| "D" \| "R", before, after }`, each side `{ kind: "text", text, size }`, `{ kind: "binary", size }` (an asset that is not SVG or HTML, or text over 2 MB) or `null` where the file is missing. `base` is the merge base of `origin/main` (else `main`) and `HEAD`, or `null`; `from` reads main under a renamed file's old name. |
 | `GET /api/changes/blob?path=…[&base=<sha>]` | The file's bytes as commit `base` (else the merge base now) holds it, for an image's before side in the diff and an older version's image in history; `404` when it has none. Served like an asset. |
-| `GET /api/history?path=…` | `{ path, mtimeMs, deleted, generated, versions }`: `deleted` names the commit that deleted a file the worktree no longer has, `generated` whether a diagram source generates the asset |
+| `GET /api/history?path=…` | `{ path, mtimeMs, deleted, versions }`: `deleted` names the commit that deleted a file the worktree no longer has |
 | `GET /api/history/compare?path=&to=[&from=]` | Each a full sha or `now`; without `from`, nothing is before |
 | `POST /api/history/restore` | `{ path, sha, mtimeMs }`, answers `{ path, mtimeMs }`, `path` being where the file is now; `409` when the file changed since its mtime |
 | `GET /api/history/deleted` | `{ pages: [{ path, title, sha, date, author, message, folderGone, committed }] }`, the latest 200; deletes not committed yet first (`committed: false`, `sha` the last commit with the page) |
@@ -466,9 +465,6 @@ dry run plans without the lock.
   References are read on the parsed note (`server/assets/refs.ts`), the
   same reading as lint's `asset-missing`; rewritten Markdown destinations
   are percent-encoded.
-- Diagram sources (`server/assets/sources.ts`) are read again when a note
-  or an asset changes, not when a diagram does; files over 1 MB and
-  symlinks are skipped.
 
 ## Agents
 

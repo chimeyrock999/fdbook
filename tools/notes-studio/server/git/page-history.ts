@@ -1,6 +1,5 @@
 import { applyAssetPlan } from '../assets/ops.ts';
 import { planAssetReplace } from '../assets/replace.ts';
-import { findAssetSources } from '../assets/sources.ts';
 import { statOrNull, writeAtomic } from '../files/store.ts';
 import { HttpError } from '../http.ts';
 import { classifyPath, extensionOf } from '../security/paths.ts';
@@ -16,9 +15,8 @@ export type PageVersion = { sha: string; date: string; author: string; message: 
 export type DeletedIn = { sha: string; date: string; author: string; message: string };
 // `mtimeMs` is the file on disk as the history was read, for a restore to
 // name; null when the file is gone from the worktree. `deleted` is the
-// commit that took it away, when one did. `generated`: a diagram source
-// generates the asset, so a restore is refused, as a Replace is.
-export type PageHistory = { path: string; mtimeMs: number | null; deleted: DeletedIn | null; generated: boolean; versions: PageVersion[] };
+// commit that took it away, when one did.
+export type PageHistory = { path: string; mtimeMs: number | null; deleted: DeletedIn | null; versions: PageVersion[] };
 // A side of a comparison: a commit, or `now`, the page on disk.
 export type VersionRef = { version: string; path: string };
 // `from` → `to`; `from` null compares with nothing (the version alone).
@@ -85,13 +83,12 @@ export async function logPage(root: string, path: string) {
 // versions, only what is on disk; one on neither side is not found. One
 // deleted on HEAD names the commit that deleted it.
 export async function loadPageHistory(root: string, path: string): Promise<PageHistory> {
-  const { kind, absolute } = historyPath(root, path);
+  const { absolute } = historyPath(root, path);
   const base = await baseOf(root);
-  const [logged, own, info, sources] = await Promise.all([
+  const [logged, own, info] = await Promise.all([
     logPage(root, path),
     base === null ? '' : runGit(root, ['rev-list', `${base}..HEAD`]),
     statOrNull(absolute),
-    kind === 'asset' ? findAssetSources(root) : null,
   ]);
   const ours = new Set(own.split('\n').filter(Boolean));
   const mtimeMs = info?.isFile() ? info.mtimeMs : null;
@@ -102,7 +99,6 @@ export async function loadPageHistory(root: string, path: string): Promise<PageH
     path,
     mtimeMs,
     deleted: gone === null ? null : { sha: gone.sha, date: gone.date, author: gone.author, message: gone.message },
-    generated: (sources?.get(path)?.length ?? 0) > 0,
     versions: versions.map((version) => ({ ...version, inChangeRequest: ours.has(version.sha) })),
   };
 }
@@ -138,10 +134,9 @@ export async function comparePageVersions(root: string, path: string, from: stri
 // Writes the file as version `sha` held it over the one on disk, under its
 // current name, and commits nothing. `mtimeMs` is the file as the client
 // last read it: one that changed since is not overwritten (409). An asset
-// goes the way Replace writes one (server/assets/replace.ts): refused when a
-// diagram source generates it, and a version with another extension takes
-// that extension, every note's link following. `path` in the answer is
-// where the file is now.
+// goes the way Replace writes one (server/assets/replace.ts): a version
+// with another extension takes that extension, every note's link
+// following. `path` in the answer is where the file is now.
 export async function restorePageVersion(root: string, { path, sha, mtimeMs }: { path: unknown; sha: unknown; mtimeMs: unknown }) {
   if (typeof path !== 'string') throw new HttpError(400, 'path must be a string');
   if (typeof mtimeMs !== 'number') throw new HttpError(400, 'mtimeMs must be a number');
