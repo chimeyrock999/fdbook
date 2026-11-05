@@ -72,6 +72,11 @@ describe('review threads', () => {
     const { id } = await threads.open({ path: PATH, body: 'x', by: REVIEWER, severity: 'blocking' });
     // The author answers; it does not judge its own answer.
     expect(await status(threads.move(id, { state: 'resolved', by: AUTHOR }))).toBe(409);
+    // A person's finding is not the reviewer's to withdraw; its own is.
+    const persons = await threads.open({ path: PATH, body: 'Mine.', by: PERSON, severity: 'blocking' });
+    expect(await status(threads.move(persons.id, { state: 'resolved', by: REVIEWER }))).toBe(409);
+    const own = await threads.open({ path: PATH, body: 'Mine too.', by: REVIEWER });
+    expect((await threads.move(own.id, { state: 'resolved', by: REVIEWER })).state).toBe('resolved');
     // The reviewer judges; it does not answer for the author.
     expect(await status(threads.move(id, { state: 'addressed', by: REVIEWER }))).toBe(409);
     expect(await status(threads.move(id, { state: 'rejected', by: REVIEWER, body: 'no' }))).toBe(409);
@@ -126,6 +131,30 @@ describe('review threads', () => {
     expect((await readFile(file, 'utf8')).split('\n').filter(Boolean)).toHaveLength(1);
   });
 
+  it('takes no sibling that reads alike for an orphaned thread, edited after the orphaning', async () => {
+    const x = 'The cache keeps every page for an hour before it reads the source again.';
+    const sibling = x.replace('page', 'image');
+    const v1 = `Intro.\n\n${x}\n\nMiddle.\n\n${sibling}\n\nEnd.\n`;
+    const { id } = await threads.open({ path: PATH, text: v1, block: 1, body: 'x', by: REVIEWER });
+    const v2 = v1.replace(`${x}\n\n`, '');
+    await threads.reanchor(PATH, note(v2));
+    expect((await threads.read(id)).orphaned).toBe(true);
+    await threads.reanchor(PATH, note(v2.replace('again.', 'again later.')));
+    expect(await threads.read(id)).toMatchObject({ orphaned: true, anchor: { text: x } });
+    // The block itself coming back is found.
+    await threads.reanchor(PATH, note(v1));
+    expect(await threads.read(id)).toMatchObject({ orphaned: false, anchor: { index: 1, text: x } });
+  });
+
+  it('finds the block at the new path when the watcher saw the rename first', async () => {
+    const { id } = await threads.open({ path: PATH, text: NOTE, block: 2, body: 'x', by: REVIEWER });
+    // The old path's unlink, then the new path's add (no thread there yet), then the move.
+    await threads.reanchor(PATH, note(null));
+    await threads.reanchor('content/notes/handbook.mdx', note(NOTE));
+    await threads.moved('guide.mdx', 'handbook.mdx', () => Promise.resolve(NOTE));
+    expect(await threads.read(id)).toMatchObject({ path: 'content/notes/handbook.mdx', orphaned: false, anchor: { index: 2 } });
+  });
+
   it('reads no note that has no threads, and each change is later than the last', async () => {
     const read = vi.fn(() => Promise.resolve(NOTE));
     expect(await threads.reanchor(PATH, read)).toEqual([]);
@@ -141,8 +170,9 @@ describe('review threads', () => {
     const page = await threads.open({ path: PATH, body: 'Page.', by: PERSON });
     const inFolder = await threads.open({ path: 'content/notes/guide/deep.mdx', body: 'In the folder.', by: PERSON });
     const other = await threads.open({ path: 'content/notes/guides.mdx', body: 'Not in it.', by: PERSON });
-    await threads.moved('guide.mdx', 'handbook.mdx');
-    await threads.moved('guide', 'handbook');
+    const read = () => Promise.resolve(null);
+    await threads.moved('guide.mdx', 'handbook.mdx', read);
+    await threads.moved('guide', 'handbook', read);
     expect((await threads.list()).map((thread) => [thread.id, thread.path])).toEqual([
       [page.id, 'content/notes/handbook.mdx'],
       [inFolder.id, 'content/notes/handbook/deep.mdx'],

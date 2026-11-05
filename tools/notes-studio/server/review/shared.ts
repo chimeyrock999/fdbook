@@ -50,8 +50,11 @@ const MOVES: Record<ThreadState, Partial<Record<ThreadState, Mover[]>>> = {
   resolved: { open: ['person'] },
 };
 
-// The states `mover` may take a thread in `state` to.
-export const movesOf = (state: ThreadState, mover: Mover) => THREAD_STATES.filter((to) => MOVES[state][to]?.includes(mover) === true);
+// The states `mover` may take `thread` to. The reviewer withdraws its own
+// open findings (or another agent's); a person's waits for the author's
+// answer or a person.
+export const movesOf = (thread: Pick<Thread, 'state' | 'comments'>, mover: Mover) =>
+  THREAD_STATES.filter((to) => MOVES[thread.state][to]?.includes(mover) === true && !(mover === 'reviewer' && thread.state === 'open' && to === 'resolved' && thread.comments[0]?.by.kind === 'person'));
 
 // A rejection says why.
 export const needsReason = (to: ThreadState) => to === 'rejected';

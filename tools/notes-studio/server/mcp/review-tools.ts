@@ -129,7 +129,7 @@ export function createReviewTools(deps: ReviewToolDeps): StudioTool[] {
 
   const setState = {
     name: 'set_thread_state',
-    description: 'Moves a review thread, with a comment on why. An author answers an open thread: addressed (fixed: propose the fix with propose_edit first and pass its id as suggestion) or rejected (body says why). A reviewer judges the answer: resolved, open again when the fix falls short, or needs-decision when it keeps a finding the author rejected; a person then decides. A person may make any move.',
+    description: 'Moves a review thread, with a comment on why. An author answers an open thread: addressed (fixed: propose the fix with propose_edit first and pass its id as suggestion) or rejected (body says why). A reviewer judges the answer: resolved, open again when the fix falls short, or needs-decision when it keeps a finding the author rejected; a person then decides. A reviewer may also resolve an open thread an agent opened (withdrawing its finding), not one a person opened. A person may make any move.',
     input: stateInput,
     access: 'read',
     async run({ thread: id, state, body: text, suggestion }, ctx) {

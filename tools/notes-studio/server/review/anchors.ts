@@ -66,11 +66,14 @@ const ALIKE_BESIDE = 0.4;
 // between both its old neighbours, however much it changed, or the one
 // most like it, enough to be the same block edited. When the text had
 // copies and one fewer is left, the copy edited may be this one: the new
-// block between its neighbours wins over the copies.
-export function locate(anchor: Anchor, blocks: Texts): number | null {
+// block between its neighbours wins over the copies. An `orphaned` anchor
+// lost its block already: only that block coming back, word for word,
+// finds it, so a sibling edited later is never taken for it.
+export function locate(anchor: Anchor, blocks: Texts, orphaned = false): number | null {
   const nearest = (found: number[]) => found.reduce<number | null>((best, index) => (best === null || Math.abs(index - anchor.index) < Math.abs(best - anchor.index) ? index : best), null);
   const texts = blocks.map((block) => block.text);
   const copies = texts.flatMap((text, index) => (text === anchor.text ? [index] : []));
+  if (orphaned) return nearest(copies);
   const own = hashOf(anchor.text);
   if (copies.length > 0 && copies.length >= anchor.seen.filter((hash) => hash === own).length) return nearest(copies);
   const seen = new Set(anchor.seen);

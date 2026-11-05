@@ -81,7 +81,7 @@ export function ThreadCard({ thread, readOnly, actions, onClose }: { thread: Thr
             onKeyDown={onKey}
           />
           <p className="studio-review-actions">
-            {movesOf(thread.state, 'person').map((state) => (
+            {movesOf(thread, 'person').map((state) => (
               <PendingButton key={state} className="studio-button" pending={action.is(state)} disabled={action.busy} onClick={() => { move(state); }}>
                 {MOVE_LABELS[state]}
               </PendingButton>

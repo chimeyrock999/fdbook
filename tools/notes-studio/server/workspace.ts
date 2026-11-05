@@ -151,7 +151,7 @@ export function createWorkspace(
     // A person's save is never reverted by a turn going on (agents/watch.ts).
     createFilesApi(root, pathLock, conversations === null ? undefined : (path) => { conversations.savedByPerson(path); }),
     createLintApi(root),
-    createTreeApi(root, notesLock, { onDeleted, onMoved: (from, to) => review?.threads.moved(from, to) }),
+    createTreeApi(root, notesLock, { onDeleted, onMoved: (from, to) => review?.threads.moved(from, to, (path) => { const resolved = resolveWorktreePath(root, path); return resolved === null ? Promise.resolve(null) : readFile(resolved.absolute, 'utf8'); }) }),
     createAssetsApi(root, notesLock),
     createChangesApi(root, notesLock),
     createPageHistoryApi(root, notesLock),

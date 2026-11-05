@@ -63,6 +63,6 @@ export function placeAll(text: string, proposals: ProposalView[], threads: Threa
     else hunks.push({ key: keyOf(proposal, hunk), proposal, hunk, stale: true, ...at, ...spanOf(blocks, at.from, at.to) });
   }
   hunks.sort((a, b) => a.from - b.from || a.to - b.to);
-  const placedThreads = threads.map((thread) => ({ thread, block: thread.anchor === null ? null : locate(thread.anchor, blocks) }));
+  const placedThreads = threads.map((thread) => ({ thread, block: thread.anchor === null ? null : locate(thread.anchor, blocks, thread.orphaned) }));
   return { hunks, lost, threads: placedThreads, parsed: true };
 }

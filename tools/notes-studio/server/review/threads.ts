@@ -143,7 +143,7 @@ export function createThreads(file: string, { onChange }: ThreadsOptions = {}) {
     async move(id: string, { state, body = '', by, suggestion }: { state: ThreadState; body?: string; by: ThreadAuthor; suggestion?: string | null }) {
       if (needsReason(state) && body.trim() === '') throw new HttpError(400, 'say why the thread is rejected');
       return await change(id, (thread) => {
-        const allowed = movesOf(thread.state, moverOf(by));
+        const allowed = movesOf(thread, moverOf(by));
         if (!allowed.includes(state)) {
           const who = by.kind === 'person' ? 'a person' : `the ${by.role} agent`;
           throw new HttpError(409, `${who} cannot take a thread from ${thread.state} to ${state}${allowed.length === 0 ? '' : ` (it may go to ${allowed.join(', ')})`}`);
@@ -174,7 +174,7 @@ export function createThreads(file: string, { onChange }: ThreadsOptions = {}) {
         const changed: Thread[] = [];
         for (const thread of threads) {
           if (thread.path !== path || thread.anchor === null) continue;
-          const found = blocks === null ? null : locate(thread.anchor, blocks);
+          const found = blocks === null ? null : locate(thread.anchor, blocks, thread.orphaned);
           const anchor = blocks === null || found === null ? thread.anchor : anchorAt(blocks, found);
           const orphaned = found === null;
           if (orphaned === thread.orphaned && JSON.stringify(anchor) === JSON.stringify(thread.anchor)) continue;
@@ -188,14 +188,24 @@ export function createThreads(file: string, { onChange }: ThreadsOptions = {}) {
       });
     },
     // A page (`x.mdx`) or folder (`x`) the tree moved, relative to
-    // content/notes: its threads go with it.
-    moved(from: string, to: string) {
+    // content/notes: its threads go with it, placed on the notes at their
+    // new paths as `readNote` reads them. The watcher may have seen the
+    // rename first and orphaned them on the old path: that loss was the
+    // move, so they are placed as if they had never lost their block.
+    moved(from: string, to: string, readNote: (path: string) => Promise<string | null>) {
       const [old, now] = [`${NOTES_DIR}/${from}`, `${NOTES_DIR}/${to}`];
       return lock('threads', async () => {
         const threads = await read();
         const changed = threads.filter((thread) => thread.path === old || thread.path.startsWith(`${old}/`));
         if (changed.length === 0 || closed) return;
-        for (const thread of changed) Object.assign(thread, { path: now + thread.path.slice(old.length), updatedMs: after(thread.updatedMs) });
+        const notes = new Map<string, { text: string }[] | null>();
+        for (const thread of changed) {
+          const path = now + thread.path.slice(old.length);
+          if (!notes.has(path)) notes.set(path, await readNote(path).then((text) => (text === null ? null : blocksOf(text))).catch(() => null));
+          const blocks = notes.get(path) ?? null;
+          const found = blocks === null || thread.anchor === null ? null : locate(thread.anchor, blocks);
+          Object.assign(thread, { path, updatedMs: after(thread.updatedMs), ...(blocks !== null && found !== null ? { anchor: anchorAt(blocks, found), orphaned: false } : {}) });
+        }
         await write(threads);
         for (const thread of changed) onChange?.(thread);
       });

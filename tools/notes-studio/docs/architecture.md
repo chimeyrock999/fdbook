@@ -665,15 +665,19 @@ written whole through a temp file), outside `content/`. A comment of #85
   another keep it; the editor places threads with the same `locate` on
   the text being typed.
 - **Orphaned.** No block found: the thread keeps its anchor and state and
-  is listed over the note with what the block said; it finds the block
-  again if it comes back. A deleted note orphans its threads; a renamed
-  one does too (they stay on the old path).
+  is listed over the note with what the block said. From then on only
+  that block coming back word for word finds it, so a sibling edited
+  later is never taken for it. A deleted note orphans its threads; a
+  tree rename or move takes them to the new path and places them there,
+  even when the watcher saw the rename first.
 - **States.** `open`, `addressed`, `rejected` (with a reason),
   `resolved`, `needs-decision`. The author agent answers an open thread
   (addressed, rejected); the reviewer agent judges the answer (resolved,
   open again, or needs-decision when it keeps a finding the author
-  rejected); only a person decides a needs-decision thread or reopens a
-  resolved one, and a person may make any other move too
+  rejected); the reviewer resolves an open thread only when an agent
+  opened it (withdrawing its own finding), never a person's; only a
+  person decides a needs-decision thread or reopens a resolved one, and a
+  person may make any other move too
   (`server/review/shared.ts`). Each move is a comment in the thread's
   history.
 - **Who.** `by` is a person (their login) or an agent run with its agent,

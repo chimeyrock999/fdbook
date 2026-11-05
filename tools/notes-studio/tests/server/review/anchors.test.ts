@@ -83,6 +83,15 @@ describe('locate', () => {
     expect(locate(at(twice, 4), blocks(twice.replace('Same text.\n\nTwo', 'Same text, edited.\n\nTwo')))).toBe(4);
   });
 
+  it('finds an orphaned anchor only when its block comes back word for word', () => {
+    const anchor = at(NOTE, BOUNDARY);
+    // Rewritten in place: a live anchor follows it, an orphaned one does not.
+    const rewritten = NOTE.replace(/Each stage ends.*\n/, 'Something else entirely.\n');
+    expect(locate(anchor, blocks(rewritten))).toBe(BOUNDARY);
+    expect(locate(anchor, blocks(rewritten), true)).toBeNull();
+    expect(locate(anchor, blocks(NOTE), true)).toBe(BOUNDARY);
+  });
+
   it('picks the copy nearest where the block was when the text repeats', () => {
     const twice = 'One.\n\nSame.\n\nTwo.\n\nThree.\n\nSame.\n';
     expect(locate(at(twice, 1), blocks(twice))).toBe(1);
