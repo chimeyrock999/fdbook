@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { DeleteProposalView, NoteComment, ProposalOp, ProposalsClient, ProposalView } from '../api/proposals';
+import type { Anchor, DeleteProposalView, ProposalOp, ProposalsClient, ProposalView, Thread, ThreadSeverity, ThreadState } from '../api/proposals';
 import { toast } from '../actions/toasts';
 import { NOTES_PREFIX } from '../notes/notes';
 
-// The proposals, delete proposals and comments of the change request the page edits (`inCr`),
+// The proposals, delete proposals and review threads of the change request the page edits (`inCr`),
 // kept up to date from the server's stream, and the actions on them. A
 // failed read says why in a toast; a failed action throws, for the button
 // that sent it (useNoteSuggestions).
 export function useProposals(client: ProposalsClient, inCr: boolean) {
   const [proposals, setProposals] = useState<ProposalView[]>([]);
-  const [comments, setComments] = useState<NoteComment[]>([]);
+  const [threads, setThreads] = useState<Thread[]>([]);
   const [deletes, setDeletes] = useState<DeleteProposalView[]>([]);
 
   const reload = useCallback(async () => {
     if (!inCr) return;
     try {
-      const [list, notes, deleteList] = await Promise.all([client.list(), client.comments(), client.listDeletes()]);
+      const [list, threadList, deleteList] = await Promise.all([client.list(), client.threads(), client.listDeletes()]);
       setProposals(list);
-      setComments(notes);
+      setThreads(threadList);
       setDeletes(deleteList);
     } catch (reason) {
       toast.error(reason);
@@ -35,19 +35,29 @@ export function useProposals(client: ProposalsClient, inCr: boolean) {
     setDeletes((current) => [...current.filter((each) => each.id !== proposal.id), proposal].sort((a, b) => a.createdMs - b.createdMs));
   }, []);
 
+  // A thread as the stream or an answer has it: the later of two copies wins.
+  const mergeThread = useCallback((thread: Thread) => {
+    setThreads((current) => {
+      const known = current.find((each) => each.id === thread.id);
+      if (known !== undefined && known.updatedMs > thread.updatedMs) return current;
+      return [...current.filter((each) => each.id !== thread.id), thread].sort((a, b) => a.createdMs - b.createdMs);
+    });
+  }, []);
+
   useEffect(() => {
     if (!inCr) return undefined;
-    return client.subscribe(merge, () => { void reload(); }, (comment) => {
-      setComments((current) => (current.some((each) => each.id === comment.id) ? current : [...current, comment]));
-    }, ({ id }) => {
-      setComments((current) => current.filter((comment) => comment.id !== id));
-    }, mergeDelete);
-  }, [client, inCr, merge, mergeDelete, reload]);
+    return client.subscribe(merge, () => { void reload(); }, mergeThread, mergeDelete);
+  }, [client, inCr, merge, mergeThread, mergeDelete, reload]);
 
-  const resolveComment = useCallback(async (id: string) => {
-    await client.resolveComment(id);
-    setComments((current) => current.filter((comment) => comment.id !== id));
-  }, [client]);
+  const openThread = useCallback(async (path: string, anchor: Anchor | null, body: string, severity: ThreadSeverity | null) => {
+    mergeThread(await client.openThread(path, anchor, body, severity));
+  }, [client, mergeThread]);
+  const replyThread = useCallback(async (id: string, body: string) => {
+    mergeThread(await client.reply(id, body));
+  }, [client, mergeThread]);
+  const moveThread = useCallback(async (id: string, state: ThreadState, body: string) => {
+    mergeThread(await client.move(id, state, body));
+  }, [client, mergeThread]);
 
   const act = useCallback(async (id: string, op: ProposalOp, hunks?: string[]) => {
     merge(await client.act(id, op, hunks));
@@ -74,12 +84,14 @@ export function useProposals(client: ProposalsClient, inCr: boolean) {
 
   return {
     proposals,
-    comments,
+    threads,
     counts,
     deleting,
     act,
     actOnDelete,
-    resolveComment,
+    openThread,
+    replyThread,
+    moveThread,
     reload,
   };
 }

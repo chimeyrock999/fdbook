@@ -58,6 +58,9 @@ import { NoteGate } from './notes/NoteGate';
 import { OpenPreview } from './notes/OpenPreview';
 import { isList, movedPage, NOTES_PREFIX, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote, type Page } from './notes/notes';
 import { Sidebar, type IssueCount } from './sidebar/Sidebar';
+import { isOpen } from '../server/review/shared';
+import { ReviewPanel } from './review/ReviewPanel';
+import { blockingCount, type ThreadFocus } from './review/texts';
 import { useSidebar, type SidebarView } from './sidebar/useSidebar';
 import { rightsOf, useSession } from './session/session';
 import { UserMenu } from './session/UserMenu';
@@ -125,10 +128,13 @@ export function App() {
   // On main too: its chats only read (server/agents/main-only.ts).
   const agents = useAgents(agentsClient, crMode, onMain);
   const { answering, asking, asks } = useAsking(agents, rights.agents);
-  // What agents proposed and commented (#85), as it comes.
+  // What agents proposed (#85) and the review threads (#87), as they come.
   const proposalsClient = useMemo(() => createProposalsClient(), []);
   const proposals = useProposals(proposalsClient, crMode && CURRENT_CR !== null);
-  const { act: actOnProposal, proposals: allProposals, comments: allComments, resolveComment, deleting, actOnDelete } = proposals;
+  const { act: actOnProposal, proposals: allProposals, threads: allThreads, openThread, replyThread, moveThread, deleting, actOnDelete } = proposals;
+  // The thread the Review panel picked, for the editor to show.
+  const [threadFocus, setThreadFocus] = useState<ThreadFocus | null>(null);
+  const focusSeq = useRef(0);
   // A delete to review from the bar over the note (the tree's menu opens its own).
   const [reviewDelete, setReviewDelete] = useState<{ target: DeleteTarget; proposal: DeleteProposalView } | null>(null);
   const review = useMemo<NoteReview | null>(() => {
@@ -137,7 +143,8 @@ export function App() {
     const proposal = [...deleting.values()].find((each) => note === each.path || note.startsWith(`${each.path}/`)) ?? null;
     return {
       proposals: allProposals.filter((each) => each.path === active && !each.done),
-      comments: allComments.filter((comment) => comment.path === active),
+      // A resolved thread only while the Review panel shows it, to reopen it.
+      threads: allThreads.filter((thread) => thread.path === active && (isOpen(thread) || thread.id === threadFocus?.id)),
       deletion: proposal === null ? null : {
         proposal,
         waiting: unsaved !== null && renamedPath(unsaved, proposal.path, proposal.path) !== null,
@@ -145,9 +152,11 @@ export function App() {
         onReject: () => actOnDelete(proposal.id, 'reject'),
       },
       act: actOnProposal,
-      resolveComment,
+      openThread: (anchor, body, severity) => openThread(active, anchor, body, severity),
+      replyThread,
+      moveThread,
     };
-  }, [active, allProposals, allComments, actOnProposal, resolveComment, deleting, actOnDelete, titles, setReviewDelete, unsaved]);
+  }, [active, allProposals, allThreads, threadFocus, actOnProposal, openThread, replyThread, moveThread, deleting, actOnDelete, titles, setReviewDelete, unsaved]);
   const [agentTotals, setAgentTotals] = useState<Record<string, ConversationTotals>>({});
   // Pushing and the Cloudflare Pages build, in the worktree being edited (#19).
   const previewClient = useMemo(() => createPreviewClient(), []);
@@ -228,6 +237,8 @@ export function App() {
 
   const go = (next: Page) => {
     setDrawer(false);
+    // A thread picked in the Review view is shown once, on its own note.
+    setThreadFocus(null);
     if (samePage(page, next)) return;
     window.history.pushState(null, '', pageQuery(next));
     setPage(next);
@@ -393,6 +404,23 @@ export function App() {
             />
           }
           changeRequests={crMode ? { shown: page?.kind === 'crs', onOpen: openList } : null}
+          review={crMode && CURRENT_CR !== null ? {
+            blocking: blockingCount(allThreads),
+            view: (
+              <ReviewPanel
+                threads={allThreads}
+                activeNote={active}
+                readOnly={readOnly}
+                agents={rights.agents ? agents : null}
+                onOpenThread={(path, body, severity) => openThread(path, null, body, severity)}
+                onPick={(thread) => {
+                  open(thread.path);
+                  focusSeq.current += 1;
+                  setThreadFocus({ id: thread.id, seq: focusSeq.current });
+                }}
+              />
+            ),
+          } : null}
           deletedPages={{ shown: page?.kind === 'deleted' || deletedPage !== undefined, count: deleted.pages?.length ?? null, onOpen: () => { go({ kind: 'deleted' }); } }}
           assets={
             <AssetsView
@@ -446,6 +474,7 @@ export function App() {
               onShowHistory={() => { go({ kind: 'history', path: active }); }}
               place={place?.note === active ? place : null}
               review={review}
+              threadFocus={threadFocus}
             />
           </NoteGate>
         ) : asset ? (

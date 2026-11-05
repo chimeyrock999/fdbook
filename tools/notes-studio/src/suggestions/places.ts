@@ -1,5 +1,6 @@
 import { blocksOf, placeOf, rebased, type Block } from '../../server/proposals/hunks';
-import type { NoteComment, ProposalHunk, ProposalView } from '../api/proposals';
+import { locate } from '../../server/review/anchors';
+import type { ProposalHunk, ProposalView, Thread } from '../api/proposals';
 
 // A hunk waiting for a person, set on the note as the editor holds it now
 // (the server's own placement, server/proposals/hunks.ts, run on the live
@@ -23,8 +24,10 @@ export type Placement = {
   hunks: PlacedHunk[];
   // Stale hunks whose anchors are gone too: they can only be dropped.
   lost: { key: string; proposal: ProposalView; hunk: ProposalHunk }[];
-  // Comments on a block still there, by block index; the rest on the note.
-  comments: { comment: NoteComment; block: number | null }[];
+  // Threads not resolved yet on a block still there, by block index (found
+  // on the text being typed, so a block that came back shows before the
+  // server saw it); the rest on the note: on the whole of it, or orphaned.
+  threads: { thread: Thread; block: number | null }[];
   // False when the text does not parse: nothing can be placed.
   parsed: boolean;
 };
@@ -38,13 +41,13 @@ function spanOf(blocks: Block[], from: number, to: number) {
 }
 
 // Every undecided hunk of `proposals` placed on `text`, in note order.
-export function placeAll(text: string, proposals: ProposalView[], comments: NoteComment[] = []): Placement {
+export function placeAll(text: string, proposals: ProposalView[], threads: Thread[] = []): Placement {
   const waiting = proposals.flatMap((proposal) => proposal.hunks.filter((hunk) => hunk.decided === null).map((hunk) => ({ proposal, hunk })));
   let blocks: Block[];
   try {
     blocks = blocksOf(text);
   } catch {
-    return { hunks: [], lost: waiting.map((each) => ({ key: keyOf(each.proposal, each.hunk), ...each })), comments: comments.map((comment) => ({ comment, block: null })), parsed: false };
+    return { hunks: [], lost: waiting.map((each) => ({ key: keyOf(each.proposal, each.hunk), ...each })), threads: threads.map((thread) => ({ thread, block: null })), parsed: false };
   }
   const hunks: PlacedHunk[] = [];
   const lost: Placement['lost'] = [];
@@ -60,11 +63,6 @@ export function placeAll(text: string, proposals: ProposalView[], comments: Note
     else hunks.push({ key: keyOf(proposal, hunk), proposal, hunk, stale: true, ...at, ...spanOf(blocks, at.from, at.to) });
   }
   hunks.sort((a, b) => a.from - b.from || a.to - b.to);
-  const placedComments = comments.map((comment) => {
-    if (comment.block === null) return { comment, block: null };
-    const same = blocks.map((block, index) => (block.text === comment.block?.text ? index : -1)).filter((index) => index !== -1);
-    const nearest = same.reduce<number | null>((best, index) => (best === null || Math.abs(index - (comment.block?.index ?? 0)) < Math.abs(best - (comment.block?.index ?? 0)) ? index : best), null);
-    return { comment, block: nearest };
-  });
-  return { hunks, lost, comments: placedComments, parsed: true };
+  const placedThreads = threads.map((thread) => ({ thread, block: thread.anchor === null ? null : locate(thread.anchor, blocks) }));
+  return { hunks, lost, threads: placedThreads, parsed: true };
 }

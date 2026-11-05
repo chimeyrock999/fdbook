@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBusy } from '../actions/busy';
-import type { NoteComment, ProposalHunk, ProposalOp, ProposalView } from '../api/proposals';
+import type { ProposalHunk, ProposalOp, ProposalView, Thread } from '../api/proposals';
 import { placeAll, type PlacedHunk, type Placement } from './places';
 import type { NoteReview } from './Suggestions';
 
 const NONE: ProposalView[] = [];
-const NONE_COMMENTED: NoteComment[] = [];
-const EMPTY: Placement = { hunks: [], lost: [], comments: [], parsed: true };
+const NO_THREADS: Thread[] = [];
+const EMPTY: Placement = { hunks: [], lost: [], threads: [], parsed: true };
 
 // How long an accepted hunk stays on the text it was accepted on, waiting
 // for the write to reach the editor (sync) after the proposal says so.
@@ -35,10 +35,10 @@ type Held = { hunks: PlacedHunk[]; text: string };
 // focus, stepping through them, and deciding them.
 export function useNoteSuggestions(review: NoteReview | null, text: string) {
   const proposals = review?.proposals ?? NONE;
-  const comments = review?.comments ?? NONE_COMMENTED;
+  const threads = review?.threads ?? NO_THREADS;
   // Nothing to place, nothing to parse: typing in a note without
   // suggestions costs nothing here.
-  const placed = useMemo(() => (proposals.length === 0 && comments.length === 0 ? EMPTY : placeAll(text, proposals, comments)), [text, proposals, comments]);
+  const placed = useMemo(() => (proposals.length === 0 && threads.length === 0 ? EMPTY : placeAll(text, proposals, threads)), [text, proposals, threads]);
   const action = useBusy();
   const [deciding, setDeciding] = useState<Decisions['deciding']>(null);
   const [held, setHeld] = useState<Held | null>(null);

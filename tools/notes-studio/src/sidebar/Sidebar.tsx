@@ -1,4 +1,4 @@
-import { CircleAlert, FileX, FolderTree, GitBranch, GitCommitHorizontal, Images, PanelLeft } from 'lucide-react';
+import { CircleAlert, FileX, FolderTree, GitBranch, GitCommitHorizontal, Images, MessagesSquare, PanelLeft } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { clampWidth, SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, type Sidebar as SidebarState, type SidebarView } from './useSidebar';
 
@@ -37,8 +37,10 @@ function useWidthCap() {
 // view is filled by the editor through a portal into `issuesRef`, since the
 // lint lives with the open note. With change requests, `changeRequests`
 // adds a button under the views that opens their list in the main pane;
-// `deletedPages` one above it for the pages deleted on HEAD (#114).
-export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, assets, issuesRef, changes = null, changeCount = 0, changeRequests = null, deletedPages = null }: {
+// `deletedPages` one above it for the pages deleted on HEAD (#114). In a
+// change request, `review` is the Review view (#87), its badge the
+// blocking threads that wait.
+export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, assets, issuesRef, changes = null, changeCount = 0, review = null, changeRequests = null, deletedPages = null }: {
   state: SidebarState;
   drawer: boolean;
   onCloseDrawer: () => void;
@@ -51,12 +53,15 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
   // The Changes view, with its own heading, and the number of files changed.
   changes?: ReactNode;
   changeCount?: number;
+  review?: { view: ReactNode; blocking: number } | null;
   changeRequests?: { shown: boolean; onOpen: () => void } | null;
   // `count` is null until the list loads.
   deletedPages?: { shown: boolean; count: number | null; onOpen: () => void } | null;
 }) {
   const pane = useRef<HTMLDivElement>(null);
   const shown = state.shown || drawer;
+  // Review was the view last time, on a page that has none (main): Notes.
+  const current = state.view === 'review' && review === null ? 'notes' : state.view;
   const cap = useWidthCap();
   const width = Math.min(state.width, cap);
   const fit = (next: number) => Math.min(cap, clampWidth(next));
@@ -103,7 +108,7 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
     <button
       type="button"
       className="studio-activity-button"
-      aria-pressed={state.view === view && shown}
+      aria-pressed={current === view && shown}
       aria-label={label}
       title={label}
       onClick={() => { if (drawer) state.select(view); else state.pick(view); }}
@@ -133,6 +138,12 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
           changeCount === 0 ? 'Changes' : `Changes (${String(changeCount)})`,
           <GitCommitHorizontal size={20} strokeWidth={1.8} />,
           changeCount > 0 && <span className="studio-activity-count" data-info>{changeCount}</span>,
+        )}
+        {review !== null && viewButton(
+          'review',
+          review.blocking === 0 ? 'Review' : `Review (${String(review.blocking)} blocking)`,
+          <MessagesSquare size={20} strokeWidth={1.8} />,
+          review.blocking > 0 && <span className="studio-activity-count" data-errors>{review.blocking}</span>,
         )}
         {deletedPages && (
           // A page in the main pane, as Change requests below it.
@@ -174,21 +185,27 @@ export function Sidebar({ state, drawer, onCloseDrawer, issues, hasNote, notes, 
       </nav>
       {/* A phone's drawer sizes the view itself (see .studio-pane). */}
       <div ref={pane} className="studio-pane" style={drawer ? undefined : { width }} hidden={!shown}>
-        <div className="studio-pane-view" hidden={state.view !== 'notes'}>
+        <div className="studio-pane-view" hidden={current !== 'notes'}>
           {notes}
         </div>
-        <div className="studio-pane-view" hidden={state.view !== 'assets'}>
+        <div className="studio-pane-view" hidden={current !== 'assets'}>
           <h2 className="studio-pane-head">Assets</h2>
           {assets}
         </div>
-        <div className="studio-pane-view" hidden={state.view !== 'issues'}>
+        <div className="studio-pane-view" hidden={current !== 'issues'}>
           <h2 className="studio-pane-head">Issues</h2>
           {!hasNote && <p className="px-3 py-2 text-[12.5px] text-[var(--fde-muted-foreground)]">Open a note to see its issues.</p>}
           <div ref={issuesRef} className="min-h-0 flex-1 overflow-auto px-3 pt-2 pb-5" />
         </div>
-        <div className="studio-pane-view" hidden={state.view !== 'changes'}>
+        <div className="studio-pane-view" hidden={current !== 'changes'}>
           {changes}
         </div>
+        {review !== null && (
+          <div className="studio-pane-view" hidden={current !== 'review'}>
+            <h2 className="studio-pane-head">Review</h2>
+            <div className="min-h-0 flex-1 overflow-auto px-3 pt-2 pb-5">{review.view}</div>
+          </div>
+        )}
         <div
           role="separator"
           aria-orientation="vertical"

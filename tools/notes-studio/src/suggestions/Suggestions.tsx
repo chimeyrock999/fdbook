@@ -1,11 +1,11 @@
-import { Check, ChevronLeft, ChevronRight, MessageSquare, X } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentId } from '../../server/agents/shared';
-import { useBusy, useShownAfter } from '../actions/busy';
+import { useShownAfter } from '../actions/busy';
 import { PendingButton, Spinner } from '../actions/PendingButton';
 import { AgentLogo } from '../agents/AgentLogo';
-import type { NoteComment, ProposalOp, ProposalView } from '../api/proposals';
+import type { Anchor, ProposalOp, ProposalView, Thread, ThreadSeverity, ThreadState } from '../api/proposals';
 import { diffFrontmatter } from '../diff/diff-blocks';
 import { FrontmatterTable, NotePart } from '../diff/RenderedDiff';
 import { findBlock } from '../frontmatter/block';
@@ -13,19 +13,24 @@ import { authorName } from './authors';
 import type { NoteDeletion } from './DeleteProposalBar';
 import type { Placement, PlacedHunk } from './places';
 import type { Decisions } from './useNoteSuggestions';
+import { useCommentDraft } from '../review/comment-draft';
+import { ThreadMarks } from '../review/ThreadMarks';
+import { threadMarks, type NoteThreadActions, type ThreadFocus } from '../review/texts';
 import type { SuggestionLayer, VisualMarks } from './visual';
 
 // What the editor needs to show a note's suggestions: its proposals and
-// comments, and the action on them (useProposals), which throws when the
-// server refuses it. Null without proposals (main, a Studio over one
-// worktree).
+// review threads (not resolved), and the actions on them (useProposals),
+// which throw when the server refuses them. Null without proposals (main, a
+// Studio over one worktree).
 export type NoteReview = {
   proposals: ProposalView[];
-  comments: NoteComment[];
+  threads: Thread[];
   // A delete proposed for the note or its folder, if any.
   deletion?: NoteDeletion | null;
   act: (id: string, op: ProposalOp, hunks?: string[]) => Promise<void>;
-  resolveComment: (id: string) => Promise<void>;
+  openThread: (anchor: Anchor | null, body: string, severity: ThreadSeverity | null) => Promise<void>;
+  replyThread: (id: string, body: string) => Promise<void>;
+  moveThread: (id: string, state: ThreadState, body: string) => Promise<void>;
 };
 
 const VERBS: Record<ProposalOp, string> = { accept: 'Accepting', reject: 'Rejecting', rebase: 'Rebasing', drop: 'Dropping' };
@@ -146,34 +151,14 @@ function Card({ hunk, index, total, readOnly, decisions }: { hunk: PlacedHunk; i
   );
 }
 
-const authorOf = (comment: NoteComment) => authorName(comment);
-
-// Resolves a comment, once while the request is out.
-function Resolve({ comment, onResolve }: { comment: NoteComment; onResolve: (id: string) => Promise<void> }) {
-  const action = useBusy();
-  return <PendingButton className="studio-button" pending={action.busy} pendingLabel="Resolving…" disabled={action.busy} onClick={() => { void action.run(() => onResolve(comment.id)); }}>Resolve feedback</PendingButton>;
-}
-
-function Bubble({ comment, readOnly, onResolve }: { comment: NoteComment; readOnly: boolean; onResolve: (id: string) => Promise<void> }) {
-  const [open, setOpen] = useState(false);
-  const who = authorOf(comment);
-  return (
-    <>
-      <button type="button" className="studio-suggest-icon" aria-expanded={open} aria-label={`Comment from ${who}`} onClick={() => { setOpen(!open); }}>
-        <MessageSquare size={13} aria-hidden />
-      </button>
-      {open && <div className="studio-suggest-comment-pop" role="note"><strong>{who}</strong><p>{comment.body}</p>{!readOnly && <Resolve comment={comment} onResolve={onResolve} />}</div>}
-    </>
-  );
-}
-
-// The cards and comment bubbles, drawn into the elements the editor plugin
-// placed (visual.ts), and the plugin told where they go.
-export function VisualSuggestions({ layer, placement, focus, readOnly, decisions, onResolveComment }: { layer: SuggestionLayer; placement: Placement; focus: string | null; readOnly: boolean; decisions: Decisions; onResolveComment: (id: string) => Promise<void> }) {
-  const placedComments = placement.comments.filter((each): each is { comment: NoteComment; block: number } => each.block !== null);
+// The cards and the review threads' marks (src/review), drawn into the
+// elements the editor plugin placed (visual.ts), and the plugin told where
+// they go. `text`: the note as the editor holds it, for a new thread's block.
+export function VisualSuggestions({ layer, placement, focus, readOnly, decisions, text, threads, threadFocus }: { layer: SuggestionLayer; placement: Placement; focus: string | null; readOnly: boolean; decisions: Decisions; text: string; threads: NoteThreadActions; threadFocus: ThreadFocus | null }) {
+  const draft = useCommentDraft();
   const marks: VisualMarks = {
     hunks: placement.hunks.map((hunk) => ({ key: hunk.key, first: hunk.first, count: hunk.count, stale: hunk.stale, focus: hunk.key === focus })),
-    comments: placedComments.map(({ comment, block }) => ({ key: comment.id, block })),
+    comments: threadMarks(placement, readOnly ? null : draft),
   };
   // Only when what is marked changes: each set redraws the editor.
   const marked = JSON.stringify(marks);
@@ -184,22 +169,6 @@ export function VisualSuggestions({ layer, placement, focus, readOnly, decisions
   const portals: ReactNode[] = placement.hunks.map((hunk, index) =>
     createPortal(<Card hunk={hunk} index={index + 1} total={placement.hunks.length} readOnly={readOnly} decisions={decisions} />, layer.element(hunk.key, 'studio-suggest-card'), hunk.key),
   );
-  for (const { comment } of placedComments) portals.push(createPortal(<Bubble comment={comment} readOnly={readOnly} onResolve={onResolveComment} />, layer.element(`c:${comment.id}`, 'studio-suggest-comment'), comment.id));
+  portals.push(<ThreadMarks key="threads" layer={layer} placement={placement} text={text} readOnly={readOnly} actions={threads} focus={threadFocus} />);
   return <>{portals}</>;
-}
-
-// Comments on the note as a whole, or on a block that is gone: under the bar.
-export function NoteComments({ placement, readOnly, onResolve }: { placement: Placement; readOnly: boolean; onResolve: (id: string) => Promise<void> }) {
-  const loose = placement.comments.filter((each) => each.block === null);
-  if (loose.length === 0) return null;
-  return (
-    <ul className="studio-suggest-notes" aria-label="Comments on the note">
-      {loose.map(({ comment }) => (
-        <li key={comment.id}>
-          <span><MessageSquare size={13} aria-hidden /> <strong>{authorOf(comment)}</strong> {comment.body}</span>
-          {!readOnly && <Resolve comment={comment} onResolve={onResolve} />}
-        </li>
-      ))}
-    </ul>
-  );
 }

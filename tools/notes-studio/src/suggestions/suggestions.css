@@ -152,47 +152,13 @@
     color: var(--fde-warning);
   }
 
-  /* A comment on a block, in the right margin. */
+  /* A review thread's mark on a block, in the right margin (src/review). */
   .studio-suggest-comment {
     position: relative;
     float: right;
     margin-right: -40px;
     height: 0;
   }
-  .studio-suggest-comment-pop {
-    position: absolute;
-    top: 28px;
-    right: 0;
-    z-index: 3;
-    width: min(260px, 70vw);
-    padding: 8px 10px;
-    border: 1px solid var(--fde-border);
-    border-radius: 8px;
-    background: var(--fde-card);
-    box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
-    font-size: 12.5px;
-  }
-  .studio-suggest-comment-pop p {
-    margin: 4px 0 0;
-  }
-  .studio-suggest-notes {
-    margin: 0;
-    padding: 6px 16px;
-    list-style: none;
-    border-bottom: 1px solid var(--fde-border);
-    font-size: 12.5px;
-  }
-  .studio-suggest-notes > li {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    justify-content: space-between;
-    padding: 3px 0;
-  }
-  .studio-suggest-notes > li > .studio-button {
-    flex: none;
-  }
-
   /* Source: the lines a hunk replaces, and what it puts there. */
   .studio-suggest-line-removed {
     background: color-mix(in srgb, var(--fde-error) 10%, transparent);
@@ -230,11 +196,6 @@
       float: none;
       margin: 0 0 4px;
       height: auto;
-    }
-    .studio-suggest-comment-pop {
-      position: static;
-      width: auto;
-      margin-top: 4px;
     }
   }
 }

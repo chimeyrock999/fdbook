@@ -900,9 +900,27 @@ written into the note until a person accepts it.
   Source the lines it replaces are marked and what it puts there follows
   them. Hunks are placed on the text in the editor, so typing never waits
   for a save; a stale hunk is shown where a rebase would put it.
-- **Comments.** A comment on a block is a bubble at the block's right; one
-  on the note, or on a block that is gone, is listed under the bar. Threads,
-  answers and states are planned in #87.
+- **Review threads.** Agents and people comment in threads (#87). A
+  thread on a block is a mark at the block's right, with its number of
+  comments: red while a blocking thread waits, faint once every thread
+  there is addressed. The mark opens the threads: every comment and move,
+  who wrote it (an agent with its model and role), the suggestion that
+  goes with it (**Show** focuses its card), a reply box, and the moves you
+  may make (**Mark addressed**, **Reject** with a reason in the box,
+  **Resolve**, **Reopen**, **Needs a decision**). A thread follows its
+  block as the note changes, whoever edits it; once the block is gone it
+  is listed over the note with what the block said. To comment, select
+  text and pick **Comment** on the format bubble (a severity is optional:
+  Blocking or Nit).
+- **Review view.** The activity bar's Review view (in a change request)
+  lists every thread by note, filtered by state (not resolved by
+  default), severity, author and note; its badge counts the blocking
+  threads still open or waiting for a decision. Picking a thread opens
+  its note in Visual with the thread open. **Comment on the note** opens
+  a thread on the open note as a whole. **Review this CR** (for whoever
+  may run agents) starts a reviewer chat with the agent picked: it reads
+  what the change request changed against main and comments there,
+  changing nothing; **Open chat** shows it in the agent panel.
 - **Deletes.** An agent proposes deleting a page or folder with
   `propose_delete`; nothing is deleted. The tree marks the row with a red
   bin (a folder row for its own page too), a bar over the note (or any note
