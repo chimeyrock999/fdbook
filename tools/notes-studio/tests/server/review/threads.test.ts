@@ -155,6 +155,27 @@ describe('review threads', () => {
     expect(await threads.read(id)).toMatchObject({ path: 'content/notes/handbook.mdx', orphaned: false, anchor: { index: 2 } });
   });
 
+  it('keeps a thread orphaned before a rename orphaned through it, and finds one whose own block the rename changed', async () => {
+    const x = 'The cache keeps every page for an hour before it reads the source again.';
+    const sibling = x.replace('page', 'image');
+    const v1 = `Intro.\n\n${x}\n\nMiddle.\n\n${sibling}\n\nEnd.\n`;
+    const old = await threads.open({ path: PATH, text: v1, block: 1, body: 'x', by: REVIEWER });
+    const v2 = v1.replace(`${x}\n\n`, '');
+    await threads.reanchor(PATH, note(v2));
+    const v3 = v2.replace('again.', 'again later.');
+    await threads.reanchor(PATH, note(v3));
+    await threads.moved('guide.mdx', 'handbook.mdx', () => Promise.resolve(v3));
+    expect(await threads.read(old.id)).toMatchObject({ path: 'content/notes/handbook.mdx', orphaned: true, anchor: { text: x } });
+    // Orphaned by the rename's own unlink, with its block changed by the rename (a link to itself).
+    const page = 'Read [this page](./guide.mdx) first.';
+    const linked = `Intro.\n\n${page}\n\nEnd.\n`;
+    const own = await threads.open({ path: 'content/notes/a.mdx', text: linked, block: 1, body: 'y', by: REVIEWER });
+    await threads.reanchor('content/notes/a.mdx', note(null));
+    const rewritten = linked.replace('./guide.mdx', './b.mdx');
+    await threads.moved('a.mdx', 'b.mdx', () => Promise.resolve(rewritten));
+    expect(await threads.read(own.id)).toMatchObject({ path: 'content/notes/b.mdx', orphaned: false, anchor: { index: 1, text: 'Read [this page](./b.mdx) first.' } });
+  });
+
   it('reads no note that has no threads, and each change is later than the last', async () => {
     const read = vi.fn(() => Promise.resolve(NOTE));
     expect(await threads.reanchor(PATH, read)).toEqual([]);

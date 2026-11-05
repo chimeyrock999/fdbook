@@ -75,6 +75,10 @@ export function createThreads(file: string, { onChange }: ThreadsOptions = {}) {
   const lock = createKeyedLock();
   let kept: Thread[] | null = null;
   let closed = false;
+  // The threads orphaned only because their note went (an unlink), until
+  // a move or the note's return settles them: the watcher may report a
+  // rename before the tree says where the note went (moved).
+  const unlinked = new Set<string>();
   const read = async (): Promise<Thread[]> => {
     kept ??= await load();
     return structuredClone(kept);
@@ -177,6 +181,8 @@ export function createThreads(file: string, { onChange }: ThreadsOptions = {}) {
           const found = blocks === null ? null : locate(thread.anchor, blocks, thread.orphaned);
           const anchor = blocks === null || found === null ? thread.anchor : anchorAt(blocks, found);
           const orphaned = found === null;
+          if (blocks === null && !thread.orphaned) unlinked.add(thread.id);
+          if (!orphaned) unlinked.delete(thread.id);
           if (orphaned === thread.orphaned && JSON.stringify(anchor) === JSON.stringify(thread.anchor)) continue;
           Object.assign(thread, { anchor, orphaned, updatedMs: after(thread.updatedMs) });
           changed.push(thread);
@@ -191,7 +197,9 @@ export function createThreads(file: string, { onChange }: ThreadsOptions = {}) {
     // content/notes: its threads go with it, placed on the notes at their
     // new paths as `readNote` reads them. The watcher may have seen the
     // rename first and orphaned them on the old path: that loss was the
-    // move, so they are placed as if they had never lost their block.
+    // move, so those are placed as if they had never lost their block (the
+    // rename may have rewritten a link in it); one orphaned before keeps
+    // the orphaned rule (anchors.ts).
     moved(from: string, to: string, readNote: (path: string) => Promise<string | null>) {
       const [old, now] = [`${NOTES_DIR}/${from}`, `${NOTES_DIR}/${to}`];
       return lock('threads', async () => {
@@ -203,7 +211,8 @@ export function createThreads(file: string, { onChange }: ThreadsOptions = {}) {
           const path = now + thread.path.slice(old.length);
           if (!notes.has(path)) notes.set(path, await readNote(path).then((text) => (text === null ? null : blocksOf(text))).catch(() => null));
           const blocks = notes.get(path) ?? null;
-          const found = blocks === null || thread.anchor === null ? null : locate(thread.anchor, blocks);
+          const found = blocks === null || thread.anchor === null ? null : locate(thread.anchor, blocks, thread.orphaned && !unlinked.has(thread.id));
+          unlinked.delete(thread.id);
           Object.assign(thread, { path, updatedMs: after(thread.updatedMs), ...(blocks !== null && found !== null ? { anchor: anchorAt(blocks, found), orphaned: false } : {}) });
         }
         await write(threads);
