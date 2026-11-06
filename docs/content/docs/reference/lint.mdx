@@ -36,7 +36,7 @@ code are never checked.
 | `accordion-group` | warning | In a `::::accordions` group: an item with its own `type`, two items with one value (their `value`, else their title), and a `defaultValue` no item has | The group decides how its items open: an item's `type` does nothing, two items with one value open and close together, and the `defaultValue` opens nothing. |
 | `link-broken` | error | A relative link or link definition (`./`, `../`, `foo/bar`) that reaches no note, resolved like `source.resolveHref` (as a file next to the note, then as a URL against the page), and a `/notes/…` link with no page. A link to a file under `public/notes` is fine. | The link is dead on the site. |
 | `asset-missing` | error | A `HtmlEmbed`, `SvgDiagram`, `::html`, `::svg` or `::diagram` with no `src` or a `src` that is not a file in `public/` (a URL such as `https://…` included: the site only reads `public/`), a `/…` image that is not in `public/`, and a `<Diagram>` with no `src` or no `diagrams/<src>.diagram.json`. `HtmlEmbed` with inline `html` and `SvgDiagram` with inline `svg` are skipped. | The site shows a placeholder. |
-| `diagram-invalid` | error, warning | A `<Diagram>` file the site's checks (`lib/diagram/validate.ts`) find wrong: an error when it cannot be laid out, a warning when it draws with a layout problem (nodes too close, a label that overflows) | An error shows a placeholder on the site; a warning draws badly. |
+| `diagram-invalid` | error, warning | A `<Diagram>` file the site's checks (`packages/diagram/src/validate/validate.ts`) find wrong: an error when it cannot be laid out, a warning when it draws with a layout problem (nodes too close, a label that overflows) | An error shows a placeholder on the site; a warning draws badly. |
 | `graph-id-duplicate` | error | Two sections with one id in a note: `GraphMeta`, `:graph-meta`, `SectionTitle`, `GraphSection`, or any marker with `graphType`/`graphKind="section"`. Keywords may reuse a section's id, and the same id on two notes is how the graph links them. | The anchor and graph node point to the first one. |
 | `graph-meta-incomplete` | error, warning | A marker with no `id`; a Keyword, Tag, SectionTitle or GraphSection with no `displayName` (a `:keyword[…]` or `:tag[…]` label stands in for it); a warning for a GraphMeta with no `displayName` | The graph drops the marker; a GraphMeta falls back to its heading text. |
 | `emphasis-marker` | warning | Emphasis or strong written with `_` / `__` | The notes use `*text*` / `**text**`, as the editor writes them, so a Visual edit does not rewrite them in a diff. |
@@ -44,21 +44,22 @@ code are never checked.
 
 ## Lists shared with the site
 
-Callout types and accordion kinds come from `lib/notes-syntax.ts`, the same
+Callout types and accordion kinds come from `packages/mdx/src/notes-syntax.ts`, the same
 lists the site's components use. The directive names the lint knows come
 from there too (`CONTAINER_DIRECTIVES`, `LEAF_DIRECTIVES`,
 `TEXT_DIRECTIVES`), but the site's directive plugin
-(`lib/remark-notes-directives.ts`) reads only `CALLOUT_DIRECTIVES` from it
+(`packages/mdx/src/remark-notes-directives.ts`) reads only `CALLOUT_DIRECTIVES` from it
 and names the other directives it renders itself.
 The root test `tests/remark-notes-directives.test.mjs` checks that every
 listed directive renders; it cannot see a non-callout directive the plugin
-renders and the list lacks, so when the site gains one, add it to `lib/notes-syntax.ts`
+renders and the list lacks, so when the site gains one, add it to `packages/mdx/src/notes-syntax.ts`
 too, or the lint reports it as unknown.
 
 ## Running it on every note
 
 ```sh
-npm run studio:lint   # from the repo root
+npm run docs:lint                                  # these docs
+npm run lint:notes -w @fdbook/server -- <folder>   # another project
 ```
 
 lints every note and exits 1 on an error (`server/lint/cli.ts`).

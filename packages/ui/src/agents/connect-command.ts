@@ -8,7 +8,7 @@ export function connectCommand(client: Client, url: string, token: string | null
   // Codex reads the token from a variable each time it starts: the command
   // names the variable only, and the token stays out of it (CODEX_TOKEN_STEP).
   if (client === 'codex') return `codex mcp add notes-studio --url ${url}${token === null ? '' : ' --bearer-token-env-var STUDIO_MCP_TOKEN'}`;
-  return `STUDIO_MCP_URL=${url}${token === null ? '' : ` STUDIO_MCP_TOKEN=${token}`} node studio/server/mcp/stdio.ts`;
+  return `STUDIO_MCP_URL=${url}${token === null ? '' : ` STUDIO_MCP_TOKEN=${token}`} node packages/server/src/mcp/stdio.ts`;
 }
 
 // Sets STUDIO_MCP_TOKEN for Codex from a paste, without echoing it or

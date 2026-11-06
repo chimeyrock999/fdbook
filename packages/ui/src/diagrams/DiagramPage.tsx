@@ -46,7 +46,7 @@ const STATUS: Record<SaveStatus, string> = {
   failed: 'Could not save',
 };
 
-// The `src` a <Diagram> names the file with (lib/diagram/source.ts, the other way).
+// The `src` a <Diagram> names the file with (packages/diagram/src/model/source.ts, the other way).
 const srcOf = (path: string) => path.slice(DIAGRAMS_DIR.length + 1, -DIAGRAM_SUFFIX.length);
 
 // Whether a key press belongs to a field (or the JSON view) rather than the canvas.

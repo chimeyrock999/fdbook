@@ -20,7 +20,7 @@ import { ASSETS_DIR, classifyPath, DIAGRAMS_DIR, extensionOf, isAssetExtension, 
 // - Markdown links, link definitions and <img src>: a URL, resolved against
 //   the page URL, as the browser does.
 // - `src` of <Diagram>: a file under diagrams/ without its extension
-//   (lib/read-diagram.ts). It is listed with the assets so a diagram shows
+//   (packages/diagram/src/node/read-diagram.ts). It is listed with the assets so a diagram shows
 //   where it is used, and never rewritten: diagrams are not renamed here.
 
 export type AssetRefKind = 'image' | 'link' | 'jsx' | 'directive' | 'diagram';

@@ -168,7 +168,7 @@
    dark one, where its light lines and dark nodes both lose contrast. The
    dark theme tints it instead, and its title keeps the theme's ink, unless
    the author also set the title's `color:` for that fill. The marks come
-   from lib/pele-author-fill.ts. */
+   from packages/mdx/src/pele-author-fill.ts. */
 .dark .notes-theme svg.pele, .dark:has(.notes-theme) svg.pele {
   --notes-cluster-tint: 0.22;
 }
@@ -194,7 +194,7 @@
 /* Pele draws a halo behind a subgraph title it lifted out of its subgraph,
    mixed from its own subgraph colour; on an author's fill, mix it from that
    fill at the subgraph's strength over the background, or it smears around
-   the ink above. lib/pele-author-fill.ts finds the title and gives it the
+   the ink above. packages/mdx/src/pele-author-fill.ts finds the title and gives it the
    fill, or the surface when the author cleared it (`fill:transparent`). */
 :root:has(.notes-theme) svg.pele .pele-cluster-title[data-author-fill] > text:not(.pele-cluster-label),
 .notes-theme svg.pele .pele-cluster-title[data-author-fill] > text:not(.pele-cluster-label) {

@@ -180,11 +180,11 @@ editor is [fumadocs-editor](https://github.com/fuma-nama/fumadocs-editor):
   description are typed in place (Enter moves on to the next line, then the
   body). The strip under them sums up the rest (icon, Hidden, graph id,
   keyword and section counts, errors) and opens to edit it: the icon, from
-  the lucide names the site knows (`lib/notes-icons.ts`); whether the page
+  the lucide names the site knows (`packages/mdx/src/notes-icons.ts`); whether the page
   is shown in the site's sidebar (off writes `visible: false`); the graph's
   id and displayName; keywords as chips; sections with their keywords.
   Other keys show read only. Every change is checked against
-  `notesPageSchema` (`lib/notes-schema.ts`), written only when it passes,
+  `notesPageSchema` (`packages/mdx/src/notes-schema.ts`), written only when it passes,
   and the issues show next to the field. Only the edited values change;
   comments, key order, quoting and other keys stay. Visual hides the YAML
   block; Source shows it.

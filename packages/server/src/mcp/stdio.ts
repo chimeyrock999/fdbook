@@ -3,7 +3,7 @@
 // holds no tool: it passes each request on to the Studio's /api/mcp.
 //   STUDIO_MCP_URL    http://127.0.0.1:<port>/api/mcp
 //   STUDIO_MCP_TOKEN  a run's or a person's agent token (none with sign-in off)
-// Run with node: `node studio/server/mcp/stdio.ts`.
+// Run with node: `node packages/server/src/mcp/stdio.ts`.
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';

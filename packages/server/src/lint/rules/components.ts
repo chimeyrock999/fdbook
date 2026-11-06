@@ -63,7 +63,7 @@ function decodeUrlPath(url: string) {
 }
 
 // components/mdx/diagram.tsx reads `<diagrams>/<src>.diagram.json`
-// (lib/read-diagram.ts), so `src` is a path there, not a public URL, and it
+// (packages/diagram/src/node/read-diagram.ts), so `src` is a path there, not a public URL, and it
 // draws only a diagram that lays out.
 function checkDiagram(node: Nodes, source: string, context: LintContext, report: Report, src: string | null | undefined) {
   if (src === null) return;

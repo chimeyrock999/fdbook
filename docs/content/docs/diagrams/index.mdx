@@ -6,11 +6,11 @@ description: The diagram file format the diagram editor and the diagram tools ed
 Each `<page path>/<name>.diagram.json` in the project's diagrams folder
 (`diagrams` in [Configuration](../guide/configuration.mdx)) is one diagram,
 drawn into a page with `<Diagram src="<page path>/<name>" />`. The site lays it out and routes
-its edges when it builds (`lib/diagram`) and inlines the SVG, so a note ships
+its edges when it builds (`packages/diagram`) and inlines the SVG, so a note ships
 the drawing and a small viewer: hover a node to light its edges, click it to
 dim the rest and read its note, expand for pan, zoom, the cards and export.
 
-The format is checked by `lib/diagram/schema.ts`; `diagram.schema.json` is its
+The format is checked by `packages/diagram/src/model/schema.ts`; `diagram.schema.json` is its
 JSON Schema for editors. What a diagram
 says sits apart from where it is drawn, so a change of meaning and a move read
 as separate diffs:
@@ -60,7 +60,7 @@ as separate diffs:
   that way shows as written; escape a literal `<` or `{` as `\<` or `\{`.
 - **Lanes** are columns with a numbered header.
 - **Layout**: every node needs a box before it draws; a node without one is
-  placed by the auto layout (elkjs, `lib/diagram/auto-layout.ts`),
+  placed by the auto layout (elkjs, `packages/diagram/src/edit/auto-layout.ts`),
   next to what it connects to, without moving a node already placed. Routes
   are planned around nodes, frame borders and other routes; `via` pins
   waypoints, `fromSide`/`toSide` pin the ends, `labelAt`/`labelDx`/`labelDy`
@@ -102,7 +102,7 @@ message is moving its line in the file.
 - The canvas is 920px wide for four participants or more and narrower for
   two or three short ones; its height follows the timeline.
 - The [examples](./examples.mdx) (two converted from Archify) are each
-  held to Archify's own drawing of them (`lib/diagram/ARCHIFY.md`), as are
+  held to Archify's own drawing of them (`packages/diagram/ARCHIFY.md`), as are
   the lifecycle examples there.
 
 ## Lifecycles
@@ -142,12 +142,12 @@ from the main path.
 - A state may transition to itself.
 
 The layout, routing and label placement are ported from
-[Archify](https://github.com/tt-a1i/archify) (MIT, `lib/diagram/LICENSE.archify`), whose specs these
-diagrams were converted from (`lib/diagram/import-archify.ts`); which
+[Archify](https://github.com/tt-a1i/archify) (MIT, `packages/diagram/LICENSE.archify`), whose specs these
+diagrams were converted from (`packages/diagram/src/import/import-archify.ts`); which
 Archify release the port matches, and how to check a new one, is in
-`lib/diagram/ARCHIFY.md`. A diagram
+`packages/diagram/ARCHIFY.md`. A diagram
 that does not draw shows a placeholder in the note with the first problem;
-the checks (`lib/diagram/validate.ts`) each have a stable code, the place in
+the checks (`packages/diagram/src/validate/validate.ts`) each have a stable code, the place in
 the file (`path`, such as `layout.nodes.plan`) and a fix.
 
 ## Tools
@@ -158,7 +158,7 @@ the file (`path`, such as `layout.nodes.plan`) and a fix.
   reorders participants and messages instead, a lifecycle's adds transitions
   and edits the main path ([Using the Studio](../guide/using.mdx#diagrams)).
 - In a change request, agents use the Studio MCP's `diagram_*` tools
-  (`studio/server/mcp/diagram-tools.ts`), which make the same edits through
-  the Studio's file store; `lib/diagram/ops.ts` holds the edits both share.
+  (`packages/server/src/mcp/diagram-tools.ts`), which make the same edits through
+  the Studio's file store; `packages/diagram/src/edit/ops.ts` holds the edits both share.
 
 The [examples](./examples.mdx) draw one diagram of each type.

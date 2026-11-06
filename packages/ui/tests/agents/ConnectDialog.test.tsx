@@ -29,7 +29,7 @@ describe('Connect an agent', () => {
     // Codex names the variable only: the token never goes on its command line.
     expect(connectCommand('codex', 'http://h/api/mcp', 't')).toBe('codex mcp add notes-studio --url http://h/api/mcp --bearer-token-env-var STUDIO_MCP_TOKEN');
     expect(connectCommand('codex', 'http://h/api/mcp', null)).toBe('codex mcp add notes-studio --url http://h/api/mcp');
-    expect(connectCommand('stdio', 'http://h/api/mcp', null)).toBe('STUDIO_MCP_URL=http://h/api/mcp node studio/server/mcp/stdio.ts');
+    expect(connectCommand('stdio', 'http://h/api/mcp', null)).toBe('STUDIO_MCP_URL=http://h/api/mcp node packages/server/src/mcp/stdio.ts');
   });
 
   it('asks for no token with sign-in off', async () => {

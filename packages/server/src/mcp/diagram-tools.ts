@@ -14,7 +14,7 @@ import type { StudioTool, StudioToolContext, ToolResult } from './tool.ts';
 // worktree, so an agent never rewrites a whole file or a coordinate by hand.
 // Every write goes through ctx.files with the mtime it read, lays out any
 // node left without a position, and answers with the checks of
-// lib/diagram/validate.ts. The format is in diagrams/README.md. Layout
+// packages/diagram/src/validate/validate.ts. The format is in diagrams/README.md. Layout
 // (elkjs) and drawing (resvg) load on first use, from the repository root's
 // packages, so the server starts without them.
 

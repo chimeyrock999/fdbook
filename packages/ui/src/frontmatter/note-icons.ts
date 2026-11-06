@@ -5,7 +5,7 @@ import { fetchIconNames } from '#api/icons.ts';
 export type Icons = { names: readonly string[]; known: ReadonlySet<string>; draw: Record<string, unknown> };
 
 // The site turns `icon` into a lucide icon by name, from its own
-// lucide-react; the server lists those names (lib/notes-icons.ts). The
+// lucide-react; the server lists those names (packages/mdx/src/notes-icons.ts). The
 // Studio draws them with its lucide-react, which still exports every name
 // the site's has. Both are large, so they load on first use.
 let loading: Promise<Icons> | null = null;

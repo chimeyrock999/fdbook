@@ -13,7 +13,7 @@ import { parseAccordions, withAccordionAttributes, withAccordionBody, type Accor
 // (components/mdx/youtube.tsx). Each becomes a card over its hidden source;
 // the "MDX" button (or selecting the block) shows the source again.
 
-// The site's icon per kind (lib/notes-accordion.ts, lucide-react), drawn
+// The site's icon per kind (packages/mdx/src/notes-accordion.ts, lucide-react), drawn
 // here as plain DOM with the lucide icon of the same name.
 export function kindIcon(kind: AccordionKind): IconNode {
   const name = accordionKindIcons[kind].displayName;

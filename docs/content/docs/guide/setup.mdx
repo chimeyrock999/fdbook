@@ -23,27 +23,24 @@ use it is in [Using the Studio](./using.mdx); how it is built is in
 From the repo root, after the root `npm install`:
 
 ```sh
-npm run studio:install   # once, and after a pull that changed this package
-npm run studio           # http://127.0.0.1:4310
+npm run docs                     # the Studio on these docs, http://127.0.0.1:4310
+npm run studio -- <folder>       # the Studio on another project
 ```
 
-`npm run studio` runs `server/index.ts` in this package. The Studio is not
-part of the site build: `tools/` is outside the site's TypeScript, ESLint
-and Tailwind sources.
+Both run `packages/server/src/index.ts`; which folder it opens and what it
+reads there is in [Configuration](./configuration.mdx).
 
 ### After a pull
 
-Run `npm install` (and `npm run studio:install` when this package changed),
-then restart the Studio. The server keeps the code it started with while
+Run `npm install`, then restart the Studio. The server keeps the code it started with while
 the page reloads with every update, so a new endpoint answers with the
 app's page until the restart; the API clients (`src/api/json.ts`) then say
-to restart `npm run studio`.
+to restart the Studio.
 
-The server refuses to start when a direct dependency, at the root or here,
-is missing or installed at another version than its `package-lock.json`
-pins, and names the command to run and the packages (`server/deps.ts`).
-The Studio's tests stop the same way (`tests/global-setup.ts`); the root
-`npm test` has no such check. A package put in place with `npm link` is skipped.
+The server refuses to start when a direct dependency is missing or
+installed at another version than the root `package-lock.json`
+pins, and names the command to run and the packages (`server/config/deps.ts`).
+The tests stop the same way (`@fdbook/testing`'s `global-setup.ts`). A package put in place with `npm link` is skipped.
 
 ## Host and port
 
@@ -135,8 +132,8 @@ variable): the Studio holds no key, and starts the agent without its own
 
 | Agent | How it is installed |
 | --- | --- |
-| Claude Code | `@agentclientprotocol/claude-agent-acp`, a dependency of this package (`npm run studio:install`) |
-| Codex | `@agentclientprotocol/codex-acp`, a dependency of this package |
+| Claude Code | `@agentclientprotocol/claude-agent-acp`, a dependency of `@fdbook/server` |
+| Codex | `@agentclientprotocol/codex-acp`, a dependency of `@fdbook/server` |
 | omp | install it yourself; the Studio runs `omp acp` |
 | Hermes Agent | install it with its `[acp]` extra; the Studio runs `hermes acp` |
 
@@ -164,7 +161,7 @@ claude mcp add --transport http notes-studio http://127.0.0.1:4310/api/mcp
 codex mcp add notes-studio --url http://127.0.0.1:4310/api/mcp
 
 # Any stdio client (add STUDIO_MCP_TOKEN=<token> with sign-in on)
-STUDIO_MCP_URL=http://127.0.0.1:4310/api/mcp node studio/server/mcp/stdio.ts
+STUDIO_MCP_URL=http://127.0.0.1:4310/api/mcp node packages/server/src/mcp/stdio.ts
 ```
 
 With sign-in on, a token acts with the role of the person who made it,

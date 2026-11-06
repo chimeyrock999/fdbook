@@ -2,7 +2,7 @@ import { decodeNamedCharacterReference } from 'decode-named-character-reference'
 import { attributes } from '#plugins/source-attributes.ts';
 
 // `::::accordions{…}` with its `:::accordion{kind="…" title="…"}` items, as
-// lib/remark-notes-directives.ts reads them. The editor keeps the whole group
+// packages/mdx/src/remark-notes-directives.ts reads them. The editor keeps the whole group
 // as one verbatim block; this reads it and rewrites one item's body, kind or
 // title without touching any other byte.
 

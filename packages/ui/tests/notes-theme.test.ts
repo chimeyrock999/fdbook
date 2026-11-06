@@ -119,7 +119,7 @@ describe('notes prose', () => {
   // Pele paints the plate behind an edge label in --pele-bg: transparent
   // lets the line run through the text. Each surface a diagram sits on
   // names its colour, and the dark label ink follows the marks
-  // lib/pele-author-fill.ts sets (a lifted subgraph title included).
+  // packages/mdx/src/pele-author-fill.ts sets (a lifted subgraph title included).
   it('gives diagram label plates the surface and dark ink the author-fill mark', async () => {
     const site = await read('packages/mdx/styles/notes-theme.css');
     expect(values(block(site, ':root:has(.notes-theme) svg.pele, .notes-theme svg.pele'))['--pele-bg']).toBe(

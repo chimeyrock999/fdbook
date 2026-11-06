@@ -85,7 +85,7 @@ function store(live: Editor) {
 }
 
 describe('accordion cards', () => {
-  // The site's lucide-react icon per kind (lib/notes-accordion.ts), as the
+  // The site's lucide-react icon per kind (packages/mdx/src/notes-accordion.ts), as the
   // lucide icon of the same name.
   it('draws each kind with the icon of the site', () => {
     for (const kind of ACCORDION_KINDS) {

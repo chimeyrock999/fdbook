@@ -1,6 +1,6 @@
 import { CALLOUT_DIRECTIVES, CALLOUT_TYPES as SITE_CALLOUT_TYPES } from '@fdbook/mdx/notes-syntax.ts';
 
-// The site's callout types (lib/notes-syntax.ts) in menu order: mild to
+// The site's callout types (packages/mdx/src/notes-syntax.ts) in menu order: mild to
 // severe. A type the order does not know yet goes last.
 const ORDER = ['note', 'info', 'tip', 'idea', 'example', 'success', 'warn', 'warning', 'caution', 'important', 'danger', 'error'];
 function rank(type: string) {

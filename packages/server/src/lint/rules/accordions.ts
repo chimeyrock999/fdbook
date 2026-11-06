@@ -37,7 +37,7 @@ function valueOf(item: Item): string | null {
   return attribute(item, 'title') ?? null;
 }
 
-// `::::accordions` is the root of its items (lib/remark-notes-directives.ts),
+// `::::accordions` is the root of its items (packages/mdx/src/remark-notes-directives.ts),
 // so the group's `type` and `defaultValue` decide how they open: a `type` on
 // a `:::accordion` does nothing, two items with one value open and close
 // together, and a `defaultValue` no item has opens nothing.

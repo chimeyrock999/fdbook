@@ -4,7 +4,7 @@ import type { SequenceLayer } from '@fdbook/diagram/sequence.ts';
 
 // What the diagram editor changes, on the file's input form (no schema
 // defaults filled in), so a save touches only the lines an edit changed.
-// Each returns a changed copy. lib/diagram/ops.ts has the edits agents
+// Each returns a changed copy. packages/diagram/src/edit/ops.ts has the edits agents
 // share; these are the editor's own: duplicates, frames, cards, waypoints.
 
 export type Input = DiagramInput;
@@ -217,7 +217,7 @@ function removeEdgeIn(diagram: Input, id: string): Input {
   return diagram;
 }
 
-// A sequence's segments and activations keep their ends (lib/diagram/ops.ts).
+// A sequence's segments and activations keep their ends (packages/diagram/src/edit/ops.ts).
 export const removeEdge = (diagram: Input, id: string): Input => ((diagram.edges ?? []).some((edge) => edge.id === id) ? removeEdgeOp(diagram, id) : diagram);
 
 // An edge's waypoints, on the grid; null clears them, so the route is
@@ -324,7 +324,7 @@ export function updateCard(diagram: Input, index: number, patch: Partial<CardInp
   return next;
 }
 
-// A sequence's edits: its order is its layout (lib/diagram/ops.ts reorder).
+// A sequence's edits: its order is its layout (packages/diagram/src/edit/ops.ts reorder).
 
 // The column a participant dragged to `x` lands in.
 export function participantIndexAt(layer: SequenceLayer, id: string, x: number) {

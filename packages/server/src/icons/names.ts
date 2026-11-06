@@ -1,4 +1,4 @@
-// The lucide names a note's `icon` can take, from lib/notes-icons.ts with the
+// The lucide names a note's `icon` can take, from packages/mdx/src/notes-icons.ts with the
 // site's own lucide-react (in the browser, Vite would hand it the Studio's, a
 // newer set with other names). Loaded once; a failed load (lucide-react still
 // installing) is tried again on the next call.
