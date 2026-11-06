@@ -8,15 +8,19 @@ root of a fumadocs site. It reads `fdbook.config.ts` in that folder; without
 one, it uses the defaults below.
 
 ```ts title="fdbook.config.ts"
-import { defineConfig } from '@fdbook/server/config';
-
-export default defineConfig({
+export default {
   root: 'content/docs',
   media: 'public/docs',
   diagrams: 'diagrams',
   baseUrl: '/docs',
-});
+};
 ```
+
+The file exports a plain object, so it needs nothing installed in the
+site. Inside the FdBook repository a config can also wrap it in
+`defineConfig` from `@fdbook/server/config`, as `docs/fdbook.config.ts`
+does, for its types; a site outside it can do the same once FdBook is
+published to npm.
 
 Every path is relative to the config file and must stay inside the
 repository. The names follow `StudioConfig` of `@fumadocs-editor/studio`
@@ -24,7 +28,7 @@ where they mean the same thing.
 
 | Field | Default | What it is |
 | --- | --- | --- |
-| `root` | `content/docs`, else `content` | The pages: `.mdx` files and the `meta.yaml` files that order them. |
+| `root` | `content/docs`, else `content` | The pages: `.mdx` files and the `meta.json` or `meta.yaml` files that order them. |
 | `media` | `public/docs` | Where the Studio saves the files a page shows. It must be inside `public/`, which the site serves at `/`, so a file at `public/docs/guide/a.png` is `/docs/guide/a.png` in a page. |
 | `diagrams` | `diagrams` | The diagram files `<Diagram src>` draws. |
 | `baseUrl` | `/docs` | The URL the site gives the pages, as in fumadocs' `loader({ baseUrl })`. Links between pages are checked against it. |
@@ -39,6 +43,15 @@ The folder is read from where npm runs, and defaults to it. The Studio
 finds the repository the folder is in: change requests branch the whole
 repository, and the paths it shows are paths in there. These docs are
 opened with `npm run docs`, which is `npm run studio -- docs`.
+
+The repository needs a remote named `origin` with a `main` branch: each
+change request starts from `origin/main` and is pushed back there. A site
+just made with `create-fumadocs-app` has neither, so add them first:
+
+```sh
+git remote add origin <url>
+git push -u origin main
+```
 
 :::note
 Only the paths are configurable for now. The components the editor knows,
