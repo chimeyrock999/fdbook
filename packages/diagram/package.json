@@ -5,8 +5,24 @@
   "description": "Diagram files: schema, checks, layout, routing and rendering, shared by the Studio and a site.",
   "type": "module",
   "exports": {
-    "./styles/*": "./styles/*",
-    "./*": "./src/*"
+    "./schema.ts": "./src/model/schema.ts",
+    "./format.ts": "./src/model/format.ts",
+    "./source.ts": "./src/model/source.ts",
+    "./ops.ts": "./src/edit/ops.ts",
+    "./auto-layout.ts": "./src/edit/auto-layout.ts",
+    "./validate.ts": "./src/validate/validate.ts",
+    "./validate-lifecycle.ts": "./src/validate/validate-lifecycle.ts",
+    "./scene.ts": "./src/layout/scene.ts",
+    "./sequence.ts": "./src/layout/sequence.ts",
+    "./render.ts": "./src/render/render.ts",
+    "./diagram-export.ts": "./src/render/diagram-export.ts",
+    "./lens.ts": "./src/view/lens.ts",
+    "./minimap.ts": "./src/view/minimap.ts",
+    "./import-archify.ts": "./src/import/import-archify.ts",
+    "./png.ts": "./src/node/png.ts",
+    "./read-diagram.ts": "./src/node/read-diagram.ts",
+    "./note-text.ts": "./src/site/note-text.ts",
+    "./styles/*": "./styles/*"
   },
   "imports": {
     "#tests/*": "./tests/*",
