@@ -6,7 +6,7 @@ import { startAuthStudio, type AuthStudio } from '#tests/support/auth.ts';
 import { json } from '#tests/support/http.ts';
 import { syncSignedIn, TextEditor } from '#tests/support/sync.ts';
 
-const PAGE = 'streaming/index.mdx';
+const PAGE = 'guide/configuration.mdx';
 const CHECK_MS = 50;
 
 async function until(check: () => boolean | Promise<boolean>, what: string, ms = 8000) {

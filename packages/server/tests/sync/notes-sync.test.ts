@@ -52,9 +52,9 @@ describe('notes sync', () => {
 
   it('serves real notes and merges writes made through the file API', async () => {
     const editor = new TextEditor();
-    const doc = connect().open('database/index.mdx', { editor });
+    const doc = connect().open('guide/setup.mdx', { editor });
     const opened = await doc.opened;
-    const path = 'content/docs/database/index.mdx';
+    const path = 'content/docs/guide/setup.mdx';
     expect(opened.text).toBe(await readFile(join(studio.root, path), 'utf8'));
     expect(opened.writable).toBe(true);
     editor.text = opened.text;
@@ -73,12 +73,12 @@ describe('notes sync', () => {
   // The editor's autosave path: an edit in the open document lands in the file.
   it('writes edits made in the open document to the note', async () => {
     const editor = new TextEditor();
-    const doc = connect().open('streaming/index.mdx', { editor });
+    const doc = connect().open('guide/configuration.mdx', { editor });
     const opened = await doc.opened;
     editor.text = `${opened.text}\nfrom the editor\n`;
     doc.changed();
     await doc.flush();
-    const path = join(studio.root, 'content/docs/streaming/index.mdx');
+    const path = join(studio.root, 'content/docs/guide/configuration.mdx');
     await expect.poll(() => readFile(path, 'utf8'), { timeout: 5000 }).toBe(`${opened.text}\nfrom the editor\n`);
     expect(doc.status()).toBe('synced');
   });
@@ -99,9 +99,9 @@ describe('notes sync', () => {
     sync.onTree(() => undefined);
     await expect.poll(() => sync.tree() !== null).toBe(true);
     await expect(sync.run({ type: 'mkdir', dir: 'zz-new', title: 'Zz' })).rejects.toThrow(/denied: zz-new\/meta\.json/);
-    await expect(sync.run({ type: 'create', path: 'streaming/zz-page.mdx', title: 'Zz' })).rejects.toThrow(/denied/);
+    await expect(sync.run({ type: 'create', path: 'guide/zz-page.mdx', title: 'Zz' })).rejects.toThrow(/denied/);
     await expect(stat(join(studio.root, 'content/docs/zz-new'))).rejects.toThrow();
-    await expect(stat(join(studio.root, 'content/docs/streaming/zz-page.mdx'))).rejects.toThrow();
+    await expect(stat(join(studio.root, 'content/docs/guide/zz-page.mdx'))).rejects.toThrow();
   });
 
   // The scope cannot tell a tree `delete` from a save on the same path, so
@@ -111,9 +111,9 @@ describe('notes sync', () => {
     const sync = connect();
     sync.onTree(() => undefined);
     await expect.poll(() => sync.tree() !== null).toBe(true);
-    await expect(sync.run({ type: 'delete', path: 'streaming/index.mdx' })).rejects.toThrow(/delete denied: streaming\/index\.mdx/);
-    await stat(join(studio.root, 'content/docs/streaming/index.mdx'));
-    const opened = await sync.open('streaming/index.mdx', { editor: new TextEditor() }).opened;
-    expect(opened.text).toBe(await readFile(join(studio.root, 'content/docs/streaming/index.mdx'), 'utf8'));
+    await expect(sync.run({ type: 'delete', path: 'guide/configuration.mdx' })).rejects.toThrow(/delete denied: guide\/configuration\.mdx/);
+    await stat(join(studio.root, 'content/docs/guide/configuration.mdx'));
+    const opened = await sync.open('guide/configuration.mdx', { editor: new TextEditor() }).opened;
+    expect(opened.text).toBe(await readFile(join(studio.root, 'content/docs/guide/configuration.mdx'), 'utf8'));
   });
 });

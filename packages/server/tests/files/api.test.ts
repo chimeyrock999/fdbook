@@ -2,6 +2,7 @@ import { chmod, readdir, readFile, rm, stat, symlink, utimes, writeFile } from '
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { json, rawRequest } from '#tests/support/http.ts';
+import { realNotes } from '@fdbook/testing/notes.ts';
 import { startTestStudio, type TestStudio } from '@fdbook/testing/studio.ts';
 
 type FileBody = { path: string; content: string; mtimeMs: number };
@@ -54,7 +55,8 @@ describe('file API', () => {
       expect(response.status).toBe(200);
       const { files } = json(response) as { files: { path: string }[] };
       expect(files.map((file) => file.path)).not.toContain('content/docs/loop.mdx');
-      expect(files.length).toBeGreaterThan(80);
+      // Every page of the docs is still listed, not only those read before the loop.
+      expect(files.map((file) => file.path)).toEqual(expect.arrayContaining((await realNotes()).map((note) => note.path)));
       await rm(join(studio.root, 'content/docs/loop.mdx'));
     });
 
@@ -99,7 +101,7 @@ describe('file API', () => {
 
   describe('writes and mtime conflicts', () => {
     it('saves when the base mtime matches', async () => {
-      const path = 'content/docs/streaming/index.mdx';
+      const path = 'content/docs/guide/configuration.mdx';
       const before = await read(path);
       const response = await put(path, { content: `${before.content}\nedited\n`, baseMtime: before.mtimeMs });
       expect(response.status).toBe(200);
@@ -109,7 +111,7 @@ describe('file API', () => {
     });
 
     it('returns 409 with the disk version when the file changed elsewhere', async () => {
-      const path = 'content/docs/database/index.mdx';
+      const path = 'content/docs/guide/setup.mdx';
       const absolute = join(studio.root, path);
       const opened = await read(path);
       // Obsidian or an agent writes the file while the Studio has it open.
@@ -138,7 +140,7 @@ describe('file API', () => {
     });
 
     it('keeps the file mode across a save', async () => {
-      const path = 'content/docs/data-modeling/index.mdx';
+      const path = 'content/docs/reference/architecture.mdx';
       const absolute = join(studio.root, path);
       await chmod(absolute, 0o600);
       const opened = await read(path);
@@ -158,7 +160,7 @@ describe('file API', () => {
     });
 
     it('lets only one of two racing saves from the same base win', async () => {
-      const path = 'content/docs/streaming/meta.yaml';
+      const path = 'content/docs/guide/meta.yaml';
       const opened = await read(path);
       const [first, second] = await Promise.all([
         put(path, { content: `${opened.content}# a\n`, baseMtime: opened.mtimeMs }),
@@ -199,7 +201,8 @@ describe('file API', () => {
     const entries = (await readdir(join(studio.root, 'content/docs'), { recursive: true })).filter(
       (entry) => entry.endsWith('.mdx') || entry.endsWith('meta.yaml'),
     );
-    expect(entries.length).toBeGreaterThan(80);
+    const real = (await realNotes()).map((note) => note.path.slice('content/docs/'.length));
+    expect(entries).toEqual(expect.arrayContaining([...real, 'meta.yaml', 'guide/meta.yaml']));
     for (const entry of entries) {
       const path = `content/docs/${entry.split('\\').join('/')}`;
       const before = await readFile(join(studio.root, path), 'utf8');

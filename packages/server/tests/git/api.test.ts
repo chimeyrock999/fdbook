@@ -44,23 +44,23 @@ describe('changes API', () => {
   });
 
   it('lists a page created from the page tree with its meta.yaml', async () => {
-    expect((await tree({ op: 'create', parent: 'streaming', slug: 'exactly-once-sinks', title: 'Exactly-once sinks' })).status).toBe(200);
+    expect((await tree({ op: 'create', parent: 'diagrams', slug: 'sequence-diagrams', title: 'Sequence diagrams' })).status).toBe(200);
     expect((await changes()).files).toEqual([
-      { path: 'content/docs/streaming/exactly-once-sinks.mdx', status: 'A' },
-      { path: 'content/docs/streaming/meta.yaml', status: 'M' },
+      { path: 'content/docs/diagrams/meta.yaml', status: 'M' },
+      { path: 'content/docs/diagrams/sequence-diagrams.mdx', status: 'A' },
     ]);
   });
 
   it('refuses an empty message, no files, a file that has no change and a cross-site post', async () => {
-    const paths = ['content/docs/streaming/exactly-once-sinks.mdx'];
+    const paths = ['content/docs/diagrams/sequence-diagrams.mdx'];
     const empty = await commit({ message: '  \n ', paths });
     expect(empty.status).toBe(400);
     expect(json(empty)).toEqual({ error: 'write a commit message' });
     expect((await commit({ message: 'x', paths: [] })).status).toBe(400);
-    expect((await commit({ message: 'x', paths: 'content/docs/streaming/meta.yaml' })).status).toBe(400);
-    const stranger = await commit({ message: 'x', paths: ['content/docs/streaming/index.mdx'] });
+    expect((await commit({ message: 'x', paths: 'content/docs/diagrams/meta.yaml' })).status).toBe(400);
+    const stranger = await commit({ message: 'x', paths: ['content/docs/diagrams/index.mdx'] });
     expect(stranger.status).toBe(400);
-    expect(json(stranger)).toEqual({ error: 'content/docs/streaming/index.mdx has no change to commit' });
+    expect(json(stranger)).toEqual({ error: 'content/docs/diagrams/index.mdx has no change to commit' });
     expect((await commit({ message: 'x', paths: ['package.json'] })).status).toBe(400);
     expect((await commit({ message: 'x', paths }, { Origin: 'http://evil.example' })).status).toBe(403);
     const form = await rawRequest(`${studio.url}api/changes`, { method: 'POST', headers: { 'Content-Type': 'text/plain', Origin: studio.origin }, body: '{}' });
@@ -69,58 +69,58 @@ describe('changes API', () => {
   });
 
   it('commits only the picked files and leaves the rest uncommitted, even when staged', async () => {
-    git(studio.root, 'add', 'content/docs/streaming/meta.yaml');
-    const response = await commit({ message: '  docs(notes): add exactly-once-sinks\n', paths: ['content/docs/streaming/exactly-once-sinks.mdx'] });
+    git(studio.root, 'add', 'content/docs/diagrams/meta.yaml');
+    const response = await commit({ message: '  docs(notes): add sequence-diagrams\n', paths: ['content/docs/diagrams/sequence-diagrams.mdx'] });
     expect(response.status).toBe(200);
     const made = json(response) as Commit;
-    expect(made).toMatchObject({ message: 'docs(notes): add exactly-once-sinks', files: [{ status: 'A', path: 'content/docs/streaming/exactly-once-sinks.mdx' }] });
+    expect(made).toMatchObject({ message: 'docs(notes): add sequence-diagrams', files: [{ status: 'A', path: 'content/docs/diagrams/sequence-diagrams.mdx' }] });
     expect(made.sha).toMatch(/^[0-9a-f]{40}$/);
-    expect(git(studio.root, 'log', '-1', '--format=%s')).toBe('docs(notes): add exactly-once-sinks\n');
-    expect((await changes()).files).toEqual([{ path: 'content/docs/streaming/meta.yaml', status: 'M' }]);
+    expect(git(studio.root, 'log', '-1', '--format=%s')).toBe('docs(notes): add sequence-diagrams\n');
+    expect((await changes()).files).toEqual([{ path: 'content/docs/diagrams/meta.yaml', status: 'M' }]);
     // What was staged before stays staged, and nothing else is.
-    expect(git(studio.root, 'diff', '--cached', '--name-only')).toBe('content/docs/streaming/meta.yaml\n');
+    expect(git(studio.root, 'diff', '--cached', '--name-only')).toBe('content/docs/diagrams/meta.yaml\n');
   });
 
   it('commits a deleted page and an edited one together', async () => {
-    await rm(note('distributed-systems/rpc-and-threads.mdx'));
-    const index = await readFile(note('streaming/index.mdx'), 'utf8');
-    await writeFile(note('streaming/index.mdx'), `${index}\nMore.\n`);
+    await rm(note('reference/lint.mdx'));
+    const index = await readFile(note('diagrams/index.mdx'), 'utf8');
+    await writeFile(note('diagrams/index.mdx'), `${index}\nMore.\n`);
     const response = await commit({
       message: 'docs(notes): update 2 pages',
-      paths: ['content/docs/distributed-systems/rpc-and-threads.mdx', 'content/docs/streaming/index.mdx', 'content/docs/streaming/meta.yaml'],
+      paths: ['content/docs/reference/lint.mdx', 'content/docs/diagrams/index.mdx', 'content/docs/diagrams/meta.yaml'],
     });
     expect(response.status).toBe(200);
     expect((json(response) as Commit).files).toEqual([
-      { status: 'D', path: 'content/docs/distributed-systems/rpc-and-threads.mdx' },
-      { status: 'M', path: 'content/docs/streaming/index.mdx' },
-      { status: 'M', path: 'content/docs/streaming/meta.yaml' },
+      { status: 'M', path: 'content/docs/diagrams/index.mdx' },
+      { status: 'M', path: 'content/docs/diagrams/meta.yaml' },
+      { status: 'D', path: 'content/docs/reference/lint.mdx' },
     ]);
-    expect(committed('streaming/index.mdx')).toBe(`${index}\nMore.\n`);
+    expect(committed('diagrams/index.mdx')).toBe(`${index}\nMore.\n`);
     expect((await changes()).files).toEqual([]);
   });
 
   it('commits a rename and a deletion staged in a terminal', async () => {
-    git(studio.root, 'mv', 'content/docs/streaming/watermark-and-late-events.mdx', 'content/docs/streaming/watermarks.mdx');
-    await writeFile(note('streaming/watermarks.mdx'), 'renamed and edited\n');
-    git(studio.root, 'rm', '-q', 'content/docs/database/index.mdx');
+    git(studio.root, 'mv', 'content/docs/diagrams/examples.mdx', 'content/docs/diagrams/samples.mdx');
+    await writeFile(note('diagrams/samples.mdx'), 'renamed and edited\n');
+    git(studio.root, 'rm', '-q', 'content/docs/guide/setup.mdx');
     expect((await changes()).files).toEqual([
-      { path: 'content/docs/database/index.mdx', status: 'D' },
-      { path: 'content/docs/streaming/watermarks.mdx', status: 'R', from: 'content/docs/streaming/watermark-and-late-events.mdx' },
+      { path: 'content/docs/diagrams/samples.mdx', status: 'R', from: 'content/docs/diagrams/examples.mdx' },
+      { path: 'content/docs/guide/setup.mdx', status: 'D' },
     ]);
-    const response = await commit({ message: 'docs(notes): rename and remove', paths: ['content/docs/streaming/watermarks.mdx', 'content/docs/database/index.mdx'] });
+    const response = await commit({ message: 'docs(notes): rename and remove', paths: ['content/docs/diagrams/samples.mdx', 'content/docs/guide/setup.mdx'] });
     expect(response.status).toBe(200);
     expect((json(response) as Commit).files).toEqual([
-      { status: 'D', path: 'content/docs/database/index.mdx' },
-      { status: 'D', path: 'content/docs/streaming/watermark-and-late-events.mdx' },
-      { status: 'A', path: 'content/docs/streaming/watermarks.mdx' },
+      { status: 'D', path: 'content/docs/diagrams/examples.mdx' },
+      { status: 'A', path: 'content/docs/diagrams/samples.mdx' },
+      { status: 'D', path: 'content/docs/guide/setup.mdx' },
     ]);
-    expect(committed('streaming/watermarks.mdx')).toBe('renamed and edited\n');
+    expect(committed('diagrams/samples.mdx')).toBe('renamed and edited\n');
     expect((await changes()).files).toEqual([]);
   });
 
   it('keeps a message that starts with #', async () => {
-    await writeFile(note('streaming/index.mdx'), 'issue\n');
-    const response = await commit({ message: '#42 fix typo', paths: ['content/docs/streaming/index.mdx'] });
+    await writeFile(note('diagrams/index.mdx'), 'issue\n');
+    const response = await commit({ message: '#42 fix typo', paths: ['content/docs/diagrams/index.mdx'] });
     expect(response.status).toBe(200);
     expect((json(response) as Commit).message).toBe('#42 fix typo');
   });
@@ -131,21 +131,21 @@ describe('changes API', () => {
     await writeFile(join(hooks, 'pre-commit'), '#!/bin/sh\necho "refused by the hook" >&2\nexit 1\n');
     await chmod(join(hooks, 'pre-commit'), 0o755);
     git(studio.root, 'config', 'core.hooksPath', hooks);
-    await writeFile(note('streaming/later.mdx'), '---\ntitle: Later\n---\n');
-    const response = await commit({ message: 'docs(notes): add later', paths: ['content/docs/streaming/later.mdx'] });
+    await writeFile(note('diagrams/later.mdx'), '---\ntitle: Later\n---\n');
+    const response = await commit({ message: 'docs(notes): add later', paths: ['content/docs/diagrams/later.mdx'] });
     expect(response.status).toBe(500);
     expect((json(response) as { error: string }).error).toContain('refused by the hook');
     expect(git(studio.root, 'diff', '--cached', '--name-only')).toBe('');
-    expect((await changes()).files).toEqual([{ path: 'content/docs/streaming/later.mdx', status: 'A' }]);
+    expect((await changes()).files).toEqual([{ path: 'content/docs/diagrams/later.mdx', status: 'A' }]);
     git(studio.root, 'config', '--unset', 'core.hooksPath');
     await rm(hooks, { recursive: true });
-    expect((await commit({ message: 'docs(notes): add later', paths: ['content/docs/streaming/later.mdx'] })).status).toBe(200);
+    expect((await commit({ message: 'docs(notes): add later', paths: ['content/docs/diagrams/later.mdx'] })).status).toBe(200);
   });
 
   it('lists the change request commits, newest first, without merges', async () => {
     // main moves on, is fetched, and is merged into the change request.
     git(studio.root, 'switch', '--quiet', 'main');
-    await writeFile(note('data-modeling/index.mdx'), 'on main\n');
+    await writeFile(note('reference/architecture.mdx'), 'on main\n');
     git(studio.root, 'commit', '--quiet', '-am', 'main moves on');
     git(studio.root, 'update-ref', 'refs/remotes/origin/main', 'main');
     git(studio.root, 'switch', '--quiet', 'cr/test');
@@ -153,15 +153,15 @@ describe('changes API', () => {
     expect(git(studio.root, 'log', '-1', '--format=%s')).toBe('Merge main\n');
     const { base, commits } = await history();
     expect(base).toBe('origin/main');
-    expect(commits.map((each) => each.message)).toEqual(['docs(notes): add later', '#42 fix typo', 'docs(notes): rename and remove', 'docs(notes): update 2 pages', 'docs(notes): add exactly-once-sinks']);
-    expect(commits[4].files).toEqual([{ status: 'A', path: 'content/docs/streaming/exactly-once-sinks.mdx' }]);
+    expect(commits.map((each) => each.message)).toEqual(['docs(notes): add later', '#42 fix typo', 'docs(notes): rename and remove', 'docs(notes): update 2 pages', 'docs(notes): add sequence-diagrams']);
+    expect(commits[4].files).toEqual([{ status: 'A', path: 'content/docs/diagrams/sequence-diagrams.mdx' }]);
     expect(Number.isNaN(Date.parse(commits[0].date))).toBe(false);
   });
 
   it('does not commit on main', async () => {
     git(studio.root, 'switch', '--quiet', 'main');
-    await writeFile(note('streaming/index.mdx'), 'on main\n');
-    const response = await commit({ message: 'x', paths: ['content/docs/streaming/index.mdx'] });
+    await writeFile(note('diagrams/index.mdx'), 'on main\n');
+    const response = await commit({ message: 'x', paths: ['content/docs/diagrams/index.mdx'] });
     expect(response.status).toBe(409);
     expect(json(response)).toEqual({ error: 'commit in a change request, not on main' });
     expect(git(studio.root, 'log', '-1', '--format=%s')).toBe('main moves on\n');

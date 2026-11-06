@@ -91,7 +91,7 @@ describe('page history API: deleted pages', () => {
     await writeFile(at(`${SHELF}/meta.yaml`), 'title: "Lost shelf"\nicon: "Book"\npages:\n  - "one"\n  - "---Later---"\n  - "two"\n');
     await writeFile(at(`${SHELF}/one.mdx`), page('Shelf one', 'One.'));
     await writeFile(at(`${SHELF}/two.mdx`), page('Shelf two', 'Two.'));
-    await writeFile(at(ROOT_META), rootMeta.replace('  - "distributed-systems"\n', '  - "distributed-systems"\n  - "lost-shelf"\n'));
+    await writeFile(at(ROOT_META), rootMeta.replace('  - "reference"\n', '  - "reference"\n  - "lost-shelf"\n'));
     await mkdir(at(IDX), { recursive: true });
     await writeFile(at(`${IDX}/meta.yaml`), 'title: "Idx"\npages:\n  - "index"\n  - "one"\n  - "two"\n');
     for (const name of ['index', 'one', 'two']) await writeFile(at(`${IDX}/${name}.mdx`), page(`Idx ${name}`, name));
@@ -173,7 +173,7 @@ describe('page history API: deleted pages', () => {
     expect(await read(one)).toBe(page('Shelf one', 'One.'));
     expect(await read(`${SHELF}/index.mdx`)).toBe(page('Lost shelf', 'The shelf.'));
     expect(await read(`${SHELF}/meta.yaml`)).toBe('title: "Lost shelf"\nicon: "Book"\npages:\n  - "one"\n  - "---Later---"\n');
-    expect(await read(ROOT_META)).toBe(rootMeta.replace('  - "distributed-systems"\n', '  - "distributed-systems"\n  - "lost-shelf"\n'));
+    expect(await read(ROOT_META)).toBe(rootMeta.replace('  - "reference"\n', '  - "reference"\n  - "lost-shelf"\n'));
   });
 
   it('keeps a listed index in a folder it brings back, and leaves an unlisted folder unlisted above', async () => {
@@ -203,7 +203,7 @@ describe('page history API: deleted pages', () => {
     const { base } = json(await tree({ op: 'delete', path: 'restore-lab/alpha.mdx', dryRun: true })) as { base: string };
     expect((await tree({ op: 'delete', path: 'restore-lab/alpha.mdx', base })).status).toBe(200);
     // A folder of committed pages, renamed: its pages are moved, not deleted.
-    expect((await tree({ op: 'rename', path: 'distributed-systems/mapreduce', slug: 'map-reduce' })).status).toBe(200);
+    expect((await tree({ op: 'rename', path: 'reference', slug: 'references' })).status).toBe(200);
     const pages = await deleted();
     expect(pages[0]).toMatchObject({ path: `${LAB}/alpha.mdx`, title: 'alpha', sha: betaFirst, committed: false, folderGone: false });
     expect(pages.filter((each) => !each.committed).map((each) => each.path)).toEqual([`${LAB}/alpha.mdx`]);
