@@ -7,24 +7,24 @@
 @import './scrollbars.css';
 @import '@fdbook/mdx/styles/notes-prose.css';
 @import './notes-prose.css';
-@import './assets/assets.css';
-@import './assets/asset-page.css';
-@import './diagrams/diagram-page.css';
-@import './changes/changes.css';
-@import './diff/diff.css';
-@import './history/history.css';
-@import './graph/graph.css';
-@import './cr/cr.css';
-@import './sidebar/sidebar.css';
-@import './session/session.css';
-@import './editor/unsaved.css';
-@import './agents/agents.css';
-@import './agents/markdown.css';
-@import './agents/context.css';
-@import './review/suggestions/suggestions.css';
-@import './review/review.css';
+@import './features/assets/assets.css';
+@import './features/assets/asset-page.css';
+@import './features/diagrams/diagram-page.css';
+@import './features/changes/changes.css';
+@import './features/diff/diff.css';
+@import './features/history/history.css';
+@import './features/editor/graph/graph.css';
+@import './features/cr/cr.css';
+@import './app/sidebar.css';
+@import './features/session/session.css';
+@import './features/editor/unsaved.css';
+@import './features/agents/agents.css';
+@import './features/agents/markdown.css';
+@import './features/agents/context.css';
+@import './features/review/suggestions/suggestions.css';
+@import './features/review/review.css';
 @import './components/components.css';
-/* Site components whose classes the Studio draws with (src/plugins). */
+/* Site components whose classes the Studio draws with (src/features/editor/plugins). */
 @source '../../mdx/components/graph-objects.tsx';
 
 /* The Studio chrome uses the editor's --fde-* tokens, which follow the
@@ -58,7 +58,7 @@
     color: var(--fde-background);
     border-color: var(--fde-foreground);
   }
-  /* A popup over the note: the graph fields (src/graph). */
+  /* A popup over the note: the graph fields (src/features/editor/graph). */
   .studio-popup {
     border: 1px solid var(--fde-border);
     border-radius: 9px;
@@ -412,8 +412,9 @@
   }
 }
 
-/* The page tree (src/tree): rows, the actions menu and the dialogs, with
-   the popup menu and the dialog every feature uses (src/components). */
+/* The page tree (src/views/PageTree.tsx, src/features/tree): rows, the
+   actions menu and the dialogs, with the popup menu and the dialog every
+   feature uses (src/components). */
 @layer components {
   .studio-field-label {
     font-size: 12px;
@@ -713,7 +714,7 @@
   .studio-tree-changes span {
     color: var(--fde-muted-foreground);
   }
-  /* The delete dialog (src/tree/DeleteDialog.tsx): who proposed it, and the links it breaks. */
+  /* The delete dialog (src/features/tree/DeleteDialog.tsx): who proposed it, and the links it breaks. */
   .studio-delete-by {
     padding: 8px 10px;
     border-radius: 8px;

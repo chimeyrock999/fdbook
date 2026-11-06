@@ -3,7 +3,7 @@ import type { AnyExtension, Editor } from '@tiptap/core';
 import { act, render } from '@testing-library/react';
 import { createRef, useRef, type ReactNode } from 'react';
 import { vi } from 'vitest';
-import { editorConfig } from '#plugins/index.ts';
+import { editorConfig } from '#features/editor/plugins/index.ts';
 import { defined } from './editor-state';
 
 // jsdom has none of these: the editor sizes menus and places popups from

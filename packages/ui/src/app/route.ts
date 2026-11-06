@@ -1,7 +1,7 @@
 import { BASE_URL, classifyPath, PUBLIC_DIR, siteUrlOf } from '@fdbook/shared/asset-types.ts';
 import { CURRENT_CR } from '#api/workspace.ts';
 import { NOTES_PREFIX, syncPath } from '#lib/note-paths.ts';
-import { renamedPath } from '#tree/tree.ts';
+import { renamedPath } from '#features/tree/tree.ts';
 
 // The page model: what the main pane shows, and the URL that opens it.
 

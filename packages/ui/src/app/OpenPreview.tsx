@@ -1,5 +1,5 @@
 import type { Preview } from '#api/preview.ts';
-import { BUILD_LABELS } from '#changes/preview-labels.ts';
+import { BUILD_LABELS } from '#features/changes/preview-labels.ts';
 
 // Opens the change request's preview on Cloudflare Pages at `route`, the
 // page shown, in a new tab, with a dot for its build. Nothing until the

@@ -70,7 +70,7 @@ export function confirmSignedIn() {
 let seatCheck: (() => Promise<boolean>) | null = null;
 
 // Set by the session gate: whether the session the browser holds now is the
-// one the Studio runs with (src/session/SessionGate.tsx). Null when nothing
+// one the Studio runs with (src/app/SessionGate.tsx). Null when nothing
 // is set.
 export function onSeatCheck(check: (() => Promise<boolean>) | null) {
   seatCheck = check;

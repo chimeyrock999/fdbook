@@ -19,7 +19,7 @@ describe('popup menus on a narrow screen', () => {
   });
 
   it('size the change request menu within the viewport', async () => {
-    const css = rule(await readFile(join(studio, 'cr/cr.css'), 'utf8'), '.studio-cr-menu');
+    const css = rule(await readFile(join(studio, 'features/cr/cr.css'), 'utf8'), '.studio-cr-menu');
     expect(css).toMatch(/max-width: min\(300px, calc\(100vw - 16px\)\);/);
     expect(css).toMatch(/min-width: min\(240px, calc\(100vw - 16px\)\);/);
   });
