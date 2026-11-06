@@ -4,7 +4,7 @@
 // width, labels that found no clear spot, crowded neighbours).
 
 import { availableTextWidth, minimumTextWidth } from '#layout/geometry.ts';
-import { STATE_MAX_W, TEXT, stateTextFits } from '#layout/lifecycle.ts';
+import { STATE_MAX_W, TEXT, stateTextFits, type LifecycleLayer } from '#layout/lifecycle.ts';
 import type { Scene } from '#layout/scene.ts';
 import type { Diagram } from '#model/schema.ts';
 import type { DiagramIssue } from './validate.ts';
@@ -38,49 +38,50 @@ export function checkLifecycleStructure(diagram: Diagram): DiagramIssue[] {
     error('lifecycle/main-path-too-short', 'A lifecycle needs a main path of two states or more: the happy path from the initial state.', 'list the happy path\'s states in mainPath, in order', 'mainPath');
   }
   diagram.mainPath.forEach((id, index) => {
-    if (!ids.has(id)) error('lifecycle/unknown-main-path-state', `mainPath[${index}] "${id}" is not a state.`, `name a state id, such as ${known}`, `mainPath[${index}]`);
+    if (!ids.has(id)) error('lifecycle/unknown-main-path-state', `mainPath[${String(index)}] "${id}" is not a state.`, `name a state id, such as ${known}`, `mainPath[${String(index)}]`);
   });
   if (new Set(diagram.mainPath).size !== diagram.mainPath.length) {
     error('lifecycle/repeated-main-path-state', 'mainPath lists a state more than once; a return to an earlier phase is a transition, not a repeated step.', 'list each state once and keep the return as a transition', 'mainPath');
   }
   diagram.edges.forEach((edge, index) => {
-    if (edge.bidirectional) error('lifecycle/two-way-transition', `Transition "${edge.id}" has heads at both ends; a transition goes one way.`, 'add the way back as its own transition', `edges[${index}].bidirectional`);
+    if (edge.bidirectional) error('lifecycle/two-way-transition', `Transition "${edge.id}" has heads at both ends; a transition goes one way.`, 'add the way back as its own transition', `edges[${String(index)}].bidirectional`);
   });
   for (const { from, to, index } of mainPathGaps(diagram)) {
     error('lifecycle/main-path-gap', `The main path steps from "${from}" to "${to}" with no transition between them.`,
-      `add a transition from "${from}" to "${to}", or take the state out of mainPath if it is not on the happy path`, `mainPath[${index}]`);
+      `add a transition from "${from}" to "${to}", or take the state out of mainPath if it is not on the happy path`, `mainPath[${String(index)}]`);
   }
   diagram.nodes.forEach((node, index) => {
     for (const [field, minimum] of [['label', TEXT.labelMinimum], ['sublabel', TEXT.sublabelMinimum], ['tag', TEXT.tagMinimum]] as const) {
       const value = node[field];
       if (value && !stateTextFits(value, minimum)) {
-        error('lifecycle/state-text-too-long', `The ${field} of state "${node.id}" needs ~${Math.ceil(minimumTextWidth(value, minimum))}px at ${minimum}px, but the widest state (${STATE_MAX_W}px) gives ${availableTextWidth(STATE_MAX_W)}px.`,
-          `shorten the ${field}; move the detail into the note or a card`, `nodes[${index}].${field}`);
+        error('lifecycle/state-text-too-long', `The ${field} of state "${node.id}" needs ~${String(Math.ceil(minimumTextWidth(value, minimum)))}px at ${String(minimum)}px, but the widest state (${String(STATE_MAX_W)}px) gives ${String(availableTextWidth(STATE_MAX_W))}px.`,
+          `shorten the ${field}; move the detail into the note or a card`, `nodes[${String(index)}].${field}`);
       }
     }
   });
   return issues;
 }
 
-export function checkLifecycleScene(scene: Scene): DiagramIssue[] {
-  const layer = scene.lifecycle!;
+export function checkLifecycleScene(scene: Scene, layer: LifecycleLayer): DiagramIssue[] {
   const issues: DiagramIssue[] = [];
   const edgeIndex = new Map(scene.diagram.edges.map((edge, index) => [edge.id, index]));
   if (scene.width > layer.readableWidth) {
     issues.push({
       code: 'lifecycle/too-wide', severity: 'error',
-      message: `The lifecycle is ${scene.width}px wide; at ${layer.smallestText}px text it reads at desktop width only up to ${layer.readableWidth}px.`,
+      message: `The lifecycle is ${String(scene.width)}px wide; at ${String(layer.smallestText)}px text it reads at desktop width only up to ${String(layer.readableWidth)}px.`,
       fix: 'shorten state labels or transition labels on the main path, move secondary phases off mainPath, or split the lifecycle in two',
       path: 'mainPath',
     });
   }
   for (const id of layer.unplacedLabels) {
-    const edge = scene.diagram.edges[edgeIndex.get(id)!];
+    const index = edgeIndex.get(id);
+    if (index === undefined) throw new Error(`lifecycle check: unplaced label "${id}" is no transition`);
+    const edge = scene.diagram.edges[index];
     issues.push({
       code: 'lifecycle/label-unplaced', severity: 'error',
       message: `The label of transition "${id}" (${edge.from} → ${edge.to}) finds no spot clear of the routes around it.`,
       fix: 'shorten its label or detail; keep every condition, or move the detail to a card',
-      path: `edges[${edgeIndex.get(id)}].label`,
+      path: `edges[${String(index)}].label`,
     });
   }
   for (const [from, to] of layer.crowded) {

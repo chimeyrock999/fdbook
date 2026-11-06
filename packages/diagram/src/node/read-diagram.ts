@@ -19,7 +19,7 @@ export function diagramFilePath(root: string, src: string, dir?: string): string
  * throwing, like readPublicAsset, so a bad reference shows a placeholder in
  * the page instead of failing the export.
  */
-export async function readDiagramFile(src: string): Promise<unknown | null> {
+export async function readDiagramFile(src: string): Promise<unknown> {
   const file = diagramFilePath(process.cwd(), src);
   if (!file) return null;
 
