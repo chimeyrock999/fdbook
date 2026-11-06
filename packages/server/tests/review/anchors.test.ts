@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { blocksOf } from '@fdbook/shared/hunks.ts';
 import { anchorAt, likeness, locate } from '@fdbook/shared/anchors.ts';
 import { realNotes } from '@fdbook/testing/notes.ts';
+import { docsPageCount } from '#tests/support/docs.ts';
 
 const NOTE = `---
 title: Shuffle
@@ -115,8 +116,9 @@ describe('locate on every note', async () => {
     }
   });
 
-  it('reads the notes', () => {
-    expect(notes.length).toBeGreaterThan(10);
+  it('reads the notes', async () => {
+    // Every page parses.
+    expect(notes.length).toBe(await docsPageCount());
   });
 
   // Each edit parses the note again: up to this many blocks of each, spread out.

@@ -17,14 +17,14 @@ cover: /docs/guide/a.png
 
 See [the PDF](/docs/guide/spec.pdf#page=2) and [ref][spec].
 
-[spec]: </notes/guide/spec.pdf>
+[spec]: </docs/guide/spec.pdf>
 
 <HtmlEmbed
   title="Flow"
   src="/docs/guide/flow.html?embed=1"
 />
 
-<SvgDiagram src="notes/guide/b.svg" />
+<SvgDiagram src="docs/guide/b.svg" />
 
 <img src="/docs/guide/a.png" alt="" />
 
@@ -32,7 +32,7 @@ See [the PDF](/docs/guide/spec.pdf#page=2) and [ref][spec].
 
 ::diagram{#d src=/docs/guide/b.svg}
 
-[A page](/docs/guide) · [Elsewhere](https://example.com/notes/guide/a.png) · <HtmlEmbed src={dynamic} />
+[A page](/docs/guide) · [Elsewhere](https://example.com/docs/guide/a.png) · <HtmlEmbed src={dynamic} />
 `;
 
 const at = (source: string, line: number) => source.split('\n')[line - 1];
@@ -59,12 +59,12 @@ describe('findAssetRefs', () => {
       '/docs/guide/spec.pdf',
       '/docs/guide/spec.pdf',
       '/docs/guide/flow.html',
-      'notes/guide/b.svg',
+      'docs/guide/b.svg',
       '/docs/guide/a.png',
       '/docs/guide/flow.html',
       '/docs/guide/b.svg',
     ]);
-    for (const ref of refs) expect(at(NOTE, ref.line).slice(ref.column - 1)).toMatch(/^\/?notes\//);
+    for (const ref of refs) expect(at(NOTE, ref.line).slice(ref.column - 1)).toMatch(/^\/?docs\//);
   });
 
   it('resolves relative links against the page URL, as the site does', () => {
@@ -118,8 +118,8 @@ describe('findAssetRefs', () => {
     const source = '[![a](/docs/x/a.png)](/docs/x/a.png)\n';
     const refs = findAssetRefs(source, 'guide/intro.mdx') ?? [];
     expect(refs.map((ref) => [ref.kind, ref.start, ref.end])).toEqual([
-      ['image', 6, 20],
-      ['link', 23, 37],
+      ['image', 6, 19],
+      ['link', 22, 35],
     ]);
     expect(rewriteAssetRefs(source, 'guide/intro.mdx', () => 'public/docs/x/renamed-asset.png')?.next).toBe(
       '[![a](/docs/x/renamed-asset.png)](/docs/x/renamed-asset.png)\n',
@@ -194,11 +194,12 @@ describe('findAssetRefs', () => {
       found.push(...refs);
     });
 
-    it('finds images and components among them', () => {
-      // Diagrams are <Diagram> (diagrams/, not public/) since #80: the notes
-      // keep their images and one <SvgDiagram>.
-      expect(found.length).toBeGreaterThanOrEqual(8);
-      expect(new Set(found.map((ref) => ref.kind))).toEqual(new Set(['image', 'jsx', 'diagram']));
+    it('finds the diagrams among them', () => {
+      // The docs show no image: their files are the <Diagram>s of the home
+      // page (one) and of diagrams/examples (five); the kinds above cover the rest.
+      expect(found.length).toBeGreaterThanOrEqual(6);
+      expect(new Set(found.map((ref) => ref.kind))).toEqual(new Set(['diagram']));
+      expect(found.map((ref) => ref.asset)).toEqual(expect.arrayContaining(['diagrams/reference/studio-layout.diagram.json', 'diagrams/examples/deployment-release.diagram.json']));
     });
   });
 });
@@ -219,10 +220,10 @@ describe('rewriteAssetRefs', () => {
   });
 
   it('writes the site path when the folder changes', () => {
-    const source = '[a](../b.png)\n\n<SvgDiagram src="notes/b.svg" />\n\n![x](/docs/b.png)\n';
+    const source = '[a](../b.png)\n\n<SvgDiagram src="docs/b.svg" />\n\n![x](/docs/b.png)\n';
     const moved = (asset: string) => asset.replace('public/docs/', 'public/docs/moved/');
     expect(rewriteAssetRefs(source, 'guide/intro.mdx', moved)?.next).toBe(
-      '[a](/docs/moved/b.png)\n\n<SvgDiagram src="notes/moved/b.svg" />\n\n![x](/docs/moved/b.png)\n',
+      '[a](/docs/moved/b.png)\n\n<SvgDiagram src="docs/moved/b.svg" />\n\n![x](/docs/moved/b.png)\n',
     );
   });
 
@@ -230,7 +231,7 @@ describe('rewriteAssetRefs', () => {
     const result = rewriteAssetRefs(NOTE, 'guide/intro.mdx', rename('public/docs/guide/a.png', 'public/docs/guide/hero.png'));
     expect(result?.count).toBe(2);
     expect(result?.next).toContain('cover: /docs/guide/a.png');
-    expect(result?.next).toContain('[Elsewhere](https://example.com/notes/guide/a.png)');
+    expect(result?.next).toContain('[Elsewhere](https://example.com/docs/guide/a.png)');
     expect(rewriteAssetRefs('<a\n', 'a.mdx', () => 'public/docs/x.png')).toBeNull();
   });
 });

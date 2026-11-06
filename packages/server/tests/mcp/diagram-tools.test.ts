@@ -96,14 +96,14 @@ describe('diagram tools', () => {
   it('updates a node, pins an edge label, changes a group and removes an edge', async () => {
     await call('diagram_update', { src: SRC, node: { id: 'plan', label: 'Plan', sublabel: null } });
     await call('diagram_update', { src: SRC, edge: { id: 'build', labelDy: 20, variant: 'dashed' } });
-    await call('diagram_update', { src: SRC, group: { id: 'spark-application-runtime-boundary', label: 'Spark application' } });
+    await call('diagram_update', { src: SRC, group: { id: 'application-runtime-boundary', label: 'Application' } });
     const removed = await call('diagram_remove_edge', { src: SRC, id: 'schedule' });
     expect(errors(removed)).toEqual([]);
     const after = await onDisk();
     expect(nodeOf(after, 'plan')).toEqual({ id: 'plan', kind: 'backend', label: 'Plan' });
     expect(after.edges.find((edge) => edge.id === 'build')).toMatchObject({ variant: 'dashed' });
     expect(after.layout.edges.build).toEqual({ labelDy: 20 });
-    expect(after.groups?.[0].label).toBe('Spark application');
+    expect(after.groups?.[0].label).toBe('Application');
     expect(after.edges.map((edge) => edge.id)).not.toContain('schedule');
     expect(after.layout.edges.schedule).toBeUndefined();
 

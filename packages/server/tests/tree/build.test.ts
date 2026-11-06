@@ -1,7 +1,9 @@
 import type * as PageTree from 'fumadocs-core/page-tree';
 import { loader } from 'fumadocs-core/source';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { docsRoot } from '@fdbook/testing/notes.ts';
+import { makeWorktree, type Worktree } from '@fdbook/testing/studio.ts';
+import { writeTreeCases } from '#tests/support/tree-cases.ts';
 import { buildTree, loadTree, readNotesContent, type NotesContent } from '#tree/build.ts';
 import type { TreeFolder, TreeNode } from '@fdbook/shared/tree.ts';
 
@@ -37,6 +39,17 @@ function content(pages: Record<string, Record<string, unknown>>, metas: Record<s
 }
 
 describe('page tree on content/docs', () => {
+  // The docs, plus the cases they do not have (support/tree-cases.ts).
+  let worktree: Worktree;
+
+  beforeAll(async () => {
+    worktree = await makeWorktree();
+    await writeTreeCases(worktree.root);
+  });
+  afterAll(async () => {
+    await worktree.remove();
+  });
+
   it('carries the icons the site shows, a folder falling back to its index page', async () => {
     const icons: Record<string, string> = {};
     const walk = (nodes: TreeNode[]) => {
@@ -46,67 +59,62 @@ describe('page tree on content/docs', () => {
       }
     };
     // loadTree: with the site's icon names, as the Studio serves it.
-    walk((await loadTree(docsRoot)).children);
+    walk((await loadTree(worktree.root)).children);
     expect(icons).toEqual({
-      'index.mdx': 'Brain',
-      'data-platform': 'TreePine',
-      'personal-reflections': 'Flower2',
-      // Listed as pages: these index pages are rows of their own.
-      'computer-systems/index.mdx': 'Shrub',
-      'database/index.mdx': 'Leaf',
-      'streaming/index.mdx': 'Clover',
-      // No icon in meta.yaml (or no meta.yaml): the index page's.
-      'data-modeling': 'Sprout',
-      'distributed-systems': 'Trees',
+      'index.mdx': 'BookOpen',
+      'archive': 'Archive',
+      // Listed as a page: this index page is a row of its own.
+      'archive/index.mdx': 'Shrub',
+      // No meta.yaml: the index page's.
+      'patterns': 'Sprout',
     });
   });
 
   it('lists what the site lists, in the same order', async () => {
-    const notes = await readNotesContent(docsRoot);
-    const tree = buildTree(notes);
-    // The site's own build: the loader over the same files (lib/source.ts).
-    const files = [
-      ...[...notes.pages].map(([path, data]) => ({ type: 'page' as const, path, data })),
-      ...[...notes.metas].map(([path, data]) => ({ type: 'meta' as const, path, data })),
-    ];
-    const site = loader({ baseUrl: '/docs', source: { files } }).getPageTree();
-    expect(outline(tree.children, 0, (node) => !('hidden' in node) || node.hidden !== 'unlisted')).toEqual(siteOutline(site.children));
+    for (const root of [docsRoot, worktree.root]) {
+      const notes = await readNotesContent(root);
+      const tree = buildTree(notes);
+      // The site's own build: the loader over the same files (lib/source.ts).
+      const files = [
+        ...[...notes.pages].map(([path, data]) => ({ type: 'page' as const, path, data })),
+        ...[...notes.metas].map(([path, data]) => ({ type: 'meta' as const, path, data })),
+      ];
+      const site = loader({ baseUrl: '/docs', source: { files } }).getPageTree();
+      expect(outline(tree.children, 0, (node) => !('hidden' in node) || node.hidden !== 'unlisted')).toEqual(siteOutline(site.children));
+    }
   });
 
   it('marks what the site leaves out of the sidebar, in place', async () => {
-    const tree = buildTree(await readNotesContent(docsRoot));
+    const tree = buildTree(await readNotesContent(worktree.root));
     const hidden = (path: string) => {
       const node = find(tree, path);
       return node && 'hidden' in node ? node.hidden : 'not found';
     };
     // No meta.yaml lists them.
-    expect(hidden('index.mdx')).toBe('unlisted');
-    expect(hidden('data-platform/processing')).toBe('unlisted');
-    expect(hidden('data-platform/stacks-integration/databricks/spark-foundation.mdx')).toBe('unlisted');
-    expect(hidden('computer-systems')).toBe('unlisted');
+    expect(hidden('archive')).toBe('unlisted');
+    expect(hidden('guide/drafts.mdx')).toBe('unlisted');
     // `visible: false`, which lib/visible-page-tree.ts filters out.
-    expect(hidden('data-platform/stacks-integration/databricks/databricks-interactive-runtime/driver-container-first-look.mdx')).toBe('visible-false');
-    expect(hidden('distributed-systems/rpc-and-threads.mdx')).toBeNull();
+    expect(hidden('archive/old/retired.mdx')).toBe('visible-false');
+    expect(hidden('reference/lint.mdx')).toBeNull();
     // An unlisted page stays in its own folder, after the listed ones.
-    const databricks = find(tree, 'data-platform/stacks-integration/databricks');
-    expect(databricks?.kind === 'folder' && databricks.children.map((child) => child.entry)).toEqual([0, ...Array<null>(10).fill(null)]);
-    // Nothing in the repo points at a missing page.
-    expect(outline(tree.children).filter((line) => line.trim().startsWith('missing'))).toEqual([]);
+    const guide = find(tree, 'guide');
+    expect(guide?.kind === 'folder' && guide.children.map((child) => child.entry)).toEqual([0, 1, 2, null]);
+    // Nothing in the docs points at a missing page.
+    expect(outline(buildTree(await readNotesContent(docsRoot)).children).filter((line) => line.trim().startsWith('missing'))).toEqual([]);
   });
 
   it('numbers entries so the UI knows what it can move', async () => {
-    const tree = buildTree(await readNotesContent(docsRoot));
-    const computer = find(tree, 'computer-systems');
-    // computer-systems/meta.yaml lists its index and nested pages (`operating-systems/page-cache`).
-    expect(computer?.kind === 'folder' && computer.children.map((child) => [child.entry, child.kind === 'page' ? child.path : ''])).toEqual([
-      [0, 'computer-systems/index.mdx'],
-      [1, 'computer-systems/operating-systems/page-cache.mdx'],
-      [2, 'computer-systems/storage/wal-and-fsync.mdx'],
-      [3, 'computer-systems/networking/tcp-flow-control-and-kafka-poll.mdx'],
+    const tree = buildTree(await readNotesContent(worktree.root));
+    const archive = find(tree, 'archive');
+    // archive/meta.yaml lists its index and nested pages (`old/setup-v1`).
+    expect(archive?.kind === 'folder' && archive.children.map((child) => [child.entry, child.kind === 'page' ? child.path : ''])).toEqual([
+      [0, 'archive/index.mdx'],
+      [1, 'archive/old/setup-v1.mdx'],
+      [2, 'archive/old/retired.mdx'],
     ]);
     // A folder without meta.yaml: its children in the order the site shows.
-    const modeling = find(tree, 'data-modeling');
-    expect(modeling?.kind === 'folder' && [modeling.meta, modeling.children.map((child) => child.entry)]).toEqual([null, [0]]);
+    const patterns = find(tree, 'patterns');
+    expect(patterns?.kind === 'folder' && [patterns.meta, patterns.children.map((child) => child.entry)]).toEqual([null, [0]]);
   });
 });
 

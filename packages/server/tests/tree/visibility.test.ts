@@ -8,6 +8,7 @@ import { applyPlan, planMove, planVisibility } from '#tree/ops.ts';
 import type { TreeFolder, TreeNode } from '@fdbook/shared/tree.ts';
 import { writeMetaVisible, writePageVisible } from '#tree/visible-edit.ts';
 import { makeWorktree, type Worktree } from '@fdbook/testing/studio.ts';
+import { writeTreeCases } from '#tests/support/tree-cases.ts';
 
 describe('visible: false in a page or meta.yaml', () => {
   const page = '---\ntitle: "A"\ndescription: ""\n---\n\nBody\n---\n';
@@ -70,15 +71,17 @@ describe('hiding and showing from the page tree', () => {
     return node && 'hidden' in node ? node.hidden : 'gone';
   };
 
+  // The docs, plus the cases they do not have (support/tree-cases.ts).
   beforeEach(async () => {
     worktree = await makeWorktree();
+    await writeTreeCases(worktree.root);
   });
   afterEach(async () => {
     await worktree.remove();
   });
 
   it('hides a page and shows it again, leaving the file as it was', async () => {
-    const path = 'distributed-systems/rpc-and-threads.mdx';
+    const path = 'reference/lint.mdx';
     const before = await text(path);
     expect(await change(path, false)).toEqual([{ type: 'change', path, detail: 'visible: false' }]);
     expect(await text(path)).toBe(before.replace(/^(title: .*\n)/m, '$1visible: false\n'));
@@ -89,98 +92,98 @@ describe('hiding and showing from the page tree', () => {
   });
 
   it('hides a folder in its meta.yaml, and gives a folder without one a meta.yaml', async () => {
-    const meta = await text('distributed-systems/meta.yaml');
-    await change('distributed-systems', false);
-    expect(await text('distributed-systems/meta.yaml')).toBe(meta.replace(/^(title: .*\n)/m, '$1visible: false\n'));
-    expect(await hiddenOf('distributed-systems')).toBe('visible-false');
+    const meta = await text('reference/meta.yaml');
+    await change('reference', false);
+    expect(await text('reference/meta.yaml')).toBe(meta.replace(/^(title: .*\n)/m, '$1visible: false\n'));
+    expect(await hiddenOf('reference')).toBe('visible-false');
     // Its pages stay where they were, under the hidden folder.
-    expect(await hiddenOf('distributed-systems/rpc-and-threads.mdx')).toBeNull();
+    expect(await hiddenOf('reference/lint.mdx')).toBeNull();
 
-    const before = nodeAt(await loadTree(worktree.root), 'data-modeling') as TreeFolder;
+    const before = nodeAt(await loadTree(worktree.root), 'patterns') as TreeFolder;
     const order = (folder: TreeFolder) => folder.children.map((child) => `${child.kind === 'page' || child.kind === 'folder' ? child.path : child.kind} ${String(child.entry)}`);
-    expect(await change('data-modeling', false)).toEqual([{ type: 'add', path: 'data-modeling/meta.yaml' }]);
-    expect(await text('data-modeling/meta.yaml')).toBe('visible: false\npages:\n  - "dimensional-modeling"\n');
-    const folder = nodeAt(await loadTree(worktree.root), 'data-modeling') as TreeFolder;
+    expect(await change('patterns', false)).toEqual([{ type: 'add', path: 'patterns/meta.yaml' }]);
+    expect(await text('patterns/meta.yaml')).toBe('visible: false\npages:\n  - "caching"\n');
+    const folder = nodeAt(await loadTree(worktree.root), 'patterns') as TreeFolder;
     expect([folder.hidden, folder.title, folder.defaultOpen]).toEqual(['visible-false', before.title, false]);
     // Its children keep their order and their entries, so they can still move.
     expect(order(folder)).toEqual(order(before));
     // Shown again, the folder is as it was: without meta.yaml.
-    expect(await change('data-modeling', true)).toEqual([{ type: 'delete', path: 'data-modeling/meta.yaml' }]);
-    expect(await exists('data-modeling/meta.yaml')).toBe(false);
-    expect(order(nodeAt(await loadTree(worktree.root), 'data-modeling') as TreeFolder)).toEqual(order(before));
+    expect(await change('patterns', true)).toEqual([{ type: 'delete', path: 'patterns/meta.yaml' }]);
+    expect(await exists('patterns/meta.yaml')).toBe(false);
+    expect(order(nodeAt(await loadTree(worktree.root), 'patterns') as TreeFolder)).toEqual(order(before));
     // So a page added later shows by itself, as it did before.
-    await writeFile(notes('data-modeling/later.mdx'), '---\ntitle: "Later"\n---\n');
-    expect(await hiddenOf('data-modeling/later.mdx')).toBeNull();
+    await writeFile(notes('patterns/later.mdx'), '---\ntitle: "Later"\n---\n');
+    expect(await hiddenOf('patterns/later.mdx')).toBeNull();
   });
 
   it('hides a folder with only an index page in a meta.yaml the site accepts', async () => {
-    // data-modeling has no meta.yaml, so it lists the new folder by itself.
-    await mkdir(notes('data-modeling/raft'));
-    await writeFile(notes('data-modeling/raft/index.mdx'), '---\ntitle: "Raft"\n---\n');
-    await change('data-modeling/raft', false);
-    const meta = await text('data-modeling/raft/meta.yaml');
+    // patterns has no meta.yaml, so it lists the new folder by itself.
+    await mkdir(notes('patterns/retries'));
+    await writeFile(notes('patterns/retries/index.mdx'), '---\ntitle: "Retries"\n---\n');
+    await change('patterns/retries', false);
+    const meta = await text('patterns/retries/meta.yaml');
     expect(meta).toBe('visible: false\npages: []\n');
     expect(notesMetaSchema.safeParse(parse(meta)).success).toBe(true);
-    expect(await hiddenOf('data-modeling/raft')).toBe('visible-false');
-    expect(await change('data-modeling/raft', true)).toEqual([{ type: 'delete', path: 'data-modeling/raft/meta.yaml' }]);
-    expect(await exists('data-modeling/raft/meta.yaml')).toBe(false);
+    expect(await hiddenOf('patterns/retries')).toBe('visible-false');
+    expect(await change('patterns/retries', true)).toEqual([{ type: 'delete', path: 'patterns/retries/meta.yaml' }]);
+    expect(await exists('patterns/retries/meta.yaml')).toBe(false);
   });
 
   it('keeps the meta.yaml it wrote once the folder was reordered while hidden', async () => {
-    await writeFile(notes('data-modeling/zz-later.mdx'), '---\ntitle: "Later"\n---\n');
-    await change('data-modeling', false);
+    await writeFile(notes('patterns/zz-later.mdx'), '---\ntitle: "Later"\n---\n');
+    await change('patterns', false);
     // Pages come before folders without meta.yaml.
-    expect(await text('data-modeling/meta.yaml')).toBe('visible: false\npages:\n  - "zz-later"\n  - "dimensional-modeling"\n');
-    const hidden = nodeAt(await loadTree(worktree.root), 'data-modeling') as TreeFolder;
-    await applyPlan(worktree.root, await planMove(worktree.root, await loadTree(worktree.root), { folder: 'data-modeling', from: 1, to: 0, baseMtime: hidden.metaMtime }));
-    expect(await change('data-modeling', true)).toEqual([{ type: 'change', path: 'data-modeling/meta.yaml', detail: 'removes visible: false' }]);
-    expect(await text('data-modeling/meta.yaml')).toBe('pages:\n  - "dimensional-modeling"\n  - "zz-later"\n');
+    expect(await text('patterns/meta.yaml')).toBe('visible: false\npages:\n  - "zz-later"\n  - "caching"\n');
+    const hidden = nodeAt(await loadTree(worktree.root), 'patterns') as TreeFolder;
+    await applyPlan(worktree.root, await planMove(worktree.root, await loadTree(worktree.root), { folder: 'patterns', from: 1, to: 0, baseMtime: hidden.metaMtime }));
+    expect(await change('patterns', true)).toEqual([{ type: 'change', path: 'patterns/meta.yaml', detail: 'removes visible: false' }]);
+    expect(await text('patterns/meta.yaml')).toBe('pages:\n  - "caching"\n  - "zz-later"\n');
   });
 
   it('adds an unlisted page to its folder when shown, and drops its visible: false', async () => {
-    const dir = 'data-platform/stacks-integration/databricks/databricks-interactive-runtime';
-    const path = `${dir}/command-execution-path.mdx`;
+    const dir = 'guide';
+    const path = `${dir}/drafts.mdx`;
     const meta = await text(`${dir}/meta.yaml`);
     expect(await hiddenOf(path)).toBe('unlisted');
     expect(await change(path, true)).toEqual([
       { type: 'change', path, detail: 'removes visible: false' },
-      { type: 'change', path: `${dir}/meta.yaml`, detail: 'adds "command-execution-path"' },
+      { type: 'change', path: `${dir}/meta.yaml`, detail: 'adds "drafts"' },
     ]);
-    expect(await text(`${dir}/meta.yaml`)).toBe(`${meta.replace(/\n?$/, '')}\n  - "command-execution-path"${meta.endsWith('\n') ? '\n' : ''}`);
+    expect(await text(`${dir}/meta.yaml`)).toBe(`${meta.replace(/\n?$/, '')}\n  - "drafts"${meta.endsWith('\n') ? '\n' : ''}`);
     expect(await hiddenOf(path)).toBeNull();
   });
 
   it('has no folder node to show where `...name` brings in its children', async () => {
     const meta = await text('meta.yaml');
-    await writeFile(notes('meta.yaml'), meta.replace('  - "data-platform"\n', '  - "...database"\n  - "data-platform"\n'));
-    expect(await hiddenOf('database')).toBe('gone');
+    await writeFile(notes('meta.yaml'), meta.replace('  - "guide"\n', '  - "...archive"\n  - "guide"\n'));
+    expect(await hiddenOf('archive')).toBe('gone');
   });
 
   it('turns a `!name` entry into the name instead of adding one', async () => {
-    await writeFile(notes('distributed-systems/meta.yaml'), 'title: "D"\npages:\n  - "..."\n  - "!rpc-and-threads"\n');
-    expect(await hiddenOf('distributed-systems/rpc-and-threads.mdx')).toBe('unlisted');
-    expect(await change('distributed-systems/rpc-and-threads.mdx', true)).toEqual([
-      { type: 'change', path: 'distributed-systems/meta.yaml', detail: '"!rpc-and-threads" becomes "rpc-and-threads"' },
+    await writeFile(notes('reference/meta.yaml'), 'title: "R"\npages:\n  - "..."\n  - "!lint"\n');
+    expect(await hiddenOf('reference/lint.mdx')).toBe('unlisted');
+    expect(await change('reference/lint.mdx', true)).toEqual([
+      { type: 'change', path: 'reference/meta.yaml', detail: '"!lint" becomes "lint"' },
     ]);
-    expect(await text('distributed-systems/meta.yaml')).toBe('title: "D"\npages:\n  - "..."\n  - "rpc-and-threads"\n');
-    expect(await hiddenOf('distributed-systems/rpc-and-threads.mdx')).toBeNull();
+    expect(await text('reference/meta.yaml')).toBe('title: "R"\npages:\n  - "..."\n  - "lint"\n');
+    expect(await hiddenOf('reference/lint.mdx')).toBeNull();
   });
 
   it('refuses to show a page whose name its folder already gives to a folder', async () => {
-    // mapreduce/ is listed; a page mapreduce.mdx next to it is left out.
-    await writeFile(notes('distributed-systems/mapreduce.mdx'), '---\ntitle: "MR"\n---\n');
-    const meta = await text('distributed-systems/meta.yaml');
-    expect(await hiddenOf('distributed-systems/mapreduce.mdx')).toBe('unlisted');
-    const refused = change('distributed-systems/mapreduce.mdx', true);
+    // guide/ is listed; a page guide.mdx next to it is left out.
+    await writeFile(notes('guide.mdx'), '---\ntitle: "G"\n---\n');
+    const meta = await text('meta.yaml');
+    expect(await hiddenOf('guide.mdx')).toBe('unlisted');
+    const refused = change('guide.mdx', true);
     await expect(refused).rejects.toThrow('already names another page or folder');
     await expect(refused).rejects.toMatchObject({ status: 409 });
-    expect(await text('distributed-systems/meta.yaml')).toBe(meta);
+    expect(await text('meta.yaml')).toBe(meta);
   });
 
   it('adds an unlisted folder to the root meta.yaml', async () => {
-    await change('database', true);
-    expect(await hiddenOf('database')).toBeNull();
-    expect(await text('meta.yaml')).toContain('  - "personal-reflections"\n  - "database"');
+    await change('archive', true);
+    expect(await hiddenOf('archive')).toBeNull();
+    expect(await text('meta.yaml')).toContain('  - "patterns"\n  - "archive"');
   });
 
   it('refuses the root, a missing node and a file that changed after planning', async () => {
@@ -188,10 +191,10 @@ describe('hiding and showing from the page tree', () => {
     await expect(planVisibility(worktree.root, tree, { path: 'index.mdx', visible: false })).rejects.toThrow('always shown');
     await expect(planVisibility(worktree.root, tree, { path: '', visible: false })).rejects.toThrow('always shown');
     await expect(planVisibility(worktree.root, tree, { path: 'nothing.mdx', visible: false })).rejects.toThrow('no such page');
-    await expect(planVisibility(worktree.root, tree, { path: 'distributed-systems', visible: 'no' })).rejects.toThrow('true or false');
-    const plan = await planVisibility(worktree.root, tree, { path: 'distributed-systems', visible: false });
-    await writeFile(notes('distributed-systems/meta.yaml'), 'pages: []\n');
+    await expect(planVisibility(worktree.root, tree, { path: 'reference', visible: 'no' })).rejects.toThrow('true or false');
+    const plan = await planVisibility(worktree.root, tree, { path: 'reference', visible: false });
+    await writeFile(notes('reference/meta.yaml'), 'pages: []\n');
     await expect(applyPlan(worktree.root, plan)).rejects.toMatchObject({ status: 409 });
-    expect(await text('distributed-systems/meta.yaml')).toBe('pages: []\n');
+    expect(await text('reference/meta.yaml')).toBe('pages: []\n');
   });
 });

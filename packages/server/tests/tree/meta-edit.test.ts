@@ -1,15 +1,14 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { docsRoot } from '@fdbook/testing/notes.ts';
 import { insertEntry, keepEntries, metaTemplate, moveEntry, quote, readPages, removeKey, replaceEntry, setDefaultOpen, setFlag } from '#tree/meta-edit.ts';
 
-const real = (path: string) => readFileSync(join(docsRoot, 'content/docs', path), 'utf8');
+// A meta.yaml as people write them by hand: quoted entries, a commented-out
+// entry above the list and no newline at the end of the file.
+const HAND_WRITTEN = 'title: "Data Platform"\nicon: TreePine\ndefaultOpen: true\npages:\n  # - "processing"\n  - "stacks-integration"\n  - "data-quality"';
 
 describe('meta.yaml edits', () => {
   it('moves an entry and keeps comments, quotes and the missing final newline', () => {
     // A commented-out entry above the list, no newline at the end of the file.
-    const text = real('data-platform/meta.yaml');
+    const text = HAND_WRITTEN;
     expect(text.endsWith('\n')).toBe(false);
     const moved = moveEntry(text, 1, 0);
     expect(moved).toBe(text.replace('  - "stacks-integration"\n  - "data-quality"', '  - "data-quality"\n  - "stacks-integration"'));
@@ -83,7 +82,7 @@ describe('meta.yaml edits', () => {
 
   it('sets defaultOpen in place and keeps the rest of the file', () => {
     // No final newline, a commented-out entry.
-    const text = real('data-platform/meta.yaml');
+    const text = HAND_WRITTEN;
     expect(setDefaultOpen(text, false)).toBe(text.replace('defaultOpen: true', 'defaultOpen: false'));
     expect(setDefaultOpen(text, true)).toBe(text);
     expect(setDefaultOpen('title: X\ndefaultOpen: no # site\npages: []\n', true)).toBe('title: X\ndefaultOpen: true # site\npages: []\n');

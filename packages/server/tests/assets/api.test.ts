@@ -1,13 +1,13 @@
-import { chmod, cp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createSyncClient, SYNC_ENDPOINT, wsTransport, type DocumentEditor } from '@fumadocs-editor/core/sync';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyAssetPlan, planAssetRename } from '#assets/ops.ts';
-import { docsRoot } from '@fdbook/testing/notes.ts';
 import { lintWorktree } from '#lint/context.ts';
 import { json, rawRequest } from '#tests/support/http.ts';
 import { startTestStudio, type TestStudio } from '@fdbook/testing/studio.ts';
 import { CORPUS_TIMEOUT_MS } from '#tests/support/timeouts.ts';
+import { PANES, REQUEST_PATH, SIGN_IN, writeAssetCases } from '#tests/support/asset-cases.ts';
 
 type Usage = { note: string; line: number; column: number; text: string; unsure: boolean };
 type Asset = { path: string; mtimeMs: number; usages: Usage[] };
@@ -33,15 +33,16 @@ class TextEditor implements DocumentEditor {
   }
 }
 
-const SUPERSET = 'public/docs/data-platform/stacks-integration/superset-trino-impersonate.jpg';
-const WAREHOUSE = 'public/docs/data-modeling/data_warehouse_architecture.webp';
+const PANES_SVG = PANES.asset;
+const SIGN_IN_WEBP = SIGN_IN.asset;
 // An embedded HTML asset, and an unused one, each still named by a regen
 // script of the retired Archify pipeline: the Studio no longer reads those.
 const MADE = { asset: 'public/docs/legacy/made.html', note: 'content/docs/legacy-made.mdx', script: 'diagrams/legacy/made.regen.sh' };
 const KEPT = { asset: 'public/docs/legacy/kept.html', script: 'diagrams/legacy/kept.regen.sh' };
 
-// The assets API on a copy of the real content/docs and public/docs. The
-// tests run in order and build on each other's changes.
+// The assets API on a copy of the real content/docs, public/docs and
+// diagrams, with images the pages use (support/asset-cases.ts). The tests
+// run in order and build on each other's changes.
 describe('assets API', () => {
   let studio: TestStudio;
 
@@ -62,8 +63,7 @@ describe('assets API', () => {
 
   beforeAll(async () => {
     studio = await startTestStudio();
-    await cp(join(docsRoot, 'public/docs'), file('public/docs'), { recursive: true });
-    await cp(join(docsRoot, 'diagrams'), file('diagrams'), { recursive: true });
+    await writeAssetCases(studio.root);
     await mkdir(file('public/docs/legacy'), { recursive: true });
     await mkdir(file('diagrams/legacy'), { recursive: true });
     for (const { asset, script } of [MADE, KEPT]) {
@@ -81,24 +81,27 @@ describe('assets API', () => {
     const assets = await list();
     const byPath = (path: string) => assets.find((asset) => asset.path === path);
     expect(assets.every((asset) => asset.path.startsWith('public/docs/') || asset.path.startsWith('diagrams/'))).toBe(true);
-    expect(byPath(SUPERSET)).toMatchObject({
-      mtimeMs: await mtime(SUPERSET),
-      usages: [{ note: 'content/docs/data-platform/stacks-integration/index.mdx', line: 157, unsure: false }],
+    expect(byPath(PANES_SVG)).toMatchObject({
+      mtimeMs: await mtime(PANES_SVG),
+      usages: [{ note: PANES.note, line: (await text(PANES.note)).split('\n').indexOf(PANES.line) + 1, unsure: false }],
     });
-    expect(byPath(SUPERSET)?.usages[0].text).toMatch(/^!\[Superset .*superset-trino-impersonate\.jpg\)$/);
+    expect(byPath(PANES_SVG)?.usages[0].text).toMatch(/^!\[The Studio's .*studio-panes\.svg\)$/);
     expect(byPath('public/docs/demo/pixel.png')?.usages).toEqual([]);
-    expect(assets.flatMap((asset) => asset.usages).length).toBeGreaterThanOrEqual(9);
+    // The three images and the embed written above, and the six <Diagram>s of the docs.
+    expect(assets.flatMap((asset) => asset.usages).length).toBeGreaterThanOrEqual(10);
     expect(await missingAssets()).toEqual([]);
   }, 20_000);
 
   it('lists the diagrams with the notes whose <Diagram> draws them', async () => {
     const assets = await list();
     const diagrams = assets.filter((asset) => asset.path.startsWith('diagrams/'));
-    expect(diagrams.length).toBeGreaterThanOrEqual(8);
+    // The docs' examples and the Studio's layout.
+    expect(diagrams.length).toBeGreaterThanOrEqual(9);
     expect(diagrams.every((asset) => asset.path.endsWith('.diagram.json'))).toBe(true);
-    const vantage = diagrams.find((asset) => asset.path.endsWith('/driver-container-vantage-point.diagram.json'));
-    expect(vantage?.usages).toMatchObject([{ note: 'content/docs/data-platform/stacks-integration/databricks/databricks-interactive-runtime/driver-container-first-look.mdx', line: 39, unsure: false }]);
-    expect(vantage?.usages[0].text).toMatch(/^<Diagram src="/);
+    const layout = diagrams.find((asset) => asset.path === 'diagrams/reference/studio-layout.diagram.json');
+    const home = (await text('content/docs/index.mdx')).split('\n');
+    expect(layout?.usages).toMatchObject([{ note: 'content/docs/index.mdx', line: home.findIndex((line) => line.startsWith('<Diagram src="reference/studio-layout"')) + 1, unsure: false }]);
+    expect(layout?.usages[0].text).toMatch(/^<Diagram src="/);
   });
 
   it('lists an asset a leftover regen script names like any other', async () => {
@@ -107,23 +110,23 @@ describe('assets API', () => {
 
   describe('rename', () => {
     it('shows a dry run and writes nothing', async () => {
-      const response = await post({ op: 'rename', dryRun: true, path: WAREHOUSE, name: 'data-warehouse-architecture', baseMtime: await mtime(WAREHOUSE) });
+      const response = await post({ op: 'rename', dryRun: true, path: SIGN_IN_WEBP, name: 'sign-in-flow', baseMtime: await mtime(SIGN_IN_WEBP) });
       expect(response.status).toBe(200);
       expect((json(response) as Answer).changes).toEqual([
-        { type: 'move', path: WAREHOUSE, to: 'public/docs/data-modeling/data-warehouse-architecture.webp' },
-        { type: 'change', path: 'content/docs/data-modeling/index.mdx', detail: '1 reference' },
+        { type: 'move', path: SIGN_IN_WEBP, to: 'public/docs/guide/setup/sign-in-flow.webp' },
+        { type: 'change', path: SIGN_IN.note, detail: '1 reference' },
       ]);
-      expect(await exists(WAREHOUSE)).toBe(true);
+      expect(await exists(SIGN_IN_WEBP)).toBe(true);
     });
 
     it('renames the file and every reference to it; the lint stays clean', async () => {
-      const note = 'content/docs/data-modeling/index.mdx';
+      const note = SIGN_IN.note;
       const before = await text(note);
-      const response = await post({ op: 'rename', path: WAREHOUSE, name: 'data-warehouse-architecture', baseMtime: await mtime(WAREHOUSE) });
+      const response = await post({ op: 'rename', path: SIGN_IN_WEBP, name: 'sign-in-flow', baseMtime: await mtime(SIGN_IN_WEBP) });
       expect(response.status).toBe(200);
-      expect(await exists(WAREHOUSE)).toBe(false);
-      expect(await exists('public/docs/data-modeling/data-warehouse-architecture.webp')).toBe(true);
-      expect(await text(note)).toBe(before.replace('data_warehouse_architecture.webp', 'data-warehouse-architecture.webp'));
+      expect(await exists(SIGN_IN_WEBP)).toBe(false);
+      expect(await exists('public/docs/guide/setup/sign-in-flow.webp')).toBe(true);
+      expect(await text(note)).toBe(before.replace('sign_in_flow.webp', 'sign-in-flow.webp'));
       expect(await missingAssets()).toEqual([]);
     }, 20_000);
 
@@ -137,31 +140,31 @@ describe('assets API', () => {
     }, 20_000);
 
     it('refuses bad names, taken names, stale files and paths outside public/docs', async () => {
-      const baseMtime = await mtime(SUPERSET);
-      expect((await post({ op: 'rename', path: SUPERSET, name: 'Superset Trino', baseMtime })).status).toBe(400);
-      expect((await post({ op: 'rename', path: SUPERSET, name: 'superset-trino-impersonate', baseMtime })).status).toBe(400);
-      await writeFile(file('public/docs/data-platform/stacks-integration/taken.jpg'), 'x');
-      expect((await post({ op: 'rename', path: SUPERSET, name: 'taken', baseMtime })).status).toBe(409);
-      expect((await post({ op: 'rename', path: SUPERSET, name: 'fresh', baseMtime: baseMtime - 1000 })).status).toBe(409);
+      const baseMtime = await mtime(PANES_SVG);
+      expect((await post({ op: 'rename', path: PANES_SVG, name: 'Studio Panes', baseMtime })).status).toBe(400);
+      expect((await post({ op: 'rename', path: PANES_SVG, name: 'studio-panes', baseMtime })).status).toBe(400);
+      await writeFile(file('public/docs/guide/using/taken.svg'), 'x');
+      expect((await post({ op: 'rename', path: PANES_SVG, name: 'taken', baseMtime })).status).toBe(409);
+      expect((await post({ op: 'rename', path: PANES_SVG, name: 'fresh', baseMtime: baseMtime - 1000 })).status).toBe(409);
       expect((await post({ op: 'rename', path: 'content/docs/index.mdx', name: 'x', baseMtime })).status).toBe(403);
       expect((await post({ op: 'rename', path: 'public/docs/../notes/demo/pixel.png', name: 'x', baseMtime })).status).toBe(403);
       expect((await post({ op: 'rename', path: 'public/docs/nothing.png', name: 'x', baseMtime })).status).toBe(404);
-      expect((await post({ op: 'shred', path: SUPERSET })).status).toBe(400);
-      expect(await exists(SUPERSET)).toBe(true);
+      expect((await post({ op: 'shred', path: PANES_SVG })).status).toBe(400);
+      expect(await exists(PANES_SVG)).toBe(true);
     });
 
     it('refuses a symlinked asset', async () => {
-      await symlink(file(SUPERSET), file('public/docs/demo/linked.jpg'));
+      await symlink(file(PANES_SVG), file('public/docs/demo/linked.jpg'));
       const response = await post({ op: 'rename', path: 'public/docs/demo/linked.jpg', name: 'x', baseMtime: 0 });
       expect(response.status).toBe(403);
     });
 
     it('refuses when a note changed after the plan, before moving anything', async () => {
-      const note = 'content/docs/data-platform/stacks-integration/index.mdx';
-      const plan = await planAssetRename(studio.root, { path: SUPERSET, name: 'superset-impersonation', baseMtime: await mtime(SUPERSET) });
+      const note = PANES.note;
+      const plan = await planAssetRename(studio.root, { path: PANES_SVG, name: 'panes', baseMtime: await mtime(PANES_SVG) });
       await writeFile(file(note), `${await text(note)}\nedited elsewhere\n`);
       await expect(applyAssetPlan(studio.root, plan)).rejects.toMatchObject({ status: 409 });
-      expect(await exists(SUPERSET)).toBe(true);
+      expect(await exists(PANES_SVG)).toBe(true);
     }, CORPUS_TIMEOUT_MS);
 
     it('rewrites a reference written with a Markdown escape', async () => {
@@ -217,24 +220,24 @@ describe('assets API', () => {
 
     it('refuses while a note that does not parse may use it', async () => {
       const broken = 'content/docs/zz-broken.mdx';
-      await writeFile(file(broken), '<HtmlEmbed src="/docs/data-platform/stacks-integration/superset-trino-impersonate.jpg"\n');
-      expect((await find(SUPERSET))?.usages.at(-1)).toMatchObject({ note: broken, line: 1, unsure: true });
-      const response = await post({ op: 'rename', path: SUPERSET, name: 'superset', baseMtime: await mtime(SUPERSET) });
+      await writeFile(file(broken), '<HtmlEmbed src="/docs/guide/using/studio-panes.svg"\n');
+      expect((await find(PANES_SVG))?.usages.at(-1)).toMatchObject({ note: broken, line: 1, unsure: true });
+      const response = await post({ op: 'rename', path: PANES_SVG, name: 'panes', baseMtime: await mtime(PANES_SVG) });
       expect(response.status).toBe(409);
       expect((json(response) as { error: string }).error).toContain(broken);
     });
 
     it('updates a note open in the editor through its sync', async () => {
-      const note = 'content/docs/data-platform/processing/apache-spark/spark-programming-model.mdx';
-      const svg = 'public/docs/data-platform/processing/apache-spark/narrow-vs-wide-transformations.svg';
+      const note = REQUEST_PATH.note;
+      const svg = REQUEST_PATH.asset;
       const client = createSyncClient({ transport: wsTransport(`ws://127.0.0.1:${studio.port}${SYNC_ENDPOINT}`) });
       try {
         const editor = new TextEditor();
         const doc = client.open(note.slice('content/docs/'.length), { editor });
         editor.text = (await doc.opened).text;
-        const response = await post({ op: 'rename', path: svg, name: 'narrow-vs-wide', baseMtime: await mtime(svg) });
+        const response = await post({ op: 'rename', path: svg, name: 'request-flow', baseMtime: await mtime(svg) });
         expect(response.status).toBe(200);
-        await expect.poll(() => editor.external.at(-1) ?? '', { timeout: 5000 }).toContain('src="/docs/data-platform/processing/apache-spark/narrow-vs-wide.svg"');
+        await expect.poll(() => editor.external.at(-1) ?? '', { timeout: 5000 }).toContain('src="/docs/reference/architecture/request-flow.svg"');
         expect(doc.status()).toBe('synced');
       } finally {
         client.close();
@@ -244,10 +247,10 @@ describe('assets API', () => {
 
   describe('delete', () => {
     it('refuses while a note uses the asset, and lists where', async () => {
-      const used = 'public/docs/data-modeling/data-warehouse-architecture.webp';
+      const used = 'public/docs/guide/setup/sign-in-flow.webp';
       const dry = await post({ op: 'delete', dryRun: true, path: used, baseMtime: await mtime(used) });
       expect(dry.status).toBe(409);
-      expect((json(dry) as { error: string }).error).toMatch(/content\/notes\/data-modeling\/index\.mdx/);
+      expect((json(dry) as { error: string }).error).toMatch(/content\/docs\/guide\/setup\.mdx/);
       expect((await post({ op: 'delete', path: used, baseMtime: await mtime(used) })).status).toBe(409);
       expect(await exists(used)).toBe(true);
     });
@@ -273,7 +276,7 @@ describe('assets API', () => {
     });
 
     it('refuses a stale delete', async () => {
-      const unused = 'public/docs/data-platform/stacks-integration/taken.jpg';
+      const unused = 'public/docs/guide/using/taken.svg';
       expect((await post({ op: 'delete', path: unused, baseMtime: (await mtime(unused)) - 1 })).status).toBe(409);
       expect(await exists(unused)).toBe(true);
     });

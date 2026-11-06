@@ -3,7 +3,7 @@ import { lintNote } from '#lint/lint.ts';
 import type { DiagramProblem, LintIssue } from '#lint/types.ts';
 
 const PAGES = ['index.mdx', 'guide/index.mdx', 'guide/intro.mdx', 'guide/setup.mdx', 'other/page.mdx'];
-const ASSETS = ['notes/guide/demo.html', 'notes/guide/arch.svg', 'images/logo.png'];
+const ASSETS = ['docs/guide/demo.html', 'docs/guide/arch.svg', 'images/logo.png'];
 // Diagrams by src, and what keeps each from drawing cleanly.
 const DIAGRAMS: Record<string, DiagramProblem | null> = {
   'guide/flow': null,
@@ -215,7 +215,7 @@ describe('assets', () => {
   });
 
   it('reads an image path as the browser asks for it, percent escapes decoded', () => {
-    expect(lint('![a](/docs/guide/my%20pic.png)\n', { assets: [...ASSETS, 'notes/guide/my pic.png'] })).toEqual([]);
+    expect(lint('![a](/docs/guide/my%20pic.png)\n', { assets: [...ASSETS, 'docs/guide/my pic.png'] })).toEqual([]);
     expect(summary(lint('![a](/docs/guide/my%20pic.png)\n'))).toEqual(['asset-missing@1']);
   });
 
