@@ -1,7 +1,7 @@
 import type { ServerResponse } from 'node:http';
 import { atLeast } from '@fdbook/shared/auth.ts';
-import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#http.ts';
-import { viewerOf, type Viewer } from '#security/access.ts';
+import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#http/http.ts';
+import { viewerOf, type Viewer } from '#auth/access.ts';
 import type { Thread } from '@fdbook/shared/review.ts';
 import type { DeleteProposals } from './deletes.ts';
 import { PROPOSAL_OPS, type DeleteProposalView, type ProposalOp, type ProposalView } from '@fdbook/shared/proposals.ts';

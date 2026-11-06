@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { isTextPath, MAX_ASSET_BYTES } from '@fdbook/shared/asset-types.ts';
 import { classifyPath, EDITABLE_AREAS, resolveWorktreePath } from '#security/paths.ts';
 import { statOrNull } from '#files/store.ts';

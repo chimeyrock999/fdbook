@@ -2,7 +2,7 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { git } from '#cr/git.ts';
+import { git } from '#git/command.ts';
 import { createBranchPullRequestReader, ghPullRequest, type BranchPullRequest, type PullRequestGh } from '#preview/pull-request.ts';
 
 const OPEN: BranchPullRequest = { number: 7, url: 'https://github.com/o/r/pull/7', state: 'OPEN', title: 'Probe' };

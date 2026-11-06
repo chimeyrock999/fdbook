@@ -4,7 +4,7 @@ import { visit } from 'unist-util-visit';
 import { scanNotes, usagesIn, type NoteScan } from '#assets/ops.ts';
 import { findAssetRefs } from '#assets/refs.ts';
 import { listEditableFiles, type createKeyedLock } from '#files/store.ts';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { parseNote } from '#lint/lint.ts';
 import { pageUrl, resolveHref } from '#lint/rules/links.ts';
 import { ASSETS_DIR, NOTES_DIR, resolveWorktreePath } from '#security/paths.ts';

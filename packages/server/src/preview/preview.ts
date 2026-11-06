@@ -1,6 +1,5 @@
-import { HttpError } from '#http.ts';
-import { CommandError, git, run } from '#cr/git.ts';
-import { previewUrlOf } from '#cr/manager.ts';
+import { HttpError } from '#http/http.ts';
+import { CommandError, git, run } from '#git/command.ts';
 import { CR_BRANCH_PREFIX } from '@fdbook/shared/cr-slug.ts';
 import { loadChanges } from '#git/status.ts';
 import { buildOf, type Build, type BuildReader } from './check-runs.ts';
@@ -25,6 +24,13 @@ export type Preview = {
   pr: BranchPullRequest | null;
   prError: string | null;
 };
+
+// The preview Cloudflare Pages builds for a branch: its name lowercased,
+// anything but letters and digits as `-`, at most 28 characters.
+export function previewUrlOf(branch: string, project: string) {
+  const alias = branch.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 28).replace(/-+$/, '');
+  return `https://${alias}.${project}.pages.dev`;
+}
 
 export type PreviewOptions = { builds: BuildReader; pullRequests: BranchPullRequestReader; pagesProject: string | null };
 

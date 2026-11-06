@@ -1,5 +1,5 @@
 import { runGit } from '#git/git.ts';
-import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '#http.ts';
+import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '#http/http.ts';
 import type { Attachments } from './attachments.ts';
 import { mentionKindOf } from './context.ts';
 import { ATTACHMENT_MAX_BYTES, type Mention, type MentionKind } from '@fdbook/shared/agents.ts';

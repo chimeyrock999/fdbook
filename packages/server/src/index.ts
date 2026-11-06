@@ -1,8 +1,8 @@
 import { resolve } from 'node:path';
-import { listenFailure, pagesProject, parseStaleDays, parseStudioHost, parseStudioPort, studioHome } from './config.ts';
-import { installProblem } from './deps.ts';
-import { CALLBACK_PATH } from './auth/config.ts';
-import { loadProject } from './project.ts';
+import { listenFailure, pagesProject, parseStaleDays, parseStudioHost, parseStudioPort, studioHome } from '#config/config.ts';
+import { installProblem } from '#config/deps.ts';
+import { CALLBACK_PATH } from '#auth/config.ts';
+import { loadProject } from '#config/project.ts';
 import { setAreas } from '@fdbook/shared/asset-types.ts';
 
 // Each dependency must be installed as its package-lock.json pins: a pull
@@ -21,8 +21,8 @@ const project = await loadProject(resolve(process.env.INIT_CWD ?? process.cwd(),
 });
 setAreas(project.areas);
 
-const { startStudioServer } = await import('./studio-server.ts');
-const { githubAuth } = await import('./auth/setup.ts');
+const { startStudioServer } = await import('#app/studio-server.ts');
+const { githubAuth } = await import('#auth/setup.ts');
 
 try {
   const host = parseStudioHost(process.env.STUDIO_HOST);

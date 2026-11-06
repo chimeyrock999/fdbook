@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { loadProject } from '#project.ts';
+import { loadProject } from '#config/project.ts';
 import { setAreas } from '@fdbook/shared/asset-types.ts';
 
 // Lints every note of a project: `npm run studio:lint -- <folder>` from the

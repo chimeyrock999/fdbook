@@ -1,7 +1,7 @@
 import { createKeyedLock } from '#files/store.ts';
-import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '#http.ts';
+import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '#http/http.ts';
 import { ASSET_TYPES, extensionOf } from '#security/paths.ts';
-import { viewerOf } from '#security/access.ts';
+import { viewerOf } from '#auth/access.ts';
 import { authorOf, commitChanges } from './commit.ts';
 import { loadBaseFile, loadDiff } from './diff.ts';
 import { loadHistory } from './history.ts';

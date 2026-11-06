@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { atLeast } from '@fdbook/shared/auth.ts';
 import { changedSinceBase, loadDiff } from '#git/diff.ts';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { loadLintContexts } from '#lint/context.ts';
 import { lintNote } from '#lint/lint.ts';
 import { hunksOf } from '@fdbook/shared/hunks.ts';

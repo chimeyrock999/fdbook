@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'node:http';
-import type { GitHubUser } from '#auth/github.ts';
+import type { GitHubUser } from './github.ts';
 import type { Role } from '@fdbook/shared/auth.ts';
 
 // The role a request needs, decided from its method and path alone, before

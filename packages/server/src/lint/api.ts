@@ -1,4 +1,4 @@
-import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '#http.ts';
+import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '#http/http.ts';
 import { NOTES_DIR, resolveWorktreePath } from '#security/paths.ts';
 import { loadLintContext } from './context.ts';
 import { lintNote } from './lint.ts';

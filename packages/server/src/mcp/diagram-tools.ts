@@ -9,7 +9,7 @@ import { classifyPath, DIAGRAM_SUFFIX, DIAGRAMS_DIR } from '@fdbook/shared/asset
 import type { StudioTool, StudioToolContext, ToolResult } from './tool.ts';
 
 // The diagram tools of the Studio MCP, mounted beside the note tools
-// (server/studio-server.ts):
+// (server/app/studio-server.ts):
 // small edits to `diagrams/**/*.diagram.json` in the change request's
 // worktree, so an agent never rewrites a whole file or a coordinate by hand.
 // Every write goes through ctx.files with the mtime it read, lays out any

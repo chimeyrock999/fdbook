@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '#http.ts';
+import { HttpError, pathnameOf, readBody, sendJson, type Handler } from '#http/http.ts';
 import { MAX_ASSET_BYTES } from '@fdbook/shared/asset-types.ts';
 import { ASSET_TYPES, extensionOf, resolveWorktreePath, type PathKind } from '#security/paths.ts';
 import { createKeyedLock, listEditableFiles, statOrNull } from './store.ts';

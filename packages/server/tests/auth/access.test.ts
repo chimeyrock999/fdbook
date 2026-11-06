@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { requiredRole } from '#security/access.ts';
+import { requiredRole } from '#auth/access.ts';
 
 describe('requiredRole', () => {
   it.each([

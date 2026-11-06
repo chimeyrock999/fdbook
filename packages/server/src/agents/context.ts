@@ -1,7 +1,7 @@
 import { lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { classifyPath } from '#security/paths.ts';
 import type { AttachedFile } from './attachment-blocks.ts';
 import type { Attachments } from './attachments.ts';

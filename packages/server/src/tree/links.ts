@@ -2,7 +2,7 @@ import { visit } from 'unist-util-visit';
 import { parseNote } from '#lint/lint.ts';
 import { joinPath, pageUrl } from '#lint/rules/links.ts';
 import { BASE_URL } from '@fdbook/shared/asset-types.ts';
-import { markdownRange } from '#markdown/destination.ts';
+import { markdownRange } from '#lint/destination.ts';
 
 // A page or folder that gets a new name in the same folder. Paths are
 // relative to content/notes: `guide/intro.mdx` for a page, `guide` for a

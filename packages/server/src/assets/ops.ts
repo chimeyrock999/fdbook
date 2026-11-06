@@ -3,7 +3,7 @@ import { readFile, readdir, rename, rm, rmdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { slugify } from '@fdbook/shared/slug.ts';
 import { listEditableFiles, statOrNull, writeAtomic } from '#files/store.ts';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { DIAGRAM_SUFFIX } from '@fdbook/shared/asset-types.ts';
 import { ASSETS_DIR, classifyPath, DIAGRAMS_DIR, extensionOf, NOTES_DIR, resolveWorktreePath } from '#security/paths.ts';
 import { findAssetRefs, rewriteAssetRefs, type AssetRef } from './refs.ts';

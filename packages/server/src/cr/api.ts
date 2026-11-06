@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { atLeast } from '@fdbook/shared/auth.ts';
-import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#http.ts';
-import { viewerOf } from '#security/access.ts';
+import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#http/http.ts';
+import { viewerOf } from '#auth/access.ts';
 import type { ChangeRequests, DiscardSeen } from './manager.ts';
 
 const MAX_BODY_BYTES = 16 * 1024;

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createKeyedLock, writeAtomic } from '#files/store.ts';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { blocksOf } from '@fdbook/shared/hunks.ts';
 import { NOTES_DIR } from '#security/paths.ts';
 import type { ProposalAuthor } from '@fdbook/shared/proposals.ts';

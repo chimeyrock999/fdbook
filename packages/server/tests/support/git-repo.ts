@@ -2,14 +2,14 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { git } from '#cr/git.ts';
+import { git } from '#git/command.ts';
 import type { PullRequest } from '#cr/pull-requests.ts';
 import { createBuildReader, type CheckRun } from '#preview/check-runs.ts';
 import { createBranchPullRequestReader, type BranchPullRequest, type NewPullRequest, type PullRequestGh } from '#preview/pull-request.ts';
 import type { AgentProfile } from '#agents/profiles.ts';
 import type { AuthOptions } from '#auth/auth.ts';
 import type { StudioTool } from '#mcp/tool.ts';
-import { startStudioServer } from '#studio-server.ts';
+import { startStudioServer } from '#app/studio-server.ts';
 
 const NOTES: Record<string, string> = {
   'content/docs/index.mdx': '---\ntitle: Home\n---\n\nWelcome.\n',

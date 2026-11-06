@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
-import { git } from '#cr/git.ts';
+import { git } from '#git/command.ts';
 
 // The worktree path (posix) an absolute path names, or null outside it.
 export function worktreePathOf(root: string, path: string) {

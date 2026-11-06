@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { createKeyedLock, statOrNull } from '#files/store.ts';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import type { TurnChange } from '@fdbook/shared/agents.ts';
 import type { Transcripts } from './transcripts.ts';
 import { revertChange, type StoredChange } from './watch.ts';

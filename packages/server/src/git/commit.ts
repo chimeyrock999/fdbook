@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { MAIN_BRANCH } from '@fdbook/shared/branch.ts';
 import { readCommits, type Commit } from './history.ts';
 import { runGit } from './git.ts';

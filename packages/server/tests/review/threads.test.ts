@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HttpError } from '#http.ts';
+import type { HttpError } from '#http/http.ts';
 import type { Thread, ThreadAuthor } from '@fdbook/shared/review.ts';
 import { createThreads, type Threads } from '#review/threads.ts';
 

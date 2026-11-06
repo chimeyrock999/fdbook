@@ -1,4 +1,4 @@
-import { HttpError, pathnameOf, sendJson, type Handler } from '#http.ts';
+import { HttpError, pathnameOf, sendJson, type Handler } from '#http/http.ts';
 import { siteIconNames } from './names.ts';
 
 // GET /api/icons: the lucide names a note's `icon` can take (names.ts).

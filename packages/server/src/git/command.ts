@@ -1,5 +1,10 @@
 import { execFile } from 'node:child_process';
 
+// The commands change requests, previews, agents and roles run on the
+// repository and on GitHub (git, gh), failing with a CommandError. A read of
+// a worktree for the API goes through git.ts instead, which fails with an
+// HttpError.
+
 export class CommandError extends Error {
   readonly code: number | null;
   // Stopped by the timeout.

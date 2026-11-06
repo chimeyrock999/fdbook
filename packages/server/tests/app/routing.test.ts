@@ -2,9 +2,9 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { SYNC_ENDPOINT } from '@fumadocs-editor/core/sync';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createRequestListener } from '#routing.ts';
+import { createRequestListener } from '#app/routing.ts';
 import { ownHosts } from '#security/guard.ts';
-import { rawRequest, tryUpgrade } from './support/http';
+import { rawRequest, tryUpgrade } from '#tests/support/http.ts';
 import { startTestStudio, type TestStudio } from '@fdbook/testing/studio.ts';
 
 describe('websocket upgrades', () => {

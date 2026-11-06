@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { driftedPackages, installProblem } from '#deps.ts';
+import { driftedPackages, installProblem } from '#config/deps.ts';
 
 describe('installed packages against the lockfile', () => {
   const dirs: string[] = [];

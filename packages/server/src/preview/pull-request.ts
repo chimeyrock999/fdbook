@@ -1,4 +1,4 @@
-import { run } from '#cr/git.ts';
+import { run } from '#git/command.ts';
 import { originRepoOf } from './check-runs.ts';
 
 // The pull request of a change request's branch (#20).

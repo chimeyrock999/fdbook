@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { HttpError, pathnameOf, readJsonObject, sendJson } from '#http.ts';
-import { requiredRole, setViewer, type Viewer } from '#security/access.ts';
+import { HttpError, pathnameOf, readJsonObject, sendJson } from '#http/http.ts';
+import { requiredRole, setViewer, type Viewer } from '#auth/access.ts';
 import { CALLBACK_PATH, type AuthConfig } from './config.ts';
 import type { GitHub, GitHubUser } from './github.ts';
 import type { RepoAccess, RoleReader } from './roles.ts';

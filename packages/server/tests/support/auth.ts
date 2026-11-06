@@ -7,7 +7,7 @@ import type { AuthConfig } from '#auth/config.ts';
 import type { DevicePoll, GitHub, GitHubUser } from '#auth/github.ts';
 import { createRoleReader } from '#auth/roles.ts';
 import { createSessionStore } from '#auth/sessions.ts';
-import { startStudioServer } from '#studio-server.ts';
+import { startStudioServer } from '#app/studio-server.ts';
 import { makeGitWorktree } from '@fdbook/testing/git.ts';
 import { json, rawRequest, type RawResponse } from './http';
 import { makeWorktree } from '@fdbook/testing/studio.ts';

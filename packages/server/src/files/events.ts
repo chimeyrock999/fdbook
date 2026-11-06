@@ -3,8 +3,8 @@ import { readdir, stat } from 'node:fs/promises';
 import type { ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { atLeast } from '@fdbook/shared/auth.ts';
-import { pathnameOf, type Handler } from '#http.ts';
-import { viewerOf, type Viewer } from '#security/access.ts';
+import { pathnameOf, type Handler } from '#http/http.ts';
+import { viewerOf, type Viewer } from '#auth/access.ts';
 import { classifyPath, EDITABLE_AREAS, resolveWorktreePath } from '#security/paths.ts';
 import { listEditableFiles } from './store.ts';
 

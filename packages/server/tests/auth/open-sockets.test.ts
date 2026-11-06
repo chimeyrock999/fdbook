@@ -6,7 +6,7 @@ import type { ConnectionStatus, SyncClient } from '@fumadocs-editor/core/sync';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createAuth } from '#auth/auth.ts';
 import type { ChangeRequest } from '#cr/manager.ts';
-import { viewerOf } from '#security/access.ts';
+import { viewerOf } from '#auth/access.ts';
 import { fakeAuth, sender, signInWith, startAuthStudio, testAuthConfig, type AuthStudio, type FakeGitHub } from '#tests/support/auth.ts';
 import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '#tests/support/git-repo.ts';
 import { json } from '#tests/support/http.ts';

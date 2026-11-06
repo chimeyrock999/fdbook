@@ -1,6 +1,6 @@
 import { posix } from 'node:path';
 import { z } from 'zod';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { pageUrl } from '#lint/rules/links.ts';
 import { NOTES_DIR } from '#security/paths.ts';
 import { graphKeywordEntriesOf, graphKeywordsOf, json, linksOf, notePath, notesOf, strings, text } from './note-tools.ts';

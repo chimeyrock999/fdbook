@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { ATTACHMENT_MAX_BYTES, type Attachment, type ConversationEvent } from '@fdbook/shared/agents.ts';
 
 const ID = /^[a-f0-9]{16}$/;

@@ -1,4 +1,4 @@
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { ASSET_TYPES, extensionOf, isAssetExtension } from '@fdbook/shared/asset-types.ts';
 import { checkAsset, planMove, scanNotes, usagesIn, type AssetPlan, type NoteScan } from './ops.ts';
 

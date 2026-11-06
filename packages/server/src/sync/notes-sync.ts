@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { createSyncServer, fsStorage } from '@fumadocs-editor/core/node';
 import { atLeast } from '@fdbook/shared/auth.ts';
-import { viewerOf } from '#security/access.ts';
+import { viewerOf } from '#auth/access.ts';
 import { rejectForeignRequest } from '#security/guard.ts';
 import { NOTES_DIR, resolveWorktreePath } from '#security/paths.ts';
 
