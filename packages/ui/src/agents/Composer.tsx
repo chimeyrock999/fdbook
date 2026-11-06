@@ -1,10 +1,10 @@
 import { ArrowUp, AtSign, Paperclip } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ATTACHMENT_MAX_BYTES, SELECTION_MAX } from '@fdbook/shared/agents.ts';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
-import { toast } from '#actions/toasts.ts';
-import { composing } from '#keyboard.ts';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
+import { toast } from '#components/toasts.ts';
+import { composing } from '#lib/keyboard.ts';
 import type { Attachment, Mention, MessageContext, MessageSelection } from '#api/agents.ts';
 import { NOTE_ACTIONS, SELECTION_ACTIONS } from './actions';
 import { AttachmentChip, CaretChip, MentionChip, SelectionChip } from './ContextChips';

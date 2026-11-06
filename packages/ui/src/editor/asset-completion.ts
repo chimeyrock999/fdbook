@@ -1,6 +1,6 @@
 import type { Completion, CompletionContext, CompletionResult, CompletionSource } from '@codemirror/autocomplete';
 import { ASSETS_PREFIX, assetDirFor, sitePath } from '#media/asset-names.ts';
-import { NOTES_PREFIX } from '#notes/notes.ts';
+import { NOTES_PREFIX } from '#lib/note-paths.ts';
 
 type AssetKind = 'html' | 'svg' | 'image' | 'any';
 

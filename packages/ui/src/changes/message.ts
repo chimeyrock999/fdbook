@@ -1,6 +1,6 @@
 import type { ChangedFile, ChangeStatus } from '#api/changes.ts';
 import { classifyPath } from '@fdbook/shared/asset-types.ts';
-import { NOTES_PREFIX } from '#notes/notes.ts';
+import { NOTES_PREFIX } from '#lib/note-paths.ts';
 import { shortPath } from './labels';
 
 const PREFIX = 'docs(notes): ';

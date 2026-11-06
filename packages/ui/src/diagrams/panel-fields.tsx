@@ -1,6 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { composing } from '#keyboard.ts';
+import { composing } from '#lib/keyboard.ts';
 
 // The fields of the diagram panel (DiagramPanel.tsx, SequencePanel.tsx).
 

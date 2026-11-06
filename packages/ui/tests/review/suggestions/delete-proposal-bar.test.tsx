@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DeleteProposalView } from '#api/proposals.ts';
-import { DeleteProposalBar } from '#suggestions/DeleteProposalBar.tsx';
+import { DeleteProposalBar } from '#review/suggestions/DeleteProposalBar.tsx';
 
 afterEach(cleanup);
 

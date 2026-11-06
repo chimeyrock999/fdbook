@@ -1,6 +1,6 @@
 import type { ChangedFile, ChangeStatus } from '#api/changes.ts';
 import type { TreeFolder, TreeMissing } from '#api/tree.ts';
-import { NOTES_PREFIX } from '#notes/notes.ts';
+import { NOTES_PREFIX } from '#lib/note-paths.ts';
 
 export const CHANGE_NAME: Record<ChangeStatus, string> = { M: 'Modified', A: 'Added', D: 'Deleted', R: 'Renamed' };
 

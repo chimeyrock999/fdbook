@@ -2,7 +2,7 @@ import type { EditorView } from '@tiptap/pm/view';
 import { TriangleAlert } from 'lucide-react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { composing } from '#keyboard.ts';
+import { composing } from '#lib/keyboard.ts';
 import { usePlaceAt } from './place';
 import { closeGraphFields, graphKey, setGraphListing, type GraphSource } from './graph-plugin';
 import { listedIn } from './listed';

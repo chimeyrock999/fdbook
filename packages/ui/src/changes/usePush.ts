@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useBusy } from '#actions/busy.ts';
+import { useBusy } from '#components/busy.ts';
 import type { Preview, PreviewClient } from '#api/preview.ts';
 import { plural } from '#assets/asset-changes.ts';
 

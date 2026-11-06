@@ -1,5 +1,5 @@
 import type { Changes } from '#api/changes.ts';
-import { keepInTab, keptInTab } from '#session-storage.ts';
+import { keepInTab, keptInTab } from '#lib/session-storage.ts';
 
 // A change request left with uncommitted files: its slug (to go back), its
 // branch and how many files.

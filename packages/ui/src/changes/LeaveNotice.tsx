@@ -1,7 +1,7 @@
 import { CircleAlert } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { plural } from '#assets/asset-changes.ts';
-import { TOAST_MS } from '#actions/toasts.ts';
+import { TOAST_MS } from '#components/toasts.ts';
 import type { Leave } from './leave';
 
 // The reminder that a change request was left with uncommitted files. It

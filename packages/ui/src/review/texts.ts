@@ -1,6 +1,6 @@
 import type { Anchor, Thread, ThreadAuthor, ThreadSeverity, ThreadState } from '#api/proposals.ts';
-import type { Placement } from '#suggestions/places.ts';
-import { agentName } from '#suggestions/authors.ts';
+import type { Placement } from './places';
+import { agentName } from './authors';
 
 // What the review threads' UI says and works with (#87).
 

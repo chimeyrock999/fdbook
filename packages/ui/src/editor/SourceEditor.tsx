@@ -17,7 +17,7 @@ const locked = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), Editor
 // here parses back into the document once it parses; visual edits and disk
 // changes arrive as new text. `reveal` selects a range (a lint issue);
 // `completion` suggests values as they are typed (asset paths); `extra`
-// draws more over the text (agent suggestions, src/suggestions/source.ts);
+// draws more over the text (agent suggestions, src/review/suggestions/source.ts);
 // `onSelect` hears of each selection (from..to in the text), the first one too.
 export function SourceEditor({ reveal = null, completion = null, extra = null, onSelect = null }: {
   reveal?: RevealRequest | null;

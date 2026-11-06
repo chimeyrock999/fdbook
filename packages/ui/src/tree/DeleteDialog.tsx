@@ -1,14 +1,15 @@
 import { Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
 import { CHANGED_SINCE } from '@fdbook/shared/tree.ts';
 import { isConflict } from '#api/json.ts';
 import type { DeleteProposalView } from '#api/proposals.ts';
 import type { TreeAnswer, TreeClient } from '#api/tree.ts';
-import { authorName } from '#suggestions/authors.ts';
+import { authorName } from '#review/authors.ts';
 import { renamedPath } from './tree';
-import { Changes, Dialog } from './TreeDialogs';
+import { Dialog } from '#components/Dialog.tsx';
+import { Changes } from './TreeDialogs';
 
 // What a delete takes: a page `x.mdx`, a folder page `x/index.mdx` or a
 // folder `x`, relative to content/notes.

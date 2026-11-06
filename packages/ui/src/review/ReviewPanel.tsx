@@ -1,11 +1,11 @@
 import { MessageSquarePlus, Play, Unlink } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { isOpen, THREAD_SEVERITIES, THREAD_STATES } from '@fdbook/shared/review.ts';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
 import type { Conversation } from '#api/agents.ts';
 import type { Thread, ThreadSeverity } from '#api/proposals.ts';
-import { NOTES_PREFIX } from '#notes/notes.ts';
+import { NOTES_PREFIX } from '#lib/note-paths.ts';
 import type { Agents } from '#agents/useAgents.ts';
 import { pickOf } from '#agents/useAgents.ts';
 import { SeverityChip, StateChip, Who } from './labels';

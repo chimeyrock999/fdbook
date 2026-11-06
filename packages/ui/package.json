@@ -6,7 +6,7 @@
   "type": "module",
   "exports": {
     "./package.json": "./package.json",
-    "./*": "./src/*"
+    "./plugins/index.ts": "./src/plugins/index.ts"
   },
   "imports": {
     "#tests/*": "./tests/*",

@@ -1,7 +1,7 @@
 import { FilePlus, History, Info, Plus, ShieldQuestion, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useBusy } from '#actions/busy.ts';
-import { toast } from '#actions/toasts.ts';
+import { useBusy } from '#components/busy.ts';
+import { toast } from '#components/toasts.ts';
 import type { AgentInfo, AgentRole, Conversation, ConversationEvent, MessageContext } from '#api/agents.ts';
 import { OPENED_CHAT } from '#api/workspace.ts';
 import { NOTE_ACTIONS } from './actions';

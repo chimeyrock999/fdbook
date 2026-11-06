@@ -1,6 +1,6 @@
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { Spinner } from '#actions/PendingButton.tsx';
+import { Spinner } from '#components/PendingButton.tsx';
 import type { Conversation } from '#api/agents.ts';
 import { AgentLogo } from './AgentLogo';
 import { ConfirmPopover } from './ConfirmPopover';

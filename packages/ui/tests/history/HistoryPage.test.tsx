@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { NOW, type Comparison, type HistoryClient, type PageHistory } from '#api/history.ts';
-import { ToastStack } from '#actions/ToastStack.tsx';
+import { ToastStack } from '#components/ToastStack.tsx';
 import { HistoryPage } from '#history/HistoryPage.tsx';
 
 afterEach(cleanup);

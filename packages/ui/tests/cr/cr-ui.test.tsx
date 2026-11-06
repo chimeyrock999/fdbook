@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import { ToastStack } from '#actions/ToastStack.tsx';
+import { ToastStack } from '#components/ToastStack.tsx';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeRequest, CrClient, CrList, Discard } from '#api/crs.ts';
@@ -9,7 +9,7 @@ import { DiscardDialog, NewCrDialog } from '#cr/CrDialogs.tsx';
 import { CrListPage } from '#cr/CrListPage.tsx';
 import { CrPicker, EditMenu } from '#cr/CrMenus.tsx';
 import { updatedAgo } from '#cr/cr-status.ts';
-import { pageFromUrl, pageQuery } from '#notes/notes.ts';
+import { pageFromUrl, pageQuery } from '#app/route.ts';
 
 const cr = (slug: string, status: ChangeRequest['status'], more: Partial<ChangeRequest> = {}): ChangeRequest => ({
   slug,

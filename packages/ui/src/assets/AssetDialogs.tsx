@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { extensionOf } from '@fdbook/shared/asset-types.ts';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
 import type { AssetAnswer, AssetChange, AssetInfo, AssetRequest, AssetsClient, AssetUsage } from '#api/assets.ts';
 import { sitePath } from '#media/asset-names.ts';
 import { slugify } from '@fdbook/shared/slug.ts';
-import { Dialog } from '#tree/TreeDialogs.tsx';
+import { Dialog } from '#components/Dialog.tsx';
 import { usePreview } from './asset-changes';
 import { nameOf } from './asset-tree';
 

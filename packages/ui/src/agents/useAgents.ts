@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from '#actions/toasts.ts';
+import { toast } from '#components/toasts.ts';
 import { isConflict } from '#api/json.ts';
 import { onMainInfo } from '@fdbook/shared/agents.ts';
 import { OPENED_CHAT } from '#api/workspace.ts';

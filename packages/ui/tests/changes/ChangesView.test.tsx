@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChangedFile, Changes, ChangesClient, Commit, History } from '#api/changes.ts';
 import type { createFilesClient, FileEvent } from '#api/files.ts';
-import { ToastStack } from '#actions/ToastStack.tsx';
+import { ToastStack } from '#components/ToastStack.tsx';
 import { ChangesView } from '#changes/ChangesView.tsx';
 import { LeaveNotice } from '#changes/LeaveNotice.tsx';
 import { leaveNotice, leftBehind, rememberLeave } from '#changes/leave.ts';

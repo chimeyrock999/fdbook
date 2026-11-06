@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ToastStack } from '#actions/ToastStack.tsx';
+import { ToastStack } from '#components/ToastStack.tsx';
 import type { AssetInfo, AssetsClient } from '#api/assets.ts';
 import type { TreeClient, TreeFolder } from '#api/tree.ts';
 import { DeleteAssetDialog, RenameAssetDialog } from '#assets/AssetDialogs.tsx';

@@ -1,7 +1,7 @@
 import { LogOut } from 'lucide-react';
 import { useState } from 'react';
-import { PopupMenu } from '#cr/PopupMenu.tsx';
-import { useMenu } from '#cr/use-menu.ts';
+import { PopupMenu } from '#components/PopupMenu.tsx';
+import { useMenu } from '#components/use-menu.ts';
 import { ROLE_LABELS, useSession } from './session';
 
 // The signed-in person at the end of the header: their picture and login

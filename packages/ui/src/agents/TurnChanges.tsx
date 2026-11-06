@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
 import type { AgentsClient, TurnChange } from '#api/agents.ts';
 import { SourceDiff } from '#diff/SourceDiff.tsx';
 

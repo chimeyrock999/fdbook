@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
-import { createPortal } from 'react-dom';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { useEffect, useState } from 'react';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
 import type { CreateKind, TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '#api/tree.ts';
-import { makeOthersInert, trapFocus } from '#dialog-focus.ts';
+import { Dialog } from '#components/Dialog.tsx';
 import { slugify } from '@fdbook/shared/slug.ts';
 import { renamedPath, slugOf } from './tree';
 import { BASE_URL } from '@fdbook/shared/asset-types.ts';
@@ -59,52 +58,6 @@ export function Changes({ changes }: { changes: TreeChange[] }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-// A modal over the whole Studio: the rest of the page is inert while it is
-// open, so the note behind it cannot change, and Tab stays inside. The
-// asset dialogs use it too. While its request is out (`busy`, #138), it
-// neither closes nor sends again: Escape, the backdrop and Enter wait.
-export function Dialog({ title, busy = false, onClose, onSubmit, children }: { title: string; busy?: boolean; onClose: () => void; onSubmit: () => void; children: ReactNode }) {
-  const layer = useRef<HTMLDivElement>(null);
-  const form = useRef<HTMLFormElement>(null);
-  useEffect(() => makeOthersInert(layer.current), []);
-  // A busy dialog disables what had the focus: once it is free, the focus
-  // comes back in, so Tab and Escape work again.
-  useEffect(() => {
-    const element = form.current;
-    if (busy || element === null || element.contains(document.activeElement)) return;
-    element.querySelector<HTMLElement>('input:not(:disabled), textarea:not(:disabled), button:not(:disabled)')?.focus();
-  }, [busy]);
-  const close = () => { if (!busy) onClose(); };
-  const submit = (event: SyntheticEvent) => {
-    event.preventDefault();
-    if (!busy) onSubmit();
-  };
-  return createPortal(
-    <div ref={layer} className="studio-dialog-back" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
-      <form
-        ref={form}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        aria-busy={busy || undefined}
-        className="studio-dialog"
-        onSubmit={submit}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            close();
-          }
-          if (event.key === 'Tab') trapFocus(event.currentTarget, event);
-        }}
-      >
-        <h2 className="text-[15px] font-semibold">{title}</h2>
-        {children}
-      </form>
-    </div>,
-    document.body,
   );
 }
 

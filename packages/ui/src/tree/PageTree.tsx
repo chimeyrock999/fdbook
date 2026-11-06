@@ -1,10 +1,10 @@
 import { ArrowDown, ArrowUp, Check, ChevronRight, ExternalLink, Eye, EyeOff, FileText, Folder, GripVertical, icons, Lock, MoreHorizontal, Pencil, Plus, Trash2, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { createElement, useEffect, useRef, useState, type DragEvent } from 'react';
-import { useBusy } from '#actions/busy.ts';
-import { Spinner } from '#actions/PendingButton.tsx';
+import { useBusy } from '#components/busy.ts';
+import { Spinner } from '#components/PendingButton.tsx';
 import type { DeleteProposalView } from '#api/proposals.ts';
 import type { TreeAnswer, TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '#api/tree.ts';
-import { CHANGE_NAME, folderMarked, missingStatus, type TreeMarks } from '#changes/marks.ts';
+import { CHANGE_NAME, folderMarked, missingStatus, type TreeMarks } from './marks';
 import { DeleteDialog, type DeleteTarget } from './DeleteDialog';
 import { CreateDialog, RenameDialog } from './TreeDialogs';
 import { dropIndex, filterTree, folderAt, movable, noteOf, renamedPath, stepIndex, titleOf } from './tree';
@@ -181,7 +181,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
   // folder) would move the file under the editor and lose them.
   unsaved?: string | null;
   readOnly?: boolean;
-  // The worktree's git changes, marked on the rows (src/changes/marks.ts).
+  // The worktree's git changes, marked on the rows (marks.ts).
   marks?: TreeMarks | null;
   // Agent suggestions waiting per note, by path relative to content/notes (#85).
   suggested?: ReadonlyMap<string, number> | null;

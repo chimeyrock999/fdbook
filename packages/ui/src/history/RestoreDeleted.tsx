@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
-import { messageOf } from '#actions/toasts.ts';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
+import { messageOf } from '#components/toasts.ts';
 import type { DeletedRestore, HistoryClient } from '#api/history.ts';
 import { shortVersion } from './versions';
 

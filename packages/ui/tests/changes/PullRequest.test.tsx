@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BranchPullRequest, Preview, PreviewClient } from '#api/preview.ts';
 import { PreviewSection } from '#changes/PreviewSection.tsx';
-import { ToastStack } from '#actions/ToastStack.tsx';
+import { ToastStack } from '#components/ToastStack.tsx';
 import { PublishDialog } from '#changes/PublishDialog.tsx';
 import { PullRequestSection } from '#changes/PullRequestSection.tsx';
 import type { Pusher } from '#changes/usePush.ts';

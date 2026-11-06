@@ -3,12 +3,12 @@ import { act, cleanup, render, renderHook, screen } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Build, Preview, PreviewClient } from '#api/preview.ts';
-import { ToastStack } from '#actions/ToastStack.tsx';
+import { ToastStack } from '#components/ToastStack.tsx';
 import { PreviewSection } from '#changes/PreviewSection.tsx';
 import { usePreview } from '#changes/usePreview.ts';
 import { usePush } from '#changes/usePush.ts';
-import { OpenPreview } from '#notes/OpenPreview.tsx';
-import { siteRoute } from '#notes/notes.ts';
+import { OpenPreview } from '#app/OpenPreview.tsx';
+import { siteRoute } from '#app/route.ts';
 
 afterEach(() => {
   cleanup();

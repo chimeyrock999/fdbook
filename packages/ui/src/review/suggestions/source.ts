@@ -1,7 +1,7 @@
 import { StateField, type EditorState, type Extension, type Range } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view';
 import type { ProposalOp } from '#api/proposals.ts';
-import type { PlacedHunk } from './places';
+import type { PlacedHunk } from '#review/places.ts';
 
 export type SourceAct = (hunk: PlacedHunk, op: ProposalOp) => Promise<void>;
 

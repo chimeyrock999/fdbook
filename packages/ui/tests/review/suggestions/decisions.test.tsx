@@ -2,10 +2,10 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hunksOf } from '@fdbook/shared/hunks.ts';
-import { ToastStack } from '#actions/ToastStack.tsx';
+import { ToastStack } from '#components/ToastStack.tsx';
 import type { ProposalHunk, ProposalView } from '#api/proposals.ts';
-import { SuggestionBar, type NoteReview } from '#suggestions/Suggestions.tsx';
-import { LANDING_MS, useNoteSuggestions } from '#suggestions/useNoteSuggestions.ts';
+import { SuggestionBar, type NoteReview } from '#review/suggestions/Suggestions.tsx';
+import { LANDING_MS, useNoteSuggestions } from '#review/suggestions/useNoteSuggestions.ts';
 
 const PATH = 'content/docs/guide.mdx';
 const NOTE = '---\ntitle: Guide\n---\n\n# Guide\n\nFirst paragraph.\n\nA middle one.\n\nAnd one more.\n\nSecond paragraph.\n';

@@ -1,10 +1,10 @@
 import { FilePen, FileText, GitBranch, Search, Square, Terminal, Trash2, Wrench } from 'lucide-react';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { ToolCallUpdate } from '@fdbook/shared/agents.ts';
-import { PendingButton, Spinner } from '#actions/PendingButton.tsx';
+import { PendingButton, Spinner } from '#components/PendingButton.tsx';
 import type { AgentsClient, Conversation, ConversationEvent } from '#api/agents.ts';
 import { chatHref } from '#api/workspace.ts';
-import { NOTES_PREFIX } from '#notes/notes.ts';
+import { NOTES_PREFIX } from '#lib/note-paths.ts';
 import { AgentLogo } from './AgentLogo';
 import { AskCard, AskLine } from './AskCard';
 import { ContextChips } from './ContextChips';

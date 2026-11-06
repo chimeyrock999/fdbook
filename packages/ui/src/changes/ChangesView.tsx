@@ -1,13 +1,13 @@
 import { ChevronRight } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
 import type { ChangedFile, Changes, ChangesClient, Commit, History } from '#api/changes.ts';
 import { plural } from '#assets/asset-changes.ts';
 import { MAIN_BRANCH } from '@fdbook/shared/branch.ts';
 import { ASSETS_DIR, classifyPath, NOTES_DIR } from '@fdbook/shared/asset-types.ts';
 import { labelOf, shortPath, timeAgo } from './labels';
-import { CHANGE_NAME } from './marks';
+import { CHANGE_NAME } from '#tree/marks.ts';
 import { suggestMessage } from './message';
 
 // What the last commit did; a failed one says why in a toast.
