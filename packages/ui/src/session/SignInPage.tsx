@@ -1,7 +1,7 @@
 import { Check, Copy, ExternalLink, KeyRound, LogIn } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { DeviceStart, SessionClient, SessionState } from '#api/session.ts';
-import { useCopy } from '#clipboard.ts';
+import { useCopy } from '#lib/clipboard.ts';
 
 type Step = { kind: 'choose' } | { kind: 'device'; code: DeviceStart } | { kind: 'starting' };
 

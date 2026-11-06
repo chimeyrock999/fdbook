@@ -2,7 +2,7 @@ import { keydownHandler } from '@tiptap/pm/keymap';
 import { Plugin, PluginKey, TextSelection, type Command, type EditorState } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { Sprout } from 'lucide';
-import { composing } from '#keyboard.ts';
+import { composing } from '#lib/keyboard.ts';
 import { icon } from '#plugins/icon.ts';
 import { addGraphMeta, headingTarget, markerAt, markersIn, removeMarker, wrapSelection, type Marker } from './markers';
 import { OPEN_GRAPH_FIELDS } from './meta';

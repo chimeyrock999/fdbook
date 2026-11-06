@@ -14,9 +14,9 @@ import { ReviewPanel } from '#review/ReviewPanel.tsx';
 import { REVIEW_PROMPT, type ThreadFocus } from '#review/texts.ts';
 import { Sidebar } from '#sidebar/Sidebar.tsx';
 import { useSidebar } from '#sidebar/useSidebar.ts';
-import { VisualSuggestions, type NoteReview } from '#suggestions/Suggestions.tsx';
-import { useNoteSuggestions } from '#suggestions/useNoteSuggestions.ts';
-import { createSuggestionLayer, type SuggestionLayer } from '#suggestions/visual.ts';
+import { VisualSuggestions, type NoteReview } from '#review/suggestions/Suggestions.tsx';
+import { useNoteSuggestions } from '#review/suggestions/useNoteSuggestions.ts';
+import { createSuggestionLayer, type SuggestionLayer } from '#review/visual.ts';
 import { mountVisual, stubLayout, textAt } from '#tests/support/visual-editor.tsx';
 
 const PATH = 'content/docs/guide.mdx';

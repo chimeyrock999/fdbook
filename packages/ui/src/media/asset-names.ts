@@ -1,5 +1,5 @@
 import { ASSET_TYPES, ASSETS_DIR, extensionOf, siteUrlOf } from '@fdbook/shared/asset-types.ts';
-import { NOTES_PREFIX } from '#notes/notes.ts';
+import { NOTES_PREFIX } from '#lib/note-paths.ts';
 import { slugify } from '@fdbook/shared/slug.ts';
 
 export const ASSETS_PREFIX = `${ASSETS_DIR}/`;

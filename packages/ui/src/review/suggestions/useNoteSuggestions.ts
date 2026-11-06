@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useBusy } from '#actions/busy.ts';
+import { useBusy } from '#components/busy.ts';
 import type { ProposalHunk, ProposalOp, ProposalView, Thread } from '#api/proposals.ts';
-import { placeAll, type PlacedHunk, type Placement } from './places';
+import { placeAll, type PlacedHunk, type Placement } from '#review/places.ts';
 import type { NoteReview } from './Suggestions';
 
 const NONE: ProposalView[] = [];

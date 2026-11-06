@@ -1,8 +1,8 @@
 import { Unlink, WandSparkles, X } from 'lucide-react';
 import { useState, type KeyboardEvent } from 'react';
 import { movesOf, needsReason } from '@fdbook/shared/review.ts';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
 import type { Thread, ThreadState } from '#api/proposals.ts';
 import { SeverityChip, StateChip, Who } from './labels';
 import { MOVE_LABELS, MOVED, type ThreadActions } from './texts';

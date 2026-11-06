@@ -1,6 +1,6 @@
 import { FileCode, FileText, Image } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { composing } from '#keyboard.ts';
+import { composing } from '#lib/keyboard.ts';
 import type { Mention, MentionKind } from '#api/agents.ts';
 import type { ContextClient } from './Composer';
 import { shortPath } from './context-labels';

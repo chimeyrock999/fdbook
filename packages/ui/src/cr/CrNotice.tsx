@@ -1,6 +1,6 @@
 import { Brush, Check, Copy, TriangleAlert } from 'lucide-react';
 import type { ChangeRequest } from '#api/crs.ts';
-import { useCopy } from '#clipboard.ts';
+import { useCopy } from '#lib/clipboard.ts';
 import { ADMIN_HINT } from '#session/session.ts';
 import { isDone, mergeCommand, plural, shortPath } from './cr-status';
 

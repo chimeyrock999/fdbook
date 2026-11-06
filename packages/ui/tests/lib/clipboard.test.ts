@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { copyText } from '#clipboard.ts';
+import { copyText } from '#lib/clipboard.ts';
 
 const setClipboard = (value: unknown) => {
   Object.defineProperty(navigator, 'clipboard', { value, configurable: true });

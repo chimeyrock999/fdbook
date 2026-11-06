@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChangedFile } from '#api/changes.ts';
 import type { TreeFolder, TreeMissing } from '#api/tree.ts';
-import { folderMarked, missingStatus, treeMarks } from '#changes/marks.ts';
+import { folderMarked, missingStatus, treeMarks } from '#tree/marks.ts';
 
 const files: ChangedFile[] = [
   { path: 'content/docs/guide/one.mdx', status: 'M' },

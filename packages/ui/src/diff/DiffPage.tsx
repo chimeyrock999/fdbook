@@ -4,7 +4,7 @@ import { classifyPath, extensionOf, isTextPath } from '@fdbook/shared/asset-type
 import type { ChangesClient, DiffSide, FileDiff } from '#api/changes.ts';
 import { useAssetUrl } from '#api/asset-versions.ts';
 import { formatSize, isImage } from '#assets/asset-facts.ts';
-import { CHANGE_NAME } from '#changes/marks.ts';
+import { CHANGE_NAME } from '#tree/marks.ts';
 import { labelOf } from '#changes/labels.ts';
 import { ImageSide } from './ImageSide';
 import { RenderedDiff } from './RenderedDiff';

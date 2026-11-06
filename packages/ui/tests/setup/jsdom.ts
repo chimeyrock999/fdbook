@@ -1,5 +1,5 @@
 import { afterEach } from 'vitest';
-import { clearToasts } from '#actions/toasts.ts';
+import { clearToasts } from '#components/toasts.ts';
 
 // Runs before every test file (vitest.config.ts). jsdom has no matchMedia,
 // and the editor asks it about touch input and reduced motion once its live
@@ -20,6 +20,6 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   };
 }
 
-// The toasts are one stack per page (src/actions/toasts.ts): a case starts
+// The toasts are one stack per page (src/components/toasts.ts): a case starts
 // with none from the one before.
 afterEach(() => { clearToasts(); });

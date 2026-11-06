@@ -1,11 +1,9 @@
-import { BASE_URL, classifyPath, NOTES_DIR, PUBLIC_DIR, siteUrlOf } from '@fdbook/shared/asset-types.ts';
+import { BASE_URL, classifyPath, PUBLIC_DIR, siteUrlOf } from '@fdbook/shared/asset-types.ts';
 import { CURRENT_CR } from '#api/workspace.ts';
+import { NOTES_PREFIX, syncPath } from '#lib/note-paths.ts';
 import { renamedPath } from '#tree/tree.ts';
 
-export const NOTES_PREFIX = `${NOTES_DIR}/`;
-
-// The file API speaks worktree paths, the sync socket paths inside the notes.
-export const syncPath = (path: string) => path.slice(NOTES_PREFIX.length);
+// The page model: what the main pane shows, and the URL that opens it.
 
 // The open note (a sync path) while it has edits not on disk yet, from the
 // last autosave status the editor reported, or null. The editor reports a

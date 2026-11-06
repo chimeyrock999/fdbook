@@ -1,8 +1,8 @@
 import { Check, ChevronDown, Eye, GitBranch, List, Pencil, Plus } from 'lucide-react';
 import type { ChangeRequest, CrList, CrStatus } from '#api/crs.ts';
 import { isOpen, STATUS_LABELS } from './cr-status';
-import { PopupMenu } from './PopupMenu';
-import { useMenu } from './use-menu';
+import { PopupMenu } from '#components/PopupMenu.tsx';
+import { useMenu } from '#components/use-menu.ts';
 
 export function CrBadge({ status }: { status: CrStatus | 'read-only' }) {
   return (

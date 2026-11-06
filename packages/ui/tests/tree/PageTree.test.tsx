@@ -3,8 +3,8 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TreeAnswer, TreeClient, TreeFolder, TreeRequest } from '#api/tree.ts';
-import { treeMarks } from '#changes/marks.ts';
-import { ToastStack } from '#actions/ToastStack.tsx';
+import { treeMarks } from '#tree/marks.ts';
+import { ToastStack } from '#components/ToastStack.tsx';
 import { PageTree } from '#tree/PageTree.tsx';
 
 const root: TreeFolder = {

@@ -1,8 +1,8 @@
 import { ShieldCheck, ShieldQuestion, ShieldX, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { PERMISSION_TIMEOUT_MS, type PermissionAsk } from '@fdbook/shared/agents.ts';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
 import type { Conversation } from '#api/agents.ts';
 
 type Answer = { optionId: string | null; by: string | null };

@@ -1,5 +1,5 @@
 import { act } from '@testing-library/react';
-import { ToastStack } from '#actions/ToastStack.tsx';
+import { ToastStack } from '#components/ToastStack.tsx';
 import { vi } from 'vitest';
 import { AgentControl } from '#agents/AgentControl.tsx';
 import { AgentPanel } from '#agents/AgentPanel.tsx';

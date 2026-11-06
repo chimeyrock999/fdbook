@@ -2,21 +2,21 @@ import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentId } from '@fdbook/shared/agents.ts';
-import { useShownAfter } from '#actions/busy.ts';
-import { PendingButton, Spinner } from '#actions/PendingButton.tsx';
+import { useShownAfter } from '#components/busy.ts';
+import { PendingButton, Spinner } from '#components/PendingButton.tsx';
 import { AgentLogo } from '#agents/AgentLogo.tsx';
 import type { Anchor, ProposalOp, ProposalView, Thread, ThreadSeverity, ThreadState } from '#api/proposals.ts';
 import { diffFrontmatter } from '#diff/diff-blocks.ts';
 import { FrontmatterTable, NotePart } from '#diff/RenderedDiff.tsx';
 import { findBlock } from '@fdbook/shared/frontmatter-block.ts';
-import { authorName } from './authors';
+import { authorName } from '#review/authors.ts';
 import type { NoteDeletion } from './DeleteProposalBar';
-import type { Placement, PlacedHunk } from './places';
+import type { Placement, PlacedHunk } from '#review/places.ts';
 import type { Decisions } from './useNoteSuggestions';
 import { useCommentDraft } from '#review/comment-draft.tsx';
 import { ThreadMarks } from '#review/ThreadMarks.tsx';
 import { threadMarks, type NoteThreadActions, type ThreadFocus } from '#review/texts.ts';
-import type { SuggestionLayer, VisualMarks } from './visual';
+import type { SuggestionLayer, VisualMarks } from '#review/visual.ts';
 
 // What the editor needs to show a note's suggestions: its proposals and
 // review threads (not resolved), and the actions on them (useProposals),

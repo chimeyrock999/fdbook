@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { NoteGate } from '#notes/NoteGate.tsx';
+import { NoteGate } from '#app/NoteGate.tsx';
 import type { createFilesClient } from '#api/files.ts';
-import { movedPage, noteFromUrl, noteRoute, pageFromUrl, pageQuery, previewRoute, syncPath, unsavedNote } from '#notes/notes.ts';
+import { movedPage, noteFromUrl, noteRoute, pageFromUrl, pageQuery, previewRoute, unsavedNote } from '#app/route.ts';
+import { syncPath } from '#lib/note-paths.ts';
 
 afterEach(cleanup);
 

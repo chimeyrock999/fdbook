@@ -1,10 +1,10 @@
 import { Trash2 } from 'lucide-react';
 import type { AgentId } from '@fdbook/shared/agents.ts';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
 import { AgentLogo } from '#agents/AgentLogo.tsx';
 import type { DeleteProposalView } from '#api/proposals.ts';
-import { authorName } from './authors';
+import { authorName } from '#review/authors.ts';
 
 // What the editor shows of a delete an agent proposed for the open note (or
 // its folder): who, why, and Review delete… (the delete dialog, with its

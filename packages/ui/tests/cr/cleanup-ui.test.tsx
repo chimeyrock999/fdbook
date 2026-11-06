@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import { ToastStack } from '#actions/ToastStack.tsx';
+import { ToastStack } from '#components/ToastStack.tsx';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeRequest, CrClient, CrList, Discard } from '#api/crs.ts';

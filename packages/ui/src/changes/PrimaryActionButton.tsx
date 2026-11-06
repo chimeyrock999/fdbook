@@ -1,6 +1,6 @@
 import { ArrowUp, Check, ExternalLink, GitPullRequest } from 'lucide-react';
-import { useShownAfter } from '#actions/busy.ts';
-import { Spinner } from '#actions/PendingButton.tsx';
+import { useShownAfter } from '#components/busy.ts';
+import { Spinner } from '#components/PendingButton.tsx';
 import type { PrimaryAction, PrimaryKind } from './primary-action';
 
 const ICONS: Record<PrimaryKind, typeof Check> = { commit: Check, preview: ArrowUp, update: ArrowUp, publish: GitPullRequest, view: ExternalLink };

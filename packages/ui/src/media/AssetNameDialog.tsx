@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { NameRequest } from './asset-media';
-import { composing } from '#keyboard.ts';
+import { composing } from '#lib/keyboard.ts';
 import { slugify } from '@fdbook/shared/slug.ts';
 import { sitePath } from './asset-names';
-import { makeOthersInert, trapFocus } from '#dialog-focus.ts';
+import { makeOthersInert, trapFocus } from '#components/dialog-focus.ts';
 
 // Asks for the name of an image before it is saved: the suggested name comes
 // selected so typing replaces it, the extension is fixed, and the path the

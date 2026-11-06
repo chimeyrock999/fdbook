@@ -1,11 +1,11 @@
 import { Info } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { crSlug } from '@fdbook/shared/cr-slug.ts';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
-import { messageOf } from '#actions/toasts.ts';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
+import { messageOf } from '#components/toasts.ts';
 import type { ChangeRequest, CrClient, Discard } from '#api/crs.ts';
-import { Dialog } from '#tree/TreeDialogs.tsx';
+import { Dialog } from '#components/Dialog.tsx';
 import { isDone, plural } from './cr-status';
 
 // A new change request: its name, and the branch it will get. The server

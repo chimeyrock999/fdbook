@@ -1,5 +1,5 @@
 import { ArrowUp, ExternalLink, ScrollText } from 'lucide-react';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { PendingButton } from '#components/PendingButton.tsx';
 import type { BuildState, Preview } from '#api/preview.ts';
 import { plural } from '#assets/asset-changes.ts';
 import { timeAgo } from './labels';

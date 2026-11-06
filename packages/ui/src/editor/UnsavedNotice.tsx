@@ -1,6 +1,6 @@
 import { CircleAlert } from 'lucide-react';
 import { timeAgo } from '#changes/labels.ts';
-import { useCopy } from '#clipboard.ts';
+import { useCopy } from '#lib/clipboard.ts';
 import type { UnsavedOffer } from './unsaved';
 
 // Edits an earlier editor of this note could not save (the page went away

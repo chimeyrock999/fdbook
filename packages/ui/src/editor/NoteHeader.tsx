@@ -1,6 +1,6 @@
 import { Sparkles } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, type KeyboardEvent, type RefObject } from 'react';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { PendingButton } from '#components/PendingButton.tsx';
 import { askAgent, useAsk } from '#agents/agent-ask.ts';
 import { FieldError } from '#frontmatter/fields.tsx';
 import { MetadataStrip, type FieldReveal } from '#frontmatter/MetadataStrip.tsx';

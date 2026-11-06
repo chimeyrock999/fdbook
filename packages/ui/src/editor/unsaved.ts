@@ -1,7 +1,7 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { useEffect, useRef, useState } from 'react';
 import { CURRENT_CR } from '#api/workspace.ts';
-import { keepInTab, keptInTab } from '#session-storage.ts';
+import { keepInTab, keptInTab } from '#lib/session-storage.ts';
 
 // A note's text not yet on disk: `base` is the text last known to be there
 // (what `text` was edited from), `savedMs` when it was kept.

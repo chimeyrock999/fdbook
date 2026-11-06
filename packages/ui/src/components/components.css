@@ -1,4 +1,4 @@
-/* Write actions in flight and their toasts (#138): src/actions. */
+/* Write actions in flight and their toasts (#138): src/components. */
 @layer components {
   .studio-spin {
     flex: none;

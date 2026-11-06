@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { messageOf } from '#actions/toasts.ts';
+import { messageOf } from '#components/toasts.ts';
 import type { AssetAnswer, AssetChange, AssetRequest, AssetsClient } from '#api/assets.ts';
 import { nameOf } from './asset-tree';
 

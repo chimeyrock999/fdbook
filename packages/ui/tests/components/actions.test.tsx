@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SPINNER_AFTER_MS, useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
-import { ToastStack } from '#actions/ToastStack.tsx';
-import { TOAST_MS, toast } from '#actions/toasts.ts';
+import { SPINNER_AFTER_MS, useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
+import { ToastStack } from '#components/ToastStack.tsx';
+import { TOAST_MS, toast } from '#components/toasts.ts';
 
 afterEach(() => {
   cleanup();

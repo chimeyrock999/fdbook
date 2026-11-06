@@ -1,12 +1,12 @@
 import { ArrowRight, FileCode } from 'lucide-react';
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { ASSET_TYPES, extensionOf, isAssetExtension, MAX_ASSET_BYTES } from '@fdbook/shared/asset-types.ts';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
 import type { AssetAnswer, AssetInfo, AssetRequest, AssetsClient } from '#api/assets.ts';
 import { useAssetUrl } from '#api/asset-versions.ts';
 import { imageExtension } from '#media/asset-names.ts';
-import { Dialog } from '#tree/TreeDialogs.tsx';
+import { Dialog } from '#components/Dialog.tsx';
 import { formatSize, isImage } from './asset-facts';
 import { nameOf } from './asset-tree';
 import { usePreview } from './asset-changes';

@@ -1,9 +1,9 @@
 import { ChevronLeft, FileX, Image, Pencil, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { extensionOf } from '@fdbook/shared/asset-types.ts';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
-import { messageOf } from '#actions/toasts.ts';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
+import { messageOf } from '#components/toasts.ts';
 import { NOW, type Comparison, type HistoryClient, type PageHistory } from '#api/history.ts';
 import { ComparisonBody } from './ComparisonBody';
 import { isAsset, modesOf, type Mode } from './modes';

@@ -1,7 +1,7 @@
 import type { ChangedFile } from '#api/changes.ts';
 import type { TreeFolder } from '#api/tree.ts';
 import { DIAGRAM_SUFFIX } from '@fdbook/shared/asset-types.ts';
-import { NOTES_PREFIX } from '#notes/notes.ts';
+import { NOTES_PREFIX } from '#lib/note-paths.ts';
 import { noteOf } from '#tree/tree.ts';
 
 const META = 'meta.yaml';

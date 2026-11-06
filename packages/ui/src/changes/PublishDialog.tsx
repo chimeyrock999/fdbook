@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
-import { messageOf } from '#actions/toasts.ts';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
+import { messageOf } from '#components/toasts.ts';
 import type { Preview, PreviewClient } from '#api/preview.ts';
 import { plural } from '#assets/asset-changes.ts';
-import { Dialog } from '#tree/TreeDialogs.tsx';
+import { Dialog } from '#components/Dialog.tsx';
 
 // Publish (#20): the pull request's title and description, filled from the
 // change request's name and commits and free to edit, then a push of what is

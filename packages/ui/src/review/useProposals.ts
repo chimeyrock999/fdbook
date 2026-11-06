@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Anchor, DeleteProposalView, ProposalOp, ProposalsClient, ProposalView, Thread, ThreadSeverity, ThreadState } from '#api/proposals.ts';
-import { toast } from '#actions/toasts.ts';
-import { NOTES_PREFIX } from '#notes/notes.ts';
+import { toast } from '#components/toasts.ts';
+import { NOTES_PREFIX } from '#lib/note-paths.ts';
 
 // The proposals, delete proposals and review threads of the change request the page edits (`inCr`),
 // kept up to date from the server's stream, and the actions on them. A

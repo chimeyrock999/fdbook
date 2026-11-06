@@ -15,7 +15,7 @@ import { IssuesChip, IssuesPanel } from '#lint/IssuesPanel.tsx';
 import { useLint } from '#lint/useLint.ts';
 import { UploadNotice } from '#media/UploadNotice.tsx';
 import { useAssetUploads } from '#media/useAssetUploads.tsx';
-import { NOTES_PREFIX } from '#notes/notes.ts';
+import { NOTES_PREFIX } from '#lib/note-paths.ts';
 import { useSession } from '#session/session.ts';
 import type { IssueCount } from '#sidebar/Sidebar.tsx';
 import { assetCompletion } from './asset-completion';
@@ -32,14 +32,14 @@ import { SourceEditor } from './SourceEditor';
 import { ConflictDialog, SaveStatus } from './SyncState';
 import { useUnsaved } from './unsaved';
 import { UnsavedNotice } from './UnsavedNotice';
-import { DeleteProposalBar } from '#suggestions/DeleteProposalBar.tsx';
-import { SuggestionBar, VisualSuggestions, type NoteReview } from '#suggestions/Suggestions.tsx';
+import { DeleteProposalBar } from '#review/suggestions/DeleteProposalBar.tsx';
+import { SuggestionBar, VisualSuggestions, type NoteReview } from '#review/suggestions/Suggestions.tsx';
 import { commentBubbleItem } from '#review/comment-draft.tsx';
 import { NoteThreads } from '#review/ThreadMarks.tsx';
 import type { NoteThreadActions, ThreadFocus } from '#review/texts.ts';
-import { useNoteSuggestions } from '#suggestions/useNoteSuggestions.ts';
-import { sourceSuggestions } from '#suggestions/source.ts';
-import { createSuggestionLayer } from '#suggestions/visual.ts';
+import { useNoteSuggestions } from '#review/suggestions/useNoteSuggestions.ts';
+import { sourceSuggestions } from '#review/suggestions/source.ts';
+import { createSuggestionLayer } from '#review/visual.ts';
 import './drag-handle.css';
 
 // The sidebar's Issues view: the editor fills `issuesSlot` and reports the
@@ -73,7 +73,7 @@ export function NoteEditor({ path, assets, onStatus, place = null, review = null
   assets: readonly string[];
   onStatus?: (status: DocumentStatus) => void;
   place?: SourcePlace | null;
-  // The note's agent suggestions and review threads (src/suggestions, src/review), in a change request.
+  // The note's agent suggestions and review threads (src/review), in a change request.
   review?: NoteReview | null;
   // A thread the Review panel picked, shown in Visual.
   threadFocus?: ThreadFocus | null;

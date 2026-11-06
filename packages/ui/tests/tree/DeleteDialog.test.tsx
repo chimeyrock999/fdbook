@@ -2,7 +2,7 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ToastStack } from '#actions/ToastStack.tsx';
+import { ToastStack } from '#components/ToastStack.tsx';
 import type { DeleteProposalView } from '#api/proposals.ts';
 import type { TreeAnswer, TreeClient, TreeFolder, TreeRequest } from '#api/tree.ts';
 import { DeleteDialog } from '#tree/DeleteDialog.tsx';

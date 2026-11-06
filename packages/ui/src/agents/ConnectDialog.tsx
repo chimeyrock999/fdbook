@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useBusy } from '#actions/busy.ts';
-import { PendingButton } from '#actions/PendingButton.tsx';
+import { useBusy } from '#components/busy.ts';
+import { PendingButton } from '#components/PendingButton.tsx';
 import { errorOf, readJson } from '#api/json.ts';
 import { studioFetch } from '#api/session.ts';
-import { useCopy } from '#clipboard.ts';
+import { useCopy } from '#lib/clipboard.ts';
 import { useSession } from '#session/session.ts';
-import { Dialog } from '#tree/TreeDialogs.tsx';
+import { Dialog } from '#components/Dialog.tsx';
 import { CLIENTS, CODEX_TOKEN_STEP, connectCommand, type Client } from './connect-command';
 
 function CopyRow({ id, text }: { id: string; text: string }) {
