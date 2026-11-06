@@ -407,6 +407,12 @@ export async function openChangeRequests({
   }
 
   await inRepo('worktree', 'prune');
+  // Change requests start from origin/main and are pushed to origin: a
+  // repository without it (a site just made with create-fumadocs-app) has
+  // nothing to start from, so say how to add it.
+  if (!lines(await inRepo('remote')).includes(REMOTE)) {
+    throw new Error(`Notes Studio needs a git remote named ${REMOTE} with a main branch: change requests start from ${BASE} and are pushed there. Add it with \`git remote add ${REMOTE} <url>\` and \`git push -u ${REMOTE} main\`, then start the Studio again.`);
+  }
   try {
     await fetchOrigin();
   } catch (error) {
@@ -416,6 +422,8 @@ export async function openChangeRequests({
   try {
     await refreshMain();
   } catch (error) {
+    const fetched = await inRepo('rev-parse', '--verify', '--quiet', `refs/remotes/${BASE}`).then(() => true, () => false);
+    if (!fetched) throw new Error(`Notes Studio reads ${BASE}, which does not exist yet: push main with \`git push -u ${REMOTE} main\`, then start the Studio again.`, { cause: error });
     throw new Error(`Notes Studio reads ${BASE} and could not check it out: ${(error as Error).message}`, { cause: error });
   }
 
