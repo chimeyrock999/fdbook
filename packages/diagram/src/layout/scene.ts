@@ -139,11 +139,16 @@ export function buildScene(diagram: Diagram): Scene {
     return [node.id, boxOf(node.id, { x: at.x, y: at.y, width: at.w, height: at.h })];
   }));
   const nodeList = [...nodes.values()];
+  const nodeBox = (id: string) => {
+    const box = nodes.get(id);
+    if (!box) throw new Error(`No node has the id "${id}".`);
+    return box;
+  };
 
   // ---- Frames from their members, with room on top for the title rail.
   const topPad = (pad: number) => Math.max(pad, TITLE_BASELINE + TITLE_CLEARANCE, TITLE_MASK_HEIGHT + TITLE_CLEARANCE + TITLE_FRAME_INSET);
   const rawFrames: RawFrame[] = diagram.groups.flatMap((group) => {
-    const members = groupNodeIds(diagram, group).map((id) => nodes.get(id)!);
+    const members = groupNodeIds(diagram, group).map(nodeBox);
     if (!members.length) return [];
     const minX = Math.min(...members.map((member) => member.x));
     const minY = Math.min(...members.map((member) => member.y));
@@ -160,7 +165,8 @@ export function buildScene(diagram: Diagram): Scene {
     }];
   });
   const lanes = diagram.lanes.map((lane) => {
-    const at = layout.lanes![lane.id];
+    const at = layout.lanes?.[lane.id];
+    if (!at) throw new Error(`Lane "${lane.id}" has no place in the layout.`);
     return { lane, x: at.x, y: at.y, width: at.w, height: at.h, radius: 10 };
   });
 
@@ -171,7 +177,9 @@ export function buildScene(diagram: Diagram): Scene {
   });
   const diagramEdge = new Map(edges.map((edge, index) => [edge, diagram.edges[index]]));
   const labelBoxAt = (edge: RouteEdge, [lx, ly]: Point, relationIndex: number): LabelRect => {
-    const { width, height } = edgeLabelSize(diagramEdge.get(edge)!);
+    const source = diagramEdge.get(edge);
+    if (!source) throw new Error(`Edge "${edge.id}" is not one of the diagram's.`);
+    const { width, height } = edgeLabelSize(source);
     const pinned = edge.labelAt !== undefined || edge.labelDx !== undefined || edge.labelDy !== undefined;
     return { x: lx - width / 2, y: ly - 10, width, height, lx, ly, relationIndex, pinned };
   };
@@ -240,7 +248,8 @@ export function buildScene(diagram: Diagram): Scene {
   };
   const layoutTitles = (minimumFontSize: number) => {
     const placedTitles: Rect[] = [];
-    const measured = new Map<number, { frame: RawFrame; title: FrameTitle }>();
+    // By frame index; every frame is measured.
+    const measured: { frame: RawFrame; title: FrameTitle }[] = [];
     const ordered = rawFrames.map((frame, index) => ({ frame, index }))
       .sort((left, right) => left.frame.width * left.frame.height - right.frame.width * right.frame.height || left.index - right.index);
     for (const { frame: raw, index } of ordered) {
@@ -268,10 +277,9 @@ export function buildScene(diagram: Diagram): Scene {
       }
       slideTitleOffRoutes(frame, title, placedTitles);
       placedTitles.push(title);
-      measured.set(index, { frame, title });
+      measured[index] = { frame, title };
     }
-    return rawFrames.map((_, index) => {
-      const { frame, title } = measured.get(index)!;
+    return measured.map(({ frame, title }) => {
       const bottom = frame.y + frame.height;
       const y = Math.min(frame.y, title.y - TITLE_FRAME_INSET);
       return { group: frame.group, x: frame.x, y, width: frame.width, height: bottom - y, radius: frameRadius(frame.group), title };
@@ -327,11 +335,13 @@ export function buildScene(diagram: Diagram): Scene {
     width,
     height,
     nodes: diagram.nodes.map((node) => {
-      const box = nodes.get(node.id)!;
+      const box = nodeBox(node.id);
+      const kind = diagram.kinds.find((each) => each.id === node.kind);
+      if (!kind) throw new Error(`Node "${node.id}" is of a kind the diagram does not list.`);
       return {
         ...box,
         node,
-        kind: diagram.kinds.find((kind) => kind.id === node.kind)!,
+        kind,
         labelFont: fittedNodeFontSize(node.label, box.width, 11, 8),
         sublabelFont: node.sublabel ? fittedNodeFontSize(node.sublabel, box.width, 9, 6) : 9,
         tagFont: node.tag ? fittedNodeFontSize(node.tag, box.width, 7, 6) : 7,

@@ -268,20 +268,22 @@ export function buildSequenceScene(diagram: Diagram): Scene {
   const order = new Map(diagram.nodes.map((node, index) => [node.id, index]));
   const columnX = (index: number) => leftX + index * geometry.gap;
 
-  // The widest gap the message spans; equal gaps resolve to the left-most.
+  // The widest gap a message between two columns spans; equal gaps resolve
+  // to the left-most.
   const noteGap = (from: number, to: number) => {
-    let best: { gap: number; width: number } | null = null;
-    for (let gap = Math.min(from, to); gap < Math.max(from, to); gap += 1) {
+    const first = Math.min(from, to);
+    let best = { gap: first, width: columnX(first + 1) - columnX(first) };
+    for (let gap = first + 1; gap < Math.max(from, to); gap += 1) {
       const gapWidth = columnX(gap + 1) - columnX(gap);
-      if (!best || gapWidth > best.width + NOTE_GAP_TOLERANCE) best = { gap, width: gapWidth };
+      if (gapWidth > best.width + NOTE_GAP_TOLERANCE) best = { gap, width: gapWidth };
     }
-    return best?.gap ?? null;
+    return best.gap;
   };
   const noteAt = (edge: DiagramEdge, y: number): SequenceNote | null => {
     const from = order.get(edge.from);
     const to = order.get(edge.to);
     if (!edge.detail || from === undefined || to === undefined || from === to) return null;
-    const gap = noteGap(from, to)!;
+    const gap = noteGap(from, to);
     const x = columnX(gap) + ARROW_INSET + NOTE_TEXT_INSET;
     const maxWidth = Math.max(1, columnX(gap + 1) - NOTE_LIFELINE_CLEARANCE - x);
     const lines = noteWidth(edge.detail) <= maxWidth ? [edge.detail] : wrapNote(edge.detail, maxWidth);
@@ -305,7 +307,8 @@ export function buildSequenceScene(diagram: Diagram): Scene {
     const to = columns[edge.to] ?? 0;
     const direction = to > from ? 1 : -1;
     // The last message's note was never needed for spacing.
-    const note = notes.has(edge) ? notes.get(edge)! : noteAt(edge, y);
+    const spaced = notes.get(edge);
+    const note = spaced !== undefined ? spaced : noteAt(edge, y);
     return { edge, y, start: from + direction * ARROW_INSET, end: to - direction * ARROW_INSET, note };
   });
   const yOf = new Map(messages.map((message) => [message.edge.id, message]));
@@ -320,10 +323,10 @@ export function buildSequenceScene(diagram: Diagram): Scene {
   const activations: SequenceActivation[] = diagram.activations.flatMap((activation) => {
     const first = yOf.get(activation.from);
     const last = yOf.get(activation.to);
-    const x = columns[activation.node];
-    if (!first || !last || x === undefined) return [];
+    const column = order.get(activation.node);
+    if (!first || !last || column === undefined) return [];
     const top = first.y - ACTIVATION_TOP;
-    return [{ activation, x: x - 5, y: top, width: 10, height: last.y + ACTIVATION_BOTTOM - top }];
+    return [{ activation, x: columnX(column) - 5, y: top, width: 10, height: last.y + ACTIVATION_BOTTOM - top }];
   });
 
   const contentBottom = Math.max(0,
@@ -340,10 +343,12 @@ export function buildSequenceScene(diagram: Diagram): Scene {
   const nodes: SceneNode[] = diagram.nodes.map((node) => {
     const cx = columns[node.id];
     const x = cx - participantW / 2;
+    const kind = diagram.kinds.find((each) => each.id === node.kind);
+    if (!kind) throw new Error(`Node "${node.id}" is of a kind the diagram does not list.`);
     return {
       id: node.id, x, y: TOP_Y, width: participantW, height: PARTICIPANT_H, cx, cy: TOP_Y + PARTICIPANT_H / 2,
       node,
-      kind: diagram.kinds.find((kind) => kind.id === node.kind)!,
+      kind,
       labelFont: fittedNodeFontSize(node.label, participantW, 11, 8),
       sublabelFont: node.sublabel ? fittedNodeFontSize(node.sublabel, participantW, sublabelPreferred, sublabelMinimum) : sublabelPreferred,
       tagFont: 7,
@@ -389,7 +394,7 @@ export function buildSequenceScene(diagram: Diagram): Scene {
     return {
       edge: message.edge,
       points: [[message.start, message.y], [message.end, message.y]],
-      d: `M${message.start} ${message.y}H${message.end}`,
+      d: `M${String(message.start)} ${String(message.y)}H${String(message.end)}`,
       strokeWidth: message.edge.variant === 'emphasis' ? 1.8 : 1.4,
       automatic: false,
       label: message.edge.label ? { ...rect, lx: rect.x + rect.width / 2, ly: message.y - 10 } : null,
