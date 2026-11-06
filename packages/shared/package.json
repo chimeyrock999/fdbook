@@ -1,0 +1,18 @@
+{
+  "name": "@fdbook/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "What the Studio server and UI both read: path policy, project areas, and the shapes of the API.",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "imports": {
+    "#*": "./src/*"
+  },
+  "dependencies": {
+    "@fdbook/diagram": "*",
+    "@agentclientprotocol/sdk": "1.7.0",
+    "@fumadocs-editor/core": "0.5.0"
+  }
+}

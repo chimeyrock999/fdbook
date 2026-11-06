@@ -1,0 +1,252 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { StrictMode } from 'react';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { AssetAnswer, AssetInfo, AssetRequest, AssetsClient, AssetUsage } from '#api/assets.ts';
+import { AssetPage } from '#assets/AssetPage.tsx';
+
+const usage = (note: string, line: number): AssetUsage => ({ note, line, column: 12, length: 20, text: `![x](/docs/guide/old_name.png) L${String(line)}`, unsure: false });
+
+const PICTURE: AssetInfo = { path: 'public/docs/guide/old_name.png', mtimeMs: 7, size: 2048, usages: [usage('content/docs/guide/intro.mdx', 9)] };
+const SPARE: AssetInfo = { path: 'public/docs/guide/spare.svg', mtimeMs: 9, size: 300, usages: [] };
+const EMBED: AssetInfo = { path: 'public/docs/guide/flow.html', mtimeMs: 5, size: 5 * 1024 * 1024, usages: [] };
+const MODEL: AssetInfo = { path: 'public/docs/guide/scene.glb', mtimeMs: 4, size: 10, usages: [] };
+const ASSETS = [PICTURE, SPARE, EMBED, MODEL];
+
+const revoked: string[] = [];
+beforeAll(() => {
+  let made = 0;
+  URL.createObjectURL = () => `blob:picked-${String((made += 1))}`;
+  URL.revokeObjectURL = (url: string) => { revoked.push(url); };
+});
+
+function setup(path: string, { unsaved = false, readOnly = false, assets = ASSETS }: { unsaved?: boolean; readOnly?: boolean; assets?: AssetInfo[] | null } = {}) {
+  const change = vi.fn((request: AssetRequest): Promise<AssetAnswer> => {
+    if (request.op === 'replace') {
+      const to = request.extension === 'png' ? request.path : request.path.replace(/\.png$/, `.${request.extension}`);
+      const notes = to === request.path ? [] : [{ type: 'change' as const, path: 'content/docs/guide/intro.mdx', detail: '1 reference' }];
+      return Promise.resolve({ changes: [{ type: 'replace', path: request.path, to }, ...notes], usages: PICTURE.usages });
+    }
+    if (request.op === 'rename') {
+      return Promise.resolve({ changes: [{ type: 'move', path: request.path, to: `public/docs/guide/${request.name}.png` }], usages: [] });
+    }
+    return Promise.resolve({ changes: [{ type: 'delete', path: request.path }], usages: [] });
+  });
+  const replace = vi.fn((path: string, extension: string) => {
+    const to = extension === 'png' ? path : path.replace(/\.png$/, `.${extension}`);
+    return Promise.resolve({ changes: [{ type: 'replace' as const, path, to }], usages: [], mtimeMs: 99 });
+  });
+  const client = { listAssets: vi.fn(), change, replace } as unknown as AssetsClient;
+  const reload = vi.fn();
+  const onOpenUsage = vi.fn();
+  const onChanged = vi.fn();
+  const onShowHistory = vi.fn();
+  const page = (at: string, list: AssetInfo[] | null) => (
+    <AssetPage client={client} list={{ assets: list, error: null, reload }} path={at} unsaved={unsaved} readOnly={readOnly} onOpenUsage={onOpenUsage} onChanged={onChanged} onShowHistory={onShowHistory} />
+  );
+  // StrictMode, as src/main.tsx renders the Studio.
+  const { rerender } = render(page(path, assets), { wrapper: StrictMode });
+  return { change, replace, reload, onOpenUsage, onChanged, onShowHistory, rerender: (at: string, list: AssetInfo[] | null = assets) => { rerender(page(at, list)); } };
+}
+
+const button = (name: string) => screen.getByRole<HTMLButtonElement>('button', { name });
+const fileInput = (dialog: HTMLElement) => dialog.querySelector<HTMLInputElement>('input[type="file"]') ?? document.createElement('input');
+
+afterEach(cleanup);
+
+describe('AssetPage', () => {
+  it('shows an image, its facts and where notes use it; a usage opens its note', async () => {
+    const { onOpenUsage } = setup(PICTURE.path);
+    const image = screen.getByRole<HTMLImageElement>('img', { name: 'Preview of old_name.png' });
+    expect(image.getAttribute('src')).toBe('/api/file?path=public%2Fnotes%2Fguide%2Fold_name.png');
+    expect(screen.getByRole('heading', { name: 'old_name.png' })).toBeTruthy();
+    expect(screen.getByText('guide/old_name.png')).toBeTruthy();
+    expect(screen.getByText('2.0 KB')).toBeTruthy();
+    Object.defineProperty(image, 'naturalWidth', { value: 640 });
+    Object.defineProperty(image, 'naturalHeight', { value: 400 });
+    fireEvent.load(image);
+    expect(screen.getByText('640 × 400 px')).toBeTruthy();
+    await userEvent.click(within(screen.getByRole('list', { name: 'Used in' })).getByRole('button'));
+    expect(onOpenUsage).toHaveBeenCalledWith(PICTURE.usages[0]);
+    expect(button('Delete…').disabled).toBe(true);
+    expect(button('Rename…').disabled).toBe(false);
+    expect(button('Replace…').disabled).toBe(false);
+  });
+
+  it('zooms an image to 100% and back', async () => {
+    setup(PICTURE.path);
+    await userEvent.click(button('100%'));
+    expect(screen.getByRole('img', { name: 'Preview of old_name.png' }).dataset.zoom).toBe('actual');
+    await userEvent.click(button('Fit'));
+    expect(screen.getByRole('img', { name: 'Preview of old_name.png' }).dataset.zoom).toBe('fit');
+  });
+
+  it('shows an HTML embed in a sandboxed frame, and no preview for other types', () => {
+    setup(EMBED.path);
+    const frame = screen.getByTitle('Preview of flow.html');
+    expect(frame.tagName).toBe('IFRAME');
+    expect(frame.getAttribute('sandbox')).toBe('');
+    expect(screen.getByText('5.0 MB')).toBeTruthy();
+    cleanup();
+    setup(MODEL.path);
+    expect(screen.getByText('The Studio has no preview for .glb files.')).toBeTruthy();
+  });
+
+  it('waits for the open note to be saved before renaming, replacing or deleting', () => {
+    setup(SPARE.path, { unsaved: true });
+    expect(button('Rename…').disabled).toBe(true);
+    expect(button('Replace…').disabled).toBe(true);
+    expect(button('Delete…').disabled).toBe(true);
+    expect(button('Rename…').title).toMatch(/unsaved changes/);
+  });
+
+  it('says when the asset is gone, and while the list loads', () => {
+    const { rerender } = setup('public/docs/guide/nothing.png');
+    expect(screen.getByRole('status').textContent).toBe('public/docs/guide/nothing.png is not in public/docs: it may have been renamed or deleted.');
+    rerender(PICTURE.path, null);
+    expect(screen.getByText('Loading old_name.png…')).toBeTruthy();
+  });
+
+  it('deletes an unused asset and says so', async () => {
+    const { change, onChanged, rerender } = setup(SPARE.path);
+    await userEvent.click(button('Delete…'));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
+    expect(change).toHaveBeenCalledWith({ op: 'delete', path: SPARE.path, baseMtime: 9 });
+    await waitFor(() => { expect(onChanged).toHaveBeenCalled(); });
+    rerender(SPARE.path, [PICTURE]);
+    expect(screen.getByRole('status').textContent).toBe('Deleted public/docs/guide/spare.svg.');
+  });
+
+  it('renames, and keeps saying so once the page follows the new path', async () => {
+    const { onChanged, rerender } = setup(PICTURE.path);
+    await userEvent.click(button('Rename…'));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.clear(within(dialog).getByRole('textbox', { name: 'File name' }));
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'File name' }), 'new-name');
+    await waitFor(() => { expect(within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Rename' }).disabled).toBe(false); });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Rename' }));
+    await waitFor(() => { expect(onChanged).toHaveBeenCalled(); });
+    rerender('public/docs/guide/new-name.png', [{ ...PICTURE, path: 'public/docs/guide/new-name.png' }]);
+    expect(screen.getByRole('status').textContent).toBe('Renamed to new-name.png.');
+  });
+
+  it('replaces with a file of the same type: shows both, the plan, and writes only the file', async () => {
+    const { change, replace, onChanged, reload } = setup(PICTURE.path);
+    await userEvent.click(button('Replace…'));
+    const dialog = screen.getByRole('dialog', { name: 'Replace “old_name.png”' });
+    expect(within(dialog).getByText('No file picked yet.')).toBeTruthy();
+    expect(within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Replace' }).disabled).toBe(true);
+    const file = new File(['new bytes'], 'export.png', { type: 'image/png' });
+    await userEvent.upload(fileInput(dialog), file);
+    expect(within(dialog).getByRole('figure', { name: 'now' }).textContent).toContain('old_name.png');
+    expect(within(dialog).getByRole('figure', { name: 'picked' }).textContent).toContain('export.png9 B');
+    await waitFor(() => { expect(within(dialog).getByRole('list', { name: 'Files to write' }).textContent).toBe('⟳ public/docs/guide/old_name.png new content; notes stay as they are'); });
+    expect(change).toHaveBeenLastCalledWith({ op: 'replace', path: PICTURE.path, extension: 'png', baseMtime: 7 }, true);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Replace' }));
+    expect(replace).toHaveBeenCalledWith(PICTURE.path, 'png', file, 7);
+    await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Replaced old_name.png.'); });
+    expect(onChanged).toHaveBeenCalled();
+    expect(reload).toHaveBeenCalled();
+    // The preview loads the new content.
+    expect(screen.getByRole('img', { name: 'Preview of old_name.png' }).getAttribute('src')).toBe('/api/file?path=public%2Fnotes%2Fguide%2Fold_name.png&v=99');
+  });
+
+  it('replaces with another type as a rename that the notes follow', async () => {
+    const { replace } = setup(PICTURE.path);
+    await userEvent.click(button('Replace…'));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.upload(fileInput(dialog), new File(['x'], 'export.webp', { type: 'image/webp' }));
+    expect(within(dialog).getByText(/The file becomes old_name\.webp/)).toBeTruthy();
+    await waitFor(() => { expect(within(dialog).getByRole('list', { name: 'Files to write' }).textContent).toContain('public/docs/guide/old_name.png → old_name.webp'); });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Replace and rename' }));
+    expect(replace).toHaveBeenCalledWith(PICTURE.path, 'webp', expect.any(File), 7);
+  });
+
+  it('refuses a type the Studio does not store, without asking the server', async () => {
+    const { change } = setup(PICTURE.path);
+    await userEvent.click(button('Replace…'));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.upload(fileInput(dialog), new File(['x'], 'notes.txt', { type: 'text/plain' }), { applyAccept: false });
+    expect(within(dialog).getByRole('alert').textContent).toContain('notes.txt: the Studio does not store this type');
+    expect(within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Replace' }).disabled).toBe(true);
+    expect(change).not.toHaveBeenCalled();
+  });
+
+  it('keeps the picked file’s preview until another is picked or the dialog closes', async () => {
+    setup(PICTURE.path);
+    await userEvent.click(button('Replace…'));
+    const dialog = screen.getByRole('dialog');
+    const shown = () => within(dialog).getByRole('figure', { name: 'picked' }).querySelector('img')?.getAttribute('src') ?? '';
+    await userEvent.upload(fileInput(dialog), new File(['a'], 'a.png', { type: 'image/png' }));
+    const first = shown();
+    expect(first).toMatch(/^blob:/);
+    expect(revoked).not.toContain(first);
+    await userEvent.upload(fileInput(dialog), new File(['b'], 'b.png', { type: 'image/png' }));
+    expect(revoked).toContain(first);
+    const second = shown();
+    expect(second).not.toBe(first);
+    expect(revoked).not.toContain(second);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(revoked).toContain(second);
+  });
+
+  it('shows the dimensions of the file picked now, not of the one before', async () => {
+    setup(PICTURE.path);
+    await userEvent.click(button('Replace…'));
+    const dialog = screen.getByRole('dialog');
+    const side = () => within(dialog).getByRole('figure', { name: 'picked' });
+    await userEvent.upload(fileInput(dialog), new File(['a'], 'a.png', { type: 'image/png' }));
+    const image = side().querySelector('img') ?? document.createElement('img');
+    Object.defineProperty(image, 'naturalWidth', { value: 640 });
+    Object.defineProperty(image, 'naturalHeight', { value: 400 });
+    fireEvent.load(image);
+    expect(side().textContent).toContain('640 × 400');
+    await userEvent.upload(fileInput(dialog), new File(['b'], 'b.pdf', { type: 'application/pdf' }));
+    expect(side().textContent).toContain('b.pdf1 B');
+    expect(side().textContent).not.toContain('640 × 400');
+    await userEvent.upload(fileInput(dialog), new File(['c'], 'c.png', { type: 'image/png' }));
+    expect(side().textContent).not.toContain('640 × 400');
+  });
+
+  it('lets the picked file go when the dialog unmounts without closing', async () => {
+    const { rerender } = setup(PICTURE.path);
+    await userEvent.click(button('Replace…'));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.upload(fileInput(dialog), new File(['a'], 'a.png', { type: 'image/png' }));
+    const url = within(dialog).getByRole('figure', { name: 'picked' }).querySelector('img')?.getAttribute('src') ?? '';
+    // Back or forward to another asset; a note opening unmounts the page the same way.
+    rerender(SPARE.path);
+    expect(revoked).toContain(url);
+    cleanup();
+  });
+
+  it('drops what was picked for one asset when another opens', async () => {
+    const { rerender, replace } = setup(PICTURE.path);
+    await userEvent.click(button('Replace…'));
+    await userEvent.upload(fileInput(screen.getByRole('dialog')), new File(['a'], 'a.png', { type: 'image/png' }));
+    await userEvent.click(button('100%'));
+    rerender(SPARE.path);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(replace).not.toHaveBeenCalled();
+    rerender(PICTURE.path);
+    expect(screen.getByRole('img', { name: 'Preview of old_name.png' }).dataset.zoom).toBe('fit');
+  });
+
+  it('opens Replace with a file dropped on the preview', () => {
+    setup(PICTURE.path);
+    const file = new File(['x'], 'dropped.png', { type: 'image/png' });
+    const canvas = screen.getByRole('img', { name: 'Preview of old_name.png' }).parentElement ?? document.body;
+    fireEvent.drop(canvas, { dataTransfer: { files: [file], types: ['Files'] } });
+    expect(within(screen.getByRole('dialog')).getByRole('figure', { name: 'picked' }).textContent).toContain('dropped.png');
+  });
+
+  it('shows the file without Replace, Rename, Delete or the drop zone when read only (main), and still its history', async () => {
+    const { onShowHistory } = setup(SPARE.path, { readOnly: true });
+    expect(screen.getByRole('heading', { name: 'spare.svg' })).toBeTruthy();
+    for (const name of [/Replace/, /Rename/, /Delete/]) expect(screen.queryByRole('button', { name })).toBeNull();
+    expect(screen.queryByText('Drop a file here to replace it')).toBeNull();
+    await userEvent.click(button('History'));
+    expect(onShowHistory).toHaveBeenCalledOnce();
+  });
+});

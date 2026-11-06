@@ -1,0 +1,119 @@
+import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { createSyncClient, SYNC_ENDPOINT, wsTransport, type DocumentEditor } from '@fumadocs-editor/core/sync';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { startTestStudio, type TestStudio } from '@fdbook/testing/studio.ts';
+
+// The smallest editor the sync client accepts: plain text, no Tiptap.
+class TextEditor implements DocumentEditor {
+  text = '';
+  external: string[] = [];
+  getMarkdown() {
+    return this.text;
+  }
+  applyExternalMarkdown(text: string) {
+    this.external.push(text);
+    this.text = text;
+    return Promise.resolve([]);
+  }
+  setMarkdown(text: string) {
+    this.text = text;
+    return Promise.resolve();
+  }
+  markSaved() {
+    // keeps no base
+  }
+}
+
+describe('notes sync', () => {
+  let studio: TestStudio;
+  let client: ReturnType<typeof createSyncClient>;
+
+  beforeAll(async () => {
+    studio = await startTestStudio();
+    await writeFile(join(studio.root, 'content/docs/readme.md'), '# plain markdown\n');
+    await mkdir(join(studio.root, 'outside'));
+    await writeFile(join(studio.root, 'outside/secret.mdx'), 'secret\n');
+    await symlink(join(studio.root, 'outside/secret.mdx'), join(studio.root, 'content/docs/leak.mdx'));
+  });
+
+  afterEach(() => {
+    client.close();
+  });
+
+  afterAll(async () => {
+    await studio.close();
+  });
+
+  const connect = () => {
+    client = createSyncClient({ transport: wsTransport(`ws://127.0.0.1:${studio.port}${SYNC_ENDPOINT}`) });
+    return client;
+  };
+
+  it('serves real notes and merges writes made through the file API', async () => {
+    const editor = new TextEditor();
+    const doc = connect().open('database/index.mdx', { editor });
+    const opened = await doc.opened;
+    const path = 'content/docs/database/index.mdx';
+    expect(opened.text).toBe(await readFile(join(studio.root, path), 'utf8'));
+    expect(opened.writable).toBe(true);
+    editor.text = opened.text;
+
+    // An agent saves through the file API; the open document follows.
+    const { mtimeMs } = (await (await fetch(studio.fileUrl(path))).json()) as { mtimeMs: number };
+    const saved = await fetch(studio.fileUrl(path), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: `${opened.text}\nfrom the API\n`, baseMtime: mtimeMs }),
+    });
+    expect(saved.status).toBe(200);
+    await expect.poll(() => editor.external.at(-1), { timeout: 5000 }).toBe(`${opened.text}\nfrom the API\n`);
+  });
+
+  // The editor's autosave path: an edit in the open document lands in the file.
+  it('writes edits made in the open document to the note', async () => {
+    const editor = new TextEditor();
+    const doc = connect().open('streaming/index.mdx', { editor });
+    const opened = await doc.opened;
+    editor.text = `${opened.text}\nfrom the editor\n`;
+    doc.changed();
+    await doc.flush();
+    const path = join(studio.root, 'content/docs/streaming/index.mdx');
+    await expect.poll(() => readFile(path, 'utf8'), { timeout: 5000 }).toBe(`${opened.text}\nfrom the editor\n`);
+    expect(doc.status()).toBe('synced');
+  });
+
+  it('refuses files outside the notes policy', async () => {
+    const sync = connect();
+    await expect(sync.open('readme.md', { editor: new TextEditor() }).opened).rejects.toThrow(/denied/);
+    await expect(sync.open('../../package.json', { editor: new TextEditor() }).opened).rejects.toThrow();
+    // Same check as the file API: a symlink out of the notes is not followed.
+    await expect(sync.open('leak.mdx', { editor: new TextEditor() }).opened).rejects.toThrow(/denied/);
+  });
+
+  // Tree commands skip meta.yaml, so new pages go through the file API. Since
+  // core 0.4.2 `mkdir` also needs write access to the folder's meta.json,
+  // which the scope never grants (fuma-nama/fumadocs-editor#25).
+  it('refuses to create pages or folders', async () => {
+    const sync = connect();
+    sync.onTree(() => undefined);
+    await expect.poll(() => sync.tree() !== null).toBe(true);
+    await expect(sync.run({ type: 'mkdir', dir: 'zz-new', title: 'Zz' })).rejects.toThrow(/denied: zz-new\/meta\.json/);
+    await expect(sync.run({ type: 'create', path: 'streaming/zz-page.mdx', title: 'Zz' })).rejects.toThrow(/denied/);
+    await expect(stat(join(studio.root, 'content/docs/zz-new'))).rejects.toThrow();
+    await expect(stat(join(studio.root, 'content/docs/streaming/zz-page.mdx'))).rejects.toThrow();
+  });
+
+  // The scope cannot tell a tree `delete` from a save on the same path, so
+  // the storage refuses it: deleting goes through the file API, which
+  // updates meta.yaml (#171).
+  it('refuses a tree delete, and the note stays', async () => {
+    const sync = connect();
+    sync.onTree(() => undefined);
+    await expect.poll(() => sync.tree() !== null).toBe(true);
+    await expect(sync.run({ type: 'delete', path: 'streaming/index.mdx' })).rejects.toThrow(/delete denied: streaming\/index\.mdx/);
+    await stat(join(studio.root, 'content/docs/streaming/index.mdx'));
+    const opened = await sync.open('streaming/index.mdx', { editor: new TextEditor() }).opened;
+    expect(opened.text).toBe(await readFile(join(studio.root, 'content/docs/streaming/index.mdx'), 'utf8'));
+  });
+});

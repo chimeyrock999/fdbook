@@ -1,0 +1,742 @@
+@import 'tailwindcss';
+/* The editor's rules carry :not(#\#) ×3, which outweighs any selector; in
+   a layer they give way to the site's prose and the Studio's own rules, and
+   still beat Tailwind's layers, declared first. */
+@import '@fumadocs-editor/ui/styles.css' layer(editor);
+@import './notes-theme.css';
+@import './scrollbars.css';
+@import '@fdbook/mdx/styles/notes-prose.css';
+@import './notes-prose.css';
+@import './assets/assets.css';
+@import './assets/asset-page.css';
+@import './diagrams/diagram-page.css';
+@import './changes/changes.css';
+@import './diff/diff.css';
+@import './history/history.css';
+@import './graph/graph.css';
+@import './cr/cr.css';
+@import './sidebar/sidebar.css';
+@import './session/session.css';
+@import './editor/unsaved.css';
+@import './agents/agents.css';
+@import './agents/markdown.css';
+@import './agents/context.css';
+@import './suggestions/suggestions.css';
+@import './review/review.css';
+@import './actions/actions.css';
+/* Site components whose classes the Studio draws with (src/plugins). */
+@source '../../mdx/components/graph-objects.tsx';
+
+/* The Studio chrome uses the editor's --fde-* tokens, which follow the
+   system light/dark preference, so both always match. */
+:root {
+  color-scheme: light dark;
+  font-family: var(--font-sans);
+}
+
+@layer components {
+  .studio-input {
+    width: 100%;
+    border: 1px solid var(--fde-border);
+    background: var(--fde-background);
+    border-radius: 7px;
+    padding: 5px 9px;
+    font-size: 13px;
+  }
+  .studio-button {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--fde-border);
+    background: var(--fde-card);
+    border-radius: 8px;
+    padding: 4px 11px;
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+  .studio-button-primary {
+    background: var(--fde-foreground);
+    color: var(--fde-background);
+    border-color: var(--fde-foreground);
+  }
+  /* A popup over the note: the graph fields (src/graph). */
+  .studio-popup {
+    border: 1px solid var(--fde-border);
+    border-radius: 9px;
+    background: var(--fde-popover);
+    color: var(--fde-popover-foreground);
+    box-shadow: 0 6px 24px rgb(0 0 0 / 0.14);
+  }
+  .studio-link {
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-link:hover {
+    color: var(--fde-foreground);
+  }
+  .studio-add {
+    justify-self: start;
+    border: 1px dashed var(--fde-border);
+    border-radius: 7px;
+    padding: 3px 8px;
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-field-error {
+    font-size: 11.5px;
+    color: var(--fde-error);
+  }
+  .studio-pair {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 6px;
+  }
+
+  /* The strip under the note's title: a summary line, then the fields. */
+  .studio-strip {
+    margin-top: 10px;
+    border-block: 1px dashed var(--fde-border);
+  }
+  .studio-strip-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    width: 100%;
+    padding: 7px 2px;
+    text-align: left;
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-strip-row:hover {
+    color: var(--fde-foreground);
+  }
+  .studio-strip-chevron {
+    transition: transform 0.15s;
+  }
+  .studio-strip[data-open='true'] .studio-strip-chevron {
+    transform: rotate(180deg);
+  }
+  .studio-strip-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--fde-border);
+    background: var(--fde-card);
+    border-radius: 999px;
+    padding: 1px 8px;
+    white-space: nowrap;
+  }
+  .studio-badge-warning {
+    border-color: color-mix(in oklab, var(--fde-warning) 50%, var(--fde-border));
+    color: var(--fde-warning);
+  }
+  .studio-badge-error {
+    border-color: color-mix(in oklab, var(--fde-error) 50%, var(--fde-border));
+    color: var(--fde-error);
+  }
+  .studio-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    border: 1px solid var(--fde-border);
+    background: var(--fde-card);
+    border-radius: 999px;
+    font-size: 12px;
+  }
+  .studio-chip > button:first-child {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    padding: 2px 4px 2px 10px;
+  }
+  .studio-chip:not(:has(.studio-chip-remove)) > button:first-child {
+    padding-right: 10px;
+  }
+  .studio-chip-id {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-chip-remove {
+    padding: 4px 8px 4px 4px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-chip-remove:hover {
+    color: var(--fde-error);
+  }
+  .studio-chip[aria-current='true'] {
+    border-color: var(--fde-ring);
+    background: var(--fde-accent);
+  }
+  .studio-chip-bad {
+    border-color: var(--fde-error);
+  }
+  .studio-switch {
+    position: relative;
+    width: 34px;
+    height: 20px;
+    flex: none;
+    border-radius: 999px;
+    background: var(--fde-border);
+    transition: background 0.15s;
+  }
+  .studio-switch::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--fde-background);
+    transition: transform 0.15s;
+  }
+  .studio-switch[aria-checked='true'] {
+    background: var(--fde-primary);
+  }
+  .studio-switch[aria-checked='true']::after {
+    transform: translateX(14px);
+  }
+  .studio-icon-current {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    justify-self: start;
+    border: 1px solid var(--fde-border);
+    background: var(--fde-card);
+    border-radius: 8px;
+    padding: 4px 10px 4px 8px;
+  }
+  .studio-icon-none {
+    border-style: dashed;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-icon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+    gap: 4px;
+    max-height: 196px;
+    overflow: auto;
+  }
+  .studio-icon-grid button {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    border: 1px solid transparent;
+    border-radius: 7px;
+  }
+  .studio-icon-grid button:hover {
+    background: var(--fde-accent);
+  }
+  .studio-icon-grid button[aria-selected='true'] {
+    border-color: var(--fde-ring);
+    background: var(--fde-accent);
+  }
+  fieldset:disabled :is(.studio-switch, .studio-icon-current, .studio-chip button) {
+    cursor: default;
+    opacity: 0.75;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .studio-strip-chevron,
+    .studio-switch,
+    .studio-switch::after {
+      transition: none;
+    }
+  }
+
+  :where(button, input, textarea):focus-visible {
+    outline: 2px solid var(--fde-info);
+    outline-offset: 1px;
+  }
+
+  /* Layout: sidebar (activity bar + the open view) | editor. The view's
+     width is set inline (it can be resized). Below 768px the sidebar is a
+     drawer. */
+  .studio-sidebar {
+    display: flex;
+    flex: none;
+    min-height: 0;
+    background: var(--fde-card);
+  }
+  .studio-activity {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    width: 44px;
+    padding: 8px 0;
+    border-right: 1px solid var(--fde-border);
+  }
+  .studio-activity-button {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-activity-button:hover {
+    color: var(--fde-foreground);
+    background: var(--fde-accent);
+  }
+  .studio-activity-button[aria-pressed='true'] {
+    color: var(--fde-foreground);
+  }
+  /* The open view, marked like VS Code's activity bar. */
+  .studio-activity-button:not(.studio-activity-bottom)[aria-pressed='true']::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: -4px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--fde-primary);
+  }
+  .studio-activity-bottom {
+    margin-top: auto;
+  }
+  .studio-activity-count {
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    border-radius: 8px;
+    background: var(--fde-warning);
+    color: var(--fde-background);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    line-height: 15px;
+    text-align: center;
+  }
+  .studio-activity-count[data-errors] {
+    background: var(--fde-error);
+  }
+  .studio-pane {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--fde-border);
+  }
+  .studio-pane-view {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: auto;
+  }
+  .studio-pane-head {
+    padding: 12px 12px 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-resize {
+    position: absolute;
+    top: 0;
+    right: -5px;
+    bottom: 0;
+    z-index: 5;
+    width: 10px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .studio-resize::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 4px;
+    width: 2px;
+    border-radius: 1px;
+  }
+  .studio-resize:hover::after,
+  .studio-resize:focus-visible::after,
+  .studio-resize[data-dragging]::after {
+    background: var(--fde-info);
+  }
+  .studio-resize:focus-visible {
+    outline: none;
+  }
+  @media (max-width: 767px) {
+    .studio-sidebar {
+      display: none;
+    }
+    .studio-sidebar.studio-drawer-open {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 40;
+      display: flex;
+      max-width: 92%;
+      box-shadow: 0 0 30px rgb(0 0 0 / 0.2);
+    }
+    .studio-pane {
+      width: min(320px, calc(92vw - 44px));
+    }
+    .studio-resize {
+      display: none;
+    }
+  }
+  .studio-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    background: rgb(0 0 0 / 0.35);
+  }
+
+  /* The note header edits the frontmatter; Visual hides its YAML block (Source
+     still shows it). */
+  .studio-visual [data-mdx-frontmatter] {
+    display: none;
+  }
+}
+
+/* The page tree (src/tree): rows, the actions menu and the dialogs. */
+@layer components {
+  .studio-field-label {
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .studio-icon-button {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 30px;
+    border: 1px solid var(--fde-border);
+    background: var(--fde-background);
+    border-radius: 7px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-icon-button:hover {
+    color: var(--fde-foreground);
+  }
+  /* Spacing follows the site's sidebar (fumadocs-ui): 34px rows, 14px text,
+     16px icons 8px from the label, a guide line per nested level. */
+  .studio-tree-group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .studio-tree-nested {
+    margin: 2px 0 0 12px;
+    padding-left: 8px;
+    border-left: 1px solid var(--fde-border);
+  }
+  .studio-tree-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 34px;
+    padding: 0 2px 0 4px;
+    border-radius: 6px;
+  }
+  .studio-tree-row:hover,
+  .studio-tree-row[aria-current='page'] {
+    background: var(--fde-accent);
+  }
+  .studio-tree-row[aria-current='page'] .studio-tree-label {
+    font-weight: 600;
+  }
+  .studio-tree-row[data-faded] .studio-tree-label {
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-row[data-drop='before'] {
+    box-shadow: inset 0 2px 0 var(--fde-primary);
+  }
+  .studio-tree-row[data-drop='after'] {
+    box-shadow: inset 0 -2px 0 var(--fde-primary);
+  }
+  .studio-tree-chevron {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-chevron svg {
+    transition: transform 0.12s;
+  }
+  .studio-tree-chevron svg[data-open] {
+    transform: rotate(90deg);
+  }
+  .studio-tree-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+    padding: 6px 2px;
+    text-align: left;
+    font-size: 14px;
+  }
+  .studio-tree-label svg {
+    flex: none;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-separator {
+    flex: 1;
+    padding: 8px 2px 2px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-missing {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+    padding: 3px 6px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--fde-error);
+    background: color-mix(in srgb, var(--fde-error) 9%, transparent);
+  }
+  .studio-tree-missing small {
+    margin-left: auto;
+    font-size: 10.5px;
+  }
+  .studio-tree-badge {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    background: var(--fde-muted);
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-grip,
+  .studio-tree-more {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    color: var(--fde-muted-foreground);
+    /* Shown on hover; opacity, not visibility, so the button stays in the
+       tab order and the accessibility tree. */
+    opacity: 0;
+  }
+  .studio-tree-grip {
+    cursor: grab;
+  }
+  .studio-tree-more:hover {
+    background: var(--fde-muted);
+    color: var(--fde-foreground);
+  }
+  .studio-tree-row:hover :is(.studio-tree-grip, .studio-tree-more),
+  .studio-tree-row:focus-within .studio-tree-more {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .studio-tree-more {
+      opacity: 1;
+    }
+  }
+  .studio-tree-status,
+  .studio-tree-error {
+    padding: 0 4px;
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-error {
+    color: var(--fde-error);
+  }
+  .studio-menu {
+    position: fixed;
+    z-index: 60;
+    display: grid;
+    /* One column no wider than the menu: a long row ellipsizes instead of
+       running out of it with its badge, outline and dividers (#117). */
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 190px;
+    max-width: 240px;
+    padding: 4px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    background: var(--fde-card);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  }
+  .studio-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    text-align: left;
+    font-size: 13px;
+  }
+  .studio-menu button:hover:not(:disabled) {
+    background: var(--fde-accent);
+  }
+  .studio-menu button:disabled {
+    opacity: 0.45;
+  }
+  .studio-menu hr {
+    margin: 4px 2px;
+    border-color: var(--fde-border);
+  }
+  .studio-menu-check {
+    display: grid;
+    place-items: center;
+    width: 14px;
+  }
+  .studio-menu-hint {
+    padding: 4px 8px 6px;
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-dialog-back {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgb(0 0 0 / 0.35);
+  }
+  .studio-dialog {
+    display: grid;
+    gap: 12px;
+    width: min(440px, 100%);
+    max-height: 100%;
+    overflow: auto;
+    padding: 18px;
+    border: 1px solid var(--fde-border);
+    border-radius: 12px;
+    background: var(--fde-card);
+    box-shadow: 0 20px 50px rgb(0 0 0 / 0.25);
+  }
+  .studio-tree-kinds {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+  }
+  @media (max-width: 460px) {
+    .studio-tree-kinds {
+      grid-template-columns: 1fr;
+    }
+  }
+  .studio-tree-kinds legend {
+    margin-bottom: 4px;
+  }
+  .studio-tree-kinds label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .studio-tree-kinds label:has(input:checked) {
+    border-color: var(--fde-primary);
+    background: var(--fde-accent);
+  }
+  .studio-tree-kinds small {
+    width: 100%;
+    overflow-wrap: anywhere;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .studio-tree-toggle input {
+    margin-top: 3px;
+    accent-color: var(--fde-primary);
+  }
+  .studio-tree-toggle small {
+    display: block;
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-tree-changes {
+    overflow-x: auto;
+    padding: 8px 10px;
+    border: 1px solid var(--fde-border);
+    border-radius: 8px;
+    background: var(--fde-background);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: nowrap;
+  }
+  .studio-tree-changes [data-change='add'] {
+    color: var(--fde-success);
+  }
+  .studio-tree-changes [data-change='change'],
+  .studio-tree-changes [data-change='move'] {
+    color: var(--fde-warning);
+  }
+  .studio-tree-changes [data-change='delete'] {
+    color: var(--fde-error);
+  }
+  .studio-tree-changes span {
+    color: var(--fde-muted-foreground);
+  }
+  /* The delete dialog (src/tree/DeleteDialog.tsx): who proposed it, and the links it breaks. */
+  .studio-delete-by {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--fde-muted);
+    font-size: 12.5px;
+  }
+  .studio-delete-links {
+    padding: 8px 10px;
+    border: 1px solid color-mix(in oklab, var(--fde-warning) 45%, var(--fde-border));
+    border-radius: 8px;
+    font-size: 12.5px;
+  }
+  .studio-delete-links ul {
+    margin-top: 4px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+  }
+  .studio-delete-links span {
+    color: var(--fde-muted-foreground);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .studio-tree-chevron svg {
+      transition: none;
+    }
+  }
+}

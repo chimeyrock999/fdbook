@@ -1,0 +1,71 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { TreeFolder } from '#api/tree.ts';
+import { trailTo } from './tree';
+
+const STORAGE_KEY = 'notes-studio:tree-open';
+
+// Folder id to open; a folder the reader never toggled has no entry.
+type Choices = Partial<Record<string, boolean>>;
+
+function readStored(): Choices {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
+    return typeof value === 'object' && value !== null ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function store(value: Choices) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // Not kept across reloads; the tree still works.
+  }
+}
+
+// Which folders are open: the reader's own choice, kept in localStorage,
+// else closed. meta.yaml's `defaultOpen` is for the site's sidebar and is not
+// read here: most folders set it, and the whole tree would open at once. The
+// folders on the way to a note open when it becomes the open note, once, so
+// the reader can still close them.
+export function useOpenFolders(root: TreeFolder | null, active: string | null) {
+  const [choices, setChoices] = useState(readStored);
+  const revealed = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!root || active === null || revealed.current === active) return;
+    const trail = trailTo(root, active);
+    // A tree that does not hold the note yet (it was just created or
+    // renamed) gets another try when it reloads.
+    if (trail.length === 0) return;
+    revealed.current = active;
+    const folders = trail.filter((node): node is TreeFolder => node.kind === 'folder');
+    setChoices((current) => {
+      const closed = folders.filter((folder) => current[folder.id] !== true);
+      if (closed.length === 0) return current;
+      const next = { ...current };
+      for (const folder of closed) next[folder.id] = true;
+      store(next);
+      return next;
+    });
+  }, [root, active]);
+
+  const isOpen = useCallback((folder: TreeFolder) => choices[folder.id] === true, [choices]);
+  const toggle = useCallback((folder: TreeFolder) => {
+    setChoices((current) => {
+      const next = { ...current, [folder.id]: current[folder.id] !== true };
+      store(next);
+      return next;
+    });
+  }, []);
+  // Takes an id, so a folder can be opened before the tree that holds it loads.
+  const openFolder = useCallback((folder: Pick<TreeFolder, 'id'>) => {
+    setChoices((current) => {
+      const next = { ...current, [folder.id]: true };
+      store(next);
+      return next;
+    });
+  }, []);
+  return { isOpen, toggle, openFolder };
+}

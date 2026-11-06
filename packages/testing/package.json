@@ -1,0 +1,13 @@
+{
+  "name": "@fdbook/testing",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Test helpers shared by the packages: a Studio over a throwaway worktree, FdBook's docs as real content.",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@fdbook/server": "*"
+  }
+}

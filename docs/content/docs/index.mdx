@@ -47,29 +47,27 @@ another address, sign-in and agents are in [Setup](./guide/setup.mdx).
 <Diagram src="reference/studio-layout" caption="The Studio: one Node process serving the UI, the files and the agents." />
 
 ```text
-studio/
-  server/       one Node process: API, notes sync, Vite, MCP server
-    index.ts    entry point (checks the dependencies, loads the project)
-    project.ts  fdbook.config.ts and the areas it names
-    security/   Host/Origin guard, path policy, the role each request needs
-    auth/       GitHub sign-in, roles read with gh, sessions
-    cr/ git/    change requests, worktrees, commits, history
-    preview/    push, preview build check, pull requests
-    agents/     chats with agents over ACP
-    mcp/        the MCP server and its tools
-    lint/       the lint rules and their CLI
-  src/          the React UI (editor, sidebar, views, agent panel)
-    plugins/    what the editor understands of the site's MDX
-  tests/        laid out like server/ and src/; fixtures in tests/support/
-lib/            code the Studio shares with a site: diagrams, note schema
-docs/           these docs, a FdBook project
+packages/
+  server/     @fdbook/server: one Node process for the API, the notes sync,
+              the UI (through Vite), change requests, agents and MCP
+  ui/         @fdbook/ui: the React UI (editor, sidebar, views, agent panel)
+  shared/     @fdbook/shared: what both read (path policy, project areas,
+              the shapes of the API)
+  diagram/    @fdbook/diagram: diagram files, shared with a site
+  mdx/        @fdbook/mdx: the MDX a site and the Studio share
+  testing/    @fdbook/testing: test helpers, a Studio over a throwaway worktree
+docs/         these docs, a FdBook project
 ```
+
+Inside a package, a module imports another of the same package as
+`#path/to/module.ts` (`imports` in its `package.json`) and its tests as
+`#tests/…`; across packages, as `@fdbook/<package>/<module>.ts`.
 
 ## Checks
 
 ```sh
 npm test
-npm run lint -w studio
+npm run lint
 npm run types:check
 npm run docs:lint
 ```

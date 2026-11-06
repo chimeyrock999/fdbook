@@ -1,4 +1,4 @@
-import { defineConfig } from '@fdbook/studio/config';
+import { defineConfig } from '@fdbook/server/config';
 
 // FdBook's own docs, which the Studio's tests also run on.
 export default defineConfig({
