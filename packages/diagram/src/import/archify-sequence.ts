@@ -8,7 +8,7 @@
 
 import { diagramSchema, type DiagramInput, type EdgeVariant } from '#model/schema.ts';
 import type { Scene } from '#layout/scene.ts';
-import { ARCHIFY_TYPES, DOT_TONE, EVIDENCE, defined, mdxText, uniqueId, type ArchifyNote, type ImportOptions } from './import-archify.ts';
+import { ARCHIFY_TYPES, DOT_TONE, EVIDENCE, defined, mdxText, nonEmpty, uniqueId, type ArchifyNote, type ImportOptions } from './import-archify.ts';
 
 export type ArchifySequenceSpec = {
   schema_version?: 1;
@@ -43,7 +43,8 @@ export function importArchifySequence(spec: ArchifySequenceSpec, { schemaPath, n
   // The messages a pixel range holds, first and last.
   const spanned = (from: number, to: number, participant?: string) => {
     const inside = messages.filter((message) => message.y >= from && message.y <= to && (!participant || message.from === participant || message.to === participant));
-    return inside.length ? { from: inside[0].id, to: inside.at(-1)!.id } : null;
+    const last = inside.at(-1);
+    return last ? { from: inside[0].id, to: last.id } : null;
   };
   const evidence = new Set(Object.values(notes ?? {}).map((note) => note.evidence));
   const badges = (Object.keys(EVIDENCE) as ArchifyNote['evidence'][]).filter((level) => evidence.has(level)).map((level) => ({ id: level, ...EVIDENCE[level] }));
@@ -56,11 +57,13 @@ export function importArchifySequence(spec: ArchifySequenceSpec, { schemaPath, n
     badges,
     nodes: spec.participants.map((participant) => {
       const note = notes?.[participant.id];
+      const kind = kindIds.get(participant.type);
+      if (kind === undefined) throw new Error(`participant "${participant.id}" has type "${participant.type}", which Archify does not have: use one of ${Object.keys(ARCHIFY_TYPES).join(', ')}`);
       return defined({
         id: participant.id,
-        kind: kindIds.get(participant.type)!,
+        kind,
         label: participant.label,
-        sublabel: participant.sublabel || undefined,
+        sublabel: nonEmpty(participant.sublabel),
         note: note && defined({ role: mdxText(note.role), badge: note.evidence, points: note.points?.map(mdxText) }),
       });
     }),
@@ -69,7 +72,7 @@ export function importArchifySequence(spec: ArchifySequenceSpec, { schemaPath, n
       from: message.from,
       to: message.to,
       label: message.label,
-      detail: message.note || undefined,
+      detail: nonEmpty(message.note),
       variant: VARIANT_IN[message.variant ?? 'default'],
     })),
     segments: segmentsOf(spec, messages, spanned),
@@ -82,7 +85,10 @@ export function importArchifySequence(spec: ArchifySequenceSpec, { schemaPath, n
       return defined({ title: card.title, tone: tone === 'blue' ? undefined : tone, items: card.items.map(mdxText) });
     }),
   };
-  for (const key of ['badges', 'segments', 'activations', 'cards'] as const) if (!input[key]?.length) delete input[key];
+  if (!input.badges?.length) delete input.badges;
+  if (!input.segments?.length) delete input.segments;
+  if (!input.activations?.length) delete input.activations;
+  if (!input.cards?.length) delete input.cards;
   if (input.$schema === undefined) delete input.$schema;
   diagramSchema.parse(input);
   return input;
@@ -92,13 +98,18 @@ export function importArchifySequence(spec: ArchifySequenceSpec, { schemaPath, n
 // so a spec whose segments share a message is refused with what to change.
 function segmentsOf(spec: ArchifySequenceSpec, messages: { id: string }[], spanned: (from: number, to: number) => { from: string; to: string } | null) {
   const order = new Map(messages.map((message, index) => [message.id, index]));
+  const at = (id: string) => {
+    const index = order.get(id);
+    if (index === undefined) throw new Error(`no message "${id}"`);
+    return index;
+  };
   const segments = (spec.segments ?? []).flatMap((segment) => {
     const range = spanned(segment.from, segment.to);
     return range ? [{ label: segment.label, ...range }] : [];
   });
   segments.forEach((segment, index) => {
     for (const other of segments.slice(index + 1)) {
-      if (order.get(segment.from)! <= order.get(other.to)! && order.get(other.from)! <= order.get(segment.to)!) {
+      if (at(segment.from) <= at(other.to) && at(other.from) <= at(segment.to)) {
         throw new Error(`segments "${segment.label}" and "${other.label}" share messages; Archify nests phases, a diagram's segments do not: make them consecutive in the spec (or drop the outer one) and import again`);
       }
     }
@@ -121,19 +132,23 @@ export function sequenceSpecOf(scene: Scene): ArchifySequenceSpec {
       title: diagram.title,
       output: 'out.html',
       quality_profile: 'showcase',
-      legend: { entries: Object.fromEntries((scene.legend?.entries ?? []).map((entry) => [VARIANT_OUT[entry.variant!], { label: entry.label }])) },
+      // A sequence's legend lists only message variants.
+      legend: { entries: Object.fromEntries((scene.legend?.entries ?? []).flatMap(({ variant, label }) => (variant ? [[VARIANT_OUT[variant], { label }] as const] : []))) },
     },
     participants: diagram.nodes.map((node) => defined({ id: node.id, type: typeOf(node.kind), label: node.label, sublabel: node.sublabel })),
     segments: layer.segments.map(({ segment, frame }) => ({ from: frame.y, to: frame.y + frame.height, label: segment.label })),
-    messages: layer.messages.map(({ edge, y }) => defined({
-      id: edge.id,
-      from: edge.from,
-      to: edge.to,
-      y,
-      label: edge.label!,
-      variant: edge.variant === 'default' ? undefined : VARIANT_OUT[edge.variant],
-      note: edge.detail,
-    })),
+    messages: layer.messages.map(({ edge, y }) => {
+      if (edge.label === undefined) throw new Error(`message "${edge.id}" has no label, which Archify needs`);
+      return defined({
+        id: edge.id,
+        from: edge.from,
+        to: edge.to,
+        y,
+        label: edge.label,
+        variant: edge.variant === 'default' ? undefined : VARIANT_OUT[edge.variant],
+        note: edge.detail,
+      });
+    }),
     activations: layer.activations.map(({ activation, y, height }) => ({ participant: activation.node, from: y, to: y + height })),
   };
 }

@@ -19,7 +19,7 @@ import { MESSAGE_FONT, NOTE_FONT, NOTE_LINE_HEIGHT, type SequenceLayer, type Seq
 // (styles/diagram.css), so one rule colours a node, frame or swatch of any tone.
 const toneClass = (tone: string) => `tone-${tone}`;
 
-const esc = (value: string | number) => String(value).replace(/[&<>"']/g, (character) => `&#${character.charCodeAt(0)};`);
+const esc = (value: string | number) => String(value).replace(/[&<>"']/g, (character) => `&#${String(character.charCodeAt(0))};`);
 // Coordinates come out of float arithmetic; three decimals is below a hairline.
 const num = (value: number) => String(Math.round(value * 1000) / 1000);
 
@@ -63,14 +63,14 @@ function renderDefinitions(prefix: string) {
 }
 
 function renderLane({ x, y, width, height, radius, header, lane }: SceneLane) {
-  return `<g data-lane-id="${esc(lane.id)}"><rect x="${num(x)}" y="${num(y)}" width="${num(width)}" height="${num(height)}" rx="${radius}" class="c-lane" stroke-width="1"/>`
-    + `<text x="${num(header.x)}" y="${num(header.y)}" class="t-dim" font-size="${header.fontSize}" font-weight="600" text-anchor="middle">${esc(header.text)}</text></g>`;
+  return `<g data-lane-id="${esc(lane.id)}"><rect x="${num(x)}" y="${num(y)}" width="${num(width)}" height="${num(height)}" rx="${String(radius)}" class="c-lane" stroke-width="1"/>`
+    + `<text x="${num(header.x)}" y="${num(header.y)}" class="t-dim" font-size="${String(header.fontSize)}" font-weight="600" text-anchor="middle">${esc(header.text)}</text></g>`;
 }
 
 const frameClass = (frame: SceneFrame) => `${toneClass(frame.group.tone)}${frame.group.dashed ? ' frame-dashed' : ''}`;
 
 function renderFrame(frame: SceneFrame) {
-  return `<rect data-graph-role="structural-frame" data-group-id="${esc(frame.group.id)}" x="${num(frame.x)}" y="${num(frame.y)}" width="${num(frame.width)}" height="${num(frame.height)}" rx="${frame.radius}" class="c-frame ${frameClass(frame)}" stroke-width="1"/>`;
+  return `<rect data-graph-role="structural-frame" data-group-id="${esc(frame.group.id)}" x="${num(frame.x)}" y="${num(frame.y)}" width="${num(frame.width)}" height="${num(frame.height)}" rx="${String(frame.radius)}" class="c-frame ${frameClass(frame)}" stroke-width="1"/>`;
 }
 
 function renderFrameTitle(frame: SceneFrame) {
@@ -85,11 +85,11 @@ const edgeAttrs = ({ edge }: SceneEdge) => `data-edge-id="${esc(edge.id)}" data-
 function renderEdgePath(prefix: string, scene: SceneEdge) {
   const { edge, d, strokeWidth } = scene;
   const markers = `marker-end="url(#${markerId(prefix, edge.variant)})"${edge.bidirectional ? ` marker-start="url(#${markerId(prefix, edge.variant, true)})"` : ''}`;
-  const path = `<path ${edgeAttrs(scene)} d="${d}" class="a-${edge.variant}" stroke-width="${strokeWidth}" ${markers}/>`;
+  const path = `<path ${edgeAttrs(scene)} d="${d}" class="a-${edge.variant}" stroke-width="${String(strokeWidth)}" ${markers}/>`;
   if (!scene.automatic) return `<g data-edge-group="">${path}</g>`;
   // The underlay draws the canvas colour under the route: where a later
   // route crosses it, the crossing shows as a small gap.
-  const underlay = `<path data-graph-role="crossover-underlay" d="${d}" fill="none" stroke="var(--mask)" stroke-width="${strokeWidth + 4}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>`;
+  const underlay = `<path data-graph-role="crossover-underlay" d="${d}" fill="none" stroke="var(--mask)" stroke-width="${String(strokeWidth + 4)}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>`;
   return `<g data-edge-group="" data-graph-role="automatic-crossover">${underlay}${path}</g>`;
 }
 
@@ -114,7 +114,7 @@ function renderEdgeLabel(scene: SceneEdge) {
 function renderIcon({ kind, x, y, icon: own }: SceneNode) {
   const icon = own ?? kind.icon ?? 'dot';
   if (icon === 'none') return '';
-  return `<g aria-hidden="true" class="semantic-sigil" transform="translate(${num(x + 6)} ${num(y + 6)}) scale(${SIGIL_SIZE / 16})">${ICON_SHAPE[icon]}</g>`;
+  return `<g aria-hidden="true" class="semantic-sigil" transform="translate(${num(x + 6)} ${num(y + 6)}) scale(${String(SIGIL_SIZE / 16)})">${ICON_SHAPE[icon]}</g>`;
 }
 
 // `inside` is drawn over the box, under the glyph and text: a final state's border.
@@ -124,34 +124,34 @@ function renderNode(scene: SceneNode, inside = '') {
   const aria = [node.label, node.sublabel, scene.context.at(-1)].filter(Boolean).join(', ');
   const labelY = scene.text?.label ?? (node.sublabel ? y + height / 2 - 2 : y + height / 2 + 4);
   const sub = node.sublabel
-    ? `<text x="${num(cx)}" y="${num(scene.text?.sublabel ?? y + height / 2 + 14)}" class="t-muted" font-size="${scene.sublabelFont}" text-anchor="middle">${esc(node.sublabel)}</text>`
+    ? `<text x="${num(cx)}" y="${num(scene.text?.sublabel ?? y + height / 2 + 14)}" class="t-muted" font-size="${String(scene.sublabelFont)}" text-anchor="middle">${esc(node.sublabel)}</text>`
     : '';
   // A participant box has no room for a tag; a state places its own.
   const tagY = scene.text ? scene.text.tag : y + height - 8;
   const tag = node.tag && tagY !== undefined
-    ? `<text data-detail="fine" x="${num(cx)}" y="${num(tagY)}" class="t-tone" font-size="${scene.tagFont}" text-anchor="middle">${esc(node.tag)}</text>`
+    ? `<text data-detail="fine" x="${num(cx)}" y="${num(tagY)}" class="t-tone" font-size="${String(scene.tagFont)}" text-anchor="middle">${esc(node.tag)}</text>`
     : '';
   const box = `x="${num(x)}" y="${num(y)}" width="${num(width)}" height="${num(height)}" rx="8"`;
   return `<g data-node-id="${esc(node.id)}" data-node-kind="${esc(node.kind)}" class="${toneClass(scene.kind.tone)}" tabindex="0" role="button" aria-pressed="false" aria-label="${esc(aria)}">`
     + `<title>${esc(parts.join(' · '))}</title>`
     + `<rect ${box} class="c-mask"/><rect ${box} class="c-node" stroke-width="1.5"/>${inside}${renderIcon(scene)}`
-    + `<text x="${num(scene.text?.x ?? cx)}" y="${num(labelY)}" class="t-primary" font-size="${scene.labelFont}" font-weight="600" text-anchor="middle">${esc(node.label)}</text>${sub}${tag}</g>`;
+    + `<text x="${num(scene.text?.x ?? cx)}" y="${num(labelY)}" class="t-primary" font-size="${String(scene.labelFont)}" font-weight="600" text-anchor="middle">${esc(node.label)}</text>${sub}${tag}</g>`;
 }
 
 function renderLegend({ legend }: Scene, prefix: string) {
   if (!legend) return '';
   const entries = legend.entries.map((entry) => (entry.mark
     ? `<g data-legend-mark="${entry.mark}">${entry.mark === 'initial' ? initialMarker(entry.x + 4.5, entry.x + 24, entry.baseline - 3.5) : finalSwatch(entry)}`
-      + `<text x="${num(entry.x + (entry.mark === 'initial' ? INITIAL_SWATCH_WIDTH : FINAL_SWATCH_WIDTH) + 8)}" y="${entry.baseline}" class="t-muted" font-size="${legend.fontSize}" font-weight="500">${esc(entry.label)}</text></g>`
+      + `<text x="${num(entry.x + (entry.mark === 'initial' ? INITIAL_SWATCH_WIDTH : FINAL_SWATCH_WIDTH) + 8)}" y="${String(entry.baseline)}" class="t-muted" font-size="${String(legend.fontSize)}" font-weight="500">${esc(entry.label)}</text></g>`
     : entry.variant
     // A message variant: a line in its style, as the messages draw it.
     ? `<g data-legend-variant="${esc(entry.variant)}">`
-      + `<path d="M${num(entry.x)} ${num(entry.baseline - 3)}H${num(entry.x + LINE_SWATCH_WIDTH)}" class="a-${entry.variant}" stroke-width="${entry.variant === 'emphasis' ? 1.8 : 1.4}" marker-end="url(#${markerId(prefix, entry.variant)})"/>`
-      + `<text x="${num(entry.x + LINE_SWATCH_OFFSET)}" y="${entry.baseline}" class="t-muted" font-size="${legend.fontSize}" font-weight="500">${esc(entry.label)}</text></g>`
+      + `<path d="M${num(entry.x)} ${num(entry.baseline - 3)}H${num(entry.x + LINE_SWATCH_WIDTH)}" class="a-${entry.variant}" stroke-width="${String(entry.variant === 'emphasis' ? 1.8 : 1.4)}" marker-end="url(#${markerId(prefix, entry.variant)})"/>`
+      + `<text x="${num(entry.x + LINE_SWATCH_OFFSET)}" y="${String(entry.baseline)}" class="t-muted" font-size="${String(legend.fontSize)}" font-weight="500">${esc(entry.label)}</text></g>`
     : `<g data-legend-kind="${esc(entry.kind)}" class="${toneClass(entry.tone)}">`
-      + `<rect x="${entry.x}" y="${entry.baseline - 9}" width="16" height="10" rx="2.5" class="c-node" stroke-width="1"/>`
-      + `<text x="${entry.x + LEGEND_SWATCH_OFFSET}" y="${entry.baseline}" class="t-muted" font-size="${legend.fontSize}" font-weight="500">${esc(entry.label)} <tspan class="t-dim">${entry.count}</tspan></text></g>`));
-  return `<g data-legend=""><text x="${legend.x}" y="${legend.titleY}" class="t-primary" font-size="12" font-weight="650">Legend</text>${entries.join('')}</g>`;
+      + `<rect x="${String(entry.x)}" y="${String(entry.baseline - 9)}" width="16" height="10" rx="2.5" class="c-node" stroke-width="1"/>`
+      + `<text x="${String(entry.x + LEGEND_SWATCH_OFFSET)}" y="${String(entry.baseline)}" class="t-muted" font-size="${String(legend.fontSize)}" font-weight="500">${esc(entry.label)} <tspan class="t-dim">${String(entry.count)}</tspan></text></g>`));
+  return `<g data-legend=""><text x="${String(legend.x)}" y="${String(legend.titleY)}" class="t-primary" font-size="12" font-weight="650">Legend</text>${entries.join('')}</g>`;
 }
 
 // The UML initial marker: a dot with an arrow into the first state.
@@ -160,7 +160,7 @@ function initialMarker(dotX: number, tipX: number, y: number) {
 }
 
 function finalSwatch(entry: PlacedLegendEntry) {
-  return `<g class="tone-slate"><rect x="${entry.x}" y="${entry.baseline - 8}" width="14" height="9" rx="2" class="c-node" stroke-width="1"/><rect x="${entry.x + 2.5}" y="${entry.baseline - 5.5}" width="9" height="4" rx="1" class="c-final" stroke-width="0.8"/></g>`;
+  return `<g class="tone-slate"><rect x="${String(entry.x)}" y="${String(entry.baseline - 8)}" width="14" height="9" rx="2" class="c-node" stroke-width="1"/><rect x="${String(entry.x + 2.5)}" y="${String(entry.baseline - 5.5)}" width="9" height="4" rx="1" class="c-final" stroke-width="0.8"/></g>`;
 }
 
 // A lifecycle, in Archify's order: composite frames, transitions (each with
@@ -178,10 +178,10 @@ function renderLifecycle(prefix: string, scene: Scene, layer: LifecycleLayer) {
     if (!label) return '';
     const { variant } = edge.edge;
     const name = edge.edge.label
-      ? `<text x="${num(label.lx)}" y="${num(label.ly)}" class="${variant === 'default' || variant === 'return' ? 't-muted' : LABEL_CLASS[variant]}" font-size="${LABEL_FONT}" text-anchor="middle">${esc(edge.edge.label)}</text>`
+      ? `<text x="${num(label.lx)}" y="${num(label.ly)}" class="${variant === 'default' || variant === 'return' ? 't-muted' : LABEL_CLASS[variant]}" font-size="${String(LABEL_FONT)}" text-anchor="middle">${esc(edge.edge.label)}</text>`
       : '';
     const note = edge.edge.detail
-      ? `<text data-detail="fine" x="${num(label.lx)}" y="${num(label.ly + (edge.edge.label ? 12 : 0))}" class="t-muted" font-size="${LIFECYCLE_NOTE_FONT}" text-anchor="middle">${esc(edge.edge.detail)}</text>`
+      ? `<text data-detail="fine" x="${num(label.lx)}" y="${num(label.ly + (edge.edge.label ? 12 : 0))}" class="t-muted" font-size="${String(LIFECYCLE_NOTE_FONT)}" text-anchor="middle">${esc(edge.edge.detail)}</text>`
       : '';
     return `<g data-edge-label="" ${edgeAttrs(edge)}><rect x="${num(label.x)}" y="${num(label.y)}" width="${num(label.width)}" height="${num(label.height)}" rx="4" class="c-mask"/>${name}${note}</g>`;
   });
@@ -201,22 +201,22 @@ function renderMessage(prefix: string, message: SequenceMessage, scene: SceneEdg
   const { edge } = message;
   const label = scene.label && edge.label
     ? `<rect x="${num(scene.label.x)}" y="${num(scene.label.y)}" width="${num(scene.label.width)}" height="${num(scene.label.height)}" rx="3" class="c-mask"/>`
-      + `<text x="${num(scene.label.lx)}" y="${num(scene.label.ly)}" class="${edge.variant === 'default' || edge.variant === 'return' ? 't-muted' : LABEL_CLASS[edge.variant]}" font-size="${MESSAGE_FONT}" text-anchor="middle">${esc(edge.label)}</text>`
+      + `<text x="${num(scene.label.lx)}" y="${num(scene.label.ly)}" class="${edge.variant === 'default' || edge.variant === 'return' ? 't-muted' : LABEL_CLASS[edge.variant]}" font-size="${String(MESSAGE_FONT)}" text-anchor="middle">${esc(edge.label)}</text>`
     : '';
   const { note } = message;
   const noteText = note
-    ? `<text x="${num(note.x)}" y="${num(note.baseline)}" class="t-muted" font-size="${NOTE_FONT}">${note.lines.map((line, index) => `<tspan x="${num(note.x)}" dy="${index ? NOTE_LINE_HEIGHT : 0}">${esc(line)}</tspan>`).join('')}</text>`
+    ? `<text x="${num(note.x)}" y="${num(note.baseline)}" class="t-muted" font-size="${String(NOTE_FONT)}">${note.lines.map((line, index) => `<tspan x="${num(note.x)}" dy="${String(index ? NOTE_LINE_HEIGHT : 0)}">${esc(line)}</tspan>`).join('')}</text>`
     : '';
-  return `<g data-edge-group="" ${edgeAttrs(scene)}><path d="${scene.d}" class="a-${edge.variant}" stroke-width="${scene.strokeWidth}" marker-end="url(#${markerId(prefix, edge.variant)})"/>${label}${noteText}</g>`;
+  return `<g data-edge-group="" ${edgeAttrs(scene)}><path d="${scene.d}" class="a-${edge.variant}" stroke-width="${String(scene.strokeWidth)}" marker-end="url(#${markerId(prefix, edge.variant)})"/>${label}${noteText}</g>`;
 }
 
 function renderSequence(prefix: string, scene: Scene, layer: SequenceLayer) {
   const tone = new Map(scene.nodes.map((node) => [node.node.id, node.kind.tone]));
   return layer.segments.map(({ frame }) => `<rect data-graph-role="segment" x="${num(frame.x)}" y="${num(frame.y)}" width="${num(frame.width)}" height="${num(frame.height)}" rx="10" class="c-segment" stroke-width="1"/>`).join('')
-    + layer.lifelines.map((line) => `<path data-lifeline="${esc(line.node)}" d="M${num(line.x)} ${line.top}V${num(line.bottom)}" class="c-lifeline" stroke-width="0.8"/>`).join('')
-    + layer.activations.map((bar) => `<g class="${toneClass(tone.get(bar.activation.node) ?? 'slate')}"><rect x="${num(bar.x)}" y="${num(bar.y)}" width="${bar.width}" height="${num(bar.height)}" rx="3" class="c-mask"/><rect x="${num(bar.x)}" y="${num(bar.y)}" width="${bar.width}" height="${num(bar.height)}" rx="3" class="c-activation" stroke-width="1"/></g>`).join('')
+    + layer.lifelines.map((line) => `<path data-lifeline="${esc(line.node)}" d="M${num(line.x)} ${String(line.top)}V${num(line.bottom)}" class="c-lifeline" stroke-width="0.8"/>`).join('')
+    + layer.activations.map((bar) => `<g class="${toneClass(tone.get(bar.activation.node) ?? 'slate')}"><rect x="${num(bar.x)}" y="${num(bar.y)}" width="${String(bar.width)}" height="${num(bar.height)}" rx="3" class="c-mask"/><rect x="${num(bar.x)}" y="${num(bar.y)}" width="${String(bar.width)}" height="${num(bar.height)}" rx="3" class="c-activation" stroke-width="1"/></g>`).join('')
     + layer.messages.map((message, index) => renderMessage(prefix, message, scene.edges[index])).join('')
-    + layer.segments.map(({ segment, label }) => `<g data-graph-role="segment-label"><rect x="${num(label.x)}" y="${num(label.y)}" width="${num(label.width)}" height="${label.height}" rx="3" class="c-segment-pill"/>`
+    + layer.segments.map(({ segment, label }) => `<g data-graph-role="segment-label"><rect x="${num(label.x)}" y="${num(label.y)}" width="${num(label.width)}" height="${String(label.height)}" rx="3" class="c-segment-pill"/>`
       + `<text x="${num(label.x + 6)}" y="${num(label.y + 13)}" class="t-segment" font-size="9" font-weight="600">${esc(segment.label)}</text></g>`).join('')
     + scene.nodes.map((node) => renderNode(node)).join('');
 }
@@ -226,7 +226,7 @@ function renderSequence(prefix: string, scene: Scene, layer: SequenceLayer) {
 export function renderDiagramSvg(scene: Scene, idPrefix: string, title = scene.diagram.title) {
   const prefix = idPrefix.replace(/[^\w-]/g, '-');
   const titleId = `${prefix}-title`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${scene.width} ${scene.height}" class="dg-svg" data-diagram="" role="img" aria-labelledby="${titleId}">`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${String(scene.width)} ${String(scene.height)}" class="dg-svg" data-diagram="" role="img" aria-labelledby="${titleId}">`
     + `<title id="${titleId}">${esc(title)}</title>`
     + renderDefinitions(prefix)
     + (scene.sequence ? renderSequence(prefix, scene, scene.sequence)

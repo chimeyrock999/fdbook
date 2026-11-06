@@ -44,7 +44,7 @@ const MIME: Record<DiagramExportFormat, string> = {
 };
 const PELE_VARIABLES = [
   ...['bg', 'fg', 'muted', 'line', 'surface', 'surface-alt', 'border', 'accent', 'font', 'font-mono'],
-  ...Array.from({ length: 8 }, (_, index) => `series-${index + 1}`),
+  ...Array.from({ length: 8 }, (_, index) => `series-${String(index + 1)}`),
 ].map((name) => `--pele-${name}`);
 const PELE_LABELS = '.pele-label, .pele-cluster-label';
 // What page rules restyle for an author's fill (@fdbook/mdx's styles/notes-theme.css): a
@@ -92,7 +92,7 @@ function serializeSvg(svg: SVGSVGElement): string {
   clone.setAttribute('height', String(height));
   clone.style.removeProperty('max-width');
 
-  if (!clone.getAttribute('viewBox')) clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  if (!clone.getAttribute('viewBox')) clone.setAttribute('viewBox', `0 0 ${String(width)} ${String(height)}`);
 
   const style = getComputedStyle(svg);
   clone.style.fontFamily = style.fontFamily;
@@ -109,15 +109,15 @@ function serializeSvg(svg: SVGSVGElement): string {
   // dark theme); the file has no stylesheet, so carry the computed fill over
   // unless the label sets its own.
   const labels = svg.querySelectorAll<SVGElement>(PELE_LABELS);
-  const cloneLabels = clone.querySelectorAll<SVGElement>(PELE_LABELS);
+  const cloneLabels = Array.from(clone.querySelectorAll<SVGElement>(PELE_LABELS));
   labels.forEach((label, index) => {
     if (label.style.fill) return;
-    cloneLabels[index]?.style.setProperty('fill', getComputedStyle(label).fill);
+    cloneLabels.at(index)?.style.setProperty('fill', getComputedStyle(label).fill);
   });
   for (const [selector, property] of PELE_AUTHOR_FILLS) {
-    const clones = clone.querySelectorAll<SVGElement>(selector);
+    const clones = Array.from(clone.querySelectorAll<SVGElement>(selector));
     svg.querySelectorAll<SVGElement>(selector).forEach((element, index) => {
-      clones[index]?.style.setProperty(property, getComputedStyle(element).getPropertyValue(property));
+      clones.at(index)?.style.setProperty(property, getComputedStyle(element).getPropertyValue(property));
     });
   }
 
@@ -170,12 +170,14 @@ function inlineDiagramPaint(clone: SVGSVGElement) {
 }
 
 function intrinsicSize(svg: SVGSVGElement) {
-  const viewBox = svg.viewBox.baseVal;
+  // Some engines give no viewBox rect when the svg has no viewBox; read that
+  // as an empty one, so the rendered size decides.
+  const viewBox = svg.hasAttribute('viewBox') ? svg.viewBox.baseVal : { width: 0, height: 0 };
   const rect = svg.getBoundingClientRect();
 
   return {
-    width: Math.max(1, Math.round(viewBox?.width || rect.width || 1)),
-    height: Math.max(1, Math.round(viewBox?.height || rect.height || 1)),
+    width: Math.max(1, Math.round(viewBox.width || rect.width || 1)),
+    height: Math.max(1, Math.round(viewBox.height || rect.height || 1)),
   };
 }
 

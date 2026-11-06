@@ -94,7 +94,8 @@ function restoreUnknownDirective(node: DirectiveNode & { type: DirectiveType }, 
 
   const labelIndex = children.findIndex(isDirectiveLabel);
   const label = labelIndex >= 0 ? children[labelIndex] : undefined;
-  const labelChildren = label && Array.isArray((label as DirectiveNode).children) ? (label as DirectiveNode).children! : [];
+  const labelNodes = label ? (label as DirectiveNode).children : undefined;
+  const labelChildren = Array.isArray(labelNodes) ? labelNodes : [];
   const body = children.filter((_, index) => index !== labelIndex);
   const closingFence = getClosingFence(node, source);
 
@@ -114,19 +115,22 @@ function restoreDirectiveHead(node: DirectiveNode & { type: DirectiveType }, lab
   const fence = directiveFences[node.type];
   const start = node.position?.start;
   const end = node.position?.end;
-  let head = source !== undefined && start?.offset !== undefined && end?.offset !== undefined
-    ? source.slice(start.offset, end.offset)
+  const startOffset = start?.offset;
+  const endOffset = end?.offset;
+  let head = source !== undefined && startOffset !== undefined && endOffset !== undefined
+    ? source.slice(startOffset, endOffset)
     : undefined;
 
   // A container's position spans its body and closing fence; its head is the first line.
   if (head !== undefined && node.type === 'containerDirective') head = head.split(/\r?\n/)[0];
 
-  if (head !== undefined && start && head.replace(/^:+/, '').startsWith(node.name ?? '') && head.startsWith(fence)) {
-    const headEnd = start.offset! + head.length;
+  // A head implies the source and both offsets; the checks say so to the types.
+  if (head !== undefined && source !== undefined && start && end && startOffset !== undefined && head.replace(/^:+/, '').startsWith(node.name ?? '') && head.startsWith(fence)) {
+    const headEnd = startOffset + head.length;
     const headEndPoint: Point =
       node.type === 'containerDirective'
         ? { line: start.line, column: start.column + head.length, offset: headEnd }
-        : end!;
+        : end;
     const first = (labelChildren[0] as PositionedNode | undefined)?.position?.start;
     const last = (labelChildren.at(-1) as PositionedNode | undefined)?.position?.end;
 
@@ -135,13 +139,13 @@ function restoreDirectiveHead(node: DirectiveNode & { type: DirectiveType }, lab
     if (
       first?.offset !== undefined &&
       last?.offset !== undefined &&
-      first.offset >= start.offset! &&
+      first.offset >= startOffset &&
       last.offset <= headEnd
     ) {
       return [
-        createText(source!.slice(start.offset, first.offset), { start, end: first }),
+        createText(source.slice(startOffset, first.offset), { start, end: first }),
         ...labelChildren,
-        createText(source!.slice(last.offset, headEnd), { start: last, end: headEndPoint }),
+        createText(source.slice(last.offset, headEnd), { start: last, end: headEndPoint }),
       ];
     }
   }
@@ -154,15 +158,16 @@ function restoreDirectiveHead(node: DirectiveNode & { type: DirectiveType }, lab
 }
 
 function getClosingFence(node: DirectiveNode, source: string | undefined): { fence: string; position?: Position } | undefined {
-  const start = node.position?.start?.offset;
+  const start = node.position?.start.offset;
   const end = node.position?.end;
 
   if (source === undefined || start === undefined || end?.offset === undefined) return { fence: ':::' };
 
   const lines = source.slice(start, end.offset).split(/\r?\n/);
-  const openingLength = /^:*/.exec(lines[0])![0].length;
+  // The opening fence's colons: the index of the first other character.
+  const openingLength = lines[0].search(/[^:]|$/);
   // The last line may sit behind a blockquote marker or list indentation (`> :::`).
-  const lastLine = lines.length > 1 ? lines.at(-1)! : '';
+  const lastLine = lines.length > 1 ? lines[lines.length - 1] : '';
   const closing = lines.length > 1 ? (/^[\s>]*(:{3,})\s*$/.exec(lastLine))?.[1] : undefined;
 
   // An unclosed container runs to the end of the document and has no closing fence of

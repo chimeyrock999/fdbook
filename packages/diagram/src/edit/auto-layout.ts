@@ -86,15 +86,14 @@ async function elkBoxes(diagram: Input, sizes: Map<string, { w: number; h: numbe
     edges: [],
   };
   for (const group of diagram.groups ?? []) {
-    elkNodes.set(group.id, { id: group.id, children: [], layoutOptions: { 'elk.padding': `[top=${FRAME_TOP},left=${FRAME_PAD},bottom=${FRAME_PAD},right=${FRAME_PAD}]` } });
+    elkNodes.set(group.id, { id: group.id, children: [], layoutOptions: { 'elk.padding': `[top=${String(FRAME_TOP)},left=${String(FRAME_PAD)},bottom=${String(FRAME_PAD)},right=${String(FRAME_PAD)}]` } });
   }
-  for (const node of diagram.nodes) {
-    const size = sizes.get(node.id)!;
-    elkNodes.set(node.id, { id: node.id, width: size.w, height: size.h });
-  }
+  for (const [id, size] of sizes) elkNodes.set(id, { id, width: size.w, height: size.h });
   for (const [id, elk] of elkNodes) {
     const up = parent.get(id);
-    (up ? elkNodes.get(up)! : root).children!.push(elk);
+    const container = up ? elkNodes.get(up) : root;
+    if (!container?.children) throw new Error('auto-layout: a parent group is missing from the ELK tree');
+    container.children.push(elk);
   }
   // Groups without members (all of them groups that hold nothing) would be
   // empty boxes; ELK sizes them, nothing reads them.
@@ -127,8 +126,12 @@ function memberships(diagram: Input) {
   };
   for (const group of groups) {
     for (const nodeId of expand(group.id)) {
-      if (!result.has(nodeId)) result.set(nodeId, new Set());
-      result.get(nodeId)!.add(group.id);
+      let groupIds = result.get(nodeId);
+      if (!groupIds) {
+        groupIds = new Set();
+        result.set(nodeId, groupIds);
+      }
+      groupIds.add(group.id);
     }
   }
   return result;
@@ -212,7 +215,7 @@ function freeSpot(want: Box, nodeId: string, inGroups: Set<string>, diagram: Inp
   const before = sceneErrors(cutScene(diagram, placed));
   const clean = (box: Box) => [...sceneErrors(cutScene(diagram, new Map([...placed, [nodeId, box]])))].every((key) => before.has(key));
   const start = { ...want, x: Math.min(snap(want.x), Math.max(MARGIN, snap(maxRight - want.w))), y: snap(want.y) };
-  let fallback: Box | null = null;
+  let fallback: Box | undefined;
   let drawn = 0;
   const pick = (candidates: Box[]) => {
     for (const box of candidates.filter(fits)) {
@@ -285,20 +288,22 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
     for (const [direction, layerGap] of [['RIGHT', LAYER_GAP], ['DOWN', LAYER_GAP], ['RIGHT', LAYER_GAP * 1.4], ['DOWN', LAYER_GAP * 1.4]] as const) {
       if (best?.errors === 0) break;
       const elk = await elkBoxes(next, sizes, direction, layerGap);
-      const candidate = structuredClone(next);
+      const candidate = structuredClone({ ...next, layout });
       const minX = Math.min(...[...elk.values()].map((box) => box.x));
       const minY = Math.min(...[...elk.values()].map((box) => box.y));
       const offsetX = MARGIN + ((next.groups ?? []).length ? FRAME_PAD : 0) - minX;
       const offsetY = MARGIN + ((next.groups ?? []).length ? FRAME_TOP : 0) - minY;
       for (const node of next.nodes) {
-        const box = elk.get(node.id)!;
-        candidate.layout!.nodes[node.id] = { x: snap(box.x + offsetX), y: snap(box.y + offsetY), w: box.w, h: box.h };
+        const box = elk.get(node.id);
+        if (!box) throw new Error(`auto-layout: ELK placed no box for ${node.id}`);
+        candidate.layout.nodes[node.id] = { x: snap(box.x + offsetX), y: snap(box.y + offsetY), w: box.w, h: box.h };
       }
-      growCanvas(candidate, next.nodes.map((node) => candidate.layout!.nodes[node.id]));
+      growCanvas(candidate, next.nodes.map((node) => candidate.layout.nodes[node.id]));
       const errors = validateDiagram(candidate).issues.filter((issue) => issue.severity === 'error').length;
       if (!best || errors < best.errors) best = { diagram: candidate, errors };
     }
-    return { diagram: best!.diagram, placed: next.nodes.map((node) => node.id) };
+    if (!best) throw new Error('auto-layout: no direction was laid out');
+    return { diagram: best.diagram, placed: next.nodes.map((node) => node.id) };
   }
 
   const elk = await elkBoxes(next, sizes, 'RIGHT');
@@ -315,17 +320,23 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
   const queue = [...missing];
   while (queue.length) {
     queue.sort((a, b) => Number(neighbours(b.id).some((id) => kept.has(id))) - Number(neighbours(a.id).some((id) => kept.has(id))));
-    const node = queue.shift()!;
-    const size = sizes.get(node.id)!;
-    const own = elk.get(node.id)!;
+    const node = queue.shift();
+    if (!node) break;
+    const size = sizes.get(node.id);
+    const own = elk.get(node.id);
+    if (!size || !own) throw new Error(`auto-layout: ELK placed no box for ${node.id}`);
     const anchors = [
-      ...neighbours(node.id).filter((id) => kept.has(id) && elk.has(id)),
-      ...[...kept.keys()].filter((id) => [...(inGroups.get(node.id) ?? [])].some((group) => inGroups.get(id)?.has(group)) && elk.has(id)),
-    ];
+      ...neighbours(node.id),
+      ...[...kept.keys()].filter((id) => [...(inGroups.get(node.id) ?? [])].some((group) => inGroups.get(id)?.has(group))),
+    ].flatMap((id) => {
+      const at = kept.get(id);
+      const suggested = elk.get(id);
+      return at && suggested ? [{ at, suggested }] : [];
+    });
     let want: Box;
     if (anchors.length) {
-      const xs = anchors.map((id) => kept.get(id)!.x + (own.x - elk.get(id)!.x));
-      const ys = anchors.map((id) => kept.get(id)!.y + (own.y - elk.get(id)!.y));
+      const xs = anchors.map(({ at, suggested }) => at.x + (own.x - suggested.x));
+      const ys = anchors.map(({ at, suggested }) => at.y + (own.y - suggested.y));
       want = { x: xs.reduce((a, b) => a + b) / xs.length, y: ys.reduce((a, b) => a + b) / ys.length, ...size };
     } else {
       // Unconnected: below everything placed, at the left margin.
@@ -333,21 +344,22 @@ export async function layoutDiagram(diagram: Input, { all = false }: { all?: boo
       want = { x: MARGIN, y: bottom + LAYER_GAP / 2, ...size };
     }
     const near = [...new Set([...neighbours(node.id), ...[...kept.keys()].filter((id) => [...(inGroups.get(node.id) ?? [])].some((group) => inGroups.get(id)?.has(group)))])]
-      .flatMap((id) => (kept.has(id) ? [kept.get(id)!] : []));
+      .flatMap((id) => kept.get(id) ?? []);
     const box = freeSpot(want, node.id, inGroups.get(node.id) ?? noGroups, next, kept, maxRight, near);
     kept.set(node.id, box);
     layout.nodes[node.id] = box;
     placed.push(node.id);
   }
-  growCanvas(next, placed.map((id) => kept.get(id)!));
+  growCanvas(next, placed.flatMap((id) => kept.get(id) ?? []));
   return { diagram: next, placed };
 }
 
 // A set canvas grows to hold what was placed.
 function growCanvas(diagram: Input, added: Box[]) {
-  if (!diagram.layout!.canvas || !added.length) return;
+  const { layout } = diagram;
+  if (!layout?.canvas || !added.length) return;
   const right = Math.max(...added.map((box) => box.x + box.w)) + MARGIN;
   const bottom = Math.max(...added.map((box) => box.y + box.h)) + MARGIN;
-  const [width, height] = diagram.layout!.canvas;
-  if (right > width || bottom > height) diagram.layout!.canvas = [Math.max(width, right), Math.max(height, bottom)];
+  const [width, height] = layout.canvas;
+  if (right > width || bottom > height) layout.canvas = [Math.max(width, right), Math.max(height, bottom)];
 }

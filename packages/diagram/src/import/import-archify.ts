@@ -117,7 +117,7 @@ function slug(text: string) {
 export function uniqueId(label: string, prefix: string, taken: Set<string>) {
   const base = /^[a-z]/.test(slug(label)) ? slug(label).split('-').slice(0, 4).join('-') : `${prefix}-${slug(label) || 'x'}`;
   let id = base;
-  for (let n = 2; taken.has(id); n += 1) id = `${base}-${n}`;
+  for (let n = 2; taken.has(id); n += 1) id = `${base}-${String(n)}`;
   taken.add(id);
   return id;
 }
@@ -125,6 +125,9 @@ export function uniqueId(label: string, prefix: string, taken: Set<string>) {
 // Archify notes are plain text; diagram notes are MDX. Escape what MDX reads
 // as a tag or an expression, so `spark-<uuid>` stays as written.
 export const mdxText = (text: string) => text.replace(/[<{}]/g, (character) => `\\${character}`);
+
+// Archify leaves a text empty as often as it leaves it out.
+export const nonEmpty = (text: string | undefined) => (text === '' ? undefined : text);
 
 export const defined = <T extends object>(value: T) => Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 
@@ -149,7 +152,10 @@ export function importArchify(spec: ArchifySpec | ArchifySequenceSpec | ArchifyL
   ] : undefined);
 
   const nodeBox = (node: ArchifyNode) => {
-    if (!dataflow) return { x: node.pos![0], y: node.pos![1], w: node.size?.[0] ?? 120, h: node.size?.[1] ?? 60 };
+    if (!dataflow) {
+      if (!node.pos) throw new Error(`component "${node.id}" has no pos: an architecture spec places each one`);
+      return { x: node.pos[0], y: node.pos[1], w: node.size?.[0] ?? 120, h: node.size?.[1] ?? 60 };
+    }
     const w = node.width ?? DATAFLOW.nodeW;
     return { x: stageX(node.stage ?? 0) - w / 2, y: DATAFLOW.rowYs[node.row ?? 0] + (node.yOffset ?? 0), w, h: node.height ?? DATAFLOW.nodeH };
   };
@@ -191,9 +197,11 @@ export function importArchify(spec: ArchifySpec | ArchifySequenceSpec | ArchifyL
     legend: legend?.mode === 'hidden' ? false : undefined,
     nodes: sourceNodes.map((node) => {
       const note = options.notes?.[node.id];
+      const kind = kindIds.get(node.type);
+      if (kind === undefined) throw new Error(`"${node.id}" has type "${node.type}", which Archify does not have: use one of ${Object.keys(ARCHIFY_TYPES).join(', ')}`);
       return defined({
         id: node.id,
-        kind: kindIds.get(node.type)!,
+        kind,
         label: node.label,
         sublabel: node.sublabel,
         tag: node.tag,
@@ -237,18 +245,25 @@ export function importArchify(spec: ArchifySpec | ArchifySequenceSpec | ArchifyL
         });
         return Object.keys(placement).length ? [[id, placement]] : [];
       })),
-      lanes: lanes.length ? Object.fromEntries(lanes.map(({ id, index }) => [id, {
-        x: stageX(index) - DATAFLOW.stageW / 2,
-        y: DATAFLOW.stageY,
-        w: DATAFLOW.stageW,
-        h: canvas![1] - DATAFLOW.stageY - DATAFLOW.stageBottomPad,
-      }])) : undefined,
+      lanes: lanes.length ? Object.fromEntries(lanes.map(({ id, index }) => {
+        if (!canvas) throw new Error('a spec with stages needs a viewBox to size them');
+        return [id, {
+          x: stageX(index) - DATAFLOW.stageW / 2,
+          y: DATAFLOW.stageY,
+          w: DATAFLOW.stageW,
+          h: canvas[1] - DATAFLOW.stageY - DATAFLOW.stageBottomPad,
+        }];
+      })) : undefined,
     }),
   };
-  for (const key of ['badges', 'groups', 'edges', 'lanes', 'cards'] as const) if (!input[key]?.length) delete input[key];
-  const layout = input.layout!;
-  if (!Object.keys(layout.groups ?? {}).length) delete layout.groups;
-  if (!Object.keys(layout.edges ?? {}).length) delete layout.edges;
+  if (!input.badges?.length) delete input.badges;
+  if (!input.groups?.length) delete input.groups;
+  if (!input.edges?.length) delete input.edges;
+  if (!input.lanes?.length) delete input.lanes;
+  if (!input.cards?.length) delete input.cards;
+  const { layout } = input;
+  if (layout && !Object.keys(layout.groups ?? {}).length) delete layout.groups;
+  if (layout && !Object.keys(layout.edges ?? {}).length) delete layout.edges;
   if (input.$schema === undefined) delete input.$schema;
   if (input.legend === undefined) delete input.legend;
   diagramSchema.parse(input);

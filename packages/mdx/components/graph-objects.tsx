@@ -92,6 +92,5 @@ type GraphMetaProps = {
 	graphKind?: "section" | "keyword";
 };
 
-export function GraphMeta(_props: GraphMetaProps) {
-	return null;
-}
+// Read by the graph builder; it draws nothing.
+export const GraphMeta: (props: GraphMetaProps) => null = () => null;
