@@ -38,6 +38,6 @@
     "vitest.config.ts"
   ],
   "exclude": [
-    "packages/diagram/src/note-text.ts"
+    "packages/diagram/src/site/note-text.ts"
   ]
 }

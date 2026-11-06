@@ -1,6 +1,6 @@
-/* Diagrams drawn by lib/diagram/render.ts, in the notes palette. The tokens
+/* Diagrams drawn by src/render/render.ts, in the notes palette. The tokens
    sit on `.dg` (the inline figure and the expanded view), the drawing's
-   classes on `svg.dg-svg`. Each tone (lib/diagram/schema.ts TONES) has a fill
+   classes on `svg.dg-svg`. Each tone (src/model/schema.ts TONES) has a fill
    and a stroke, the colours the Archify note style used; `tone-<name>` puts
    them in --tone-fill / --tone-stroke for the classes that read them. Dark
    nodes mix their stroke into the canvas colour instead of keeping a second
