@@ -1,0 +1,12 @@
+{
+  "name": "fdbook",
+  "private": true,
+  "workspaces": [
+    "tools/notes-studio"
+  ],
+  "scripts": {
+    "studio": "npm run dev -w tools/notes-studio",
+    "test": "npm test -w tools/notes-studio",
+    "types:check": "npm run types:check -w tools/notes-studio"
+  }
+}
