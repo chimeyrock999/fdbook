@@ -6,7 +6,9 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig([
-  globalIgnores(['**/dist/**', '**/node_modules/**', '.claude/**']),
+  // note-text.ts needs @mdx-js/mdx and fumadocs-mdx, which only a site
+  // installs, so tsconfig leaves it out and typed rules cannot read it.
+  globalIgnores(['**/dist/**', '**/node_modules/**', '.claude/**', 'packages/diagram/src/site/note-text.ts']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, tseslint.configs.strictTypeChecked, tseslint.configs.stylisticTypeChecked],
