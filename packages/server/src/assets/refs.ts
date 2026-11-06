@@ -3,7 +3,7 @@ import type { LeafDirective } from 'mdast-util-directive';
 import type { MdxJsxFlowElement, MdxJsxTextElement } from 'mdast-util-mdx-jsx';
 import { visit } from 'unist-util-visit';
 import { parseNote } from '#lint/lint.ts';
-import { decodeRefs, markdownRange, type Range } from '#markdown/destination.ts';
+import { decodeRefs, markdownRange, type Range } from '#lint/destination.ts';
 import { pageUrl } from '#lint/rules/links.ts';
 import { diagramPathOf } from '@fdbook/diagram/source.ts';
 import { ASSETS_DIR, classifyPath, DIAGRAMS_DIR, extensionOf, isAssetExtension, PUBLIC_DIR, publicAsset, siteUrlOf } from '@fdbook/shared/asset-types.ts';

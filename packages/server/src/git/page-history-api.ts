@@ -1,5 +1,5 @@
 import { createKeyedLock } from '#files/store.ts';
-import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#http.ts';
+import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#http/http.ts';
 import { loadDeletedPages, restoreDeletedPage } from './deleted-pages.ts';
 import { comparePageVersions, loadPageHistory, restorePageVersion } from './page-history.ts';
 

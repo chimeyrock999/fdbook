@@ -3,12 +3,13 @@ import { existsSync } from 'node:fs';
 import { mkdir, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createKeyedLock } from '#files/store.ts';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import type { BuildReader } from '#preview/check-runs.ts';
-import { DEFAULT_STALE_DAYS } from '#config.ts';
+import { previewUrlOf } from '#preview/preview.ts';
+import { DEFAULT_STALE_DAYS } from '#config/config.ts';
 import type { BranchPullRequestReader } from '#preview/pull-request.ts';
 import { driftOf, type Drift } from './drift.ts';
-import { CommandError, git, lines } from './git.ts';
+import { CommandError, git, lines } from '#git/command.ts';
 import { createPullRequestReader, ghPullRequests, type ListPullRequests } from './pull-requests.ts';
 import { deleteRemoteBranch, ghClosePullRequest, REMOTE, type ClosePullRequest } from './remote.ts';
 import { CR_BRANCH_PREFIX, crSlug, isCrSlug } from '@fdbook/shared/cr-slug.ts';
@@ -87,13 +88,6 @@ const NOTES = `${NOTES_DIR}/`;
 const DAY_MS = 24 * 3600_000;
 
 const branchOf = (slug: string) => `${CR_BRANCH_PREFIX}${slug}`;
-
-// The preview Cloudflare Pages builds for a branch: its name lowercased,
-// anything but letters and digits as `-`, at most 28 characters.
-export function previewUrlOf(branch: string, project: string) {
-  const alias = branch.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 28).replace(/-+$/, '');
-  return `https://${alias}.${project}.pages.dev`;
-}
 
 // The paths in `git status --porcelain=v1 -z`; a rename or copy names two.
 function statusPaths(output: string) {

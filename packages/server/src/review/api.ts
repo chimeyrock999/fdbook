@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#http.ts';
-import { viewerOf } from '#security/access.ts';
+import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#http/http.ts';
+import { viewerOf } from '#auth/access.ts';
 import { classifyPath, NOTES_DIR, resolveWorktreePath } from '#security/paths.ts';
 import type { Anchor } from '@fdbook/shared/anchors.ts';
 import { THREAD_SEVERITIES, THREAD_STATES, type ThreadAuthor, type ThreadSeverity, type ThreadState } from '@fdbook/shared/review.ts';

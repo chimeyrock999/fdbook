@@ -6,9 +6,9 @@ import { join } from 'node:path';
 import { RequestError, type RequestPermissionRequest } from '@agentclientprotocol/sdk';
 import { atLeast } from '@fdbook/shared/auth.ts';
 import { createKeyedLock } from '#files/store.ts';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import type { RunGrants } from '#mcp/grants.ts';
-import type { Viewer } from '#security/access.ts';
+import type { Viewer } from '#auth/access.ts';
 import { classifyPath } from '#security/paths.ts';
 import type { AttachedFile } from './attachment-blocks.ts';
 import { sentIn, type Attachments } from './attachments.ts';
@@ -111,9 +111,9 @@ export type AgentConversationsOptions = {
   slug: string;
   profiles: AgentProfile[];
   transcripts: Transcripts;
-  // The worktree's notes lock (workspace.ts): agent writes wait for renames and commits.
+  // The worktree's notes lock (app/workspace.ts): agent writes wait for renames and commits.
   lock?: ReturnType<typeof createKeyedLock>;
-  // The file API's lock per file (workspace.ts), so an agent's write or a
+  // The file API's lock per file (app/workspace.ts), so an agent's write or a
   // revert never lands between a save's mtime check and its write.
   pathLock?: ReturnType<typeof createKeyedLock>;
   permissionTimeoutMs?: number;

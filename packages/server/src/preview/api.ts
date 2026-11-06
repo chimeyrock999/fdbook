@@ -1,7 +1,7 @@
 import { createKeyedLock } from '#files/store.ts';
-import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#http.ts';
+import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#http/http.ts';
 import { blockedOnly, loadPreview, pushPreview, type PreviewOptions } from './preview.ts';
-import { viewerOf } from '#security/access.ts';
+import { viewerOf } from '#auth/access.ts';
 import { BODY_MAX, loadDraft, publish } from './publish.ts';
 
 const MAX_BODY_BYTES = 1024;

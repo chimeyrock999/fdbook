@@ -6,11 +6,12 @@ import { z } from 'zod';
 import type { Auth } from '#auth/auth.ts';
 import { atLeast } from '@fdbook/shared/auth.ts';
 import type { ChangeRequests } from '#cr/manager.ts';
-import { HttpError, pathnameOf, readBody, readJsonObject, sendJson, type Handler } from '#http.ts';
+import type { StudioFiles } from '#files/studio-files.ts';
+import { HttpError, pathnameOf, readBody, readJsonObject, sendJson, type Handler } from '#http/http.ts';
 import { NOTES_DIR } from '#security/paths.ts';
 import type { RunGrants } from './grants.ts';
 import type { Handoff } from './handoff.ts';
-import type { StudioFiles, StudioTool, ToolCaller, ToolResult } from './tool.ts';
+import type { StudioTool, ToolCaller, ToolResult } from './tool.ts';
 
 // A request body holds one JSON-RPC message: a proposal carries a whole note.
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -23,7 +24,7 @@ const INSTRUCTIONS = `Tools of the Notes Studio, for the notes under ${NOTES_DIR
 - Review happens in threads on a note's blocks. A reviewer starts from cr_changes, reads the notes, and opens a thread per finding with add_comment (severity blocking or nit, a suggestion when it has the fix); it does not propose otherwise. An author answers each open thread (list_threads) with set_thread_state: addressed with the proposal that fixes it, or rejected with the reason.
 - A message from the Studio may end with the context it adds: the note open in the editor, the lines selected there (edit those), mentioned files and attached documents.`;
 
-// What the host needs of a change request's workspace (workspace.ts).
+// What the host needs of a change request's workspace (app/workspace.ts).
 export type McpWorkspace = {
   root: string;
   // The worktree's files for `caller`: under its notes lock, and on its

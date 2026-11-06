@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { git } from '#cr/git.ts';
+import { git } from '#git/command.ts';
 import type { ChangeRequest } from '#cr/manager.ts';
 import type { CheckRun } from '#preview/check-runs.ts';
 import type { Preview } from '#preview/preview.ts';

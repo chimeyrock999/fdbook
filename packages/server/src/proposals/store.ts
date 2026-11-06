@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createKeyedLock, writeAtomic } from '#files/store.ts';
 import { createStudioFiles, FileConflictError } from '#files/studio-files.ts';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { classifyPath, NOTES_DIR } from '#security/paths.ts';
 import { applyAt, blocksOf, hunksOf, placeOf, rebased, type Block } from '@fdbook/shared/hunks.ts';
 import type { Proposal, ProposalAuthor, ProposalHunk, ProposalOp, ProposalView, StoredHunk } from '@fdbook/shared/proposals.ts';
@@ -59,7 +59,7 @@ function viewOf(proposal: Proposal, note: { content: string; mtimeMs: number } |
 export type ProposalsOptions = {
   // Where this change request's proposals are kept, outside its worktree.
   dir: string;
-  // The worktree's notes lock and the file API's path lock (workspace.ts).
+  // The worktree's notes lock and the file API's path lock (app/workspace.ts).
   notesLock?: ReturnType<typeof createKeyedLock>;
   pathLock?: ReturnType<typeof createKeyedLock>;
   // Told each time a proposal is made or changed.

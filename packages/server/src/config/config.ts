@@ -9,7 +9,7 @@ export const DEFAULT_STUDIO_PORT = 4310;
 
 // Where FdBook itself is installed, with its lockfile. The project it edits
 // is another folder (project.ts).
-export const installRoot = fileURLToPath(new URL('../../../', import.meta.url));
+export const installRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 // The UI the server serves through Vite: @fdbook/ui, with its vite.config.ts.
 export const uiRoot = dirname(createRequire(import.meta.url).resolve('@fdbook/ui/package.json'));
 

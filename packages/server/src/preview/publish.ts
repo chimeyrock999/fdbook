@@ -1,8 +1,7 @@
-import { CommandError, git } from '#cr/git.ts';
-import { previewUrlOf } from '#cr/manager.ts';
-import { HttpError } from '#http.ts';
+import { CommandError, git } from '#git/command.ts';
+import { HttpError } from '#http/http.ts';
 import { loadHistory } from '#git/history.ts';
-import { loadPreview, pushHead, type Preview, type PreviewOptions } from './preview.ts';
+import { loadPreview, previewUrlOf, pushHead, type Preview, type PreviewOptions } from './preview.ts';
 
 // What the Publish dialog starts from: the change request's name and its
 // commits, oldest first, with the branch's preview link.

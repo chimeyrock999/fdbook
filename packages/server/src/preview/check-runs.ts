@@ -1,4 +1,4 @@
-import { run } from '#cr/git.ts';
+import { run } from '#git/command.ts';
 
 // The check run Cloudflare Pages posts on every commit it builds, pushed with
 // or without a pull request (#7). It is how the Studio follows a preview:

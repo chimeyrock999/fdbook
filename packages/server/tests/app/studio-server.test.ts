@@ -1,8 +1,8 @@
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { installRoot } from '#config.ts';
-import { rawRequest } from './support/http';
-import { startStudioServer, type StudioServer } from '#studio-server.ts';
+import { installRoot } from '#config/config.ts';
+import { rawRequest } from '#tests/support/http.ts';
+import { startStudioServer, type StudioServer } from '#app/studio-server.ts';
 
 describe('studio server', () => {
   let studio: StudioServer;

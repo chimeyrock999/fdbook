@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { parse } from 'yaml';
 import { findBlock } from '@fdbook/shared/frontmatter-block.ts';
 import { statOrNull } from '#files/store.ts';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { classifyPath, NOTES_DIR } from '#security/paths.ts';
 import { insertEntry, keepEntries, MetaEditError, readPages } from '#tree/meta-edit.ts';
 import { applyPlan, type Plan } from '#tree/ops.ts';

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, stat, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { HttpError } from '#http.ts';
+import type { HttpError } from '#http/http.ts';
 import { applyEdits, createProposals, type Proposals } from '#proposals/store.ts';
 import type { ProposalView } from '@fdbook/shared/proposals.ts';
 

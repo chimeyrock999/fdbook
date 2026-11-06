@@ -4,7 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { git } from '#cr/git.ts';
+import { git } from '#git/command.ts';
 import type { Conversation } from '@fdbook/shared/agents.ts';
 import type { ChangeRequest } from '#cr/manager.ts';
 import type { ProposalView } from '@fdbook/shared/proposals.ts';

@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 
 const TIMEOUT_MS = 30_000;
 const MAX_OUTPUT = 16 * 1024 * 1024;

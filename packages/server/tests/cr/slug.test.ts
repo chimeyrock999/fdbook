@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { previewUrlOf } from '#cr/manager.ts';
 import { CR_SLUG_MAX, crSlug, isCrSlug } from '@fdbook/shared/cr-slug.ts';
 
 describe('change request slugs', () => {
@@ -31,10 +30,5 @@ describe('change request slugs', () => {
   it('tells a slug from anything else', () => {
     expect(isCrSlug('fix-links-2')).toBe(true);
     for (const value of ['', '_main', 'Fix', 'a--b', '-a', 'a-', 'a/b', 'x'.repeat(25)]) expect(isCrSlug(value)).toBe(false);
-  });
-
-  it('reads the Cloudflare Pages preview URL off the branch', () => {
-    expect(previewUrlOf('cr/fix-links', 'chimey')).toBe('https://cr-fix-links.chimey.pages.dev');
-    expect(previewUrlOf(`cr/${'a'.repeat(24)}`, 'chimey')).toBe(`https://cr-${'a'.repeat(24)}.chimey.pages.dev`);
   });
 });

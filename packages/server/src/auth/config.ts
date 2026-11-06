@@ -1,4 +1,4 @@
-import { DEFAULT_STUDIO_HOST } from '#config.ts';
+import { DEFAULT_STUDIO_HOST } from '#config/config.ts';
 import type { SignInFlow } from '@fdbook/shared/auth.ts';
 
 export type AuthConfig = {

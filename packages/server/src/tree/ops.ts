@@ -1,6 +1,6 @@
 import { readFile, rename, rm, rmdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { buildTree, readNotesContent } from './build.ts';
 import { listEditableFiles, statOrNull, writeAtomic } from '#files/store.ts';
 import { ASSETS_DIR, EDITABLE_AREAS, NOTES_DIR, resolveWorktreePath } from '#security/paths.ts';

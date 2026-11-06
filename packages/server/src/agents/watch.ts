@@ -87,7 +87,7 @@ export function watchRun(root: string, dirty: Promise<Map<string, number | null>
       return start === null || (await atCommit(root, sha, path)) === null;
     },
 
-    // The file API calls this before a person's save (workspace.ts).
+    // The file API calls this before a person's save (app/workspace.ts).
     savedByPerson(path: string) {
       saved.add(path);
     },

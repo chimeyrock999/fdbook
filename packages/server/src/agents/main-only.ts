@@ -1,4 +1,4 @@
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import type { AgentProfile } from './profiles.ts';
 import { mainRefusal, type AgentRole } from '@fdbook/shared/agents.ts';
 

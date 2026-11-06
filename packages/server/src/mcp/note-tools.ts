@@ -1,7 +1,7 @@
 import { visit } from 'unist-util-visit';
 import { z } from 'zod';
 import { listAssets } from '#assets/ops.ts';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { loadLintContext } from '#lint/context.ts';
 import { lintNote, parseNote } from '#lint/lint.ts';
 import { pageUrl, resolveHref } from '#lint/rules/links.ts';

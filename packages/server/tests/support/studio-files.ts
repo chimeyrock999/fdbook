@@ -1,9 +1,10 @@
 import { readFile, stat } from 'node:fs/promises';
 import { writeAtomic } from '#files/store.ts';
-import type { StudioFiles, StudioToolContext } from '#mcp/tool.ts';
+import type { StudioFiles } from '#files/studio-files.ts';
+import type { StudioToolContext } from '#mcp/tool.ts';
 import { resolveWorktreePath } from '#security/paths.ts';
 
-// A StudioFiles with the contract's shape (server/mcp/tool.ts) over a
+// A StudioFiles with the contract's shape (server/files/studio-files.ts) over a
 // worktree, for testing tools before the MCP host's own one lands: the path
 // policy, and a write refused with a FileConflictError when the disk moved
 // on since `baseMtime`.

@@ -1,6 +1,6 @@
 import { createKeyedLock } from '#files/store.ts';
 import type { IncomingMessage } from 'node:http';
-import { HttpError, pathnameOf, readBody, readJsonObject, sendJson, type Handler } from '#http.ts';
+import { HttpError, pathnameOf, readBody, readJsonObject, sendJson, type Handler } from '#http/http.ts';
 import { MAX_ASSET_BYTES } from '@fdbook/shared/asset-types.ts';
 import { applyAssetPlan, listAssets, planAssetDelete, planAssetRename, type AssetPlan, type NoteScan } from './ops.ts';
 import { planAssetReplace } from './replace.ts';

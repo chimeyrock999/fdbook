@@ -1,7 +1,7 @@
 import { applyAssetPlan } from '#assets/ops.ts';
 import { planAssetReplace } from '#assets/replace.ts';
 import { statOrNull, writeAtomic } from '#files/store.ts';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { classifyPath, extensionOf } from '#security/paths.ts';
 import { checked, readBlob, sideAtBase, sideOnDisk, type DiffSide } from './diff.ts';
 import { assertWorktreeTop, runGit } from './git.ts';

@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { Role } from '@fdbook/shared/auth.ts'; // 'reader' | 'writer' | 'admin'
+import type { StudioFiles } from '#files/studio-files.ts';
 
 export type ToolContent =
   | { type: 'text'; text: string }
@@ -10,15 +11,6 @@ export type ToolResult = { content: ToolContent[]; structured?: Record<string, u
 export type ToolCaller =
   | { kind: 'run'; runId: string; agent: string; role: 'author' | 'reviewer' }
   | { kind: 'person'; login: string | null; role: Role };
-
-export type StudioFiles = {
-  // Paths are worktree-relative posix and go through the path policy (resolveWorktreePath); null = missing.
-  read(path: string): Promise<{ content: string; mtimeMs: number } | null>;
-  readBytes(path: string): Promise<{ data: Buffer; mtimeMs: number } | null>;
-  // Under the worktree's notes lock. baseMtime: null = must not exist yet; undefined = no check.
-  // A mismatch throws FileConflictError { content, mtimeMs } (the file API's 409). A run's writes go on its Keep/Revert list.
-  write(path: string, content: string | Buffer, opts?: { baseMtime?: number | null }): Promise<{ mtimeMs: number }>;
-};
 
 export type StudioToolContext = { slug: string; root: string; caller: ToolCaller; files: StudioFiles; signal: AbortSignal };
 

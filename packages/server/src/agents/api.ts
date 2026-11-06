@@ -1,5 +1,5 @@
-import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#http.ts';
-import { viewerOf } from '#security/access.ts';
+import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#http/http.ts';
+import { viewerOf } from '#auth/access.ts';
 import type { AgentConversations } from './conversations.ts';
 import type { AgentInfo } from '@fdbook/shared/agents.ts';
 import type { Transcripts } from './transcripts.ts';

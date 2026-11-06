@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createKeyedLock, statOrNull, writeAtomic } from '#files/store.ts';
-import { HttpError } from '#http.ts';
+import { HttpError } from '#http/http.ts';
 import { NOTES_DIR, resolveWorktreePath } from '#security/paths.ts';
 import type { DeleteAnswer } from '#tree/delete.ts';
 import type { DeleteProposal, DeleteProposalView, ProposalAuthor } from '@fdbook/shared/proposals.ts';

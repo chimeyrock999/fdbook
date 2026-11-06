@@ -1,10 +1,10 @@
 import type { IncomingMessage, RequestListener, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { Auth } from './auth/auth.ts';
-import { CALLBACK_PATH } from './auth/config.ts';
-import { pathnameOf, type Handler } from './http.ts';
+import type { Auth } from '#auth/auth.ts';
+import { CALLBACK_PATH } from '#auth/config.ts';
+import { pathnameOf, type Handler } from '#http/http.ts';
 import type { Role } from '@fdbook/shared/auth.ts';
-import { rejectForeignRequest } from './security/guard.ts';
+import { rejectForeignRequest } from '#security/guard.ts';
 
 type UpgradeListener = (request: IncomingMessage, socket: Duplex, head: Buffer) => void;
 

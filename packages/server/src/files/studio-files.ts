@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises';
-import type { StudioFiles } from '#mcp/tool.ts';
 import { resolveWorktreePath } from '#security/paths.ts';
 import { createKeyedLock, statOrNull, writeAtomic } from './store.ts';
 
@@ -15,6 +14,16 @@ export class FileConflictError extends Error {
   }
 }
 
+// A worktree's files, as an MCP tool gets them in its context (mcp/tool.ts).
+export type StudioFiles = {
+  // Paths are worktree-relative posix and go through the path policy (resolveWorktreePath); null = missing.
+  read(path: string): Promise<{ content: string; mtimeMs: number } | null>;
+  readBytes(path: string): Promise<{ data: Buffer; mtimeMs: number } | null>;
+  // Under the worktree's notes lock. baseMtime: null = must not exist yet; undefined = no check.
+  // A mismatch throws FileConflictError { content, mtimeMs } (the file API's 409). A run's writes go on its Keep/Revert list.
+  write(path: string, content: string | Buffer, opts?: { baseMtime?: number | null }): Promise<{ mtimeMs: number }>;
+};
+
 // A path the policy refuses (server/security/paths.ts).
 export class PathRefusedError extends Error {}
 
@@ -22,7 +31,7 @@ export type StudioFilesOptions = {
   // Saves to one file, one at a time: shared with the file API so two saves
   // from the same base cannot both pass the mtime check.
   pathLock?: ReturnType<typeof createKeyedLock>;
-  // The worktree's notes lock (workspace.ts): a write waits for renames and
+  // The worktree's notes lock (app/workspace.ts): a write waits for renames and
   // commits. The file API saves without it, as the editor always has.
   notesLock?: ReturnType<typeof createKeyedLock> | null;
   // Told the path and what it held (null: missing) just before a write

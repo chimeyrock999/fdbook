@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_STALE_DAYS, DEFAULT_STUDIO_HOST, DEFAULT_STUDIO_PORT, listenFailure, parseStaleDays, parseStudioHost, parseStudioPort } from '#config.ts';
+import { DEFAULT_STALE_DAYS, DEFAULT_STUDIO_HOST, DEFAULT_STUDIO_PORT, listenFailure, parseStaleDays, parseStudioHost, parseStudioPort } from '#config/config.ts';
 
 describe('parseStudioPort', () => {
   it('uses the default port when unset or empty', () => {
