@@ -242,7 +242,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
 
   const proposeEdit = {
     name: 'propose_edit',
-    description: 'Proposes an edit to a note. A note that does not exist yet is created with content (list it in its folder\'s meta.yaml); later edits by the same run to a note it created are written too (answer: written), until someone else changes that note. An edit to any other note is not written: a person sees it in the editor as suggestions, block by block, and accepts or rejects each one. Give either the whole new text (content) or exact find/replace edits on the note as it is now (each find must occur once). Answers the proposal, its hunks, lint issues of the result to fix in a new proposal, and, when the person selected lines for the message, the hunks that change other lines (outsideSelection).',
+    description: 'Proposes an edit to a note. A note that does not exist yet is created with content (list it in its folder\'s meta.json or meta.yaml); later edits by the same run to a note it created are written too (answer: written), until someone else changes that note. An edit to any other note is not written: a person sees it in the editor as suggestions, block by block, and accepts or rejects each one. Give either the whole new text (content) or exact find/replace edits on the note as it is now (each find must occur once). Answers the proposal, its hunks, lint issues of the result to fix in a new proposal, and, when the person selected lines for the message, the hunks that change other lines (outsideSelection).',
     input: z.object({
       path,
       content: z.string().optional().describe('The whole note as it should be, frontmatter included'),
@@ -302,7 +302,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
 
   const proposeDelete = {
     name: 'propose_delete',
-    description: 'Proposes deleting a page (<path>.mdx) or a folder (<path>, with every page in it). Nothing is deleted: a person sees the proposal in the Studio with what the delete takes, and accepts or rejects it. Answers the proposal and that list: the files deleted, the meta.yaml entries removed, the images deleted or kept (another note still uses them), and the notes that still link there, which the delete leaves broken: fix them with propose_edit, or say so.',
+    description: 'Proposes deleting a page (<path>.mdx) or a folder (<path>, with every page in it). Nothing is deleted: a person sees the proposal in the Studio with what the delete takes, and accepts or rejects it. Answers the proposal and that list: the files deleted, the meta file entries removed, the images deleted or kept (another note still uses them), and the notes that still link there, which the delete leaves broken: fix them with propose_edit, or say so.',
     input: z.object({
       path: z.string().min(1).describe(`A page: ${NOTES_DIR}/<path>.mdx or <path>.mdx; a folder: ${NOTES_DIR}/<path> or <path>`),
       summary: z.string().max(2000).optional().describe('Why it should go, shown to the person'),

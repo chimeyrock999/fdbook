@@ -5,7 +5,8 @@ import { buildTree, readNotesContent } from './build.ts';
 import { listEditableFiles, statOrNull, writeAtomic } from '#services/files/store.ts';
 import { ASSETS_DIR, EDITABLE_AREAS, NOTES_DIR, resolveWorktreePath } from '#infra/security/paths.ts';
 import { knownTargets, replaceSegment, rewriteLinks, type Rename } from './links.ts';
-import { insertEntry, metaTemplate, MetaEditError, moveEntry, pagesTemplate, readPages, replaceEntry, setDefaultOpen } from './meta-edit.ts';
+import { MetaEditError } from './meta-edit.ts';
+import { metaEditor, newMetaName } from './meta-file.ts';
 import { slugify } from '@fdbook/shared/slug.ts';
 import { pageTemplate } from './template.ts';
 import { writeMetaVisible, writePageVisible } from './visible-edit.ts';
@@ -107,11 +108,11 @@ export type CreateRequest = { parent: string; slug: unknown; title: unknown; kin
 const CREATE_KINDS = ['page', 'folder-page', 'plain-folder'] as const;
 
 // A page `<parent>/<slug>.mdx`, a folder page `<parent>/<slug>/index.mdx`
-// with its own meta.yaml, or a plain folder with only `<slug>/meta.yaml`,
-// added to the parent's meta.yaml after entry `after` (at the end when
-// null). A parent without meta.yaml, without a `pages` list or with `...` in
-// it shows the new node by itself. A new folder is closed in the site's
-// sidebar unless `defaultOpen`.
+// with its own meta file, or a plain folder with only its meta file (in the
+// format newMetaName says), added to the parent's meta file after entry
+// `after` (at the end when null). A parent without a meta file, without a
+// `pages` list or with `...` in it shows the new node by itself. A new
+// folder is closed in the site's sidebar unless `defaultOpen`.
 export async function planCreate(root: string, tree: TreeFolder, request: CreateRequest): Promise<Plan> {
   const parent = findFolder(tree, request.parent);
   const kind = request.kind ?? 'page';
@@ -126,14 +127,18 @@ export async function planCreate(root: string, tree: TreeFolder, request: Create
   const folder = inDir(parent.path, slug);
   const page: string | null = kind === 'page' ? inDir(parent.path, `${slug}.mdx`) : kind === 'folder-page' ? inDir(folder, 'index.mdx') : null;
   const writes: Write[] = page === null ? [] : [{ path: page, content: pageTemplate(slug, title), baseMtime: null }];
-  if (kind !== 'page') writes.push({ path: inDir(folder, 'meta.yaml'), content: metaTemplate(title, [], request.defaultOpen === true), baseMtime: null });
+  if (kind !== 'page') {
+    const name = await newMetaName(root);
+    writes.push({ path: inDir(folder, name), content: metaEditor(name).metaTemplate(title, [], request.defaultOpen === true), baseMtime: null });
+  }
 
   if (parent.meta !== null) {
+    const edit = metaEditor(parent.meta);
     const meta = await readText(root, parent.meta);
-    const pages = metaError(() => readPages(meta.content));
+    const pages = metaError(() => edit.readPages(meta.content));
     if (pages && !pages.some((item) => item === '...' || item === 'z...a')) {
       const at = typeof request.after === 'number' && request.after >= 0 && request.after < pages.length ? request.after + 1 : pages.length;
-      const content = metaError(() => insertEntry(meta.content, slug, at));
+      const content = metaError(() => edit.insertEntry(meta.content, slug, at));
       if (content !== null) writes.push({ path: parent.meta, content, baseMtime: meta.mtimeMs });
     }
   }
@@ -149,17 +154,18 @@ export async function planCreate(root: string, tree: TreeFolder, request: Create
 
 export type SetOpenRequest = { folder: unknown; defaultOpen: unknown; baseMtime: unknown };
 
-// Sets `defaultOpen` in the folder's meta.yaml, which it must have: the
+// Sets `defaultOpen` in the folder's meta file, which it must have: the
 // site's root folder has no open state.
 export async function planSetOpen(root: string, tree: TreeFolder, request: SetOpenRequest): Promise<Plan> {
   if (typeof request.folder !== 'string') throw new HttpError(400, 'folder must be a folder path');
   if (request.folder === '') throw new HttpError(400, 'the root folder is always open');
   const folder = findFolder(tree, request.folder);
   if (typeof request.defaultOpen !== 'boolean') throw new HttpError(400, 'defaultOpen must be true or false');
-  if (folder.meta === null) throw new HttpError(409, `${NOTES_DIR}/${inDir(folder.path, 'meta.yaml')} does not exist`);
+  if (folder.meta === null) throw new HttpError(409, `${NOTES_DIR}/${folder.path} has no meta.json or meta.yaml`);
   const meta = await readText(root, folder.meta);
   if (request.baseMtime !== meta.mtimeMs) throw new HttpError(409, `${NOTES_DIR}/${folder.meta} changed on disk`);
-  const content = metaError(() => setDefaultOpen(meta.content, request.defaultOpen as boolean));
+  const edit = metaEditor(folder.meta);
+  const content = metaError(() => edit.setFlag(meta.content, 'defaultOpen', request.defaultOpen as boolean));
   if (content === meta.content) return { writes: [], move: null, changes: [], open: null };
   return {
     writes: [{ path: folder.meta, content, baseMtime: meta.mtimeMs }],
@@ -172,7 +178,7 @@ export async function planSetOpen(root: string, tree: TreeFolder, request: SetOp
 export type RenameRequest = { path: unknown; slug: unknown };
 
 // Gives a page or a folder a new name in the same folder, and points every
-// meta.yaml entry and every Markdown link that reached it at the new name.
+// meta file entry and every Markdown link that reached it at the new name.
 export async function planRename(root: string, tree: TreeFolder, request: RenameRequest): Promise<Plan> {
   const path = typeof request.path === 'string' ? request.path : '';
   if (path === 'index.mdx') throw new HttpError(400, 'the root page cannot be renamed');
@@ -204,7 +210,7 @@ export async function planRename(root: string, tree: TreeFolder, request: Rename
     if (!content.includes(oldName)) continue;
     const { next, count, unit } =
       kind === 'meta'
-        ? { ...metaError(() => renameEntries(content, dirOf(notesPath), change)), unit: ['entry', 'entries'] as const }
+        ? { ...metaError(() => renameEntries(content, notesPath, change)), unit: ['entry', 'entries'] as const }
         : { ...rewriteLinks(content, notesPath, change, known), unit: ['link', 'links'] as const };
     if (next === content) continue;
     const detail = `${String(count)} ${count === 1 ? unit[0] : unit[1]}`;
@@ -220,12 +226,14 @@ export async function planRename(root: string, tree: TreeFolder, request: Rename
   return { writes, move: { from: path, to }, changes, open: null };
 }
 
-// The meta.yaml at `dir` with its entries for the renamed page or folder
-// renamed too. A meta.yaml inside a renamed folder moves along with what it
+// The meta file at `path` with its entries for the renamed page or folder
+// renamed too. A meta file inside a renamed folder moves along with what it
 // lists, so it keeps its entries.
-function renameEntries(content: string, dir: string, change: Rename) {
+function renameEntries(content: string, path: string, change: Rename) {
+  const dir = dirOf(path);
   if (change.folder && (dir === change.from || dir.startsWith(`${change.from}/`))) return { next: content, count: 0 };
-  const pages = readPages(content) ?? [];
+  const edit = metaEditor(path);
+  const pages = edit.readPages(content) ?? [];
   const name = change.to.slice(change.to.lastIndexOf('/') + 1);
   const start = dir === '' ? [] : dir.split('/');
   let next = content;
@@ -239,14 +247,14 @@ function renameEntries(content: string, dir: string, change: Rename) {
       : (replaceSegment(start, raw, change.from.replace(/\.mdx$/, ''), name.replace(/\.mdx$/, ''), true) ??
         replaceSegment(start, raw, change.from, name, true));
     if (renamed === null) return;
-    next = replaceEntry(next, index, prefix + renamed);
+    next = edit.replaceEntry(next, index, prefix + renamed);
     count += 1;
   });
   return { next, count };
 }
 
 // The names of a folder's children in their order, as a `pages` list for a
-// folder that has no meta.yaml yet.
+// folder that has no meta file yet.
 function listedNames(folder: TreeFolder) {
   return folder.children
     .filter((child): child is TreePage | TreeFolder => child.entry !== null && (child.kind === 'page' || child.kind === 'folder'))
@@ -255,8 +263,8 @@ function listedNames(folder: TreeFolder) {
 
 export type MoveRequest = { folder: string; from: unknown; to: unknown; baseMtime: unknown };
 
-// Moves entry `from` of the folder's meta.yaml to index `to`. A folder
-// without meta.yaml gets one, listing its children in the new order.
+// Moves entry `from` of the folder's meta file to index `to`. A folder
+// without one gets one, listing its children in the new order.
 export async function planMove(root: string, tree: TreeFolder, request: MoveRequest): Promise<Plan> {
   const folder = findFolder(tree, request.folder);
   const { from, to } = request;
@@ -264,25 +272,27 @@ export async function planMove(root: string, tree: TreeFolder, request: MoveRequ
   if (folder.meta !== null) {
     const meta = await readText(root, folder.meta);
     if (request.baseMtime !== meta.mtimeMs) throw new HttpError(409, `${NOTES_DIR}/${folder.meta} changed on disk`);
-    const content = metaError(() => moveEntry(meta.content, from, to));
+    const edit = metaEditor(folder.meta);
+    const content = metaError(() => edit.moveEntry(meta.content, from, to));
     return { writes: [{ path: folder.meta, content, baseMtime: meta.mtimeMs }], move: null, changes: [{ type: 'change', path: folder.meta, detail: 'new order' }], open: null };
   }
-  if (request.baseMtime !== null) throw new HttpError(409, `${NOTES_DIR}/${inDir(folder.path, 'meta.yaml')} changed on disk`);
+  const name = await newMetaName(root);
+  if (request.baseMtime !== null) throw new HttpError(409, `${NOTES_DIR}/${inDir(folder.path, name)} changed on disk`);
   const names = listedNames(folder);
   if (!(from >= 0 && from < names.length && to >= 0 && to < names.length)) throw new HttpError(409, 'no such entry');
   names.splice(to, 0, ...names.splice(from, 1));
-  const path = inDir(folder.path, 'meta.yaml');
+  const path = inDir(folder.path, name);
   guarded(root, path);
   // Only `pages`: the folder keeps its title from the index page and stays
-  // closed by default, as it was without a meta.yaml.
-  return { writes: [{ path, content: pagesTemplate(names), baseMtime: null }], move: null, changes: [{ type: 'add', path }], open: null };
+  // closed by default, as it was without a meta file.
+  return { writes: [{ path, content: metaEditor(name).pagesTemplate(names), baseMtime: null }], move: null, changes: [{ type: 'add', path }], open: null };
 }
 
 export type VisibilityRequest = { path: unknown; visible: unknown };
 
 // Hides a page or folder from the site's sidebar (`visible: false` in its
-// frontmatter or meta.yaml), or shows it again (the key comes out). A
-// folder without meta.yaml gets one only to hide it, and loses it again
+// frontmatter or meta file), or shows it again (the key comes out). A
+// folder without a meta file gets one only to hide it, and loses it again
 // when shown, unless its order changed since. An unlisted node shown again
 // is also listed in its folder's `pages`: its `!name` entry becomes `name`,
 // or it is added at the end, as a create adds.
@@ -299,17 +309,17 @@ export async function planVisibility(root: string, tree: TreeFolder, request: Vi
   const file = node.kind === 'folder' ? node.meta : node.path;
   if (node.kind === 'folder' && file === null) {
     if (!visible) {
-      const meta = inDir(path, 'meta.yaml');
+      const meta = inDir(path, await newMetaName(root));
       guarded(root, meta);
       // With its children listed, as a move would, so they can still be
-      // ordered: a meta.yaml without `pages` gives them no entries.
-      plan.writes.unshift({ path: meta, content: hiddenMeta(listedNames(node)), baseMtime: null });
+      // ordered: a meta file without `pages` gives them no entries.
+      plan.writes.unshift({ path: meta, content: metaEditor(meta).hiddenTemplate(listedNames(node)), baseMtime: null });
       plan.changes.unshift({ type: 'add', path: meta });
     }
   } else if (file !== null) {
     const current = await readText(root, file);
-    const content = metaError(() => (node.kind === 'folder' ? writeMetaVisible : writePageVisible)(current.content, visible));
-    if (node.kind === 'folder' && visible && current.content === hiddenMeta(await namesWithoutMeta(root, file, path))) {
+    const content = metaError(() => (node.kind === 'folder' ? writeMetaVisible(current.content, visible, file) : writePageVisible(current.content, visible)));
+    if (node.kind === 'folder' && visible && current.content === metaEditor(file).hiddenTemplate(await namesWithoutMeta(root, file, path))) {
       plan.remove = { path: file, baseMtime: current.mtimeMs };
       plan.changes.unshift({ type: 'delete', path: file });
     } else if (content !== current.content) {
@@ -320,10 +330,7 @@ export async function planVisibility(root: string, tree: TreeFolder, request: Vi
   return plan;
 }
 
-// The meta.yaml that hides a folder which had none.
-const hiddenMeta = (names: string[]) => `visible: false\n${pagesTemplate(names)}`;
-
-// The order the folder's children would have without its meta.yaml.
+// The order the folder's children would have without its meta file.
 async function namesWithoutMeta(root: string, meta: string, path: string) {
   const content = await readNotesContent(root);
   content.metas.delete(meta);
@@ -334,13 +341,14 @@ async function namesWithoutMeta(root: string, meta: string, path: string) {
 async function listInParent(root: string, tree: TreeFolder, path: string, plan: Plan) {
   const parent = findFolder(tree, dirOf(path));
   if (parent.meta === null) return;
+  const edit = metaEditor(parent.meta);
   const meta = await readText(root, parent.meta);
-  const pages = metaError(() => readPages(meta.content)) ?? [];
+  const pages = metaError(() => edit.readPages(meta.content)) ?? [];
   const slug = slugOf(path);
   // A page `x.mdx` next to a folder `x/`: the entry reaches the folder.
   if (pages.includes(slug)) throw new HttpError(409, `"${slug}" in ${NOTES_DIR}/${parent.meta} already names another page or folder: rename one of them first`);
   const excluded = pages.indexOf(`!${slug}`);
-  const content = excluded === -1 ? metaError(() => insertEntry(meta.content, slug, pages.length)) : metaError(() => replaceEntry(meta.content, excluded, slug));
+  const content = excluded === -1 ? metaError(() => edit.insertEntry(meta.content, slug, pages.length)) : metaError(() => edit.replaceEntry(meta.content, excluded, slug));
   if (content === null) return;
   plan.writes.push({ path: parent.meta, content, baseMtime: meta.mtimeMs });
   plan.changes.push({ type: 'change', path: parent.meta, detail: excluded === -1 ? `adds "${slug}"` : `"!${slug}" becomes "${slug}"` });

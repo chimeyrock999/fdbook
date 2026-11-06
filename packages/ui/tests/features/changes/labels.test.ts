@@ -29,6 +29,12 @@ describe('labels', () => {
     expect(shortPath('diagrams/streaming/pipeline.diagram.json')).toBe('streaming/pipeline.diagram.json');
   });
 
+  it('names a meta.json as its folder\'s page order too', () => {
+    const json: TreeFolder = { ...root, title: 'My Docs', meta: 'meta.json', children: [] };
+    expect(labelOf({ path: 'content/docs/meta.json', status: 'M' }, titlesOf(json))).toBe('Page order of My Docs');
+    expect(labelOf({ path: 'content/docs/new/meta.json', status: 'A' }, titles)).toBe('Page order of new');
+  });
+
   it('says how long ago a commit was', () => {
     const now = Date.parse('2026-10-22T10:00:00Z');
     expect(timeAgo('2026-10-22T09:59:30Z', now)).toBe('just now');

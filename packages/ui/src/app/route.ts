@@ -1,4 +1,4 @@
-import { BASE_URL, classifyPath, PUBLIC_DIR, siteUrlOf } from '@fdbook/shared/asset-types.ts';
+import { BASE_URL, classifyPath, isMetaPath, PUBLIC_DIR, siteUrlOf } from '@fdbook/shared/asset-types.ts';
 import { CURRENT_CR } from '#api/workspace.ts';
 import { NOTES_PREFIX, syncPath } from '#lib/note-paths.ts';
 import { renamedPath } from '#features/tree/tree.ts';
@@ -97,10 +97,10 @@ export function siteRoute(path: string | null) {
 
 // Where Open preview goes for the page shown: its route on the site, or the
 // notes home when the page has none there. A diff has the route of the file
-// as it is now; a meta.yaml has no page, and a file the change request
+// as it is now; a meta file has no page, and a file the change request
 // deleted (`exists` says no) is no longer served.
 export function previewRoute(page: Page | null, exists: (path: string) => boolean) {
   if (page === null || isList(page)) return siteRoute(null);
-  if (page.kind === 'diff' && (page.path.endsWith('/meta.yaml') || !exists(page.path))) return siteRoute(null);
+  if (page.kind === 'diff' && (isMetaPath(page.path) || !exists(page.path))) return siteRoute(null);
   return siteRoute(page.path);
 }

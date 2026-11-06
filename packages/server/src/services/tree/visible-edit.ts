@@ -1,9 +1,10 @@
 import { parse } from 'yaml';
 import { findBlock } from '@fdbook/shared/frontmatter-block.ts';
 import { MetaEditError, removeKey, setFlag } from './meta-edit.ts';
+import { parsed, removeKey as removeJsonKey, setFlag as setJsonFlag } from './meta-json.ts';
 
 // `visible: false` written into, or taken out of, a page's frontmatter or a
-// folder's meta.yaml, the key the site hides them by
+// folder's meta file, the key the site hides them by
 // (lib/visible-page-tree.ts). Only that line changes: hiding and showing
 // again gives back the file byte for byte, unless it said `visible: true`.
 
@@ -22,8 +23,13 @@ function edit(yaml: string, visible: boolean, file: string) {
 }
 
 // A meta.yaml left with no key at all would not pass the site's meta
-// schema: it says `visible: true` instead.
-export function writeMetaVisible(text: string, visible: boolean) {
+// schema: it says `visible: true` instead. A meta.json left as `{}` is fine.
+// `path` names the meta file, for its format.
+export function writeMetaVisible(text: string, visible: boolean, path = 'meta.yaml') {
+  if (path.endsWith('.json')) {
+    if (!visible) return setJsonFlag(text, 'visible', false);
+    return parsed(text).visible === false ? removeJsonKey(text, 'visible') : text;
+  }
   const next = edit(text, visible, 'meta.yaml');
   return next !== text && parse(next) === null ? setFlag(next, 'visible', true) : next;
 }

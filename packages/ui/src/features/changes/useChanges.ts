@@ -7,7 +7,7 @@ const SETTLE_MS = 300;
 const WATCHED = EDITABLE_AREAS.map((area) => `${area}/`);
 
 // The worktree's changes and the change request's commits. The changes load
-// again when a note, meta.yaml, asset or diagram changes on disk; both load
+// again when a note, meta file, asset or diagram changes on disk; both load
 // again when the window comes back (a commit made in a terminal) and on
 // `reload` (after a commit), since a file event cannot add a commit. Loads
 // run one at a time, in order; a burst of file events settles into one.

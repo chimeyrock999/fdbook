@@ -11,6 +11,8 @@ describe('classifyPath', () => {
     ['content/docs/streaming/kafka/index.mdx', 'note'],
     ['content/docs/meta.yaml', 'meta'],
     ['content/docs/streaming/meta.yaml', 'meta'],
+    ['content/docs/meta.json', 'meta'],
+    ['content/docs/streaming/meta.json', 'meta'],
     ['public/docs/data-modeling/star.png', 'asset'],
     ['public/docs/x/diagram.HTML', 'asset'],
     ['public/docs/x/model.glb', 'asset'],
@@ -46,10 +48,14 @@ describe('classifyPath', () => {
     'content/docs/a.js',
     'content/docs/a.mdx.bak',
     'content/docs/other.yaml',
-    'content/docs/meta.json',
+    'content/docs/other.json',
+    'content/docs/meta.yml',
+    'content/docs/a/meta.json.bak',
     'public/docs/a.js',
     'public/docs/a.exe',
     'public/docs/meta.yaml',
+    'public/docs/meta.json',
+    'diagrams/meta.json',
     // names of Object.prototype, which are not types
     'public/docs/a.constructor',
     'public/docs/a.__proto__',
@@ -70,8 +76,8 @@ describe('classifyPath', () => {
 });
 
 describe('isTextPath', () => {
-  it('reads notes, meta.yaml, SVG and HTML as text, other assets and other paths not', () => {
-    for (const path of ['content/docs/a.mdx', 'content/docs/a/meta.yaml', 'public/docs/a/b.svg', 'public/docs/a/b.html', 'diagrams/a/b.diagram.json']) expect(isTextPath(path)).toBe(true);
+  it('reads notes, meta files, SVG and HTML as text, other assets and other paths not', () => {
+    for (const path of ['content/docs/a.mdx', 'content/docs/a/meta.yaml', 'content/docs/a/meta.json', 'public/docs/a/b.svg', 'public/docs/a/b.html', 'diagrams/a/b.diagram.json']) expect(isTextPath(path)).toBe(true);
     for (const path of ['public/docs/a/b.png', 'public/docs/a/b.pdf', 'package.json', 'content/docs/../x.mdx']) expect(isTextPath(path)).toBe(false);
   });
 });

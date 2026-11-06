@@ -145,7 +145,7 @@ Everything the server touches goes through these checks.
   `Sec-Fetch-Mode: navigate` on that path.
 - **Path policy** (`server/infra/security/paths.ts`). Paths are relative to the
   worktree, in posix form. Only `content/notes/**/*.mdx`,
-  `content/notes/**/meta.yaml`, assets under `public/notes/` (png, jpg,
+  `content/notes/**/meta.json` and `meta.yaml`, assets under `public/notes/` (png, jpg,
   jpeg, gif, webp, avif, svg, html, glb, pdf) and diagrams,
   `diagrams/**/*.diagram.json` (not `diagrams/diagram.schema.json`), are
   allowed. `..`, empty segments and hidden segments such as `.obsidian` are
@@ -474,8 +474,11 @@ dry run plans without the lock.
 
 - A tree rename moves the page or folder first, so a move that fails writes
   nothing. Reorders swap the text of the `meta.yaml` entry lines
-  (`server/services/tree/meta-edit.ts`); hide and show edit one line
-  (`server/services/tree/visible-edit.ts`).
+  (`server/services/tree/meta-edit.ts`), or of the `meta.json` entries
+  (`server/services/tree/meta-json.ts`, which keeps the file's key order,
+  indentation and final newline); `server/services/tree/meta-file.ts` picks
+  one by the file's name, and says which format a new meta file takes. Hide
+  and show edit one line (`server/services/tree/visible-edit.ts`).
 - An asset rename moves the asset first, then writes each note
   atomically; if the first note cannot be written, the asset moves back. A
   replace that changes the extension writes the new file, rewrites the

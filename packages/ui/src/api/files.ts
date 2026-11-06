@@ -53,7 +53,7 @@ export function createFilesClient(base = API_BASE) {
       return readJson<TextFile>(response);
     },
 
-    // Saves a note or meta.yaml edited from `baseMtime` (null: a new file) and
+    // Saves a note or meta file edited from `baseMtime` (null: a new file) and
     // returns the new mtime, or throws FileConflictError.
     async writeFile(path: string, content: string, baseMtime: number | null): Promise<number> {
       const response = await studioFetch(fileUrl(path), {

@@ -24,7 +24,7 @@ const GROUPS = [
 ] as const;
 
 // Asks before a delete, showing its dry run: the files that go, the
-// meta.yaml entries taken out, the images kept because another note uses
+// meta file entries taken out, the images kept because another note uses
 // them, and the notes whose links will break. The delete sends the dry
 // run's base back, so it takes only what was shown; when something changed
 // since, the list is read again and the person asked to look again. With a

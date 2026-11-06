@@ -5,7 +5,7 @@ import { NOTES_DIR } from '@fdbook/shared/asset-types.ts';
 
 const SETTLE_MS = 150;
 
-// The page tree, reloaded when a note or a meta.yaml changes on disk, by
+// The page tree, reloaded when a note or a meta file changes on disk, by
 // the Studio or anything else. A burst of events (a rename touches many
 // files) settles into one reload; loads run one at a time, in order.
 // `reload` tells whether its load set a tree.

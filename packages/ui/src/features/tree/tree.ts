@@ -11,6 +11,14 @@ export function noteOf(node: TreeNode): string | null {
 
 export const titleOf = (node: TreeNode) => (node.kind === 'missing' ? node.value : node.title);
 
+// Every meta file under `folder`: the ones the tree reads and the ones it does not.
+export function metaFilesOf(folder: TreeFolder, files: string[] = []): string[] {
+  if (folder.meta !== null) files.push(folder.meta);
+  if (folder.ignoredMeta !== undefined) files.push(folder.ignoredMeta);
+  for (const child of folder.children) if (child.kind === 'folder') metaFilesOf(child, files);
+  return files;
+}
+
 // The folders from the root down to the node that opens `note`, both ends
 // included; empty when no node opens it.
 export function trailTo(folder: TreeFolder, note: string): TreeNode[] {

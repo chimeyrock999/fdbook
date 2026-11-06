@@ -1,7 +1,7 @@
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 import { z } from 'zod';
 
-// Frontmatter and meta.yaml schemas for content/notes, shared by the site
+// Frontmatter and meta file (meta.json, meta.yaml) schemas for content/notes, shared by the site
 // (source.config.ts) and Notes Studio (studio).
 
 export const graphKeywordSchema = z.object({

@@ -81,7 +81,8 @@ describe('useTree', () => {
 
   it('does not focus a new folder from a load long after the reload that failed', async () => {
     const { files, emit } = fileEvents();
-    const notes: TreeFolder = { ...folder('Notes'), children: [{ ...folder('Guide'), id: 'folder:guide', path: 'guide', entry: 0 }] };
+    // The notes use meta.yaml, so a new folder gets one too.
+    const notes: TreeFolder = { ...folder('Notes'), meta: 'meta.yaml', children: [{ ...folder('Guide'), id: 'folder:guide', path: 'guide', entry: 0 }] };
     const raft: TreeFolder = { ...folder('Raft'), id: 'folder:raft', path: 'raft', meta: 'raft/meta.yaml', entry: 1 };
     const loadTree = vi.fn(() => Promise.resolve(notes));
     const change = vi.fn(() => Promise.resolve({ changes: [{ type: 'add', path: 'raft/meta.yaml' }], open: null, created: 'raft' }));

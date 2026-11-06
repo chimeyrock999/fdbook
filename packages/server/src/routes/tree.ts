@@ -19,7 +19,7 @@ type Body = Record<string, unknown>;
 // `onMoved` which page or folder a rename or move took where (its review
 // threads go with it), both relative to content/notes.
 // Page tree changes go through here, never through the notes sync, which
-// cannot update meta.yaml. `lock` runs one change at a time, each planned
+// cannot update meta files. `lock` runs one change at a time, each planned
 // from the disk it then writes; asset changes (routes/assets.ts) share
 // it, since both write notes.
 export function createTreeApi(root: string, lock = createKeyedLock(), { onDeleted, onMoved }: { onDeleted?: (target: string, notes: string[]) => Promise<void> | void; onMoved?: (from: string, to: string) => Promise<void> | void } = {}): Handler {

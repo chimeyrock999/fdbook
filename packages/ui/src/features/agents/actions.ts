@@ -37,6 +37,6 @@ export function draftPrompt({ path, title, outline, urls }: { path: string; titl
     outline.trim() === '' ? 'Work out its outline from the sources.' : `Follow this outline:\n${outline.trim()}`,
   ];
   if (urls.length > 0) parts.push(`Read these sources:\n${urls.map((url) => `- ${url}`).join('\n')}`);
-  parts.push('Use the mentioned files and attached documents as sources too, if any. If a note is already at that path, stop and say so instead of replacing it. Write it as the other notes are written (read one or two near it first), with its frontmatter (title, description, tags from note_vocabulary). Create it with propose_edit (content), and list it in its folder\'s meta.yaml.');
+  parts.push('Use the mentioned files and attached documents as sources too, if any. If a note is already at that path, stop and say so instead of replacing it. Write it as the other notes are written (read one or two near it first), with its frontmatter (title, description, tags from note_vocabulary). Create it with propose_edit (content), and list it in its folder\'s meta.json or meta.yaml.');
   return parts.join('\n\n');
 }

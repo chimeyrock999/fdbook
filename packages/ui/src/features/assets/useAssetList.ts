@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AssetInfo, AssetsClient } from '#api/assets.ts';
 import type { createFilesClient } from '#api/files.ts';
-import { classifyPath } from '@fdbook/shared/asset-types.ts';
+import { classifyPath, isMetaPath } from '@fdbook/shared/asset-types.ts';
 
 const SETTLE_MS = 300;
 
@@ -34,8 +34,8 @@ export function useAssetList(client: AssetsClient, files: ReturnType<typeof crea
     };
     reloadRef.current = load;
     const unsubscribe = files.subscribeFileEvents((event) => {
-      // A meta.yaml uses nothing; a diagram's own change changes no usage.
-      if (event.path.endsWith('/meta.yaml') || (event.type === 'change' && classifyPath(event.path) === 'diagram')) return;
+      // A meta file uses nothing; a diagram's own change changes no usage.
+      if (isMetaPath(event.path) || (event.type === 'change' && classifyPath(event.path) === 'diagram')) return;
       clearTimeout(timer);
       timer = setTimeout(load, SETTLE_MS);
     });

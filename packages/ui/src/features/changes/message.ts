@@ -1,5 +1,5 @@
 import type { ChangedFile, ChangeStatus } from '#api/changes.ts';
-import { classifyPath } from '@fdbook/shared/asset-types.ts';
+import { classifyPath, isMetaPath } from '@fdbook/shared/asset-types.ts';
 import { NOTES_PREFIX } from '#lib/note-paths.ts';
 import { shortPath } from './labels';
 
@@ -7,7 +7,7 @@ const PREFIX = 'docs(notes): ';
 const VERB: Record<ChangeStatus, string> = { M: 'update', A: 'add', D: 'remove', R: 'rename' };
 
 const isPage = (file: ChangedFile) => file.path.startsWith(NOTES_PREFIX) && file.path.endsWith('.mdx');
-const isMeta = (file: ChangedFile) => file.path.startsWith(NOTES_PREFIX) && file.path.endsWith('/meta.yaml');
+const isMeta = (file: ChangedFile) => file.path.startsWith(NOTES_PREFIX) && isMetaPath(file.path);
 const isDiagram = (file: ChangedFile) => classifyPath(file.path) === 'diagram';
 
 // The folder a file sits in, by name ('notes' at the top of content/notes).
@@ -26,8 +26,8 @@ function slugOf(path: string) {
 const unique = <T>(values: T[]) => [...new Set(values)];
 
 // The commit message the Changes view starts from, for the picked files: what
-// happened to the pages, else to the page order (meta.yaml), else to the
-// diagrams, else to the assets. A page's own meta.yaml and images go without saying.
+// happened to the pages, else to the page order (meta files), else to the
+// diagrams, else to the assets. A page's own meta file and images go without saying.
 export function suggestMessage(files: ChangedFile[]): string {
   const pages = files.filter(isPage);
   if (pages.length === 1) {

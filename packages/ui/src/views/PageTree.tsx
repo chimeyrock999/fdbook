@@ -3,11 +3,12 @@ import { createElement, useEffect, useRef, useState, type DragEvent } from 'reac
 import { useBusy } from '#components/busy.ts';
 import { Spinner } from '#components/PendingButton.tsx';
 import type { DeleteProposalView } from '#api/proposals.ts';
-import type { TreeAnswer, TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '#api/tree.ts';
+import type { Hidden, TreeAnswer, TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequest } from '#api/tree.ts';
 import { CHANGE_NAME, folderMarked, missingStatus, type TreeMarks } from '#features/tree/marks.ts';
 import { DeleteDialog, type DeleteTarget } from '#features/tree/DeleteDialog.tsx';
 import { CreateDialog, RenameDialog } from '#features/tree/TreeDialogs.tsx';
-import { dropIndex, filterTree, folderAt, movable, noteOf, renamedPath, stepIndex, titleOf } from '#features/tree/tree.ts';
+import { dropIndex, filterTree, folderAt, metaFilesOf, movable, noteOf, renamedPath, stepIndex, titleOf } from '#features/tree/tree.ts';
+import { isMetaPath, newMetaNameOf, type MetaName } from '@fdbook/shared/asset-types.ts';
 import { useOpenFolders } from '#features/tree/useOpenFolders.ts';
 
 type Named = Extract<TreeNode, { kind: 'page' | 'folder' }>;
@@ -15,20 +16,19 @@ type Menu = { node: TreeNode; parent: TreeFolder; top: number; left: number };
 type Dialog = { kind: 'create'; parent: TreeFolder; after: number | null } | { kind: 'rename'; node: Named } | { kind: 'delete'; target: DeleteTarget; proposal: DeleteProposalView | null };
 type Drop = { id: string; place: 'before' | 'after' };
 
-const HIDDEN_WHY = {
-  unlisted: 'No meta.yaml lists it, so the site leaves it out of the sidebar.',
-  'visible-false': '`visible: false`: the site leaves it out of the sidebar.',
-};
+// `meta`: what the notes call a meta file (newMetaNameOf), for a folder without one.
+const hiddenWhy = (hidden: Hidden, meta: MetaName) =>
+  hidden === 'unlisted' ? `No ${meta} lists it, so the site leaves it out of the sidebar.` : '`visible: false`: the site leaves it out of the sidebar.';
 
-function lockedWhy(node: TreeNode, parent: TreeFolder) {
-  if ('hidden' in node && node.hidden === 'unlisted') return `${HIDDEN_WHY.unlisted} Add it to ${parent.meta ?? 'meta.yaml'} to order it.`;
-  return `It has no entry of its own in ${parent.meta ?? 'meta.yaml'} (\`...\` or another meta.yaml lists it). Order it there.`;
+function lockedWhy(node: TreeNode, parent: TreeFolder, meta: MetaName) {
+  if ('hidden' in node && node.hidden === 'unlisted') return `${hiddenWhy('unlisted', meta)} Add it to ${parent.meta ?? meta} to order it.`;
+  return `It has no entry of its own in ${parent.meta ?? meta} (\`...\` or another ${meta} lists it). Order it there.`;
 }
 
 function said(changes: TreeChange[]) {
   if (changes.length === 0) return 'Nothing to change.';
   const first = changes[0];
-  if (first.type === 'add' && first.path.endsWith('meta.yaml')) return `Created ${first.path} with the new order.`;
+  if (first.type === 'add' && isMetaPath(first.path)) return `Created ${first.path} with the new order.`;
   if (first.type === 'change') return `Saved the order in ${first.path}.`;
   return 'Saved.';
 }
@@ -48,6 +48,7 @@ type View = {
   onDrop: (event: DragEvent, node: TreeNode, parent: TreeFolder) => void;
   openMenu: (menu: Menu) => void;
   readOnly: boolean;
+  metaName: MetaName;
   marks: TreeMarks | null;
   suggested: ReadonlyMap<string, number> | null;
   deleting: ReadonlyMap<string, DeleteProposalView> | null;
@@ -64,7 +65,7 @@ type View = {
 const iconOf = (name: string | null): LucideIcon | undefined => (name === null ? undefined : (icons as Partial<Record<string, LucideIcon>>)[name]);
 
 function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; dim: boolean; view: View }) {
-  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu, readOnly, marks, suggested, deleting, busy, changing } = view;
+  const { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu, readOnly, metaName, marks, suggested, deleting, busy, changing } = view;
   const hidden = 'hidden' in node ? node.hidden : null;
   const note = noteOf(node);
   const open = node.kind === 'folder' && (filtering || isOpen(node));
@@ -125,8 +126,13 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
           </button>
         )}
         {hidden && (
-          <span className="studio-tree-badge" title={HIDDEN_WHY[hidden]}>
+          <span className="studio-tree-badge" title={hiddenWhy(hidden, metaName)}>
             <EyeOff size={11} /> hidden
+          </span>
+        )}
+        {node.kind === 'folder' && node.ignoredMeta !== undefined && (
+          <span className="studio-tree-badge" title={`It has ${node.meta ?? ''} and ${node.ignoredMeta}: the site reads one of them, which one depends on file order. The Studio reads ${node.meta ?? ''}: merge them into one.`}>
+            <TriangleAlert size={11} /> 2 meta files
           </span>
         )}
         {dot && <span className="studio-tree-dot" title="Changes inside" />}
@@ -138,7 +144,7 @@ function Row({ node, parent, dim, view }: { node: TreeNode; parent: TreeFolder; 
         {canMove ? (
           <span className="studio-tree-grip" aria-hidden="true"><GripVertical size={13} /></span>
         ) : !readOnly && node.entry === null && hidden !== 'unlisted' && node.kind !== 'missing' ? (
-          <span className="studio-tree-grip" title={lockedWhy(node, parent)}><Lock size={12} /></span>
+          <span className="studio-tree-grip" title={lockedWhy(node, parent, metaName)}><Lock size={12} /></span>
         ) : null}
         {!readOnly && (
           <button
@@ -169,7 +175,7 @@ function Items({ folder, nested = false, dim, view }: { folder: TreeFolder; nest
   );
 }
 
-// The notes as the site's sidebar shows them, from meta.yaml, plus what the
+// The notes as the site's sidebar shows them, from their meta files, plus what the
 // site hides. Pages can be created, renamed, reordered, hidden and shown here; every change
 // goes through /api/tree. `active` and paths are relative to content/notes.
 // `readOnly` (main) shows the tree only: no new page, row menu or drag.
@@ -263,6 +269,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
 
   if (!root) return <p className="px-3 py-2 text-[12.5px] text-[var(--fde-muted-foreground)]">Loading notes…</p>;
   const shown = filterTree(root, query);
+  const metaName = newMetaNameOf(metaFilesOf(root));
   const filtering = query.trim() !== '';
 
   const onDragOver = (event: DragEvent, node: TreeNode, parent: TreeFolder) => {
@@ -280,14 +287,14 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
     setDrop(null);
   };
 
-  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu, readOnly, marks, suggested, deleting, busy: action.busy, changing: action.running };
+  const view: View = { active, filtering, isOpen, toggle, onOpen, dragging, drop, setDragging, setDrop, onDragOver, onDrop, openMenu: setMenu, readOnly, metaName, marks, suggested, deleting, busy: action.busy, changing: action.running };
   const menuNode = menu?.node ?? null;
   const movesUnsaved =
     unsaved !== null && (menuNode?.kind === 'page' || menuNode?.kind === 'folder') && renamedPath(unsaved, menuNode.path, menuNode.path) !== null;
   // Hiding or showing a page writes its frontmatter; a folder's only its
-  // meta.yaml. An unlisted page counts too: it may also say visible: false.
+  // meta file. An unlisted page counts too: it may also say visible: false.
   const writesUnsaved = movesUnsaved && menuNode.kind === 'page';
-  // A folder's own page when no row of its own shows it (its meta.yaml does
+  // A folder's own page when no row of its own shows it (its meta file does
   // not list `index`): the folder's menu deletes it alone.
   const ownIndex = menuNode?.kind === 'folder' && menuNode.index !== null && !menuNode.children.some((child) => child.kind === 'page' && child.path === menuNode.index) ? menuNode.index : null;
   return (
@@ -369,12 +376,12 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
                 onClick={() => {
                   const defaultOpen = !menuNode.defaultOpen;
                   send(menuNode, { op: 'set-open', folder: menuNode.path, defaultOpen, baseMtime: menuNode.metaMtime }, (changes) =>
-                    changes.length === 0 ? 'Nothing to change.' : `Saved defaultOpen: ${String(defaultOpen)} in ${menuNode.meta ?? 'meta.yaml'}.`);
+                    changes.length === 0 ? 'Nothing to change.' : `Saved defaultOpen: ${String(defaultOpen)} in ${menuNode.meta ?? metaName}.`);
                 }}
               >
                 <span className="studio-menu-check">{menuNode.defaultOpen && <Check size={14} />}</span> Open by default on the site
               </button>
-              {menuNode.meta === null && <p className="studio-menu-hint">No meta.yaml: order the folder first, or add one.</p>}
+              {menuNode.meta === null && <p className="studio-menu-hint">No {metaName}: order the folder first, or add one.</p>}
             </>
           )}
           <hr />
@@ -384,7 +391,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
           <button type="button" role="menuitem" disabled={filtering || stepIndex(menu.parent, menuNode, 1) === null} onClick={() => { move(menu.parent, menuNode, stepIndex(menu.parent, menuNode, 1)); }}>
             <ArrowDown size={14} /> Move down
           </button>
-          {!movable(menuNode) && menuNode.kind !== 'missing' && <p className="studio-menu-hint">{lockedWhy(menuNode, menu.parent)}</p>}
+          {!movable(menuNode) && menuNode.kind !== 'missing' && <p className="studio-menu-hint">{lockedWhy(menuNode, menu.parent, metaName)}</p>}
           {filtering && <p className="studio-menu-hint">Clear the filter to reorder.</p>}
           {(menuNode.kind === 'page' || menuNode.kind === 'folder') && (
             <>
@@ -424,6 +431,7 @@ export function PageTree({ root, client, active, unsaved = null, readOnly = fals
           client={client}
           parent={dialog.parent}
           after={dialog.after}
+          metaName={metaName}
           onClose={() => { setDialog(null); }}
           onDone={(created) => {
             openFolder(dialog.parent);

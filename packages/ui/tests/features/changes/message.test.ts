@@ -20,6 +20,8 @@ describe('suggestMessage', () => {
     ['new pages in one folder', [note('streaming/a.mdx', 'A'), note('streaming/b.mdx', 'A')], 'docs(notes): add streaming (2 pages)'],
     ['pages in several folders', [note('streaming/a.mdx', 'M'), note('database/b.mdx', 'A'), note('c.mdx', 'D')], 'docs(notes): update 3 pages'],
     ['only meta.yaml', [note('streaming/meta.yaml', 'M'), note('meta.yaml', 'M')], 'docs(notes): reorder streaming, notes'],
+    ['only meta.json', [note('streaming/meta.json', 'M'), note('meta.json', 'M')], 'docs(notes): reorder streaming, notes'],
+    ['one new page and its meta.json', [note('streaming/sinks.mdx', 'A'), note('streaming/meta.json', 'M')], 'docs(notes): add sinks'],
     ['only assets', [asset('streaming/a.png'), asset('streaming/b.svg', 'M')], 'docs(notes): update assets of streaming'],
     ['a page with its images', [note('streaming/a.mdx', 'M'), asset('streaming/a.png')], 'docs(notes): update a'],
     ['one diagram', [diagram('spark/flow')], 'docs(notes): update diagram flow'],
