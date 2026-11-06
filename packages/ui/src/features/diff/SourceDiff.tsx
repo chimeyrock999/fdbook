@@ -1,3 +1,4 @@
+import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
 import { yaml, yamlFrontmatter } from '@codemirror/lang-yaml';
 import { syntaxHighlighting } from '@codemirror/language';
@@ -12,10 +13,11 @@ export const SPLIT_MIN_WIDTH = 720;
 const COLLAPSE = { margin: 3, minSize: 4 };
 
 // The language a file is read in: a note's MDX with its frontmatter, a
-// meta.yaml as YAML, anything else (an SVG) as plain text.
+// meta file as JSON or YAML, anything else (an SVG) as plain text.
 function languageOf(path: string): Extension[] {
   if (path.endsWith('.mdx')) return [yamlFrontmatter({ content: markdown() })];
   if (path.endsWith('.yaml')) return [yaml()];
+  if (path.endsWith('.json')) return [json()];
   return [];
 }
 

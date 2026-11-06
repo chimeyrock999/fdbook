@@ -16,8 +16,10 @@ export type TreeFolder = Base & {
   path: string;
   meta: string | null;
   metaMtime: number | null;
+  // A meta.yaml next to the meta.json the tree reads (see @fdbook/shared api/tree.ts).
+  ignoredMeta?: string;
   index: string | null;
-  // meta.yaml's `defaultOpen`: whether the site's sidebar starts it open.
+  // The meta file's `defaultOpen`: whether the site's sidebar starts it open.
   defaultOpen: boolean;
   // The lucide icon name the site's sidebar shows (see iconOf in build.ts).
   icon: string | null;
@@ -38,8 +40,8 @@ export type TreeChange =
   // Left where it is: a page's images in public/notes (a worktree path).
   | { type: 'keep'; path: string; detail: string };
 
-// A page `x.mdx`, a folder page `x/index.mdx` with `x/meta.yaml`, or a
-// folder with only `x/meta.yaml`.
+// A page `x.mdx`, a folder page `x/index.mdx` with a meta file
+// (`x/meta.json` or `x/meta.yaml`), or a folder with only the meta file.
 export type CreateKind = 'page' | 'folder-page' | 'plain-folder';
 
 export type TreeRequest =
@@ -47,7 +49,7 @@ export type TreeRequest =
   | { op: 'rename'; path: string; slug: string }
   | { op: 'move'; folder: string; from: number; to: number; baseMtime: number | null }
   | { op: 'set-open'; folder: string; defaultOpen: boolean; baseMtime: number | null }
-  // `visible: false` in the page's frontmatter or the folder's meta.yaml, or out again.
+  // `visible: false` in the page's frontmatter or the folder's meta file, or out again.
   | { op: 'visibility'; path: string; visible: boolean }
   // A page `x.mdx`, folder page `x/index.mdx` or folder `x`; `base` from its dry run.
   | { op: 'delete'; path: string; base?: string };

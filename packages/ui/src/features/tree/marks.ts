@@ -6,7 +6,7 @@ export const CHANGE_NAME: Record<ChangeStatus, string> = { M: 'Modified', A: 'Ad
 
 // What the page tree marks, by path relative to content/notes: each changed
 // note's status (a renamed note's old path counts as deleted), every folder
-// that holds a change, and the folders whose meta.yaml changed.
+// that holds a change, and the folders whose meta file changed.
 export type TreeMarks = { notes: Map<string, ChangeStatus>; folders: Set<string>; metas: Set<string> };
 
 const inNotes = (path: string) => (path.startsWith(NOTES_PREFIX) ? path.slice(NOTES_PREFIX.length) : null);
@@ -29,11 +29,11 @@ export function treeMarks(files: ChangedFile[]): TreeMarks {
 }
 
 // A folder gets a dot when it is closed over a change, or when its own
-// meta.yaml changed: that file has no row of its own.
+// meta file changed: that file has no row of its own.
 export const folderMarked = (marks: TreeMarks, folder: TreeFolder, open: boolean) =>
   marks.metas.has(folder.path) || (!open && marks.folders.has(folder.path));
 
-// A meta.yaml entry that reaches nothing because its page was deleted.
+// A meta file entry that reaches nothing because its page was deleted.
 export function missingStatus(marks: TreeMarks, node: TreeMissing): ChangeStatus | null {
   const dir = dirOf(node.meta);
   const base = dir === '' ? node.value : `${dir}/${node.value}`;

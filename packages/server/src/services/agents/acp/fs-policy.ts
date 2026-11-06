@@ -11,7 +11,7 @@ import { worktreePathOf as insideOf } from './worktree.ts';
 // - Read: any file there, but nothing under a hidden folder or file (.git,
 //   .env) and nothing a symlink takes outside.
 // - Write: what the Studio itself may edit (the path policy): notes,
-//   meta.yaml, SVG and HTML assets, as text.
+//   meta files (meta.json, meta.yaml), SVG and HTML assets, as text.
 
 const READ_MAX_BYTES = 2 * 1024 * 1024;
 const WRITE_MAX_BYTES = 2 * 1024 * 1024;
@@ -43,7 +43,7 @@ export async function readForAgent(root: string, path: string, line?: number | n
 export async function writeForAgent(root: string, path: string, content: string, beforeWrite?: (path: string, previous: Buffer | null) => void) {
   const worktreePath = insideOf(root, path) ?? insideOf(await realpath(root), path);
   if (worktreePath === null || !isTextPath(worktreePath)) {
-    throw refuse(`the Studio lets agents write only notes, meta.yaml and SVG or HTML assets in this change request: ${path}`);
+    throw refuse(`the Studio lets agents write only notes, meta.json or meta.yaml and SVG or HTML assets in this change request: ${path}`);
   }
   const resolved = resolveWorktreePath(root, worktreePath);
   if (resolved === null) throw refuse(`${worktreePath} goes through a symlink or is not a file`);

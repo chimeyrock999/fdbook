@@ -25,7 +25,7 @@ function store(value: Choices) {
 }
 
 // Which folders are open: the reader's own choice, kept in localStorage,
-// else closed. meta.yaml's `defaultOpen` is for the site's sidebar and is not
+// else closed. The meta file's `defaultOpen` is for the site's sidebar and is not
 // read here: most folders set it, and the whole tree would open at once. The
 // folders on the way to a note open when it becomes the open note, once, so
 // the reader can still close them.

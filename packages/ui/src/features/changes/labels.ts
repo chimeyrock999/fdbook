@@ -1,13 +1,11 @@
 import type { ChangedFile } from '#api/changes.ts';
 import type { TreeFolder } from '#api/tree.ts';
-import { ASSETS_DIR, DIAGRAM_SUFFIX, DIAGRAMS_DIR, NOTES_DIR } from '@fdbook/shared/asset-types.ts';
+import { ASSETS_DIR, DIAGRAM_SUFFIX, DIAGRAMS_DIR, isMetaPath, NOTES_DIR } from '@fdbook/shared/asset-types.ts';
 import { NOTES_PREFIX } from '#lib/note-paths.ts';
 import { noteOf } from '#features/tree/tree.ts';
 
-const META = 'meta.yaml';
-
 // Titles from the page tree, by worktree path: each note's, and each
-// folder's under its meta.yaml path.
+// folder's under its meta file's path.
 export function titlesOf(root: TreeFolder | null): Map<string, string> {
   const titles = new Map<string, string>();
   const walk = (folder: TreeFolder) => {
@@ -25,12 +23,12 @@ export function titlesOf(root: TreeFolder | null): Map<string, string> {
 const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
 // What a changed file is called in the Changes view: a note by its title, a
-// meta.yaml as its folder's page order, a diagram by its name, an asset (or
+// meta file as its folder's page order, a diagram by its name, an asset (or
 // a note the tree no longer has) by its file name.
 export function labelOf(file: ChangedFile, titles: Map<string, string>) {
   const title = titles.get(file.path);
-  if (file.path.endsWith(`/${META}`)) {
-    const dir = file.path.slice(0, -META.length - 1);
+  if (isMetaPath(file.path)) {
+    const dir = file.path.slice(0, file.path.lastIndexOf('/'));
     return `Page order of ${title ?? nameOf(dir)}`;
   }
   if (title !== undefined) return title;

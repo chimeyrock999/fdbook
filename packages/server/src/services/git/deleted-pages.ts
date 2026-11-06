@@ -5,8 +5,9 @@ import { parse } from 'yaml';
 import { findBlock } from '@fdbook/shared/frontmatter-block.ts';
 import { statOrNull } from '#services/files/store.ts';
 import { HttpError } from '#infra/http.ts';
-import { classifyPath, NOTES_DIR } from '#infra/security/paths.ts';
-import { insertEntry, keepEntries, MetaEditError, readPages } from '#services/tree/meta-edit.ts';
+import { classifyPath, META_FILES, NOTES_DIR } from '#infra/security/paths.ts';
+import { MetaEditError } from '#services/tree/meta-edit.ts';
+import { metaEditor } from '#services/tree/meta-file.ts';
 import { applyPlan, type Plan } from '#services/tree/ops.ts';
 import { checked, readBlob } from './diff.ts';
 import { assertWorktreeTop, runGit } from './git.ts';
@@ -14,7 +15,7 @@ import { checkVersion, logPage, versionIn } from './page-history.ts';
 
 // Pages deleted on HEAD (#114), and bringing one back into the change
 // request: the page as a version of it held it, the folders deleted with it,
-// and its entry in the folder's meta.yaml.
+// and its entry in the folder's meta file.
 
 // A page the worktree no longer has, with the commit that deleted it.
 // `folderGone`: its folder went too. `committed: false`: a delete not
@@ -115,7 +116,18 @@ export async function loadDeletedPages(root: string): Promise<{ pages: DeletedPa
 // The text of `path` in commit `ref`, or null when it has none there.
 const textAt = (root: string, ref: string, path: string) => readBlob(root, ref, path).then((data) => data.toString('utf8'), () => null);
 
-// The entry a meta.yaml lists a page or folder by: `slug`, also as `!slug`
+// The meta file (relative to content/notes) and its text of `folder` in
+// commit `ref`: its meta.json, else its meta.yaml; null when it has neither.
+async function metaAt(root: string, ref: string, folder: string) {
+  for (const name of META_FILES) {
+    const path = folder === '' ? name : `${folder}/${name}`;
+    const text = await textAt(root, ref, `${PREFIX}${path}`);
+    if (text !== null) return { path, text };
+  }
+  return null;
+}
+
+// The entry a meta file lists a page or folder by: `slug`, also as `!slug`
 // or `...slug`; null for a separator, a link or `...`.
 function slugOfEntry(value: unknown) {
   if (typeof value !== 'string' || value.startsWith('---') || value.startsWith('[')) return null;
@@ -145,7 +157,7 @@ function metaError<T>(task: () => T): T {
   }
 }
 
-// Whether the meta.yaml above showed `slug` before the delete: it listed
+// Whether the meta file above showed `slug` before the delete: it listed
 // it, showed every page by itself (`...`), had no `pages` list, or there
 // was none. One that listed others but not this one kept it out of the
 // sidebar, and the restore keeps it out too.
@@ -153,12 +165,24 @@ export function wasShown(before: unknown[] | null, slug: string) {
   return before === null || before.some((item) => item === '...' || item === 'z...a' || slugOfEntry(item) === slug);
 }
 
+// The meta file `folder` has in the worktree: its meta.json, else its
+// meta.yaml; null when it has neither.
+async function metaNow(root: string, folder: string) {
+  for (const name of META_FILES) {
+    const path = folder === '' ? name : `${folder}/${name}`;
+    const absolute = checked(root, `${PREFIX}${path}`);
+    const info = await statOrNull(absolute);
+    if (info?.isFile()) return { path, absolute, mtimeMs: info.mtimeMs };
+  }
+  return null;
+}
+
 // Plans bringing back page `path` as version `sha` held it. Folders deleted
 // with it come back too, as the commit before the delete held them: each
-// one's index.mdx, and its meta.yaml listing only what comes back (`index`
+// one's index.mdx, and its meta file listing only what comes back (`index`
 // too, when it listed its folder page: a listed index is a child of the
 // folder, not the folder's own page). The topmost thing restored (the page,
-// or its topmost folder) goes back into the meta.yaml of the folder above,
+// or its topmost folder) goes back into the meta file of the folder above,
 // where it was, unless that list shows everything by itself (`...`) or did
 // not list it before the delete.
 async function planRestore(root: string, path: string, sha: string): Promise<Plan & { open: string }> {
@@ -185,13 +209,13 @@ async function planRestore(root: string, path: string, sha: string): Promise<Pla
     const folderPage = `${folder}/index.mdx`;
     const page = folderPage === notePath ? null : await textAt(root, before, `${PREFIX}${folderPage}`);
     const kept = new Set([child, ...(page !== null || folderPage === notePath ? ['index'] : [])]);
-    const meta = await textAt(root, before, `${PREFIX}${folder}/meta.yaml`);
+    const meta = await metaAt(root, before, folder);
     if (meta !== null) {
-      const content = metaError(() => keepEntries(meta, (value) => {
+      const content = metaError(() => metaEditor(meta.path).keepEntries(meta.text, (value) => {
         const entry = slugOfEntry(value);
         return entry === null || kept.has(entry);
       }));
-      writes.push({ path: `${folder}/meta.yaml`, content, baseMtime: null });
+      writes.push({ path: meta.path, content, baseMtime: null });
     }
     if (page !== null) writes.push({ path: folderPage, content: page, baseMtime: null });
   }
@@ -200,19 +224,18 @@ async function planRestore(root: string, path: string, sha: string): Promise<Pla
   const parent = missing === 0 ? '' : folders[missing - 1];
   const top = missing < folders.length ? folders[missing].slice(parent === '' ? 0 : parent.length + 1) : slug === 'index' ? null : slug;
   const changes: Plan['changes'] = writes.map((write) => ({ type: 'add', path: write.path }));
-  const metaPath = parent === '' ? 'meta.yaml' : `${parent}/meta.yaml`;
-  const absolute = checked(root, `${PREFIX}${metaPath}`);
-  const current = top === null ? null : await statOrNull(absolute);
-  if (top !== null && current?.isFile()) {
-    const text = await readFile(absolute, 'utf8');
-    const pages = metaError(() => readPages(text));
-    const then = await textAt(root, before, `${PREFIX}${metaPath}`);
-    const old = then === null ? null : metaError(() => readPages(then));
+  const current = top === null ? null : await metaNow(root, parent);
+  if (top !== null && current !== null) {
+    const edit = metaEditor(current.path);
+    const text = await readFile(current.absolute, 'utf8');
+    const pages = metaError(() => edit.readPages(text));
+    const then = await metaAt(root, before, parent);
+    const old = then === null ? null : metaError(() => metaEditor(then.path).readPages(then.text));
     if (pages && wasShown(old, top) && !pages.some((item) => item === '...' || item === 'z...a') && !pages.some((item) => slugOfEntry(item) === top)) {
-      const content = metaError(() => insertEntry(text, top, placeOf(pages, old, top)));
+      const content = metaError(() => edit.insertEntry(text, top, placeOf(pages, old, top)));
       if (content !== null) {
-        writes.push({ path: metaPath, content, baseMtime: current.mtimeMs });
-        changes.push({ type: 'change', path: metaPath, detail: `adds "${top}"` });
+        writes.push({ path: current.path, content, baseMtime: current.mtimeMs });
+        changes.push({ type: 'change', path: current.path, detail: `adds "${top}"` });
       }
     }
   }

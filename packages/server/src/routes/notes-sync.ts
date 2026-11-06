@@ -31,7 +31,7 @@ export function createNotesSync(root: string, hosts: string[], { readOnly = fals
     return resolved?.kind === 'note' ? resolved.absolute : null;
   };
   // Writes only to notes that already exist. Its tree `create` would add a
-  // page without touching meta.yaml, so new pages go through the file API
+  // page without touching the meta file, so new pages go through the file API
   // (#11). `mkdir` is refused by this scope too: since core 0.4.2 it also
   // needs write access to the folder's meta.json, which is not a note.
   const writable = (path: string) => {
@@ -41,7 +41,7 @@ export function createNotesSync(root: string, hosts: string[], { readOnly = fals
   const server = createSyncServer({
     // Its tree `delete` is the only caller of `storage.delete`, and the scope
     // cannot tell it from a save on the same path: refused here, since it
-    // would leave meta.yaml as it was. Pages and folders are deleted through
+    // would leave the meta file as it was. Pages and folders are deleted through
     // the file API (#171).
     storage: { ...fsStorage(join(root, NOTES_DIR)), delete: (path) => Promise.reject(new Error(`delete denied: ${path}`)) },
     // The upgrade already passed the guard; checking again here keeps the

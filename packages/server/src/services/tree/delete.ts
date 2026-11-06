@@ -9,14 +9,14 @@ import { parseNote } from '#services/lint/lint.ts';
 import { pageUrl, resolveHref } from '#services/lint/rules/links.ts';
 import { ASSETS_DIR, NOTES_DIR, resolveWorktreePath } from '#infra/security/paths.ts';
 import { entryReaches, loadTree, notesIndex } from './build.ts';
-import { keepEntries, readPages } from './meta-edit.ts';
+import { metaEditor } from './meta-file.ts';
 import { applyPlan, dirOf, findNode, metaError, type Plan, type TreeChange } from './ops.ts';
 import { CHANGED_SINCE, type TreeFolder } from '@fdbook/shared/tree.ts';
 
 // Deleting a page (`x.mdx`), a folder page (`x/index.mdx`) or a folder (`x`,
 // with every page in it) from the tree. Like the other tree changes it is
 // planned first, so a dry run can show it: the files that go, the
-// meta.yaml entries that name them, the page's images under public/notes
+// meta file entries that name them, the page's images under public/notes
 // (deleted when no other note uses them, kept otherwise) and the notes that
 // still link to what goes. The dry run's `base` names every file it read at
 // the mtime it read it; the delete sends it back and is refused (409) when
@@ -43,7 +43,7 @@ function targetOf(root: string, tree: TreeFolder, path: unknown): Target {
     throw new HttpError(403, `not an editable path: ${NOTES_DIR}/${path}`);
   }
   if (path.endsWith('/index.mdx')) {
-    // Its folder's own page, or, when the folder's meta.yaml lists `index`, a child of it.
+    // Its folder's own page, or, when the folder's meta file lists `index`, a child of it.
     const folder = findNode(tree, (node) => node.kind === 'folder' && node.path === dirOf(path));
     if (folder?.kind === 'folder' && (folder.index === path || folder.children.some((child) => child.kind === 'page' && child.path === path))) return { kind: 'folder-page', path };
   } else if (path.endsWith('.mdx')) {
@@ -54,7 +54,7 @@ function targetOf(root: string, tree: TreeFolder, path: unknown): Target {
   throw new HttpError(404, `no such page or folder: ${NOTES_DIR}/${path}`);
 }
 
-// Whether a delete takes out the entry of the meta.yaml in `dir`: it
+// Whether a delete takes out the entry of the meta file in `dir`: it
 // reached a folder or page before (`before`) and reaches none once the
 // delete is done (`after`). An entry `x` for a page `x.mdx` next to a folder
 // `x/` keeps reaching the folder, so it stays; one that reached nothing
@@ -143,10 +143,11 @@ export async function planDelete(root: string, tree: TreeFolder, request: { path
     const path = notesPath(file.path);
     if (file.kind === 'meta') {
       const dir = dirOf(path);
-      const listed = metaError(() => readPages(content)) ?? [];
+      const edit = metaEditor(path);
+      const listed = metaError(() => edit.readPages(content)) ?? [];
       const removed = listed.filter((value) => goesWith(before, after, dir, value));
       if (removed.length === 0) continue;
-      writes.push({ path, content: metaError(() => keepEntries(content, (value) => !goesWith(before, after, dir, value))), baseMtime: file.mtimeMs });
+      writes.push({ path, content: metaError(() => edit.keepEntries(content, (value) => !goesWith(before, after, dir, value))), baseMtime: file.mtimeMs });
       changes.push({ type: 'change', path, detail: `removes ${removed.map((value) => `"${String(value)}"`).join(', ')}` });
       continue;
     }

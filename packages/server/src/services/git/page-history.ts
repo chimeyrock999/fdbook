@@ -60,7 +60,7 @@ export function parsePageLog(output: string): LoggedVersion[] {
 // The versions of a log, without the deletes.
 const versionsOf = (logged: LoggedVersion[]) => logged.filter((version): version is LoggedVersion & { status: PageVersion['status'] } => version.status !== 'D');
 
-// A note or an asset the path policy allows; a meta.yaml has no history.
+// A note or an asset the path policy allows; a meta file has no history.
 function historyPath(root: string, path: string) {
   const kind = classifyPath(path);
   if (kind !== 'note' && kind !== 'asset') throw new HttpError(403, `no history for ${path}: only pages and assets have one`);

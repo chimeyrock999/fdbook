@@ -5,7 +5,7 @@ import type { CreateKind, TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequ
 import { Dialog } from '#components/Dialog.tsx';
 import { slugify } from '@fdbook/shared/slug.ts';
 import { renamedPath, slugOf } from './tree';
-import { BASE_URL } from '@fdbook/shared/asset-types.ts';
+import { BASE_URL, type MetaName } from '@fdbook/shared/asset-types.ts';
 
 const PREVIEW_MS = 200;
 
@@ -72,19 +72,21 @@ function Preview({ preview }: { preview: ReturnType<typeof usePreview> }) {
   );
 }
 
-const KINDS: { kind: CreateKind; label: string; file: (slug: string) => string; title: string }[] = [
+const KINDS: { kind: CreateKind; label: string; file: (slug: string, meta: MetaName) => string; title: string }[] = [
   { kind: 'page', label: 'Page', file: (slug) => `${slug}.mdx`, title: 'New page in' },
   { kind: 'folder-page', label: 'Folder page', file: (slug) => `${slug}/index.mdx`, title: 'New folder page in' },
-  { kind: 'plain-folder', label: 'Folder', file: (slug) => `${slug}/meta.yaml`, title: 'New folder in' },
+  { kind: 'plain-folder', label: 'Folder', file: (slug, meta) => `${slug}/${meta}`, title: 'New folder in' },
 ];
 
 // A new page, folder page or plain folder in `parent`, after entry `after`.
 // `onDone` gets the note to open, or the new folder's path when the new node
-// is a plain folder.
-export function CreateDialog({ client, parent, after, onDone, onClose }: {
+// is a plain folder. `metaName`: the meta file a new folder gets (the server
+// decides; this only shows it).
+export function CreateDialog({ client, parent, after, metaName = 'meta.json', onDone, onClose }: {
   client: TreeClient;
   parent: TreeFolder;
   after: number | null;
+  metaName?: MetaName;
   onDone: (created: { open: string } | { folder: string }) => void;
   onClose: () => void;
 }) {
@@ -129,7 +131,7 @@ export function CreateDialog({ client, parent, after, onDone, onClose }: {
         {KINDS.map((each) => (
           <label key={each.kind}>
             <input type="radio" name="kind" checked={kind === each.kind} onChange={() => { setKind(each.kind); }} />
-            {each.label} <small>{each.file(finalSlug || 'slug')}</small>
+            {each.label} <small>{each.file(finalSlug || 'slug', metaName)}</small>
           </label>
         ))}
       </fieldset>
@@ -138,7 +140,7 @@ export function CreateDialog({ client, parent, after, onDone, onClose }: {
           <input type="checkbox" checked={defaultOpen} onChange={(event) => { setDefaultOpen(event.target.checked); }} />
           <span>
             Open by default on the site
-            <small>Writes <code>defaultOpen</code> in its meta.yaml. Change it later from the folder’s ⋯ menu.</small>
+            <small>Writes <code>defaultOpen</code> in its {metaName}. Change it later from the folder’s ⋯ menu.</small>
           </span>
         </label>
       )}

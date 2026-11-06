@@ -24,6 +24,7 @@ describe('note helpers', () => {
     expect(syncPath('content/docs/streaming/index.mdx')).toBe('streaming/index.mdx');
     expect(noteFromUrl('?path=content%2Fdocs%2Fa.mdx')).toBe('content/docs/a.mdx');
     expect(noteFromUrl('?path=content/docs/meta.yaml')).toBeNull();
+    expect(noteFromUrl('?path=content/docs/meta.json')).toBeNull();
     expect(noteFromUrl('?path=package.json')).toBeNull();
     expect(noteFromUrl('')).toBeNull();
   });
@@ -59,6 +60,7 @@ describe('note helpers', () => {
 
   it('reads a diff to open: ?diff= for any file the Studio touches, &from= for its old name', () => {
     expect(pageFromUrl('?diff=content%2Fdocs%2Fa%2Fmeta.yaml')).toEqual({ kind: 'diff', path: 'content/docs/a/meta.yaml' });
+    expect(pageFromUrl('?diff=content%2Fdocs%2Fa%2Fmeta.json')).toEqual({ kind: 'diff', path: 'content/docs/a/meta.json' });
     expect(pageFromUrl('?diff=public/docs/a.png')).toEqual({ kind: 'diff', path: 'public/docs/a.png' });
     expect(pageFromUrl('?diff=content/docs/b.mdx&from=content/docs/a.mdx')).toEqual({ kind: 'diff', path: 'content/docs/b.mdx', from: 'content/docs/a.mdx' });
     // An old name the Studio would not touch is left out, not followed.
@@ -110,6 +112,7 @@ describe('note helpers', () => {
     expect(previewRoute({ kind: 'diff', path: 'public/docs/a/flow.svg' }, there)).toBe('/docs/a/flow.svg');
     // A meta.yaml has no page, and a deleted file is no longer served.
     expect(previewRoute({ kind: 'diff', path: 'content/docs/streaming/meta.yaml' }, there)).toBe('/docs');
+    expect(previewRoute({ kind: 'diff', path: 'content/docs/streaming/meta.json' }, there)).toBe('/docs');
     expect(previewRoute({ kind: 'diff', path: 'content/docs/gone.mdx' }, there)).toBe('/docs');
     expect(previewRoute({ kind: 'diff', path: 'public/docs/gone.png' }, there)).toBe('/docs');
   });

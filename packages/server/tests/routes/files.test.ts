@@ -97,6 +97,16 @@ describe('file API', () => {
     it('refuses a request without a path', async () => {
       expect((await rawRequest(`${studio.url}api/file`)).status).toBe(400);
     });
+
+    it('saves, reads and lists a meta.json like a meta.yaml', async () => {
+      const path = 'content/docs/json-folder/meta.json';
+      const content = '{ "title": "Json folder", "pages": [] }\n';
+      expect((await put(path, { content, baseMtime: null })).status).toBe(200);
+      expect((await read(path)).content).toBe(content);
+      const { files } = json(await rawRequest(`${studio.url}api/files`)) as { files: { path: string; kind: string }[] };
+      expect(files.find((file) => file.path === path)).toMatchObject({ kind: 'meta' });
+      await rm(join(studio.root, 'content/docs/json-folder'), { recursive: true });
+    });
   });
 
   describe('writes and mtime conflicts', () => {

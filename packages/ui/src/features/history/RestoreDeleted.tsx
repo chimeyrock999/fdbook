@@ -7,7 +7,7 @@ import { shortVersion } from './versions';
 
 // Asks before a deleted page comes back as version `sha`, listing every
 // file the restore writes (a dry run): the page, the folders deleted with
-// it, and the meta.yaml that lists it again. Nothing is committed.
+// it, and the meta file that lists it again. Nothing is committed.
 // `onDone` hears the restore; `onCancel` closes the question.
 export function RestoreDeleted({ client, path, sha, title, onDone, onCancel }: {
   client: HistoryClient;

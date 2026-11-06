@@ -226,7 +226,15 @@ takes up to 320px.
 
 The Notes view shows the notes as the site's sidebar does: the same order,
 separators (`---Label---`), links, nested entries (`a/b`), `...`, `z...a`,
-`...folder` and `!slug`. On top of that the tree shows:
+`...folder` and `!slug`. A folder's order and title come from its
+`meta.json` or `meta.yaml`, the two formats fumadocs reads; what this page
+says of `meta.yaml` holds for either, and a change keeps the format, key
+order and indentation of the file it edits. A folder that gets a new meta
+file gets the format the notes already use: `meta.yaml` when they have
+some and no `meta.json`, else `meta.json`, fumadocs' default. A folder
+with both is marked **2 meta files**: the site reads one of them,
+depending on file order, and the Studio reads the `meta.json`. On top of
+that the tree shows:
 
 - **hidden**: pages and folders the site leaves out of its sidebar. Those
   no `meta.yaml` lists come after the listed ones in their folder; those

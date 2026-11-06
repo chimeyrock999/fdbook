@@ -58,6 +58,22 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('PageTree', () => {
+  it('speaks of meta.json in notes that use it, and marks a folder that has both files', async () => {
+    const json: TreeFolder = {
+      ...root, meta: 'meta.json', children: [
+        { ...root, id: 'folder:both', path: 'both', title: 'Both', meta: 'both/meta.json', ignoredMeta: 'both/meta.yaml', entry: 0, children: [] },
+        { ...root, id: 'folder:bare', path: 'bare', title: 'Bare', meta: null, entry: 1, children: [] },
+      ],
+    };
+    const { client } = fakeClient(() => ({ changes: [], open: null }));
+    render(<PageTree root={json} client={client} active={null} onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={loaded()} />);
+    expect(screen.getByText('2 meta files').closest('[title]')?.getAttribute('title')).toContain('both/meta.json and both/meta.yaml');
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Bare' }));
+    expect(screen.getByRole('menu').textContent).toContain('No meta.json');
+    await userEvent.click(screen.getByRole('button', { name: 'New page' }));
+    expect(within(screen.getByRole('dialog')).getByRole('radio', { name: /slug\/meta\.json/ })).toBeTruthy();
+  });
+
   it('shows the tree in meta.yaml order with what the site hides', () => {
     setup();
     expect(screen.getByRole('button', { name: 'Two' }).closest('[aria-current]')?.getAttribute('aria-current')).toBe('page');

@@ -7,12 +7,12 @@ import { findBlock } from '@fdbook/shared/frontmatter-block.ts';
 import { listEditableFiles } from '#services/files/store.ts';
 import { siteIconNames } from '#services/icons/names.ts';
 import { joinPath } from '#services/lint/rules/links.ts';
-import { BASE_URL, NOTES_DIR } from '#infra/security/paths.ts';
+import { BASE_URL, META_FILES, NOTES_DIR } from '#infra/security/paths.ts';
 import type { Hidden, TreeFolder, TreeNode } from '@fdbook/shared/tree.ts';
 
 // The page tree, built by the same fumadocs loader the site uses
 // (lib/source.ts), so the Studio shows the sidebar the site will build. On
-// top of it: which meta.yaml entry each node comes from, the entries that
+// top of it: which meta file entry each node comes from, the entries that
 // reach nothing, and what the site hides (lib/visible-page-tree.ts).
 
 type Data = Record<string, unknown>;
@@ -22,9 +22,10 @@ const SEPARATOR = /^---(?:\[([^\]]+)])?(.+)---|^---$/;
 const LINK = /^(?:external:)?(?:\[[^\]]+])?\[[^\]]+]\([^)]+\)$/;
 const REST = new Set(['...', 'z...a']);
 
-function parseData(yaml: string): Data {
+// `json`: the text is a meta.json (YAML would take most of it too, not tabs).
+function parseData(text: string, json = false): Data {
   try {
-    const value: unknown = parse(yaml);
+    const value: unknown = json ? JSON.parse(text) : parse(text);
     return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Data) : {};
   } catch {
     return {};
@@ -32,7 +33,7 @@ function parseData(yaml: string): Data {
 }
 
 // What the tree needs from content/notes: each note's frontmatter and each
-// meta.yaml, keyed by path relative to content/notes.
+// meta file (meta.json or meta.yaml), keyed by path relative to content/notes.
 export type NotesContent = { pages: Map<string, Data>; metas: Map<string, Data>; mtimes?: Map<string, number> };
 
 export async function readNotesContent(root: string): Promise<NotesContent> {
@@ -46,7 +47,7 @@ export async function readNotesContent(root: string): Promise<NotesContent> {
       if (text === null) return;
       const path = file.path.slice(NOTES_DIR.length + 1);
       mtimes.set(path, file.mtimeMs);
-      if (file.kind === 'meta') metas.set(path, parseData(text));
+      if (file.kind === 'meta') metas.set(path, parseData(text, path.endsWith('.json')));
       else pages.set(path, parseData(findBlock(text)?.yaml ?? ''));
     }),
   );
@@ -56,13 +57,23 @@ export async function readNotesContent(root: string): Promise<NotesContent> {
 const dirOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
 
 // `icons`: the site's icon names; null keeps every name.
-function makeContext({ pages, metas, mtimes = new Map() }: NotesContent, icons: ReadonlySet<string> | null) {
+function makeContext({ pages, metas: all, mtimes = new Map() }: NotesContent, icons: ReadonlySet<string> | null) {
   const folders = new Set<string>();
-  for (const path of [...pages.keys(), ...metas.keys()]) {
+  for (const path of [...pages.keys(), ...all.keys()]) {
     for (let dir = dirOf(path); dir !== ''; dir = dirOf(dir)) folders.add(dir);
   }
+  // fumadocs reads a folder's meta.json or its meta.yaml, whichever its
+  // source lists last, so a folder with both depends on file order. The
+  // tree reads the meta.json and marks the folder with the other file.
+  const metas = new Map<string, Data>();
+  const ignored = new Map<string, string>();
+  for (const [path, data] of all) {
+    const json = path.endsWith('.yaml') ? `${path.slice(0, -'yaml'.length)}json` : null;
+    if (json !== null && all.has(json)) ignored.set(dirOf(path), path);
+    else metas.set(path, data);
+  }
   const pageAt = (path: string) => (pages.has(`${path}.mdx`) ? `${path}.mdx` : path.endsWith('.mdx') && pages.has(path) ? path : null);
-  return { pages, metas, mtimes, folders, pageAt, icons };
+  return { pages, metas, ignored, mtimes, folders, pageAt, icons };
 }
 
 type Context = ReturnType<typeof makeContext>;
@@ -85,7 +96,7 @@ function resolveEntry(context: Context, folder: string, item: string): string | 
 }
 
 // Where entries can reach: the folders and pages of `paths` (relative to
-// content/notes, notes and meta.yaml files), as makeContext has them.
+// content/notes, notes and meta files), as makeContext has them.
 export function notesIndex(paths: Iterable<string>): Pick<Context, 'folders' | 'pageAt'> {
   const pages = new Set<string>();
   const folders = new Set<string>();
@@ -96,7 +107,7 @@ export function notesIndex(paths: Iterable<string>): Pick<Context, 'folders' | '
   return { folders, pageAt: (path: string) => (pages.has(`${path}.mdx`) ? `${path}.mdx` : path.endsWith('.mdx') && pages.has(path) ? path : null) };
 }
 
-// Whether entry `item` of the meta.yaml in `folder` reaches a folder or a
+// Whether entry `item` of the meta file in `folder` reaches a folder or a
 // page, as resolveEntry looks (`!x` and `x` either, `...x` a folder only);
 // null for one that names neither (`...`, a separator, a link).
 export function entryReaches(where: Pick<Context, 'folders' | 'pageAt'>, folder: string, item: string): boolean | null {
@@ -110,7 +121,7 @@ export function entryReaches(where: Pick<Context, 'folders' | 'pageAt'>, folder:
 const nameOf = (node: { name?: unknown }) => (typeof node.name === 'string' ? node.name : '');
 
 // Without lucideIconsPlugin (lib/source.ts has it) an icon stays the name
-// written in frontmatter or meta.yaml. A folder's is its meta.yaml `icon`,
+// written in frontmatter or the meta file. A folder's is its meta file's `icon`,
 // else its index page's, as the loader sets it. A name the site's lucide
 // does not have shows no icon there, so none here either.
 function iconName(context: Context, node: { icon?: unknown }) {
@@ -133,7 +144,7 @@ function convertNode(context: Context, node: PageTree.Node, folder: string): Tre
 
 // A folder's path. Without one every folder would share the empty path and
 // id, and so its open state. fumadocs-core before 16.17 gave folders a meta
-// path string as `$ref`, and none at all to a folder without meta.yaml
+// path string as `$ref`, and none at all to a folder without a meta file
 // (infra/config/deps.ts stops the Studio on such an install).
 const OLD_FUMADOCS = 'fumadocs-core is older than the site requires (run `npm install` from the repo root)';
 
@@ -146,7 +157,7 @@ function folderPath(folder: PageTree.Folder): string {
 
 function convertFolder(context: Context, node: PageTree.Folder | PageTree.Root, path: string): TreeFolder {
   const ref = '$ref' in node ? node.$ref : undefined;
-  const meta = ref?.meta ?? (path === '' && context.metas.has('meta.yaml') ? 'meta.yaml' : null);
+  const meta = ref?.meta ?? (path === '' ? (META_FILES.find((name) => context.metas.has(name)) ?? null) : null);
   const metaData = meta === null ? undefined : context.metas.get(meta);
   const children = node.children.map((child) => convertNode(context, child, child.type === 'folder' ? folderPath(child) : path));
   const folder: TreeFolder = {
@@ -163,6 +174,8 @@ function convertFolder(context: Context, node: PageTree.Folder | PageTree.Root, 
     hidden: hiddenOf(metaData),
     children,
   };
+  const ignored = context.ignored.get(path);
+  if (ignored !== undefined) folder.ignoredMeta = ignored;
   markEntries(context, folder, metaData);
   return folder;
 }
@@ -172,7 +185,7 @@ function convertFolder(context: Context, node: PageTree.Folder | PageTree.Root, 
 function markEntries(context: Context, folder: TreeFolder, metaData: Data | undefined) {
   const items = metaData === undefined ? undefined : metaData.pages;
   if (!Array.isArray(items)) {
-    // No pages list (or no meta.yaml): every child is listed, in this order.
+    // No pages list (or no meta file): every child is listed, in this order.
     folder.children.forEach((child, index) => {
       child.entry = folder.meta === null ? index : null;
     });
@@ -222,7 +235,7 @@ function folderMap(folder: TreeFolder, map = new Map<string, TreeFolder>()) {
   return map;
 }
 
-// Puts what fumadocs left in its fallback tree (no meta.yaml lists it) into
+// Puts what fumadocs left in its fallback tree (no meta file lists it) into
 // the tree at its own folder, after the listed children, marked unlisted.
 function mergeFallback(context: Context, main: Map<string, TreeFolder>, into: TreeFolder, fallback: PageTree.Folder | PageTree.Root) {
   for (const child of fallback.children) {
@@ -243,7 +256,7 @@ export function buildTree(content: NotesContent, icons: ReadonlySet<string> | nu
   const context = makeContext(content, icons);
   const files = [
     ...[...content.pages].map(([path, data]) => ({ type: 'page' as const, path, data })),
-    ...[...content.metas].map(([path, data]) => ({ type: 'meta' as const, path, data })),
+    ...[...context.metas].map(([path, data]) => ({ type: 'meta' as const, path, data })),
   ];
   const source = loader({ baseUrl: BASE_URL, source: { files } });
   const tree = source.getPageTree();
