@@ -139,7 +139,7 @@ describe('writeFrontmatter', () => {
   // Every real note reads with no schema issue, and a no-op write is byte-identical.
   it('round-trips every note in content/docs', async () => {
     const { glob } = await import('node:fs/promises');
-    let count = 0;
+    const seen: string[] = [];
     for await (const path of glob('content/docs/**/*.mdx', { cwd: docsRoot })) {
       const source = await readFile(join(docsRoot, path), 'utf8');
       const read = readFrontmatter(source);
@@ -151,9 +151,10 @@ describe('writeFrontmatter', () => {
       const retitled = writeFrontmatter(source, { ...read.data, title: 'Retitled' }).source.split('\n');
       const changed = source.split('\n').filter((line, index) => line !== retitled[index]);
       expect(changed, path).toEqual([expect.stringMatching(/^title:/)]);
-      count += 1;
+      seen.push(path);
     }
-    expect(count).toBeGreaterThan(50);
+    // A top-level page and one in a folder: the glob reaches both.
+    expect(seen).toEqual(expect.arrayContaining(['content/docs/index.mdx', 'content/docs/guide/using.mdx']));
   });
 });
 

@@ -1,12 +1,17 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { parseMdxToDoc, serializeDocToMdx, type ParsedDoc } from '@fumadocs-editor/core';
 import { componentTypeName } from '@fumadocs-editor/core/extensions';
 import { describe, expect, it } from 'vitest';
 import { editorConfig } from '#plugins/index.ts';
 import { CALLOUT_TYPES, DIRECTIVE_TYPES } from '#plugins/callout/types.ts';
 import { defined, syntax } from '#tests/support/editor-state.ts';
+import { uiRoot } from '@fdbook/server/config.ts';
 import { realNotes } from '@fdbook/testing/notes.ts';
 
-const notes = await realNotes();
+// The docs write only `:::note`; the plugin's fixture has every site name.
+const FIXTURE = 'src/plugins/callout/fixtures/callouts.mdx';
+const notes = [...await realNotes(), { path: FIXTURE, source: await readFile(join(uiRoot, FIXTURE), 'utf8') }];
 
 type JSONContent = ParsedDoc['doc'];
 
@@ -33,8 +38,8 @@ describe('callout directives', () => {
     }
   });
 
-  // The site's own names in the real notes: before this plugin `:::example`
-  // and `:::caution` stayed source. Two kinds still do, by the editor's own
+  // The site's own names in the real notes and the fixture: before this
+  // plugin `:::example` and `:::caution` stayed source. Two kinds still do, by the editor's own
   // rules: a callout holding an accordion group (not an admonition, so the
   // editor bails) and one whose title has formatting (the title region is
   // plain text).
@@ -57,8 +62,10 @@ describe('callout directives', () => {
     });
 
     it('finds the site names among them', () => {
-      expect(types.example).toBeGreaterThanOrEqual(40);
-      expect(types.caution).toBeGreaterThanOrEqual(4);
+      // One `:::note` from the docs (configuration.mdx), one from the fixture.
+      expect(types.note).toBeGreaterThanOrEqual(2);
+      expect(types.example).toBeGreaterThanOrEqual(1);
+      expect(types.caution).toBeGreaterThanOrEqual(1);
     });
   });
 

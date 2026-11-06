@@ -59,7 +59,7 @@ describe('AssetPage', () => {
   it('shows an image, its facts and where notes use it; a usage opens its note', async () => {
     const { onOpenUsage } = setup(PICTURE.path);
     const image = screen.getByRole<HTMLImageElement>('img', { name: 'Preview of old_name.png' });
-    expect(image.getAttribute('src')).toBe('/api/file?path=public%2Fnotes%2Fguide%2Fold_name.png');
+    expect(image.getAttribute('src')).toBe('/api/file?path=public%2Fdocs%2Fguide%2Fold_name.png');
     expect(screen.getByRole('heading', { name: 'old_name.png' })).toBeTruthy();
     expect(screen.getByText('guide/old_name.png')).toBeTruthy();
     expect(screen.getByText('2.0 KB')).toBeTruthy();
@@ -149,7 +149,7 @@ describe('AssetPage', () => {
     expect(onChanged).toHaveBeenCalled();
     expect(reload).toHaveBeenCalled();
     // The preview loads the new content.
-    expect(screen.getByRole('img', { name: 'Preview of old_name.png' }).getAttribute('src')).toBe('/api/file?path=public%2Fnotes%2Fguide%2Fold_name.png&v=99');
+    expect(screen.getByRole('img', { name: 'Preview of old_name.png' }).getAttribute('src')).toBe('/api/file?path=public%2Fdocs%2Fguide%2Fold_name.png&v=99');
   });
 
   it('replaces with another type as a rename that the notes follow', async () => {

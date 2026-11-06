@@ -28,6 +28,7 @@ import {
   type Input,
 } from '#diagrams/edits.ts';
 import { placeCopy } from '#diagrams/placement.ts';
+import { docsRoot } from '@fdbook/testing/notes.ts';
 
 // A layout the test knows is there.
 function layoutOf(doc: Input) {
@@ -35,11 +36,11 @@ function layoutOf(doc: Input) {
   return doc.layout;
 }
 
-const PATH = 'diagrams/data-platform/processing/apache-spark/spark-logic-to-execution.diagram.json';
-// The repository root, from studio/tests/src/diagrams.
-const text = readFileSync(join(import.meta.dirname, '../../../..', PATH), 'utf8');
+const PATH = 'diagrams/examples/program-to-tasks.diagram.json';
+// An example diagram of FdBook's docs.
+const text = readFileSync(join(docsRoot, PATH), 'utf8');
 const real = () => JSON.parse(text) as Input;
-const FRAME = 'spark-application-runtime-boundary';
+const FRAME = 'application-runtime-boundary';
 
 // Every edit leaves a diagram the site still draws, with no new error.
 function draws(diagram: Input) {
@@ -55,8 +56,9 @@ function noNewErrors(before: Input, after: Input) {
   expect(errors(after)).toEqual(errors(before));
 }
 
-const RUNTIME = 'diagrams/data-platform/stacks-integration/databricks/databricks-interactive-runtime/runtime-architecture-from-process-signals.diagram.json';
-const runtime = () => JSON.parse(readFileSync(join(import.meta.dirname, '../../../..', RUNTIME), 'utf8')) as Input;
+// Frames inside a frame: studio-process holds behind-the-guard.
+const NESTED = 'diagrams/reference/studio-layout.diagram.json';
+const nested = () => JSON.parse(readFileSync(join(docsRoot, NESTED), 'utf8')) as Input;
 
 // The lines of the formatted file that differ.
 function changedLines(before: Input, after: Input) {
@@ -140,7 +142,7 @@ describe('diagram edits', () => {
     expect(next.groups).toEqual([]);
     expect(next.nodes).toHaveLength(6);
     expect(next.edges?.some((edge) => edge.to === FRAME)).toBe(false);
-    expect(layoutOf(next).edges?.['logic-spark-application-runtime-boundary']).toBeUndefined();
+    expect(layoutOf(next).edges?.['logic-application-runtime-boundary']).toBeUndefined();
   });
 
   it('duplicates a frame around copies of its nodes, clear of the drawing', () => {
@@ -153,8 +155,8 @@ describe('diagram edits', () => {
   });
 
   it('keeps the copy of a frame out of the frames inside the original', () => {
-    const doc = runtime();
-    const frame = 'driver-node-one-machine';
+    const doc = nested();
+    const frame = 'studio-process';
     const { diagram, id } = duplicateGroup(doc, frame, placeCopy(doc, draws(doc), { group: frame }));
     const copies = groupNodes(diagram, id);
     expect(copies.length).toBe(groupNodes(doc, frame).length);
@@ -165,12 +167,12 @@ describe('diagram edits', () => {
     noNewErrors(doc, diagram);
   });
 
-  // Every node and every frame of the repository's diagrams, one at a time.
+  // Every node and every frame of the docs' diagrams, one at a time.
   // A sequence or lifecycle copies nothing (SequenceCanvas.test.tsx, LifecycleCanvas.test.tsx).
-  const architectures = globSync('diagrams/**/*.diagram.json', { cwd: join(import.meta.dirname, '../../../..') })
-    .filter((path) => ((JSON.parse(readFileSync(join(import.meta.dirname, '../../../..', path), 'utf8')) as Input).type ?? 'architecture') === 'architecture');
+  const architectures = globSync('diagrams/**/*.diagram.json', { cwd: docsRoot })
+    .filter((path) => ((JSON.parse(readFileSync(join(docsRoot, path), 'utf8')) as Input).type ?? 'architecture') === 'architecture');
   it.each(architectures)('duplicates anything in %s without a new error', (path) => {
-    const doc = JSON.parse(readFileSync(join(import.meta.dirname, '../../../..', path), 'utf8')) as Input;
+    const doc = JSON.parse(readFileSync(join(docsRoot, path), 'utf8')) as Input;
     const scene = draws(doc);
     for (const node of doc.nodes) noNewErrors(doc, duplicateNodes(doc, [node.id], placeCopy(doc, scene, { nodes: [node.id] })).diagram);
     for (const group of doc.groups ?? []) noNewErrors(doc, duplicateGroup(doc, group.id, placeCopy(doc, scene, { group: group.id })).diagram);

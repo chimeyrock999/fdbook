@@ -84,11 +84,11 @@ describe('pasting an image into the editor', () => {
       expect(markdown).toContain('(/docs/data-modeling/warehouse-layers.png)');
       return markdown;
     }, { timeout: 3000 });
-    expect(source).toMatch(/!\[image\]\(\/notes\/data-modeling\/warehouse-layers\.png\)/);
+    expect(source).toMatch(/!\[image\]\(\/docs\/data-modeling\/warehouse-layers\.png\)/);
     expect([...written.keys()]).toEqual(['public/docs/data-modeling/warehouse-layers.png']);
     // The image shows through the file API, not as a broken /docs/… URL.
     const img = await vi.waitFor(() => defined(container.querySelector('img[src]'), 'img'));
-    expect(img.getAttribute('src')).toBe('/api/file?path=public%2Fnotes%2Fdata-modeling%2Fwarehouse-layers.png');
+    expect(img.getAttribute('src')).toBe('/api/file?path=public%2Fdocs%2Fdata-modeling%2Fwarehouse-layers.png');
     const lint = (exists: boolean) =>
       lintNote(source, { path: 'data-modeling/index.mdx', pages: new Set(['data-modeling/index.mdx']), assetExists: (asset) => exists && written.has(`public/${asset}`), diagramProblem: () => 'missing' })
         .filter((issue) => issue.rule === 'asset-missing');

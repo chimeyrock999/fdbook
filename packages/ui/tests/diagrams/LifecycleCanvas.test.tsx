@@ -1,6 +1,4 @@
 // @vitest-environment jsdom
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -9,10 +7,11 @@ import { DiagramPage } from '#diagrams/DiagramPage.tsx';
 import { buildScene } from '@fdbook/diagram/scene.ts';
 import { parseDiagram, type DiagramInput } from '@fdbook/diagram/schema.ts';
 import { stubLayout } from '#tests/support/visual-editor.tsx';
+import { readDoc } from '#tests/support/docs.ts';
 
 const PATH = 'diagrams/examples/instance-pool.diagram.json';
-// The repository root, from studio/tests/src/diagrams.
-const real = readFileSync(join(import.meta.dirname, '../../../..', PATH), 'utf8');
+// An example diagram of FdBook's docs.
+const real = readDoc(PATH);
 const scene = buildScene(parseDiagram(JSON.parse(real)));
 const centre = (id: string): [number, number] => {
   const node = scene.nodes.find((each) => each.id === id);
@@ -118,7 +117,7 @@ describe('the lifecycle editor', () => {
 
   it('gives an exit several framed phases share one hit on the canvas', async () => {
     // Building and Verifying both abort into Aborted: one route from their frame.
-    const release = readFileSync(join(import.meta.dirname, '../../../..', 'diagrams/examples/deployment-release.diagram.json'), 'utf8');
+    const release = readDoc('diagrams/examples/deployment-release.diagram.json');
     const { container } = await open(false, release);
     const hits = [...container.querySelectorAll<SVGElement>('.studio-dg-overlay [data-hit-edge]')].map((hit) => hit.dataset.hitEdge);
     expect(hits).toContain('building-aborted');

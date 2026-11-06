@@ -20,14 +20,14 @@ describe('files client', () => {
   it('lists, reads and saves', async () => {
     const files = await client.listFiles();
     expect(files.some((file) => file.path === 'content/docs/index.mdx' && file.kind === 'note')).toBe(true);
-    const file = await client.readFile('content/docs/streaming/meta.yaml');
+    const file = await client.readFile('content/docs/guide/meta.yaml');
     const mtimeMs = await client.writeFile(file.path, `${file.content}# saved\n`, file.mtimeMs);
     expect(mtimeMs).not.toBe(file.mtimeMs);
     expect(await readFile(join(studio.root, file.path), 'utf8')).toBe(`${file.content}# saved\n`);
   });
 
   it('throws FileConflictError with the disk version', async () => {
-    const file = await client.readFile('content/docs/database/index.mdx');
+    const file = await client.readFile('content/docs/reference/lint.mdx');
     const absolute = join(studio.root, file.path);
     await writeFile(absolute, 'edited in obsidian\n');
     await utimes(absolute, new Date(), new Date(file.mtimeMs + 5000));
@@ -55,13 +55,13 @@ describe('files client', () => {
   // How the SvgDiagram plugin shows a site path such as /docs/….svg.
   it('serves a site path under public/', async () => {
     const url = publicAssetUrl('/docs/demo/pixel.png?v=1#x', studio.origin);
-    expect(url).toBe(`${studio.origin}/api/file?path=public%2Fnotes%2Fdemo%2Fpixel.png`);
+    expect(url).toBe(`${studio.origin}/api/file?path=public%2Fdocs%2Fdemo%2Fpixel.png`);
     const response = await fetch(url ?? '');
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('image/png');
-    expect(publicAssetUrl('notes/demo/pixel.png')).toBe('/api/file?path=public%2Fnotes%2Fdemo%2Fpixel.png');
+    expect(publicAssetUrl('docs/demo/pixel.png')).toBe('/api/file?path=public%2Fdocs%2Fdemo%2Fpixel.png');
     // The file API serves public/docs only.
-    expect([undefined, '', '/images/x.svg', 'https://cdn/notes/x.svg', '//cdn/x.svg'].map((src) => publicAssetUrl(src)))
+    expect([undefined, '', '/images/x.svg', 'https://cdn/docs/x.svg', '//cdn/x.svg'].map((src) => publicAssetUrl(src)))
       .toEqual([null, null, null, null, null]);
   });
 });

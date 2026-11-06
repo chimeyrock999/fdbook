@@ -45,7 +45,9 @@ function regions(source: string) {
 }
 
 describe('site copies', () => {
-  it.each(COPIES)('the parts of $site the Studio copies have not changed', async ({ site, sha256 }) => {
+  // P3: the site's components come back with the chimeyrock preset; until
+  // then there is no site file to pin.
+  it.skip.each(COPIES)('the parts of $site the Studio copies have not changed', async ({ site, sha256 }) => {
     const { parts, studio } = regions(await readFile(join(installRoot, site), 'utf8'));
     expect(parts.length, `${site} marks no studio-copy region`).toBeGreaterThan(0);
     for (const path of studio) expect(existsSync(join(installRoot, path)), path).toBe(true);

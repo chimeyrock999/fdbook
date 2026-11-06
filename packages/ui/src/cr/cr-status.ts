@@ -1,4 +1,5 @@
 import type { ChangeRequest, CrStatus } from '#api/crs.ts';
+import { NOTES_PREFIX } from '#lib/note-paths.ts';
 
 export const STATUS_LABELS: Record<CrStatus, string> = {
   draft: 'Draft',
@@ -21,8 +22,8 @@ export const GROUPS: { title: string; statuses: readonly CrStatus[]; empty: stri
 // Merged or closed: what is left is to clean it up.
 export const isDone = (cr: { status: CrStatus }) => cr.status === 'merged' || cr.status === 'closed';
 
-// A note's path as the list shows it, without content/notes/.
-export const shortPath = (path: string) => path.replace(/^content\/notes\//, '');
+// A note's path as the list shows it, without the notes' folder.
+export const shortPath = (path: string) => (path.startsWith(NOTES_PREFIX) ? path.slice(NOTES_PREFIX.length) : path);
 
 // Days since `ms`, whole.
 export const daysSince = (ms: number, now = Date.now()) => Math.floor((now - ms) / (24 * 3600_000));

@@ -22,15 +22,15 @@ describe('note helpers', () => {
 
   it('maps paths and reads ?path=', () => {
     expect(syncPath('content/docs/streaming/index.mdx')).toBe('streaming/index.mdx');
-    expect(noteFromUrl('?path=content%2Fnotes%2Fa.mdx')).toBe('content/docs/a.mdx');
+    expect(noteFromUrl('?path=content%2Fdocs%2Fa.mdx')).toBe('content/docs/a.mdx');
     expect(noteFromUrl('?path=content/docs/meta.yaml')).toBeNull();
     expect(noteFromUrl('?path=package.json')).toBeNull();
     expect(noteFromUrl('')).toBeNull();
   });
 
   it('reads the page to open: ?path= for a note, ?asset= for a file under public/docs', () => {
-    expect(pageFromUrl('?path=content%2Fnotes%2Fa.mdx')).toEqual({ kind: 'note', path: 'content/docs/a.mdx' });
-    expect(pageFromUrl('?asset=public%2Fnotes%2Fguide%2Fflow.png')).toEqual({ kind: 'asset', path: 'public/docs/guide/flow.png' });
+    expect(pageFromUrl('?path=content%2Fdocs%2Fa.mdx')).toEqual({ kind: 'note', path: 'content/docs/a.mdx' });
+    expect(pageFromUrl('?asset=public%2Fdocs%2Fguide%2Fflow.png')).toEqual({ kind: 'asset', path: 'public/docs/guide/flow.png' });
     expect(pageFromUrl('?asset=public/docs/guide/Photo.PNG')).toEqual({ kind: 'asset', path: 'public/docs/guide/Photo.PNG' });
     expect(pageFromUrl('?asset=public/docs/guide/run.sh')).toBeNull();
     expect(pageFromUrl('?asset=public/docs/../secret.png')).toBeNull();
@@ -58,7 +58,7 @@ describe('note helpers', () => {
   });
 
   it('reads a diff to open: ?diff= for any file the Studio touches, &from= for its old name', () => {
-    expect(pageFromUrl('?diff=content%2Fnotes%2Fa%2Fmeta.yaml')).toEqual({ kind: 'diff', path: 'content/docs/a/meta.yaml' });
+    expect(pageFromUrl('?diff=content%2Fdocs%2Fa%2Fmeta.yaml')).toEqual({ kind: 'diff', path: 'content/docs/a/meta.yaml' });
     expect(pageFromUrl('?diff=public/docs/a.png')).toEqual({ kind: 'diff', path: 'public/docs/a.png' });
     expect(pageFromUrl('?diff=content/docs/b.mdx&from=content/docs/a.mdx')).toEqual({ kind: 'diff', path: 'content/docs/b.mdx', from: 'content/docs/a.mdx' });
     // An old name the Studio would not touch is left out, not followed.
@@ -69,18 +69,18 @@ describe('note helpers', () => {
       expect(pageFromUrl(pageQuery(page))).toEqual(page);
     }
     // In a change request, the diff is of that worktree's file.
-    expect(pageQuery({ kind: 'diff', path: 'content/docs/a.mdx', from: 'content/docs/b.mdx' }, 'sinks')).toBe('?cr=sinks&diff=content%2Fnotes%2Fa.mdx&from=content%2Fnotes%2Fb.mdx');
+    expect(pageQuery({ kind: 'diff', path: 'content/docs/a.mdx', from: 'content/docs/b.mdx' }, 'sinks')).toBe('?cr=sinks&diff=content%2Fdocs%2Fa.mdx&from=content%2Fdocs%2Fb.mdx');
   });
 
   it('reads a page history to open: ?history= for a note or an asset', () => {
-    expect(pageFromUrl('?history=content%2Fnotes%2Fa%2Fb.mdx')).toEqual({ kind: 'history', path: 'content/docs/a/b.mdx' });
+    expect(pageFromUrl('?history=content%2Fdocs%2Fa%2Fb.mdx')).toEqual({ kind: 'history', path: 'content/docs/a/b.mdx' });
     expect(pageFromUrl('?history=content/docs/a/meta.yaml')).toBeNull();
     expect(pageFromUrl('?history=public/docs/a.png')).toEqual({ kind: 'history', path: 'public/docs/a.png' });
     expect(pageFromUrl('?history=public/docs/a.exe')).toBeNull();
     expect(pageFromUrl('?history=content/docs/../package.mdx')).toBeNull();
     const page = { kind: 'history', path: 'content/docs/a b/c#d.mdx' } as const;
     expect(pageFromUrl(pageQuery(page))).toEqual(page);
-    expect(pageQuery(page, 'sinks')).toBe('?cr=sinks&history=content%2Fnotes%2Fa%20b%2Fc%23d.mdx');
+    expect(pageQuery(page, 'sinks')).toBe('?cr=sinks&history=content%2Fdocs%2Fa%20b%2Fc%23d.mdx');
     expect(previewRoute(page, () => true)).toBe('/docs/a%20b/c%23d');
   });
 

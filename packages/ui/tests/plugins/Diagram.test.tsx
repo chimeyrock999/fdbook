@@ -1,15 +1,14 @@
 // @vitest-environment jsdom
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { assetChanged } from '#api/asset-versions.ts';
 import { Diagram } from '#plugins/diagram/Diagram.tsx';
+import { readDoc } from '#tests/support/docs.ts';
 
-const SRC = 'data-platform/processing/apache-spark/spark-logic-to-execution';
+const SRC = 'examples/program-to-tasks';
 const PATH = `diagrams/${SRC}.diagram.json`;
-// The repository root, from studio/tests/src/plugins.
-const real = readFileSync(join(import.meta.dirname, '../../../..', PATH), 'utf8');
+// An example diagram of FdBook's docs.
+const real = readDoc(PATH);
 
 afterEach(() => {
   cleanup();

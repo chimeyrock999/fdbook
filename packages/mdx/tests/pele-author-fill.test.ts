@@ -5,6 +5,9 @@ import { renderAsync } from 'pele/lazy';
 import { describe, expect, it } from 'vitest';
 import { markAuthorFills, markAuthorFillsInSvg, observeAuthorFills } from '#pele-author-fill.ts';
 
+// The MapReduce note's two styled-subgraph mermaid blocks, kept as a fixture.
+const MAPREDUCE = readFileSync(join(import.meta.dirname, 'fixtures/mapreduce-subgraphs.mdx'), 'utf8');
+
 // The dark theme gives a label on an author's fill dark ink
 // (styles/notes-theme.css); these marks are what that rule reads.
 
@@ -53,9 +56,8 @@ describe('markAuthorFills', () => {
   });
 
   it('marks a subgraph title Pele lifted out of its subgraph (MapReduce note)', async () => {
-    const note = readFileSync(join(process.cwd(), '../../content/docs/distributed-systems/mapreduce/index.mdx'), 'utf8');
-    const start = note.lastIndexOf('```mermaid', note.indexOf('HDFS_INT'));
-    const block = note.slice(note.indexOf('\n', start) + 1, note.indexOf('```', start + 10));
+    const start = MAPREDUCE.lastIndexOf('```mermaid', MAPREDUCE.indexOf('HDFS_INT'));
+    const block = MAPREDUCE.slice(MAPREDUCE.indexOf('\n', start) + 1, MAPREDUCE.indexOf('```', start + 10));
     expect(block).toContain('style HDFS_INT fill:#FFF9C4');
     const root = svgOf((await renderAsync(block, {})).svg);
     markAuthorFills(root);
@@ -68,9 +70,8 @@ describe('markAuthorFills', () => {
   // A subgraph the author cleared (`fill:transparent`) shows the surface
   // behind it, so the halo of its lifted title takes that surface.
   it('gives a lifted title of a cleared subgraph the surface for its halo (MapReduce note)', async () => {
-    const note = readFileSync(join(process.cwd(), '../../content/docs/distributed-systems/mapreduce/index.mdx'), 'utf8');
-    const start = note.lastIndexOf('```mermaid', note.indexOf('subgraph MapPhase'));
-    const block = note.slice(note.indexOf('\n', start) + 1, note.indexOf('```', start + 10));
+    const start = MAPREDUCE.lastIndexOf('```mermaid', MAPREDUCE.indexOf('subgraph MapPhase'));
+    const block = MAPREDUCE.slice(MAPREDUCE.indexOf('\n', start) + 1, MAPREDUCE.indexOf('```', start + 10));
     expect(block).toContain('style MapPhase fill:transparent');
     const root = svgOf((await renderAsync(block, {})).svg);
     markAuthorFills(root);

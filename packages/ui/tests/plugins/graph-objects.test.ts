@@ -10,7 +10,11 @@ import { realNotes } from '@fdbook/testing/notes.ts';
 
 const notes = await realNotes();
 
-const fixture = () => readFile(join(installRoot, 'packages/ui/src/plugins/graph-objects/fixtures/graph-objects.mdx'), 'utf8');
+const FIXTURE = 'packages/ui/src/plugins/graph-objects/fixtures/graph-objects.mdx';
+const fixture = () => readFile(join(installRoot, FIXTURE), 'utf8');
+// The docs only name the syntax in code: the fixture's objects are the ones
+// drawn.
+const documents = [...notes, { path: FIXTURE, source: await fixture() }];
 
 function decorations(state: Parameters<typeof decorateGraphObjects>[0]) {
   return decorateGraphObjects(state).map(describeDecoration);
@@ -87,14 +91,15 @@ describe('graph object decorations', () => {
 
   // Every <Keyword>, <GraphMeta/> (or <graph-meta/>), :keyword[] and
   // :graph-meta{} is drawn, except inside blocks the editor keeps as source
-  // (accordion groups, callouts with a formatted title).
+  // (accordion groups, callouts with a formatted title). Code is text: a
+  // `<Keyword>` in backticks or a fence is not one.
   // One test per note, each well inside the default timeout; the last one
   // checks the total (tests in a file run in order).
   describe('in the real notes', () => {
-    const count = (text: string) => (text.match(/<Keyword |<Tag |:keyword\[|:tag\[|<GraphMeta |<graph-meta |:graph-meta\{/g) ?? []).length;
+    const count = (text: string) => (text.replace(/```[\s\S]*?```|``[^`\n]*``|`[^`\n]*`/g, '').match(/<Keyword |<Tag |:keyword\[|:tag\[|<GraphMeta |<graph-meta |:graph-meta\{/g) ?? []).length;
     let total = 0;
 
-    it.each(notes)('draws every graph object in $path', ({ source }) => {
+    it.each(documents)('draws every graph object in $path', ({ source }) => {
       const state = editorState(source);
       const kept = nodesOf(state, 'verbatim').reduce((sum, { node }) => sum + count(String(node.attrs.value)), 0);
       const expected = count(source) - kept;
@@ -104,7 +109,8 @@ describe('graph object decorations', () => {
     });
 
     it('finds the graph objects', () => {
-      expect(total).toBeGreaterThan(100);
+      // The fixture's seven.
+      expect(total).toBeGreaterThanOrEqual(7);
     });
   });
 });

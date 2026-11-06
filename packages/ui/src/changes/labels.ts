@@ -1,6 +1,6 @@
 import type { ChangedFile } from '#api/changes.ts';
 import type { TreeFolder } from '#api/tree.ts';
-import { DIAGRAM_SUFFIX } from '@fdbook/shared/asset-types.ts';
+import { ASSETS_DIR, DIAGRAM_SUFFIX, DIAGRAMS_DIR, NOTES_DIR } from '@fdbook/shared/asset-types.ts';
 import { NOTES_PREFIX } from '#lib/note-paths.ts';
 import { noteOf } from '#tree/tree.ts';
 
@@ -38,9 +38,12 @@ export function labelOf(file: ChangedFile, titles: Map<string, string>) {
   return name.endsWith(DIAGRAM_SUFFIX) ? name.slice(0, -DIAGRAM_SUFFIX.length) : name.replace(/\.mdx$/, '');
 }
 
-// The path under content/notes, public/notes or diagrams, which the area
-// makes plain.
-export const shortPath = (path: string) => path.replace(/^((content|public)\/notes|diagrams)\//, '');
+// The path under the notes, media or diagrams folder, which the area makes
+// plain.
+export function shortPath(path: string) {
+  const area = [NOTES_DIR, ASSETS_DIR, DIAGRAMS_DIR].find((dir) => path.startsWith(`${dir}/`));
+  return area === undefined ? path : path.slice(area.length + 1);
+}
 
 // "just now", "5 min ago", "3 hours ago", then the date.
 export function timeAgo(date: string, now = Date.now()) {

@@ -35,6 +35,7 @@ import {
 import { useDiagramFile, type SaveStatus } from './useDiagramFile';
 import '@fdbook/diagram/styles/diagram.css';
 import { DIAGRAMS_DIR, DIAGRAM_SUFFIX } from '@fdbook/shared/asset-types.ts';
+import { NOTES_PREFIX } from '#lib/note-paths.ts';
 
 const STATUS: Record<SaveStatus, string> = {
   loading: 'Loading…',
@@ -250,7 +251,7 @@ export function DiagramPage({ files, path, readOnly, usages, onOpenUsage, onWait
                   {usages.map((usage) => (
                     <li key={`${usage.note}:${String(usage.line)}`}>
                       <button type="button" onClick={() => { onOpenUsage(usage); }}>
-                        <FileText size={13} aria-hidden /> {usage.note.replace(/^content\/notes\//, '')}:{usage.line}
+                        <FileText size={13} aria-hidden /> {usage.note.slice(NOTES_PREFIX.length)}:{usage.line}
                       </button>
                     </li>
                   ))}
