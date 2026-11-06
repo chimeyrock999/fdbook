@@ -1,6 +1,6 @@
 // What the server and the UI both say about review threads (#87). No Node
 // imports: the UI reads these too.
-import type { Anchor } from './anchors.ts';
+import type { Anchor } from '#text/anchors.ts';
 
 export type ThreadSeverity = 'blocking' | 'nit';
 export const THREAD_SEVERITIES: ThreadSeverity[] = ['blocking', 'nit'];

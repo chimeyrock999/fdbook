@@ -7,7 +7,7 @@ export type ProposalAuthor =
   | { kind: 'person'; login: string | null };
 
 // A hunk as stored: `removed` is what it replaces between its anchors when
-// it was made (or last rebased), `added` what goes there (hunks.ts).
+// it was made (or last rebased), `added` what goes there (text/hunks.ts).
 export type StoredHunk = {
   id: string;
   before: string | null;

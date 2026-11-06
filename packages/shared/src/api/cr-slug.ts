@@ -1,6 +1,6 @@
 // Change request slugs. No Node imports: the UI reads the same rules to show
 // the branch a name will get and to read `?cr=` from the URL.
-import { slugify } from './slug.ts';
+import { slugify } from '#text/slug.ts';
 
 // `cr-` plus the slug stays within the 28 characters Cloudflare Pages keeps
 // of a branch name in its preview alias, so the preview URL can be read off
