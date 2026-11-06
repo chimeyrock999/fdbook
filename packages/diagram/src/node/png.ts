@@ -25,13 +25,13 @@ const styles = () => (css ??= {
   notes: readFileSync(require.resolve('@fdbook/mdx/styles/notes-theme.css'), 'utf8'),
 });
 
-export interface DrawOptions {
+export type DrawOptions = {
   theme?: Theme;
   // Show node tags and second label lines, as the expanded view does.
   expanded?: boolean;
 }
 
-export interface Drawn {
+export type Drawn = {
   svg: string | null;
   width: number;
   height: number;
@@ -48,9 +48,9 @@ export function drawDiagramSvg(value: unknown, { theme = 'light', expanded = fal
   return { svg, width: scene.width, height: scene.height, issues };
 }
 
-export interface DrawnPng extends Omit<Drawn, 'svg'> {
+export type DrawnPng = {
   png: Buffer | null;
-}
+} & Omit<Drawn, 'svg'>
 
 // `scale` multiplies the canvas size; 2 keeps the small labels legible.
 export function drawDiagramPng(value: unknown, { scale = 2, ...options }: DrawOptions & { scale?: number } = {}): DrawnPng {

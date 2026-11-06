@@ -139,9 +139,9 @@ function restoreDirectiveHead(node: DirectiveNode & { type: DirectiveType }, lab
       last.offset <= headEnd
     ) {
       return [
-        createText(source!.slice(start.offset, first.offset), { start, end: first as Point }),
+        createText(source!.slice(start.offset, first.offset), { start, end: first }),
         ...labelChildren,
-        createText(source!.slice(last.offset, headEnd), { start: last as Point, end: headEndPoint }),
+        createText(source!.slice(last.offset, headEnd), { start: last, end: headEndPoint }),
       ];
     }
   }
@@ -160,10 +160,10 @@ function getClosingFence(node: DirectiveNode, source: string | undefined): { fen
   if (source === undefined || start === undefined || end?.offset === undefined) return { fence: ':::' };
 
   const lines = source.slice(start, end.offset).split(/\r?\n/);
-  const openingLength = lines[0].match(/^:*/)![0].length;
+  const openingLength = /^:*/.exec(lines[0])![0].length;
   // The last line may sit behind a blockquote marker or list indentation (`> :::`).
   const lastLine = lines.length > 1 ? lines.at(-1)! : '';
-  const closing = lines.length > 1 ? lastLine.match(/^[\s>]*(:{3,})\s*$/)?.[1] : undefined;
+  const closing = lines.length > 1 ? (/^[\s>]*(:{3,})\s*$/.exec(lastLine))?.[1] : undefined;
 
   // An unclosed container runs to the end of the document and has no closing fence of
   // its own; a shorter fence on its last line belongs to a nested container.
@@ -448,7 +448,7 @@ function transformTextDirective(node: DirectiveNode) {
 }
 
 function extractDirectiveLabel(children: unknown[]) {
-  const nextChildren = [...children] as Array<{ type?: string; data?: { directiveLabel?: boolean }; children?: PhrasingContent[] }>;
+  const nextChildren = [...children] as { type?: string; data?: { directiveLabel?: boolean }; children?: PhrasingContent[] }[];
   const titleNodeIndex = nextChildren.findIndex((child) => child.type === 'paragraph' && child.data?.directiveLabel);
   const title =
     titleNodeIndex >= 0 && nextChildren[titleNodeIndex]?.children
@@ -469,7 +469,7 @@ function phrasingContentToText(children: PhrasingContent[]): string {
   return children
     .map((child) => {
       if ('value' in child && typeof child.value === 'string') return child.value;
-      if ('children' in child && Array.isArray(child.children)) return phrasingContentToText(child.children as PhrasingContent[]);
+      if ('children' in child && Array.isArray(child.children)) return phrasingContentToText(child.children);
       return '';
     })
     .join('');

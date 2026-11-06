@@ -10,7 +10,7 @@ import { diagramSchema, type DiagramInput, type EdgeVariant } from '#model/schem
 import type { Scene } from '#layout/scene.ts';
 import { ARCHIFY_TYPES, DOT_TONE, EVIDENCE, defined, mdxText, uniqueId, type ArchifyNote, type ImportOptions } from './import-archify.ts';
 
-export interface ArchifySequenceSpec {
+export type ArchifySequenceSpec = {
   schema_version?: 1;
   diagram_type: 'sequence';
   meta: { title: string; output?: string; quality_profile?: string; legend?: { entries?: Record<string, { label?: string }> } };

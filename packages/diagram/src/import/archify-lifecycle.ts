@@ -8,7 +8,7 @@
 import { DOT_TONE, EVIDENCE, defined, mdxText, uniqueId, type ArchifyNote, type ImportOptions } from './import-archify.ts';
 import { diagramSchema, type Diagram, type DiagramInput, type EdgeVariant, type ICONS, type Tone } from '#model/schema.ts';
 
-export interface ArchifyLifecycleSpec {
+export type ArchifyLifecycleSpec = {
   schema_version?: 3;
   diagram_type: 'lifecycle';
   meta: { title: string; output?: string; quality_profile?: string; legend?: { mode?: string } };

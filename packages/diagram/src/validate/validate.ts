@@ -12,7 +12,7 @@ import { diagramSchema, type Diagram } from '#model/schema.ts';
 import { checkLifecycleScene, checkLifecycleStructure } from './validate-lifecycle.ts';
 import { checkSequenceOnly, checkSequenceScene, checkSequenceStructure } from './validate-sequence.ts';
 
-export interface DiagramIssue {
+export type DiagramIssue = {
   code: string;
   severity: 'error' | 'warning';
   message: string;
@@ -205,7 +205,7 @@ export function checkScene(scene: Scene): DiagramIssue[] {
   return issues;
 }
 
-export interface DiagramReport {
+export type DiagramReport = {
   diagram: Diagram | null;
   scene: Scene | null;
   issues: DiagramIssue[];

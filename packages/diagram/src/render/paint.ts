@@ -168,7 +168,7 @@ function withAttributes(tag: string, attributes: Attributes) {
   return next;
 }
 
-export interface PaintOptions {
+export type PaintOptions = {
   theme?: Theme;
   // Show the fine detail (node tags, a label's second line) the expanded
   // view shows; the inline figure hides it.

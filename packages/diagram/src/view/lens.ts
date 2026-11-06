@@ -6,7 +6,7 @@
 
 import type { Scene } from '#layout/scene.ts';
 
-export interface LensGraph {
+export type LensGraph = {
   by: 'kind' | 'variant';
   // The legend entries a reader can pick, in legend order.
   entries: { value: string; label: string }[];
@@ -14,7 +14,7 @@ export interface LensGraph {
   edges: { id: string; from: string; to: string; variant: string }[];
 }
 
-export interface LensMarks {
+export type LensMarks = {
   nodes: Set<string>;
   edges: Set<string>;
 }

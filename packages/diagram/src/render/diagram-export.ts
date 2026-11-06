@@ -14,7 +14,7 @@ const RASTER_FORMATS: DiagramExportOption[] = [
 ];
 const VECTOR_FORMAT: DiagramExportOption = { value: 'svg', label: 'SVG', hint: 'Editable vector' };
 
-export interface DiagramExportOption {
+export type DiagramExportOption = {
   value: DiagramExportFormat;
   label: string;
   hint: string;
@@ -204,7 +204,7 @@ function rasterize(markup: string, width: number, height: number, format: Diagra
 
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(url);
-      canvas.toBlob((blob) => resolve(blob), MIME[format], 0.95);
+      canvas.toBlob((blob) => { resolve(blob); }, MIME[format], 0.95);
     };
 
     image.onerror = () => {
@@ -253,7 +253,7 @@ function download(blob: Blob, filename: string) {
   link.click();
   link.remove();
   // Revoking immediately can cancel the download in some browsers.
-  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  window.setTimeout(() => { URL.revokeObjectURL(url); }, 10_000);
 }
 
 function slugify(value: string) {

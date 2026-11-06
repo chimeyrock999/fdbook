@@ -24,14 +24,14 @@ const SPACING_ROUNDS = 5;
 // The corner sigil's rail (Archify's utils.mjs).
 const SIGIL_FOOTPRINT = 6 + 11;
 
-export interface LifeState extends Rect {
+export type LifeState = {
   id: string;
   node: DiagramNode;
   cx: number;
   cy: number;
-}
+} & Rect
 
-export interface Bracket {
+export type Bracket = {
   key: string;
   sources: string[];
   targets: string[];
@@ -44,7 +44,7 @@ type Kind = 'spine' | 'arc' | 'same' | 'between';
 
 // What one layout pass reads: the states it moves, how each transition is
 // drawn, the rows, the shared exits.
-export interface Model {
+export type Model = {
   states: Map<string, LifeState>;
   mainPath: string[];
   transitions: DiagramEdge[];
@@ -64,7 +64,7 @@ export interface Model {
   crowded: Set<string>;
 }
 
-export interface LifecycleLayer {
+export type LifecycleLayer = {
   frames: Rect[];
   junctions: Point[];
   // Where the initial marker points: the first main-path state's left side.
@@ -241,7 +241,7 @@ function settle(model: Model, readableWidth: number): LayoutResult {
   const snapshot = () => states.map(({ x, y, width, height, cx, cy }) => ({ x, y, width, height, cx, cy }));
   for (let round = 0; round < SPACING_ROUNDS; round += 1) {
     const candidates = (['partner', 'even'] as const).map((ports) => {
-      const pass = layout(model, { ...spacing, ports } as Spacing);
+      const pass = layout(model, { ...spacing, ports });
       return { ...pass, boxes: snapshot() };
     });
     const placed = candidates.filter((candidate) => !candidate.unplacedLabels.length);

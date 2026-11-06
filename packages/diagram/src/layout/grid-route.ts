@@ -128,7 +128,7 @@ function segmentConflictsWithAvoided(start: Point, end: Point, avoided: readonly
   });
 }
 
-export interface GridRouteOptions {
+export type GridRouteOptions = {
   start: Point;
   end: Point;
   obstacles: readonly Rect[];

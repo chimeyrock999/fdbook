@@ -7,19 +7,19 @@
 import type { Side } from '#model/schema.ts';
 
 export type Point = [number, number];
-export interface Rect {
+export type Rect = {
   x: number;
   y: number;
   width: number;
   height: number;
 }
 // A measured node: its rect plus its id and centre.
-export interface Box extends Rect {
+export type Box = {
   id: string;
   cx: number;
   cy: number;
-}
-export interface Segment {
+} & Rect
+export type Segment = {
   start: Point;
   end: Point;
 }
@@ -41,7 +41,7 @@ export function rectsOverlap(a: Rect, b: Rect, gap = 0) {
   );
 }
 
-interface Corners {
+type Corners = {
   x1: number;
   y1: number;
   x2: number;
@@ -230,7 +230,7 @@ export function defaultToSide(from: Box, to: Box): Side {
 
 // The fields of an edge the router reads: its ends and the placement the
 // author pinned (sides, waypoints, label position).
-export interface RouteEdge {
+export type RouteEdge = {
   id: string;
   from: string;
   to: string;
@@ -281,7 +281,7 @@ export function alignAutomaticFacingPorts(
 
 export const OUTWARD: Record<Side, Point> = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] };
 
-export interface RhythmIssue {
+export type RhythmIssue = {
   segmentIndex: number;
   length: number;
 }
@@ -360,7 +360,7 @@ export function automaticPortSpread(
     spacingFor?: (left: RouteEdge, right: RouteEdge) => number;
   } = {},
 ) {
-  interface Item { edge: RouteEdge; endpoint: 'from' | 'to'; rect: Box; side: Side; counterpart: Box }
+  type Item = { edge: RouteEdge; endpoint: 'from' | 'to'; rect: Box; side: Side; counterpart: Box }
   const groups = new Map<string, Item[]>();
   const spread = new Map<RouteEdge, { from?: Point; to?: Point }>();
   const add = (item: Item) => {
@@ -460,9 +460,9 @@ export function labelPoint(edge: Pick<RouteEdge, 'labelAt' | 'labelDx' | 'labelD
   return [(a[0] + b[0]) / 2 + dx, (a[1] + b[1]) / 2 - 10 + dy];
 }
 
-export interface Frame extends Rect {
+export type Frame = {
   radius: number;
-}
+} & Rect
 
 // The straight parts of a frame's border, without its rounded corners.
 export function frameBorderSegments(frame: Frame): Segment[] {

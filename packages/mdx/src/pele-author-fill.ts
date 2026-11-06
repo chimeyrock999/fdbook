@@ -45,7 +45,7 @@ export function markAuthorFills(root: ParentNode): void {
     if (fill === undefined) return;
     if (hasAuthorColor(title)) colored.add(id);
     const halo = title.querySelector(':scope > text:not(.pele-cluster-label)');
-    if (!TOP_LEVEL_HALO.test(halo?.getAttribute('stroke') ?? '')) return;
+    if (!(halo?.getAttribute('stroke') ?? '').includes('var(--_a) 50%')) return;
     title.setAttribute(MARK, fill === null ? 'none' : '');
     title.style.setProperty('--author-fill', fill ?? 'var(--_bg)');
   });
@@ -84,5 +84,5 @@ export function observeAuthorFills(root: Element): () => void {
   });
   observer.observe(root, { childList: true, subtree: true });
 
-  return () => observer.disconnect();
+  return () => { observer.disconnect(); };
 }

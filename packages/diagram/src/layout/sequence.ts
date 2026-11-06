@@ -67,13 +67,13 @@ const SEGMENT_TITLE_ROOM = 54;
 const ACTIVATION_TOP = 6;
 const ACTIVATION_BOTTOM = 8;
 
-export interface SequenceNote extends Rect {
+export type SequenceNote = {
   x: number;
   baseline: number;
   lines: string[];
-}
+} & Rect
 
-export interface SequenceMessage {
+export type SequenceMessage = {
   edge: DiagramEdge;
   y: number;
   start: number;
@@ -81,17 +81,17 @@ export interface SequenceMessage {
   note: SequenceNote | null;
 }
 
-export interface SequenceSegment {
+export type SequenceSegment = {
   segment: DiagramSegment;
   frame: Rect;
   label: Rect;
 }
 
-export interface SequenceActivation extends Rect {
+export type SequenceActivation = {
   activation: DiagramActivation;
-}
+} & Rect
 
-export interface SequenceLayer {
+export type SequenceLayer = {
   participantWidth: number;
   // The column centre of each participant, by id.
   columns: Record<string, number>;

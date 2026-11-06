@@ -11,7 +11,7 @@ import type { Scene } from '#layout/scene.ts';
 
 type Box = [number, number, number, number];
 
-export interface SequenceLayoutFixture {
+export type SequenceLayoutFixture = {
   source: string;
   diagram_type: 'sequence';
   viewBox: [number, number];

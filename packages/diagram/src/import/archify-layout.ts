@@ -6,7 +6,7 @@
 
 type Pair = [number, number];
 
-export interface LayoutFixture {
+export type LayoutFixture = {
   source: string;
   viewBox: Pair;
   boundaries: [number, number, number, number][];
@@ -15,7 +15,7 @@ export interface LayoutFixture {
 
 // The report's fields a fixture keeps; it carries more (components, labels,
 // each connection's ends and variant).
-export interface LayoutReport {
+export type LayoutReport = {
   ok?: boolean;
   diagram_type?: string;
   viewBox: Pair;

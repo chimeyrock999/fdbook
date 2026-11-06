@@ -3,7 +3,7 @@
 // crossings. Archify's renderers/lifecycle/render-lifecycle.mjs (MIT,
 // LICENSE.archify: `assignTracks`, `countCrossings`).
 
-export interface Run<Connector extends { gap: number } = { gap: number }> {
+export type Run<Connector extends { gap: number } = { gap: number }> = {
   // What the run belongs to, for the layout; tracks only read the numbers.
   connector: Connector;
   tops: number[];

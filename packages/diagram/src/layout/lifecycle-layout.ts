@@ -21,7 +21,7 @@ const TRACK_STEP = 18;
 const LABEL_GAP = 6;
 const CLEARANCE = 5;
 
-export interface Spacing {
+export type Spacing = {
   spineGap: number;
   rowGap: number;
   drop: number;
@@ -31,7 +31,7 @@ export interface Spacing {
 
 export type LabelMode = 'above' | 'on' | 'beside' | 'none';
 
-export interface Route {
+export type Route = {
   points: Point[];
   // The segment the label rides beside or on.
   segment: number;
@@ -39,12 +39,12 @@ export interface Route {
   bracket?: Bracket;
 }
 
-export interface PlacedLabel extends Rect {
+export type PlacedLabel = {
   cx: number;
   cy: number;
-}
+} & Rect
 
-export interface LayoutResult {
+export type LayoutResult = {
   routes: Map<DiagramEdge, Route>;
   junctions: Point[];
   frames: Rect[];
@@ -61,10 +61,10 @@ type Connector =
   | { kind: 'loop'; transition: DiagramEdge; gap: number; order: number };
 
 type PortKey = Connector | string;
-interface Port { key: PortKey; otherX: number; order: number; x: number }
+type Port = { key: PortKey; otherX: number; order: number; x: number }
 type Ports = Map<string, Map<PortKey, Port>>;
 
-interface Arc { transition: DiagramEdge; key: string; lo: number; hi: number; index: number; level: number }
+type Arc = { transition: DiagramEdge; key: string; lo: number; hi: number; index: number; level: number }
 
 export function layout(model: Model, { spineGap, rowGap, drop, firstTrack, ports: portMode }: Spacing): LayoutResult {
   const { states, mainPath, transitions, rows, rowCount, depthOf, spineEdges, brackets, bracketOf } = model;

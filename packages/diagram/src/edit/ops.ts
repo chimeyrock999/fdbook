@@ -67,7 +67,7 @@ function reaches(diagram: Input, outer: string, inner: string, seen = new Set<st
   return (group?.members ?? []).some((member) => member === inner || reaches(diagram, member, inner, seen));
 }
 
-export interface NewNode {
+export type NewNode = {
   id: string;
   kind: string;
   label: string;
@@ -106,7 +106,7 @@ export function addNode(diagram: Input, { id, kind, label, sublabel, tag, note, 
   return next;
 }
 
-export interface NodeMove {
+export type NodeMove = {
   id: string;
   x?: number;
   y?: number;
@@ -129,7 +129,7 @@ export function moveNode(diagram: Input, { id, x, y, dx = 0, dy = 0, w, h }: Nod
   return next;
 }
 
-export interface NewEdge {
+export type NewEdge = {
   // Defaults to "<from>-<to>", numbered when that is taken.
   id?: string;
   // In a sequence, the message the new one follows (null: it comes first);
@@ -212,7 +212,7 @@ export function removeNode(diagram: Input, id: string): Input {
 }
 
 // Fields to change; `null` removes an optional one.
-export interface NodeChange {
+export type NodeChange = {
   label?: string;
   sublabel?: string | null;
   tag?: string | null;
@@ -237,7 +237,7 @@ export function updateNode(diagram: Input, id: string, change: NodeChange): Inpu
 
 // An edge's own fields, and where its route and label are pinned
 // (layout.edges); `null` removes an optional one.
-export interface EdgeChange {
+export type EdgeChange = {
   label?: string | null;
   detail?: string | null;
   variant?: EdgeVariant;
@@ -268,7 +268,7 @@ export function updateEdge(diagram: Input, id: string, change: EdgeChange): Inpu
   }
   const pinning = (['fromSide', 'toSide', 'labelDx', 'labelDy', 'labelAt'] as const).filter((field) => change[field] !== undefined);
   if (!pinning.length) return next;
-  const layout = placedOnly(next, `${pinning.join(', ')}`);
+  const layout = placedOnly(next, pinning.join(', '));
   const pins = { ...(layout.edges?.[id] ?? {}) } as Record<string, unknown>;
   for (const field of pinning) {
     const value = change[field];
@@ -283,7 +283,7 @@ export function updateEdge(diagram: Input, id: string, change: EdgeChange): Inpu
   return next;
 }
 
-export interface GroupChange {
+export type GroupChange = {
   label?: string;
   tone?: Tone;
   dashed?: boolean;

@@ -10,7 +10,7 @@ import type { Scene } from '#layout/scene.ts';
 type Box = [number, number, number, number];
 type Pair = [number, number];
 
-export interface LifecycleLayoutFixture {
+export type LifecycleLayoutFixture = {
   source: string;
   diagram_type: 'lifecycle';
   viewBox: Pair;

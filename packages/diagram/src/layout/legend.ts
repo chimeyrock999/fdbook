@@ -15,7 +15,7 @@ const TEXT_ADVANCE_EM = 0.62;
 // Archify reserves room for the count badge its legend shows on present kinds.
 const INTERACTIVE_BADGE_ALLOWANCE = 21;
 
-export interface LegendEntry {
+export type LegendEntry = {
   kind: string;
   tone: Tone;
   label: string;
@@ -28,12 +28,12 @@ export interface LegendEntry {
   mark?: 'initial' | 'final';
 }
 
-export interface PlacedLegendEntry extends LegendEntry {
+export type PlacedLegendEntry = {
   x: number;
   baseline: number;
-}
+} & LegendEntry
 
-export interface SceneLegend {
+export type SceneLegend = {
   x: number;
   titleY: number;
   // The rendered label size: the measuring size plus 2.

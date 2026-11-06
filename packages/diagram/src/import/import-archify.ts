@@ -11,13 +11,13 @@ import { diagramSchema, type DiagramInput, type EdgeVariant, type ICONS, type To
 
 type Pair = [number, number];
 
-interface ArchifyMeta {
+type ArchifyMeta = {
   title: string;
   viewBox?: Pair;
   legend?: { mode?: 'auto' | 'all' | 'hidden'; entries?: Record<string, { label?: string; visible?: boolean }> };
 }
 
-interface ArchifyNode {
+type ArchifyNode = {
   id: string;
   type: string;
   label: string;
@@ -33,7 +33,7 @@ interface ArchifyNode {
   yOffset?: number;
 }
 
-interface ArchifyRelation {
+type ArchifyRelation = {
   id?: string;
   from: string;
   to: string;
@@ -48,7 +48,7 @@ interface ArchifyRelation {
   labelDy?: number;
 }
 
-export interface ArchifySpec {
+export type ArchifySpec = {
   diagram_type: 'architecture' | 'dataflow';
   meta: ArchifyMeta;
   components?: ArchifyNode[];
@@ -60,13 +60,13 @@ export interface ArchifySpec {
   cards?: { dot?: string; title: string; items: string[] }[];
 }
 
-export interface ArchifyNote {
+export type ArchifyNote = {
   role: string;
   evidence: 'observed' | 'inferred' | 'hypothesis';
   points?: string[];
 }
 
-export interface ImportOptions {
+export type ImportOptions = {
   // The `.notes.json` sidecar: node id → { role, evidence, points }.
   notes?: Record<string, ArchifyNote>;
   // `--grow-frame <index>@<px>` from the old regen script: extra frame

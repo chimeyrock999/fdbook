@@ -39,7 +39,7 @@ const TITLE_FRAME_INSET = 4;
 const LABEL_HEIGHT = 14;
 const DETAIL_LABEL_HEIGHT = 25;
 
-export interface SceneNode extends Box {
+export type SceneNode = {
   node: DiagramNode;
   kind: DiagramKind;
   labelFont: number;
@@ -52,24 +52,24 @@ export interface SceneNode extends Box {
   text?: { label: number; sublabel: number; tag?: number; x?: number };
   // The corner glyph when not the kind's own (a lifecycle's final state).
   icon?: string;
-}
+} & Box
 
-export interface FrameTitle extends Rect {
+export type FrameTitle = {
   fontSize: number;
   baselineOffset: number;
-}
+} & Rect
 
-export interface SceneFrame extends Frame {
+export type SceneFrame = {
   group: DiagramGroup;
   title: FrameTitle;
-}
+} & Frame
 
-export interface SceneEdgeLabel extends Rect {
+export type SceneEdgeLabel = {
   lx: number;
   ly: number;
-}
+} & Rect
 
-export interface SceneEdge {
+export type SceneEdge = {
   edge: DiagramEdge;
   points: Point[];
   d: string;
@@ -79,12 +79,12 @@ export interface SceneEdge {
   label: SceneEdgeLabel | null;
 }
 
-export interface SceneLane extends Frame {
+export type SceneLane = {
   lane: DiagramLane;
   header: { x: number; y: number; text: string; fontSize: number };
-}
+} & Frame
 
-export interface Scene {
+export type Scene = {
   type: DiagramType;
   diagram: Diagram;
   width: number;
@@ -102,10 +102,10 @@ export interface Scene {
   lifecycle: LifecycleLayer | null;
 }
 
-interface RawFrame extends Rect {
+type RawFrame = {
   group: DiagramGroup;
   memberTop: number;
-}
+} & Rect
 
 // A group's node ids, through the groups it lists as members.
 export function groupNodeIds(diagram: Diagram, group: DiagramGroup, seen = new Set<string>()): string[] {

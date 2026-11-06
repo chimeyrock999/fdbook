@@ -34,32 +34,32 @@ import type { LabelRect } from './labels.ts';
 import { improveRoutes } from './router-sweep.ts';
 import type { Side } from '#model/schema.ts';
 
-export interface Routed {
+export type Routed = {
   points: Point[];
   d: string;
 }
-export interface Resolved {
+export type Resolved = {
   conn: RouteEdge;
   points: Point[];
 }
-export interface Sides {
+export type Sides = {
   fromSide: Side;
   toSide: Side;
 }
-export interface EndpointGeometry extends Sides {
+export type EndpointGeometry = {
   from: Box;
   to: Box;
   start: Point;
   end: Point;
   crowded?: boolean;
-}
-export interface ReservedLabel {
+} & Sides
+export type ReservedLabel = {
   conn: RouteEdge;
   rect: LabelRect;
 }
 export type LabelRectFor = (conn: RouteEdge, points: Point[], context: { routes: Point[][]; labels: LabelRect[] }) => LabelRect | null;
 
-export interface RouterOptions {
+export type RouterOptions = {
   // Structural frames whose borders a route may cross but never follow.
   frames: Frame[];
   // Frames an edge may end on instead of a node, by group id. They are no
@@ -143,7 +143,7 @@ function sideAwareBridgeCandidates(start: Point, end: Point, fromSide: Side, toS
 }
 
 // The state the planning pass and the readability sweep share.
-export interface RouterContext {
+export type RouterContext = {
   components: ReadonlyMap<string, Box>;
   // The box an edge end attaches to: a node, or a group's frame.
   boxOf: (id: string) => Box | undefined;

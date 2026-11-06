@@ -5,27 +5,27 @@
 
 import { normalizeRoutePoints, rectsOverlap, segmentRectClearanceWithin, type Point, type Rect } from './geometry.ts';
 
-export interface LabelRect extends Rect {
+export type LabelRect = {
   // The label's anchor: the text is centred on `lx`, its baseline at `ly`.
   lx: number;
   ly: number;
   relationIndex: number;
   // An author-placed label (labelAt / labelDx / labelDy) never moves.
   pinned?: boolean;
-}
+} & Rect
 
-export interface LabelRoute {
+export type LabelRoute = {
   relationIndex: number;
   points: readonly Point[];
 }
 
-interface IndexedSegment {
+type IndexedSegment = {
   relationIndex: number;
   start: Point;
   end: Point;
 }
 
-interface Bounds {
+type Bounds = {
   minX: number;
   maxX: number;
   minY: number;
@@ -77,7 +77,7 @@ function createSpatialGrid<T>(cellSize: number, maxCells = 4096) {
   };
 }
 
-export interface PlaceLabelsOptions {
+export type PlaceLabelsOptions = {
   labels: LabelRect[];
   routes: readonly LabelRoute[];
   components: readonly Rect[];

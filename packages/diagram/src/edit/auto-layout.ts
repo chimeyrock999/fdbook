@@ -245,7 +245,7 @@ function freeSpot(want: Box, nodeId: string, inGroups: Set<string>, diagram: Inp
   return fallback ?? start;
 }
 
-export interface LayoutResult {
+export type LayoutResult = {
   diagram: Input;
   // The node ids given a position, in the order they were placed.
   placed: string[];
