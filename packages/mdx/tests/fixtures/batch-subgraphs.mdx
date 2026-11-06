@@ -1,0 +1,79 @@
+---
+title: Styled subgraphs
+---
+
+{/* Two mermaid blocks the author-fill tests read: subgraphs the author
+cleared (fill:transparent), and one with a fill whose title Pele lifts out. */}
+
+A batch job in phases.
+
+```mermaid
+flowchart TB
+ subgraph InputFiles["Input files"]
+        S0["split 0"]
+        S1["split 1"]
+        S2["split 2"]
+  end
+ subgraph MapPhase["Map phase"]
+        Wm1(["worker"])
+        Wm2(["worker"])
+  end
+ subgraph ReducePhase["Reduce phase"]
+        Wr1(["worker"])
+  end
+ subgraph OutputFiles["Output files"]
+        O0["output file"]
+  end
+    C(["Coordinator"]) -. assign .-> Wm1 & Wr1
+    S0 --> Wm1
+    S1 --> Wm1
+    S2 --> Wm2
+    Wm1 --> Wr1
+    Wm2 --> Wr1
+    Wr1 --> O0
+
+    style S0 fill:#C8E6C9,color:#000000
+    style S1 fill:#C8E6C9,color:#000000
+    style S2 fill:#C8E6C9,color:#000000
+    style O0 fill:#BBDEFB
+    style InputFiles fill:transparent,stroke:#757575,color:#757575
+    style MapPhase fill:transparent,stroke:#757575,color:#757575
+    style ReducePhase stroke:#757575,fill:transparent,color:#757575
+    style OutputFiles stroke:#757575,fill:transparent,color:#757575
+```
+
+The services a job runs on.
+
+```mermaid
+flowchart TB
+    subgraph CLIENT["Client"]
+        Client["Client<br/>(submit, read)"]
+    end
+    subgraph SERVICES["Services"]
+        Common["Common"]
+        Store["Storage"]
+        Sched["Scheduler"]
+    end
+    subgraph SCHED_INT["Scheduler Internals"]
+        Manager["Resource manager"]
+        Node1["Node agent"]
+        Node2["Node agent"]
+    end
+    subgraph STORE_INT["Storage Internals"]
+        Index["Index node"]
+        Block1["Block node"]
+        Block2["Block node"]
+    end
+    Common --> Store
+    Common --> Sched
+    Sched --> Manager & Node1 & Node2
+    Store --> Index & Block1 & Block2
+    Client -->|Submit| Sched
+    Client -->|Read metadata| Index
+    Manager -->|Launch| Node1 & Node2
+    Node1 -->|Read/write blocks| Block1
+    Node2 -->|Read/write blocks| Block2
+
+    style STORE_INT fill:#E1F5FE
+    style SCHED_INT fill:#FFF9C4
+```

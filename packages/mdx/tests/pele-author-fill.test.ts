@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { markAuthorFills, markAuthorFillsInSvg, observeAuthorFills } from '#pele-author-fill.ts';
 
 // The MapReduce note's two styled-subgraph mermaid blocks, kept as a fixture.
-const MAPREDUCE = readFileSync(join(import.meta.dirname, 'fixtures/mapreduce-subgraphs.mdx'), 'utf8');
+const BATCH = readFileSync(join(import.meta.dirname, 'fixtures/batch-subgraphs.mdx'), 'utf8');
 
 // The dark theme gives a label on an author's fill dark ink
 // (styles/notes-theme.css); these marks are what that rule reads.
@@ -55,23 +55,23 @@ describe('markAuthorFills', () => {
     expect(marked(root, '.pele-node')).toEqual(['N2', 'N3']);
   });
 
-  it('marks a subgraph title Pele lifted out of its subgraph (MapReduce note)', async () => {
-    const start = MAPREDUCE.lastIndexOf('```mermaid', MAPREDUCE.indexOf('HDFS_INT'));
-    const block = MAPREDUCE.slice(MAPREDUCE.indexOf('\n', start) + 1, MAPREDUCE.indexOf('```', start + 10));
-    expect(block).toContain('style HDFS_INT fill:#FFF9C4');
+  it('marks a subgraph title Pele lifted out of its subgraph (batch fixture)', async () => {
+    const start = BATCH.lastIndexOf('```mermaid', BATCH.indexOf('SCHED_INT'));
+    const block = BATCH.slice(BATCH.indexOf('\n', start) + 1, BATCH.indexOf('```', start + 10));
+    expect(block).toContain('style SCHED_INT fill:#FFF9C4');
     const root = svgOf((await renderAsync(block, {})).svg);
     markAuthorFills(root);
-    const title = root.querySelector<SVGGElement>('.pele-cluster-title[data-id="HDFS_INT"]');
+    const title = root.querySelector<SVGGElement>('.pele-cluster-title[data-id="SCHED_INT"]');
     expect(title?.getAttribute('data-author-fill')).toBe('');
     expect(title?.style.getPropertyValue('--author-fill')).toBe('#FFF9C4');
-    expect(root.querySelector('.pele-cluster-title[data-id="HDFS_INT"] > .pele-cluster-label')?.textContent).toBe('HDFS Internals');
+    expect(root.querySelector('.pele-cluster-title[data-id="SCHED_INT"] > .pele-cluster-label')?.textContent).toBe('Scheduler Internals');
   });
 
   // A subgraph the author cleared (`fill:transparent`) shows the surface
   // behind it, so the halo of its lifted title takes that surface.
-  it('gives a lifted title of a cleared subgraph the surface for its halo (MapReduce note)', async () => {
-    const start = MAPREDUCE.lastIndexOf('```mermaid', MAPREDUCE.indexOf('subgraph MapPhase'));
-    const block = MAPREDUCE.slice(MAPREDUCE.indexOf('\n', start) + 1, MAPREDUCE.indexOf('```', start + 10));
+  it('gives a lifted title of a cleared subgraph the surface for its halo (batch fixture)', async () => {
+    const start = BATCH.lastIndexOf('```mermaid', BATCH.indexOf('subgraph MapPhase'));
+    const block = BATCH.slice(BATCH.indexOf('\n', start) + 1, BATCH.indexOf('```', start + 10));
     expect(block).toContain('style MapPhase fill:transparent');
     const root = svgOf((await renderAsync(block, {})).svg);
     markAuthorFills(root);
