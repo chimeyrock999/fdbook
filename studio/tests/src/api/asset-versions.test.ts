@@ -9,7 +9,7 @@ afterEach(() => {
 
 describe('asset versions', () => {
   it('adds the version once an asset changed, and points what shows it there', () => {
-    const path = 'public/notes/guide/flow.png';
+    const path = 'public/docs/guide/flow.png';
     const plain = '/api/file?path=public%2Fnotes%2Fguide%2Fflow.png';
     expect(assetUrl(path)).toBe(plain);
     document.body.innerHTML = `
@@ -19,7 +19,7 @@ describe('asset versions', () => {
       <img id="other" src="/api/file?path=public%2Fnotes%2Fguide%2Fother.png">`;
     assetChanged(path, 1234.5);
     expect(assetUrl(path)).toBe(`${plain}&v=1234.5`);
-    expect(publicAssetUrl('/notes/guide/flow.png')).toBe(`${plain}&v=1234.5`);
+    expect(publicAssetUrl('/docs/guide/flow.png')).toBe(`${plain}&v=1234.5`);
     expect(document.getElementById('shown')?.getAttribute('src')).toBe(`${plain}&v=1234.5`);
     expect(document.getElementById('framed')?.getAttribute('src')).toBe(`${plain}&v=1234.5`);
     expect(document.getElementById('longer')?.getAttribute('src')).toBe('/api/file?path=public%2Fnotes%2Fguide%2Fflow.png.png');

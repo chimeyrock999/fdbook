@@ -5,28 +5,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AssetAnswer, AssetInfo, AssetRequest, AssetsClient, AssetUsage } from '../../../src/api/assets';
 import { AssetsView } from '../../../src/assets/AssetsView';
 
-const usage = (note: string, line: number): AssetUsage => ({ note, line, column: 12, length: 20, text: `![x](/notes/guide/${String(line)}.png)`, unsure: false });
+const usage = (note: string, line: number): AssetUsage => ({ note, line, column: 12, length: 20, text: `![x](/docs/guide/${String(line)}.png)`, unsure: false });
 
 const ASSETS: AssetInfo[] = [
-  { path: 'public/notes/guide/flow.html', mtimeMs: 5, size: 100, usages: [usage('content/notes/guide/intro.mdx', 17), usage('content/notes/guide/index.mdx', 40)] },
-  { path: 'public/notes/guide/old_name.png', mtimeMs: 7, size: 100, usages: [usage('content/notes/guide/intro.mdx', 9)] },
-  { path: 'public/notes/guide/spare.svg', mtimeMs: 9, size: 100, usages: [] },
-  { path: 'public/notes/other/pic.png', mtimeMs: 1, size: 100, usages: [] },
-  { path: 'public/notes/other/Photo.PNG', mtimeMs: 2, size: 100, usages: [] },
-  { path: 'public/notes/guide/made.html', mtimeMs: 3, size: 100, usages: [] },
+  { path: 'public/docs/guide/flow.html', mtimeMs: 5, size: 100, usages: [usage('content/docs/guide/intro.mdx', 17), usage('content/docs/guide/index.mdx', 40)] },
+  { path: 'public/docs/guide/old_name.png', mtimeMs: 7, size: 100, usages: [usage('content/docs/guide/intro.mdx', 9)] },
+  { path: 'public/docs/guide/spare.svg', mtimeMs: 9, size: 100, usages: [] },
+  { path: 'public/docs/other/pic.png', mtimeMs: 1, size: 100, usages: [] },
+  { path: 'public/docs/other/Photo.PNG', mtimeMs: 2, size: 100, usages: [] },
+  { path: 'public/docs/guide/made.html', mtimeMs: 3, size: 100, usages: [] },
 ];
 
-function setup({ unsaved = false, readOnly = false, active = 'content/notes/guide/intro.mdx', current = null }: { unsaved?: boolean; readOnly?: boolean; active?: string | null; current?: string | null } = {}) {
+function setup({ unsaved = false, readOnly = false, active = 'content/docs/guide/intro.mdx', current = null }: { unsaved?: boolean; readOnly?: boolean; active?: string | null; current?: string | null } = {}) {
   const change = vi.fn((request: AssetRequest): Promise<AssetAnswer> => {
     if (request.op === 'delete') return Promise.resolve({ changes: [{ type: 'delete', path: request.path }], usages: [] });
     if (request.op === 'replace') return Promise.reject(new Error('the view does not replace'));
-    const to = `public/notes/guide/${request.name}.png`;
+    const to = `public/docs/guide/${request.name}.png`;
     return Promise.resolve({
       changes: [
         { type: 'move', path: request.path, to },
-        { type: 'change', path: 'content/notes/guide/intro.mdx', detail: '1 reference' },
+        { type: 'change', path: 'content/docs/guide/intro.mdx', detail: '1 reference' },
       ],
-      usages: [usage('content/notes/guide/intro.mdx', 9)],
+      usages: [usage('content/docs/guide/intro.mdx', 9)],
     });
   });
   const client = { listAssets: vi.fn(), change } as unknown as AssetsClient;
@@ -60,7 +60,7 @@ const openMenu = async (file: string) => {
 afterEach(cleanup);
 
 describe('AssetsView', () => {
-  it('shows public/notes as folders, opening the open note’s, with each file’s use count', () => {
+  it('shows public/docs as folders, opening the open note’s, with each file’s use count', () => {
     setup();
     expect(screen.getByRole('button', { name: 'Collapse guide' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Expand other' })).toBeTruthy();
@@ -84,18 +84,18 @@ describe('AssetsView', () => {
   it('opens a file in the main pane instead of expanding its row, and marks the open one', async () => {
     const { onOpen, rerender } = setup();
     await userEvent.click(screen.getByRole('button', { name: /^flow/ }));
-    expect(onOpen).toHaveBeenCalledWith('public/notes/guide/flow.html');
+    expect(onOpen).toHaveBeenCalledWith('public/docs/guide/flow.html');
     expect(screen.queryByRole('list', { name: 'Used in' })).toBeNull();
     expect(row(/^flow/).getAttribute('aria-current')).toBeNull();
-    rerender('public/notes/guide/flow.html');
+    rerender('public/docs/guide/flow.html');
     expect(row(/^flow/).getAttribute('aria-current')).toBe('page');
     expect(within(row(/^flow/)).getByText('2×')).toBeTruthy();
     await userEvent.click(within(await openMenu('spare.svg')).getByRole('menuitem', { name: 'Open' }));
-    expect(onOpen).toHaveBeenLastCalledWith('public/notes/guide/spare.svg');
+    expect(onOpen).toHaveBeenLastCalledWith('public/docs/guide/spare.svg');
   });
 
   it('opens the folders down to the asset open in the main pane', () => {
-    setup({ active: null, current: 'public/notes/other/pic.png' });
+    setup({ active: null, current: 'public/docs/other/pic.png' });
     expect(screen.getByRole('button', { name: 'Collapse other' })).toBeTruthy();
     expect(row(/^pic/).getAttribute('aria-current')).toBe('page');
   });
@@ -111,15 +111,15 @@ describe('AssetsView', () => {
     expect(change).not.toHaveBeenCalled();
     await userEvent.clear(input);
     await userEvent.type(input, 'Old Name');
-    expect(within(dialog).getByText('Notes get /notes/guide/old-name.png; a query or hash after it stays.')).toBeTruthy();
-    await waitFor(() => { expect(within(dialog).getByRole('list', { name: 'Files to write' }).textContent).toContain('content/notes/guide/intro.mdx'); });
-    expect(change).toHaveBeenLastCalledWith({ op: 'rename', path: 'public/notes/guide/old_name.png', name: 'old-name', baseMtime: 7 }, true);
+    expect(within(dialog).getByText('Notes get /docs/guide/old-name.png; a query or hash after it stays.')).toBeTruthy();
+    await waitFor(() => { expect(within(dialog).getByRole('list', { name: 'Files to write' }).textContent).toContain('content/docs/guide/intro.mdx'); });
+    expect(change).toHaveBeenLastCalledWith({ op: 'rename', path: 'public/docs/guide/old_name.png', name: 'old-name', baseMtime: 7 }, true);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Rename' }));
-    expect(change).toHaveBeenLastCalledWith({ op: 'rename', path: 'public/notes/guide/old_name.png', name: 'old-name', baseMtime: 7 });
+    expect(change).toHaveBeenLastCalledWith({ op: 'rename', path: 'public/docs/guide/old_name.png', name: 'old-name', baseMtime: 7 });
     await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Renamed to old-name.png; updated 1 reference in 1 note.'); });
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(reload).toHaveBeenCalled();
-    expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ changes: expect.arrayContaining([{ type: 'move', path: 'public/notes/guide/old_name.png', to: 'public/notes/guide/old-name.png' }]) as unknown }));
+    expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ changes: expect.arrayContaining([{ type: 'move', path: 'public/docs/guide/old_name.png', to: 'public/docs/guide/old-name.png' }]) as unknown }));
   });
 
   it('shows the extension the server keeps, in lowercase', async () => {
@@ -129,7 +129,7 @@ describe('AssetsView', () => {
     const dialog = screen.getByRole('dialog');
     await userEvent.type(within(dialog).getByRole('textbox', { name: 'File name' }), ' 2');
     expect(within(dialog).getByText('.png')).toBeTruthy();
-    expect(within(dialog).getByText('Notes get /notes/other/photo-2.png; a query or hash after it stays.')).toBeTruthy();
+    expect(within(dialog).getByText('Notes get /docs/other/photo-2.png; a query or hash after it stays.')).toBeTruthy();
   });
 
   it('refuses to delete a file still in use, and lists where', async () => {
@@ -148,8 +148,8 @@ describe('AssetsView', () => {
     const { change } = setup();
     await userEvent.click(within(await openMenu('spare.svg')).getByRole('menuitem', { name: 'Delete…' }));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
-    expect(change).toHaveBeenCalledWith({ op: 'delete', path: 'public/notes/guide/spare.svg', baseMtime: 9 });
-    await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Deleted public/notes/guide/spare.svg.'); });
+    expect(change).toHaveBeenCalledWith({ op: 'delete', path: 'public/docs/guide/spare.svg', baseMtime: 9 });
+    await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Deleted public/docs/guide/spare.svg.'); });
   });
 
   it('waits for the open note to be saved before renaming or deleting', async () => {
@@ -166,11 +166,11 @@ describe('AssetsView', () => {
     const menu = await openMenu('old_name.png');
     expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent.trim())).toEqual(['Open']);
     await userEvent.click(within(menu).getByRole('menuitem', { name: 'Open' }));
-    expect(onOpen).toHaveBeenCalledWith('public/notes/guide/old_name.png');
+    expect(onOpen).toHaveBeenCalledWith('public/docs/guide/old_name.png');
   });
 
-  it('lists diagrams/ after public/notes, opening a diagram and offering only Open', async () => {
-    const diagram: AssetInfo = { path: 'diagrams/guide/flow.diagram.json', mtimeMs: 4, size: 900, usages: [usage('content/notes/guide/intro.mdx', 30)] };
+  it('lists diagrams/ after public/docs, opening a diagram and offering only Open', async () => {
+    const diagram: AssetInfo = { path: 'diagrams/guide/flow.diagram.json', mtimeMs: 4, size: 900, usages: [usage('content/docs/guide/intro.mdx', 30)] };
     const onOpen = vi.fn();
     render(
       <AssetsView

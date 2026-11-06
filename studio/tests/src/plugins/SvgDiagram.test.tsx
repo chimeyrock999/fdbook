@@ -11,7 +11,7 @@ const draw = (props: Record<string, string>) =>
 
 describe('SvgDiagram', () => {
   it('shows the SVG from the file API with the site options', () => {
-    const container = draw({ src: '/notes/spark/narrow.svg', label: 'Narrow', maxWidth: '480px', invertOnDark: 'yes' });
+    const container = draw({ src: '/docs/spark/narrow.svg', label: 'Narrow', maxWidth: '480px', invertOnDark: 'yes' });
     const image = defined(container.querySelector('img'));
     expect(image.getAttribute('src')).toBe('/api/file?path=public%2Fnotes%2Fspark%2Fnarrow.svg');
     expect(image.alt).toBe('Narrow');
@@ -20,19 +20,19 @@ describe('SvgDiagram', () => {
     const plated = draw({ src: 'notes/x.svg', plate: '1', invertOnDark: 'true' });
     expect(plated.querySelector('[data-invert]')).toBeNull();
     expect(plated.querySelector('[data-plate]')).not.toBeNull();
-    expect(draw({ src: '/notes/x.svg', plate: 'no' }).querySelector('[data-plate]')).toBeNull();
+    expect(draw({ src: '/docs/x.svg', plate: 'no' }).querySelector('[data-plate]')).toBeNull();
   });
 
   // The site reads `svg ?? readPublicAsset(src)`: inline markup wins.
   it('shows inline svg first, as the site does', () => {
-    const container = draw({ svg: '<svg viewBox="0 0 1 1"><rect width="1" height="1"/></svg>', src: '/notes/other.svg' });
+    const container = draw({ svg: '<svg viewBox="0 0 1 1"><rect width="1" height="1"/></svg>', src: '/docs/other.svg' });
     const image = defined(container.querySelector('img'));
     expect(image.getAttribute('src')).toBe(`data:image/svg+xml;charset=utf-8,${encodeURIComponent('<svg viewBox="0 0 1 1"><rect width="1" height="1"/></svg>')}`);
     expect(container.querySelector('.studio-card-src')?.textContent).toBe('inline svg');
   });
 
   it('says so when the file API cannot show it', () => {
-    expect(draw({ src: '/images/x.svg' }).textContent).toContain('Not a file under public/notes/');
+    expect(draw({ src: '/images/x.svg' }).textContent).toContain('Not a file under public/docs/');
 
   });
 });

@@ -7,9 +7,9 @@ export const DEFAULT_STUDIO_HOST = '127.0.0.1';
 export const DEFAULT_STUDIO_PORT = 4310;
 
 export const studioRoot = fileURLToPath(new URL('../', import.meta.url));
-// The repository change requests branch from; `npm run studio` reads main
-// and edits in worktrees outside it (server/cr/).
-export const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
+// Where FdBook itself is installed, with its lockfile. The project it edits
+// is another folder (server/project.ts).
+export const installRoot = fileURLToPath(new URL('../../', import.meta.url));
 
 // Where the change requests' worktrees live: STUDIO_HOME, or ~/.chimey-studio.
 export function studioHome(value = process.env.STUDIO_HOME) {

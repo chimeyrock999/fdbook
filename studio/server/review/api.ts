@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '../http.ts';
 import { viewerOf } from '../security/access.ts';
-import { classifyPath, resolveWorktreePath } from '../security/paths.ts';
+import { classifyPath, NOTES_DIR, resolveWorktreePath } from '../security/paths.ts';
 import type { Anchor } from './anchors.ts';
 import { THREAD_SEVERITIES, THREAD_STATES, type ThreadAuthor, type ThreadSeverity, type ThreadState } from './shared.ts';
 import type { Threads } from './threads.ts';
@@ -52,7 +52,7 @@ export function createThreadsApi(root: string, threads: Threads | null): Handler
       if (request.method === 'GET') return { threads: await threads.list(new URL(request.url ?? '/', 'http://studio').searchParams.get('path') ?? undefined) };
       if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
       const { path, anchor, body, severity, rule } = await readJsonObject(request, MAX_BODY_BYTES, 'a thread');
-      if (typeof path !== 'string' || classifyPath(path) !== 'note') throw new HttpError(400, 'path must be a note: content/notes/….mdx');
+      if (typeof path !== 'string' || classifyPath(path) !== 'note') throw new HttpError(400, `path must be a note: ${NOTES_DIR}/….mdx`);
       const resolved = resolveWorktreePath(root, path);
       if (resolved === null || (await readFile(resolved.absolute).then(() => false, () => true))) throw new HttpError(404, `no such note: ${path}`);
       if (rule !== undefined && rule !== null && typeof rule !== 'string') throw new HttpError(400, 'rule must be text');

@@ -1,6 +1,6 @@
 import type { AssetInfo } from '../api/assets';
-import { DIAGRAMS_DIR } from '@site/lib/diagram/source';
 import { ASSETS_PREFIX } from '../media/asset-names';
+import { DIAGRAMS_DIR } from '../../server/security/asset-types';
 
 // public/notes as folders, for the Assets view, and diagrams/ the same way
 // (`prefix`). Paths are worktree paths; the root is the area itself.

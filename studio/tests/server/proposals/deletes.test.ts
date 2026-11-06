@@ -13,8 +13,8 @@ describe('delete proposals', () => {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'notes-studio-deletes-'));
-    await mkdir(join(root, 'content/notes'), { recursive: true });
-    await writeFile(join(root, 'content/notes/a.mdx'), '---\ntitle: A\n---\n');
+    await mkdir(join(root, 'content/docs'), { recursive: true });
+    await writeFile(join(root, 'content/docs/a.mdx'), '---\ntitle: A\n---\n');
   });
   afterEach(async () => {
     await rm(root, { recursive: true, force: true });
@@ -45,7 +45,7 @@ describe('delete proposals', () => {
   it('shows a proposal whose page went another way as gone', async () => {
     const { deletes } = store();
     const { proposal } = await deletes.propose({ path: 'a.mdx', by });
-    await rm(join(root, 'content/notes/a.mdx'));
+    await rm(join(root, 'content/docs/a.mdx'));
     expect((await deletes.read(proposal.id)).state).toBe('gone');
   });
 });

@@ -20,7 +20,7 @@ describe('run watch', () => {
   });
 
   it('keeps no earlier version of a dirty file too large to keep, rather than HEAD\'s', async () => {
-    const note = 'content/notes/large.mdx';
+    const note = 'content/docs/large.mdx';
     await writeFile(join(root, note), 'Committed.\n');
     git(root, 'add', '--', note);
     git(root, 'commit', '--quiet', '-m', 'a small note');
@@ -33,7 +33,7 @@ describe('run watch', () => {
   });
 
   it('marks a file a person saved during the run, to revert by hand', async () => {
-    const note = 'content/notes/saved.mdx';
+    const note = 'content/docs/saved.mdx';
     const watch = watchRun(root, worktreeState(root));
     await watch.ready;
     watch.savedByPerson(note);
@@ -44,7 +44,7 @@ describe('run watch', () => {
   });
 
   it('lists the files committed since the run started', async () => {
-    const note = 'content/notes/committed.mdx';
+    const note = 'content/docs/committed.mdx';
     const watch = watchRun(root, worktreeState(root));
     await watch.ready;
     await writeFile(join(root, note), 'Committed by the agent.\n');

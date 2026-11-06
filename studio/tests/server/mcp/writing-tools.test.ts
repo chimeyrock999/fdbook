@@ -11,11 +11,11 @@ import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '../../s
 import { json } from '../../support/http';
 
 const NOTES: Record<string, string> = {
-  'content/notes/data/spark.mdx': '---\ntitle: Spark driver\ntags: [spark, compute]\nkeywords: [driver]\ngraph:\n  id: spark\n  displayName: Spark\n  keywords:\n    - id: dag\n      displayName: DAG\n---\n\nThe driver plans the DAG and hands tasks to executors. See [Photon](./photon.mdx).\n',
-  'content/notes/data/photon.mdx': '---\ntitle: Photon engine\ntags: [compute]\nkeywords: [driver]\n---\n\nPhoton runs SQL faster.\n',
-  'content/notes/data/executors.mdx': '---\ntitle: Executors\ntags: [spark]\n---\n\nExecutors run tasks. Back to [the driver](./spark.mdx).\n',
-  'content/notes/other/cooking.mdx': '---\ntitle: Cooking rice\n---\n\nRice and water.\n',
-  'content/notes/other/dag.mdx': '---\ntitle: Tasks and executors\ngraph:\n  id: dags\n  displayName: DAGs\n  sections:\n    - id: s\n      displayName: S\n      keywords:\n        - id: dag\n          displayName: DAG\n---\n\nA graph of tasks.\n',
+  'content/docs/data/spark.mdx': '---\ntitle: Spark driver\ntags: [spark, compute]\nkeywords: [driver]\ngraph:\n  id: spark\n  displayName: Spark\n  keywords:\n    - id: dag\n      displayName: DAG\n---\n\nThe driver plans the DAG and hands tasks to executors. See [Photon](./photon.mdx).\n',
+  'content/docs/data/photon.mdx': '---\ntitle: Photon engine\ntags: [compute]\nkeywords: [driver]\n---\n\nPhoton runs SQL faster.\n',
+  'content/docs/data/executors.mdx': '---\ntitle: Executors\ntags: [spark]\n---\n\nExecutors run tasks. Back to [the driver](./spark.mdx).\n',
+  'content/docs/other/cooking.mdx': '---\ntitle: Cooking rice\n---\n\nRice and water.\n',
+  'content/docs/other/dag.mdx': '---\ntitle: Tasks and executors\ngraph:\n  id: dags\n  displayName: DAGs\n  sections:\n    - id: s\n      displayName: S\n      keywords:\n        - id: dag\n          displayName: DAG\n---\n\nA graph of tasks.\n',
 };
 
 // The tools for writing with an agent (#86): the notes' vocabulary, and
@@ -60,7 +60,7 @@ describe('writing tools', () => {
   it('ranks the related notes with why, the href to write, and whether it already links there', async () => {
     const { value } = await call('related_notes', { path: 'data/spark.mdx' });
     const related = value?.related as { path: string; href: string; score: number; reasons: string[]; linked: boolean }[];
-    expect(related.map((each) => each.path)).toEqual(['content/notes/data/photon.mdx', 'content/notes/data/executors.mdx', 'content/notes/other/dag.mdx']);
+    expect(related.map((each) => each.path)).toEqual(['content/docs/data/photon.mdx', 'content/docs/data/executors.mdx', 'content/docs/other/dag.mdx']);
     expect(related[1]).toMatchObject({ href: './executors.mdx', linked: false, reasons: ['tag spark', 'it links to this note', 'its title\'s words in this note: executors'] });
     expect(related[0]).toMatchObject({ score: 8, href: './photon.mdx', linked: true, reasons: ['tag compute', 'keyword driver', 'this note links to it', 'its title\'s words in this note: photon'] });
     expect(related[2]).toMatchObject({ href: '../other/dag.mdx', reasons: ['keyword dag', 'its title\'s words in this note: tasks, executors'] });

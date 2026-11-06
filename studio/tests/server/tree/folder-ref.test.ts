@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildTree } from '../../../server/tree/build';
 
 // fumadocs-core 16.8.11 gives a folder without meta.yaml no $ref at all: the
-// page tree the old loader returns for content/notes/deep/a.mdx.
+// page tree the old loader returns for content/docs/deep/a.mdx.
 vi.mock('fumadocs-core/source', () => ({
   loader: () => ({
     getPageTree: () => ({ name: '', children: [{ type: 'folder', name: 'Deep', children: [] }] }),

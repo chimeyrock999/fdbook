@@ -53,12 +53,12 @@ describe('propose_delete', () => {
     repo = await makeGitRepo();
     studio = await startCrStudio(repo, { agents: [fakeProfile()] });
     cr = (json(await send('/api/crs', 'POST', { name: 'Delete proposals' })) as { cr: ChangeRequest }).cr;
-    await put('content/notes/guide/meta.yaml', 'title: Guide\npages:\n  - first-look\n  - old\n  - shelf\n');
-    await put(`content/notes/${OLD}`, '---\ntitle: Old\n---\n\nOld text.\n\n![a](/notes/guide/old/a.png)\n');
-    await put('content/notes/guide/first-look.mdx', '---\ntitle: First look\n---\n\nA first look. See [old](./old.mdx).\n');
-    await put('public/notes/guide/old/a.png', Buffer.from([0x89, 0x50, 0x4e, 0x47]));
-    await put('content/notes/guide/shelf/meta.yaml', 'title: Shelf\npages: [one]\n');
-    await put('content/notes/guide/shelf/one.mdx', '---\ntitle: One\n---\n\nOne.\n');
+    await put('content/docs/guide/meta.yaml', 'title: Guide\npages:\n  - first-look\n  - old\n  - shelf\n');
+    await put(`content/docs/${OLD}`, '---\ntitle: Old\n---\n\nOld text.\n\n![a](/docs/guide/old/a.png)\n');
+    await put('content/docs/guide/first-look.mdx', '---\ntitle: First look\n---\n\nA first look. See [old](./old.mdx).\n');
+    await put('public/docs/guide/old/a.png', Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    await put('content/docs/guide/shelf/meta.yaml', 'title: Shelf\npages: [one]\n');
+    await put('content/docs/guide/shelf/one.mdx', '---\ntitle: One\n---\n\nOne.\n');
     client = new Client({ name: 'test', version: '1.0.0' });
     await client.connect(new StreamableHTTPClientTransport(new URL(`${studio.origin}/api/mcp`)));
   }, 30_000);
@@ -71,7 +71,7 @@ describe('propose_delete', () => {
 
   it('proposes a delete with what it takes, and deletes nothing', async () => {
     expect((await client.listTools()).tools.map((tool) => tool.name)).toContain('propose_delete');
-    const proposed = await call('propose_delete', { cr: cr.slug, path: `content/notes/${OLD}`, summary: 'Superseded by first look.' });
+    const proposed = await call('propose_delete', { cr: cr.slug, path: `content/docs/${OLD}`, summary: 'Superseded by first look.' });
     expect(proposed.error).toBe(false);
     expect(proposed.value).toMatchObject({
       path: OLD,
@@ -80,11 +80,11 @@ describe('propose_delete', () => {
       changes: [
         { type: 'delete', path: OLD },
         { type: 'change', path: 'guide/meta.yaml', detail: 'removes "old"' },
-        { type: 'delete', path: 'public/notes/guide/old/a.png' },
+        { type: 'delete', path: 'public/docs/guide/old/a.png' },
       ],
       linksLeft: [{ note: 'guide/first-look.mdx', line: 5, href: './old.mdx' }],
     });
-    expect(await exists(`content/notes/${OLD}`)).toBe(true);
+    expect(await exists(`content/docs/${OLD}`)).toBe(true);
     expect(await deletes()).toEqual([expect.objectContaining({ path: OLD, state: 'open', summary: 'Superseded by first look.', by: { kind: 'person', login: null } })]);
   });
 
@@ -112,13 +112,13 @@ describe('propose_delete', () => {
   it('accepts with the base of the dry run shown: the delete runs, edits on the note are dropped', async () => {
     const edit = (json(await send(`/cr/${cr.slug}/api/proposals`)) as { proposals: ProposalView[] }).proposals;
     expect(edit).toEqual([]);
-    await call('propose_edit', { cr: cr.slug, path: `content/notes/${OLD}`, edits: [{ find: 'Old text.', replace: 'Older text.' }] });
+    await call('propose_edit', { cr: cr.slug, path: `content/docs/${OLD}`, edits: [{ find: 'Old text.', replace: 'Older text.' }] });
     const proposal = (await deletes()).find((each) => each.path === OLD);
     if (proposal === undefined) throw new Error('no delete proposal for the old page');
     const { base } = await dryRun(OLD);
     expect((await decide(proposal.id, { op: 'accept' })).status).toBe(400);
     expect((await decide(proposal.id, { op: 'accept', base: 'stale' })).status).toBe(409);
-    expect(await exists(`content/notes/${OLD}`)).toBe(true);
+    expect(await exists(`content/docs/${OLD}`)).toBe(true);
 
     const controller = new AbortController();
     const response = await fetch(`${studio.origin}/cr/${cr.slug}/api/proposals/events`, { signal: controller.signal });
@@ -131,19 +131,19 @@ describe('propose_delete', () => {
     while (!buffer.includes('event: delete-proposal')) buffer += (await reader.read()).value ?? '';
     controller.abort();
 
-    expect(await exists(`content/notes/${OLD}`)).toBe(false);
-    expect(await exists('public/notes/guide/old/a.png')).toBe(false);
+    expect(await exists(`content/docs/${OLD}`)).toBe(false);
+    expect(await exists('public/docs/guide/old/a.png')).toBe(false);
     const { proposals } = json(await send(`/cr/${cr.slug}/api/proposals`)) as { proposals: ProposalView[] };
     expect(proposals.flatMap((each) => each.hunks.map((hunk) => hunk.state))).toEqual(['dropped']);
     expect((await decide(proposal.id, { op: 'reject' })).status).toBe(409);
   });
 
   it('rejects without touching the files', async () => {
-    await put('content/notes/guide/spare.mdx', '---\ntitle: Spare\n---\n\nSpare.\n');
+    await put('content/docs/guide/spare.mdx', '---\ntitle: Spare\n---\n\nSpare.\n');
     const { value } = await call('propose_delete', { cr: cr.slug, path: 'guide/spare.mdx' });
     const rejected = await decide((value as { id: string }).id, { op: 'reject' });
     expect((json(rejected) as { proposal: DeleteProposalView }).proposal.state).toBe('rejected');
-    expect(await exists('content/notes/guide/spare.mdx')).toBe(true);
+    expect(await exists('content/docs/guide/spare.mdx')).toBe(true);
   });
 
   it('settles an open proposal when the person deletes from the tree', async () => {

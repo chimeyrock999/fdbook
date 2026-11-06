@@ -8,7 +8,7 @@ import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '../../s
 import { json } from '../../support/http';
 import { syncWith, TextEditor } from '../../support/sync';
 
-const NOTE = 'content/notes/database/index.mdx';
+const NOTE = 'content/docs/database/index.mdx';
 
 describe('what each role may do', () => {
   let studio: AuthStudio;
@@ -49,7 +49,7 @@ describe('what each role may do', () => {
       // The socket is closed (#115): the save waits for a connection that never comes back.
       void doc.flush().catch(() => undefined);
       await new Promise((resolve) => setTimeout(resolve, 300));
-      expect(await readFile(join(studio.root, 'content/notes/streaming/index.mdx'), 'utf8')).toBe(opened.text);
+      expect(await readFile(join(studio.root, 'content/docs/streaming/index.mdx'), 'utf8')).toBe(opened.text);
       // Nor does it read any more: the socket is gone and its reconnects are refused.
       expect(sync.status()).toBe('offline');
     } finally {
@@ -77,8 +77,8 @@ describe('change requests with sign-in', () => {
 
   const create = async (name: string) => (json(await send('/api/crs', { method: 'POST', body: { name }, ...writer })) as { cr: ChangeRequest }).cr;
   const commitIn = async (cr: ChangeRequest, text: string) => {
-    await writeFile(join(cr.worktree ?? '', 'content/notes/guide/first-look.mdx'), `---\ntitle: First look\n---\n\n${text}\n`);
-    const response = await send(`/cr/${cr.slug}/api/changes`, { method: 'POST', body: { message: `docs(notes): ${text}`, paths: ['content/notes/guide/first-look.mdx'] }, ...writer });
+    await writeFile(join(cr.worktree ?? '', 'content/docs/guide/first-look.mdx'), `---\ntitle: First look\n---\n\n${text}\n`);
+    const response = await send(`/cr/${cr.slug}/api/changes`, { method: 'POST', body: { message: `docs(notes): ${text}`, paths: ['content/docs/guide/first-look.mdx'] }, ...writer });
     expect(response.status).toBe(200);
   };
   const discard = (cr: ChangeRequest, as: { cookie: string; csrf: string }, dryRun = false) =>

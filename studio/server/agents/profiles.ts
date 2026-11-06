@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { parse } from 'yaml';
 import { run } from '../cr/git.ts';
+import { NOTES_DIR } from '../security/paths.ts';
 import { AGENT_NAMES, type AgentId, type AgentInfo, type AgentRole } from './shared.ts';
 
 // How the Studio starts one agent over ACP. Each agent keeps its own login
@@ -72,7 +73,7 @@ function installed(command: string, args: string[], install: string) {
 // Notes are not edited in place either: an author proposes (the Studio's
 // propose_edit), and a person accepts. An Edit rule covers every file tool
 // (Edit, MultiEdit, Write); the path is the worktree's, the session's cwd.
-const CLAUDE_AUTHOR_DENY = ['Bash(git push:*)', 'Bash(gh:*)', 'Edit(content/notes/**/*.mdx)'];
+const CLAUDE_AUTHOR_DENY = ['Bash(git push:*)', 'Bash(gh:*)', `Edit(${NOTES_DIR}/**/*.mdx)`];
 // A reviewer reads: no edits, and no shell that could make one.
 const CLAUDE_REVIEWER_DENY = ['Edit', 'MultiEdit', 'Write', 'NotebookEdit', 'Bash'];
 

@@ -1,10 +1,10 @@
-import { classifyPath } from '../../server/security/asset-types';
+import { BASE_URL, classifyPath, NOTES_DIR, PUBLIC_DIR, siteUrlOf } from '../../server/security/asset-types';
 import { CURRENT_CR } from '../api/workspace';
 import { renamedPath } from '../tree/tree';
 
-export const NOTES_PREFIX = 'content/notes/';
+export const NOTES_PREFIX = `${NOTES_DIR}/`;
 
-// The file API speaks worktree paths, the sync socket paths inside content/notes.
+// The file API speaks worktree paths, the sync socket paths inside the notes.
 export const syncPath = (path: string) => path.slice(NOTES_PREFIX.length);
 
 // The open note (a sync path) while it has edits not on disk yet, from the
@@ -84,15 +84,16 @@ export function noteRoute(path: string) {
   const segments = syncPath(path).replace(/\.mdx$/, '').split('/');
   if (segments.at(-1) === 'index') segments.pop();
   const slugs = segments.filter((segment) => !/^\(.+\)$/.test(segment));
-  return ['/notes', ...slugs.map(encodeURIComponent)].join('/');
+  return [BASE_URL, ...slugs.map(encodeURIComponent)].join('/');
 }
 
 // What the site serves for a worktree path: a note's page, a file under
-// public/ as it is (`/notes/…`), and the notes' home for anything else (a
-// diagram is drawn in the notes, not served).
+// the public folder as it is (`/docs/…`), and the notes' home for anything
+// else (a diagram is drawn in the notes, not served).
 export function siteRoute(path: string | null) {
-  if (path === null || !(path.startsWith('public/') || path.startsWith(NOTES_PREFIX))) return '/notes';
-  if (path.startsWith('public/')) return `/${path.slice('public/'.length).split('/').map(encodeURIComponent).join('/')}`;
+  const inPublic = path?.startsWith(`${PUBLIC_DIR}/`) === true;
+  if (path === null || !(inPublic || path.startsWith(NOTES_PREFIX))) return BASE_URL;
+  if (inPublic) return siteUrlOf(path).split('/').map(encodeURIComponent).join('/');
   return noteRoute(path);
 }
 

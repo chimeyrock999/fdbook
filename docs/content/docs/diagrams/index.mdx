@@ -1,0 +1,164 @@
+---
+title: Diagrams
+description: The diagram file format the diagram editor and the diagram tools edit.
+---
+
+Each `<page path>/<name>.diagram.json` in the project's diagrams folder
+(`diagrams` in [Configuration](../guide/configuration.mdx)) is one diagram,
+drawn into a page with `<Diagram src="<page path>/<name>" />`. The site lays it out and routes
+its edges when it builds (`lib/diagram`) and inlines the SVG, so a note ships
+the drawing and a small viewer: hover a node to light its edges, click it to
+dim the rest and read its note, expand for pan, zoom, the cards and export.
+
+The format is checked by `lib/diagram/schema.ts`; `diagram.schema.json` is its
+JSON Schema for editors. What a diagram
+says sits apart from where it is drawn, so a change of meaning and a move read
+as separate diffs:
+
+```jsonc
+{
+  "$schema": "../../diagram.schema.json",
+  "version": 1,
+  "title": "From a program to its tasks",
+  // What this diagram calls its nodes: a legend name, a tone and an icon.
+  "kinds": [{ "id": "stage", "label": "Plan stage", "tone": "green", "icon": "code" }],
+  // Optional labels for notes, such as how sure the author is.
+  "badges": [{ "id": "observed", "label": "Observed", "tone": "green" }],
+  "nodes": [{
+    "id": "plan", "kind": "stage", "label": "Logical plan", "sublabel": "or RDD lineage",
+    "note": { "role": "What the node does.", "badge": "observed", "points": ["A detail."] }
+  }],
+  "groups": [{ "id": "app", "label": "Application", "members": ["plan"] }],
+  "edges": [{ "id": "build", "from": "ops", "to": "plan", "label": "build", "variant": "emphasis" }],
+  "cards": [{ "title": "A takeaway", "tone": "gold", "items": ["One line."] }],
+  "layout": {
+    "canvas": [1080, 606],
+    "nodes": { "plan": { "x": 560, "y": 120, "w": 190, "h": 68 } },
+    "groups": { "app": { "pad": 16, "grow": 24 } },
+    "edges": { "build": { "fromSide": "right", "toSide": "left", "labelDy": 24 } }
+  }
+}
+```
+
+- **Tones**: `blue`, `green`, `gold`, `orange`, `red`, `teal`, `slate`, each
+  with a light and a dark value in `styles/diagram.css`.
+- **Icons**: `window`, `code`, `cylinder`, `cloud`, `shield`, `queue`,
+  `external`, `calendar`, `clock`, `person`, `briefcase`, `flag`, `moon`,
+  `dot` (the default), `none`.
+- **Groups** wrap nodes, or other groups' nodes, in a frame sized from its
+  members plus `pad`; `tone` colours it (orange by default) and `dashed: true`
+  marks a rule rather than a place. `grow` adds frame below the members, for
+  nested frames that would share a bottom edge.
+- **Edges** take `variant` `default`, `emphasis`, `dashed` or `alert`, and
+  `bidirectional: true` for a head at both ends. An edge may end on a group's
+  frame. A `detail` is a second, smaller label line.
+- **Notes and cards are MDX**: a node's `role` is a block (paragraphs,
+  lists), its `points` and a card's `items` are inline, all compiled when the
+  site builds with the note pages' directives and components, so `**bold**`,
+  `` `code` ``, links and `:keyword[Map]{id="map"}` work. A note holds no
+  code: `{…}` and `import`/`export` are refused. Text that is not valid MDX
+  that way shows as written; escape a literal `<` or `{` as `\<` or `\{`.
+- **Lanes** are columns with a numbered header.
+- **Layout**: every node needs a box before it draws; a node without one is
+  placed by the auto layout (elkjs, `lib/diagram/auto-layout.ts`),
+  next to what it connects to, without moving a node already placed. Routes
+  are planned around nodes, frame borders and other routes; `via` pins
+  waypoints, `fromSide`/`toSide` pin the ends, `labelAt`/`labelDx`/`labelDy`
+  pin a label. Without `canvas` the drawing is fitted to its content.
+
+## Sequences
+
+`"type": "sequence"` makes the diagram a sequence: its `nodes` are the
+participants, in columns in the order the file lists them, and its `edges`
+are the messages, down the timeline in the order the file lists them. It has
+no `layout`, `groups` or `lanes`: the order is the layout, so moving a
+message is moving its line in the file.
+
+```jsonc
+{
+  "$schema": "../diagram.schema.json",
+  "version": 1,
+  "type": "sequence",
+  "title": "A remote procedure call through its stub",
+  "kinds": [{ "id": "proxy", "label": "Stub", "tone": "green", "icon": "queue" }],
+  "nodes": [{ "id": "stub", "kind": "proxy", "label": "Client stub", "sublabel": "marshals arguments" }],
+  // Every message has a label; `detail` is the note under the arrow.
+  "edges": [{ "id": "request", "from": "stub", "to": "server", "label": "request bytes", "detail": "over TCP", "variant": "emphasis" }],
+  // A phase of the timeline, from its first message to its last.
+  "segments": [{ "label": "Round trip", "from": "request", "to": "reply" }],
+  // A participant busy from one message to another.
+  "activations": [{ "node": "server", "from": "request", "to": "reply" }]
+}
+```
+
+- **Variants**: `emphasis` for the main request, `return` for a reply (a
+  quiet dashed line with an open head), `dashed` for async work, events and
+  logging, `alert` for auth, policy or a failure; the legend lists the ones
+  used.
+- Segments do not nest and never share a message, unlike Archify's
+  phases; importing an Archify spec with nested phases is refused.
+- A message goes between two participants: a step a participant takes on
+  its own goes in the `detail` of the message around it, or in a card.
+- The canvas is 920px wide for four participants or more and narrower for
+  two or three short ones; its height follows the timeline.
+- The [examples](./examples.mdx) (two converted from Archify) are each
+  held to Archify's own drawing of them (`lib/diagram/ARCHIFY.md`), as are
+  the lifecycle examples there.
+
+## Lifecycles
+
+`"type": "lifecycle"` makes the diagram a state machine: its `nodes` are the
+states, its `edges` the transitions, and `mainPath` lists the happy path from
+the initial state, each step joined to the next by a transition. Like a
+sequence it has no `layout`, `groups` or `lanes`: the main path is one row
+left to right, a transition back to an earlier phase (or skipping ahead) is
+an arc above it, and every other state sits in a row below, by its distance
+from the main path.
+
+```jsonc
+{
+  "$schema": "../diagram.schema.json",
+  "version": 1,
+  "type": "lifecycle",
+  "title": "An instance in a cluster backed by an instance pool",
+  "kinds": [{ "id": "parked", "label": "Waiting", "tone": "orange", "icon": "hourglass" }],
+  "mainPath": ["launching", "ready", "placed", "terminated"],
+  "nodes": [{ "id": "idle", "kind": "parked", "label": "IDLE IN POOL", "sublabel": "warm capacity" }],
+  // A guard goes in the label, UML style; `detail` is a second, smaller line.
+  "edges": [{ "id": "release", "from": "placed", "to": "idle", "label": "release", "detail": "pool enabled" }]
+}
+```
+
+- The first main-path state gets the initial marker; a state with no
+  transition out gets a double border as a final state. Both follow from
+  the structure, and the legend lists them.
+- A state's tone and glyph come from its kind; with no icon a state shows
+  none, a final one the `stop` glyph. `hourglass`, `diamond`, `check` and
+  `cross` suit waiting, decision, success and failure kinds.
+- Main-path transitions are emphasised unless they name another variant.
+- One exit several phases share (the same label, detail and variant to the
+  same state) is drawn once: from a dashed frame around consecutive phases,
+  or from a bus with junction dots. Give such exits one label to share.
+- A state may transition to itself.
+
+The layout, routing and label placement are ported from
+[Archify](https://github.com/tt-a1i/archify) (MIT, `lib/diagram/LICENSE.archify`), whose specs these
+diagrams were converted from (`lib/diagram/import-archify.ts`); which
+Archify release the port matches, and how to check a new one, is in
+`lib/diagram/ARCHIFY.md`. A diagram
+that does not draw shows a placeholder in the note with the first problem;
+the checks (`lib/diagram/validate.ts`) each have a stable code, the place in
+the file (`path`, such as `layout.nodes.plan`) and a fix.
+
+## Tools
+
+- By hand, open the diagram from the Studio's Assets view: its editor draws
+  it with this renderer and lets you drag nodes, frames and waypoints,
+  connect nodes, and edit the properties or the JSON; a sequence's editor
+  reorders participants and messages instead, a lifecycle's adds transitions
+  and edits the main path ([Using the Studio](../guide/using.mdx#diagrams)).
+- In a change request, agents use the Studio MCP's `diagram_*` tools
+  (`studio/server/mcp/diagram-tools.ts`), which make the same edits through
+  the Studio's file store; `lib/diagram/ops.ts` holds the edits both share.
+
+The [examples](./examples.mdx) draw one diagram of each type.

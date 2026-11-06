@@ -5,8 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { notesMetaSchema, notesPageSchema } from '@site/lib/notes-schema';
 
-const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
-const notesDir = join(repoRoot, 'content/notes');
+const notesDir = join(fileURLToPath(new URL('../../../', import.meta.url)), 'docs/content/docs');
 const FRONTMATTER_REGEX = /^---\r?\n(?:([\s\S]*?)\r?\n)?---/;
 
 function listFiles(dir: string): string[] {
@@ -27,7 +26,7 @@ function readFrontmatter(file: string): unknown {
   return (match?.[1] ? parse(match[1]) : null) ?? {};
 }
 
-describe('shared notes schema on content/notes', () => {
+describe('shared notes schema on content/docs', () => {
   it('finds the notes', () => {
     expect(pages.length).toBeGreaterThan(0);
     expect(metas.length).toBeGreaterThan(0);

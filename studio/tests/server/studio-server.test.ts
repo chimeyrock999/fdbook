@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { repoRoot } from '../../server/config';
+import { installRoot } from '../../server/config';
 import { rawRequest } from '../support/http';
 import { startStudioServer, type StudioServer } from '../../server/studio-server';
 
@@ -31,9 +31,9 @@ describe('studio server', () => {
   });
 
   it('serves shared site code but not the rest of the repo', async () => {
-    const shared = await fetch(new URL(`/@fs${repoRoot}lib/notes-schema.ts`, studio.url));
+    const shared = await fetch(new URL(`/@fs${installRoot}lib/notes-schema.ts`, studio.url));
     expect(shared.status).toBe(200);
-    const other = await fetch(new URL(`/@fs${repoRoot}package.json`, studio.url));
+    const other = await fetch(new URL(`/@fs${installRoot}package.json`, studio.url));
     expect(other.status).toBe(403);
   });
 

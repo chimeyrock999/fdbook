@@ -354,7 +354,7 @@ describe('NoteHeader', () => {
   // Through a real note: only the title line moves.
   it('edits the title of a real note and nothing else', async () => {
     // jsdom's import.meta.url is not a file URL; tests run from the Studio root.
-    const real = await readFile(join(process.cwd(), '../../content/notes/distributed-systems/mapreduce/index.mdx'), 'utf8');
+    const real = await readFile(join(process.cwd(), '../../content/docs/distributed-systems/mapreduce/index.mdx'), 'utf8');
     const writes: string[] = [];
     render(<Harness initial={real} onWrite={(s) => writes.push(s)} />);
     await userEvent.type(screen.getByLabelText('Title'), '!');

@@ -35,24 +35,24 @@ afterEach(() => {
 describe('useLint', () => {
   it('checks the text once typing pauses', async () => {
     const { lint, lintNote, files } = fakes();
-    const { result, rerender } = renderHook(({ text }) => useLint(lint, files, 'content/notes/a.mdx', text), { initialProps: { text: 'a' } });
+    const { result, rerender } = renderHook(({ text }) => useLint(lint, files, 'content/docs/a.mdx', text), { initialProps: { text: 'a' } });
     expect(result.current).toEqual({ status: 'checking', issues: null });
     rerender({ text: 'ab' });
     await act(() => vi.advanceTimersByTimeAsync(LINT_DELAY_MS - 1));
     rerender({ text: 'abc' });
     await act(() => vi.advanceTimersByTimeAsync(LINT_DELAY_MS));
     expect(lintNote).toHaveBeenCalledOnce();
-    expect(lintNote.mock.calls[0]?.slice(0, 2)).toEqual(['content/notes/a.mdx', 'abc']);
+    expect(lintNote.mock.calls[0]?.slice(0, 2)).toEqual(['content/docs/a.mdx', 'abc']);
     expect(result.current).toEqual({ status: 'ready', issues: [ISSUE] });
   });
 
   it('checks again when a file changes on disk, keeping the last result meanwhile', async () => {
     const { lint, lintNote, files, emit } = fakes();
-    const { result } = renderHook(() => useLint(lint, files, 'content/notes/a.mdx', 'text'));
+    const { result } = renderHook(() => useLint(lint, files, 'content/docs/a.mdx', 'text'));
     await act(() => vi.advanceTimersByTimeAsync(LINT_DELAY_MS));
     lintNote.mockResolvedValueOnce([]);
     act(() => {
-      emit({ type: 'unlink', path: 'content/notes/b.mdx', mtimeMs: null });
+      emit({ type: 'unlink', path: 'content/docs/b.mdx', mtimeMs: null });
     });
     await act(() => vi.advanceTimersByTimeAsync(LINT_DELAY_MS));
     expect(lintNote).toHaveBeenCalledTimes(2);
@@ -61,10 +61,10 @@ describe('useLint', () => {
 
   it('does not check again for a save of the note itself', async () => {
     const { lint, lintNote, files, emit } = fakes();
-    renderHook(() => useLint(lint, files, 'content/notes/a.mdx', 'text'));
+    renderHook(() => useLint(lint, files, 'content/docs/a.mdx', 'text'));
     await act(() => vi.advanceTimersByTimeAsync(LINT_DELAY_MS));
     act(() => {
-      emit({ type: 'change', path: 'content/notes/a.mdx', mtimeMs: 2 });
+      emit({ type: 'change', path: 'content/docs/a.mdx', mtimeMs: 2 });
     });
     await act(() => vi.advanceTimersByTimeAsync(LINT_DELAY_MS));
     expect(lintNote).toHaveBeenCalledOnce();
@@ -72,7 +72,7 @@ describe('useLint', () => {
 
   it('waits for the note to open', async () => {
     const { lint, lintNote, files } = fakes();
-    const { result, rerender } = renderHook(({ text }: { text: string | null }) => useLint(lint, files, 'content/notes/a.mdx', text), {
+    const { result, rerender } = renderHook(({ text }: { text: string | null }) => useLint(lint, files, 'content/docs/a.mdx', text), {
       initialProps: { text: null as string | null },
     });
     await act(() => vi.advanceTimersByTimeAsync(LINT_DELAY_MS * 3));
@@ -85,7 +85,7 @@ describe('useLint', () => {
 
   it('reports a failed check and keeps the last issues', async () => {
     const { lint, lintNote, files } = fakes();
-    const { result, rerender } = renderHook(({ text }) => useLint(lint, files, 'content/notes/a.mdx', text), { initialProps: { text: 'a' } });
+    const { result, rerender } = renderHook(({ text }) => useLint(lint, files, 'content/docs/a.mdx', text), { initialProps: { text: 'a' } });
     await act(() => vi.advanceTimersByTimeAsync(LINT_DELAY_MS));
     lintNote.mockRejectedValueOnce(new Error('offline'));
     rerender({ text: 'b' });

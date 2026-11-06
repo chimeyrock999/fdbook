@@ -9,7 +9,7 @@ import { createAssetMedia } from '../../../src/media/asset-media';
 import { editorConfig } from '../../../src/plugins';
 import { defined } from '../../support/editor-state';
 
-const NOTE = 'content/notes/data-modeling/index.mdx';
+const NOTE = 'content/docs/data-modeling/index.mdx';
 
 // A pasted image end to end in the live editor: its paste handler, the media
 // provider, the Markdown the editor writes, and the site lint that checks the
@@ -81,12 +81,12 @@ describe('pasting an image into the editor', () => {
 
     const source = await vi.waitFor(() => {
       const markdown = defined(ref.current).getMarkdown();
-      expect(markdown).toContain('(/notes/data-modeling/warehouse-layers.png)');
+      expect(markdown).toContain('(/docs/data-modeling/warehouse-layers.png)');
       return markdown;
     }, { timeout: 3000 });
     expect(source).toMatch(/!\[image\]\(\/notes\/data-modeling\/warehouse-layers\.png\)/);
-    expect([...written.keys()]).toEqual(['public/notes/data-modeling/warehouse-layers.png']);
-    // The image shows through the file API, not as a broken /notes/… URL.
+    expect([...written.keys()]).toEqual(['public/docs/data-modeling/warehouse-layers.png']);
+    // The image shows through the file API, not as a broken /docs/… URL.
     const img = await vi.waitFor(() => defined(container.querySelector('img[src]'), 'img'));
     expect(img.getAttribute('src')).toBe('/api/file?path=public%2Fnotes%2Fdata-modeling%2Fwarehouse-layers.png');
     const lint = (exists: boolean) =>

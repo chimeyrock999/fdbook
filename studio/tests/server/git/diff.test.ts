@@ -8,10 +8,10 @@ import { startTestStudio, type TestStudio } from '../../support/studio';
 type Side = { kind: 'text'; text: string; size: number } | { kind: 'binary'; size: number };
 type Diff = { path: string; from?: string; base: string | null; status: string; before: Side | null; after: Side | null };
 
-const NOTE = 'content/notes/streaming/index.mdx';
-const PIXEL = 'public/notes/demo/pixel.png';
+const NOTE = 'content/docs/streaming/index.mdx';
+const PIXEL = 'public/docs/demo/pixel.png';
 
-// The diff API on a git worktree copy of content/notes, through the real
+// The diff API on a git worktree copy of content/docs, through the real
 // server: a change request's files against where it left main. The tests
 // run in order and build on each other's commits.
 describe('diff API', () => {
@@ -65,26 +65,26 @@ describe('diff API', () => {
     // main moves in a worktree of its own, as another change request merging would.
     const other = `${studio.root}-main`;
     git(studio.root, 'worktree', 'add', '--quiet', other, 'main');
-    await writeFile(join(other, 'content/notes/streaming/meta.yaml'), 'title: Moved on\n');
+    await writeFile(join(other, 'content/docs/streaming/meta.yaml'), 'title: Moved on\n');
     git(other, 'commit', '--quiet', '-am', 'main moved');
     git(studio.root, 'update-ref', 'refs/remotes/origin/main', 'main');
     git(studio.root, 'worktree', 'remove', '--force', other);
-    const meta = await diffOf('content/notes/streaming/meta.yaml');
+    const meta = await diffOf('content/docs/streaming/meta.yaml');
     expect(meta.base).toBe(forked);
     // main's own change is not this change request's work.
     expect(meta.status).toBe('same');
   });
 
   it('shows a new file with nothing before it, and a deleted one with nothing after it', async () => {
-    await writeFile(at('content/notes/streaming/new-page.mdx'), '# New page\n');
-    expect(await diffOf('content/notes/streaming/new-page.mdx')).toMatchObject({ status: 'A', before: null, after: { kind: 'text', text: '# New page\n' } });
-    await rm(at('content/notes/streaming/watermark-and-late-events.mdx'));
-    expect(await diffOf('content/notes/streaming/watermark-and-late-events.mdx')).toMatchObject({ status: 'D', before: { kind: 'text' }, after: null });
+    await writeFile(at('content/docs/streaming/new-page.mdx'), '# New page\n');
+    expect(await diffOf('content/docs/streaming/new-page.mdx')).toMatchObject({ status: 'A', before: null, after: { kind: 'text', text: '# New page\n' } });
+    await rm(at('content/docs/streaming/watermark-and-late-events.mdx'));
+    expect(await diffOf('content/docs/streaming/watermark-and-late-events.mdx')).toMatchObject({ status: 'D', before: { kind: 'text' }, after: null });
   });
 
   it('reads a renamed file under its old name on main', async () => {
-    const page = 'content/notes/streaming/index.mdx';
-    const moved = 'content/notes/streaming/overview.mdx';
+    const page = 'content/docs/streaming/index.mdx';
+    const moved = 'content/docs/streaming/overview.mdx';
     git(studio.root, 'mv', page, moved);
     const answer = await diffOf(moved, page);
     expect(answer).toMatchObject({ path: moved, from: page, status: 'R', before: { kind: 'text', text: original } });
@@ -92,8 +92,8 @@ describe('diff API', () => {
   });
 
   it('finds a rename already committed, and reads main under the old name', async () => {
-    const page = 'content/notes/streaming/index.mdx';
-    const moved = 'content/notes/streaming/moved.mdx';
+    const page = 'content/docs/streaming/index.mdx';
+    const moved = 'content/docs/streaming/moved.mdx';
     const edited = await readFile(at(page), 'utf8');
     git(studio.root, 'mv', page, moved);
     git(studio.root, 'commit', '--quiet', '-am', 'docs: move the page');
@@ -117,7 +117,7 @@ describe('diff API', () => {
   });
 
   it('compares a binary file by its content, and serves it at the base the diff named', async () => {
-    const pdf = 'public/notes/demo/big.pdf';
+    const pdf = 'public/docs/demo/big.pdf';
     // Larger than git's output cap for other commands: assets go up to 25 MB.
     const big = Buffer.alloc(17 * 1024 * 1024, 1);
     await writeFile(at(pdf), big);
@@ -137,26 +137,26 @@ describe('diff API', () => {
   });
 
   it('answers an SVG as text', async () => {
-    await mkdir(at('public/notes/demo'), { recursive: true });
-    await writeFile(at('public/notes/demo/shape.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>\n');
-    expect(await diffOf('public/notes/demo/shape.svg')).toMatchObject({ status: 'A', after: { kind: 'text', text: '<svg xmlns="http://www.w3.org/2000/svg"/>\n' } });
+    await mkdir(at('public/docs/demo'), { recursive: true });
+    await writeFile(at('public/docs/demo/shape.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>\n');
+    expect(await diffOf('public/docs/demo/shape.svg')).toMatchObject({ status: 'A', after: { kind: 'text', text: '<svg xmlns="http://www.w3.org/2000/svg"/>\n' } });
     // Not on main: there is nothing to serve.
-    expect((await blob('public/notes/demo/shape.svg')).status).toBe(404);
+    expect((await blob('public/docs/demo/shape.svg')).status).toBe(404);
   });
 
   it('refuses a path outside the notes, a missing path and a linked file', async () => {
     expect((await diff('package.json')).status).toBe(403);
-    expect((await diff('content/notes/../package.json')).status).toBe(403);
+    expect((await diff('content/docs/../package.json')).status).toBe(403);
     expect((await diff(NOTE, 'package.json')).status).toBe(403);
     expect((await blob('package.json')).status).toBe(403);
     expect((await rawRequest(`${studio.url}api/changes/diff`)).status).toBe(400);
-    await symlink(at(NOTE), at('content/notes/streaming/linked.mdx'));
-    expect((await diff('content/notes/streaming/linked.mdx')).status).toBe(403);
+    await symlink(at(NOTE), at('content/docs/streaming/linked.mdx'));
+    expect((await diff('content/docs/streaming/linked.mdx')).status).toBe(403);
     expect((await rawRequest(`${studio.url}api/changes/diff?path=${encodeURIComponent(NOTE)}`, { method: 'POST', headers: { Origin: studio.origin } })).status).toBe(405);
   });
 
   it('answers a path that is on neither side as not found', async () => {
-    expect((await diff('content/notes/streaming/never.mdx')).status).toBe(404);
+    expect((await diff('content/docs/streaming/never.mdx')).status).toBe(404);
   });
 
   it('has no base without a main to compare with', async () => {

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createKeyedLock, writeAtomic } from '../files/store.ts';
 import { createStudioFiles, FileConflictError } from '../files/studio-files.ts';
 import { HttpError } from '../http.ts';
-import { classifyPath } from '../security/paths.ts';
+import { classifyPath, NOTES_DIR } from '../security/paths.ts';
 import { applyAt, blocksOf, hunksOf, placeOf, rebased, type Block } from './hunks.ts';
 import type { Proposal, ProposalAuthor, ProposalHunk, ProposalOp, ProposalView, StoredHunk } from './shared.ts';
 
@@ -118,7 +118,7 @@ export function createProposals(root: string, { dir, notesLock = createKeyedLock
     // find/replace `edits` on it as it is now. It must parse and change
     // something; nothing is written to the note.
     async propose({ path, content, edits, by, summary = null }: { path: string; content?: string | undefined; edits?: Edit[] | undefined; by: ProposalAuthor; summary?: string | null }) {
-      if (classifyPath(path) !== 'note') throw new HttpError(403, `only notes take proposals (content/notes/**/*.mdx): ${path}`);
+      if (classifyPath(path) !== 'note') throw new HttpError(403, `only notes take proposals (${NOTES_DIR}/**/*.mdx): ${path}`);
       if ((content === undefined) === (edits === undefined)) throw new HttpError(400, 'give either content or edits');
       if (edits !== undefined && (edits.length === 0 || edits.length > MAX_EDITS)) throw new HttpError(400, `give 1 to ${String(MAX_EDITS)} edits`);
       const current = await note(path);

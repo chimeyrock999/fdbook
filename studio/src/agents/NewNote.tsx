@@ -60,7 +60,7 @@ export function NewNote({ client, onDraft, onClose }: {
           <button type="button" className="studio-agent-composer-tool" aria-label="Close the new note" title="Close" onClick={onClose}><X size={14} aria-hidden /></button>
         </div>
         <div className="studio-agent-newnote-row">
-          <label>Folder<input value={folder} placeholder="content/notes" onChange={(event) => { setFolder(event.target.value); }} /></label>
+          <label>Folder<input value={folder} placeholder={NOTES_DIR} onChange={(event) => { setFolder(event.target.value); }} /></label>
           <label>Title<input value={title} placeholder="What the note is about" onChange={(event) => { setTitle(event.target.value); }} /></label>
         </div>
         <span className="studio-agent-newnote-path" aria-label="Path">{inside === null ? 'The folder cannot hold . or ..' : slug === '' ? 'Give it a title' : path}</span>

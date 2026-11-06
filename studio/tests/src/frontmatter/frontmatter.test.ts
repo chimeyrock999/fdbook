@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { repoRoot } from '../../../server/config';
+import { docsRoot } from '../../support/notes';
 import { frontmatterPathAt, readFrontmatter, writeFrontmatter } from '../../../src/frontmatter/frontmatter';
 
 const note = `---
@@ -137,11 +137,11 @@ describe('writeFrontmatter', () => {
   });
 
   // Every real note reads with no schema issue, and a no-op write is byte-identical.
-  it('round-trips every note in content/notes', async () => {
+  it('round-trips every note in content/docs', async () => {
     const { glob } = await import('node:fs/promises');
     let count = 0;
-    for await (const path of glob('content/notes/**/*.mdx', { cwd: repoRoot })) {
-      const source = await readFile(join(repoRoot, path), 'utf8');
+    for await (const path of glob('content/docs/**/*.mdx', { cwd: docsRoot })) {
+      const source = await readFile(join(docsRoot, path), 'utf8');
       const read = readFrontmatter(source);
       expect(read.status, path).toBe('ok');
       if (read.status !== 'ok') continue;

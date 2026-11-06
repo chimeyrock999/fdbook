@@ -5,7 +5,7 @@ import { createFilesClient } from '../../../src/api/files';
 import { createAssetMedia, UploadCancelled, type NameRequest, type UploadNotice } from '../../../src/media/asset-media';
 import { startTestStudio, type TestStudio } from '../../support/studio';
 
-const NOTE = 'content/notes/data-modeling/index.mdx';
+const NOTE = 'content/docs/data-modeling/index.mdx';
 const png = (name: string, bytes = [0x89, 0x50, 0x4e, 0x47]) => new File([new Uint8Array(bytes)], name, { type: 'image/png' });
 
 describe('asset media provider', () => {
@@ -40,26 +40,26 @@ describe('asset media provider', () => {
   it('saves under the page folder with the chosen name and returns the site path', async () => {
     const { provider, requests, notices } = media(() => 'warehouse-layers');
     const src = await provider.upload(png('Ảnh chụp màn hình.PNG'));
-    expect(src).toBe('/notes/data-modeling/warehouse-layers.png');
+    expect(src).toBe('/docs/data-modeling/warehouse-layers.png');
     expect(requests).toEqual([
-      expect.objectContaining({ dir: 'public/notes/data-modeling', stem: 'anh-chup-man-hinh', extension: 'png' }),
+      expect.objectContaining({ dir: 'public/docs/data-modeling', stem: 'anh-chup-man-hinh', extension: 'png' }),
     ]);
-    expect([...(await readFile(join(studio.root, 'public/notes/data-modeling/warehouse-layers.png')))]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    expect([...(await readFile(join(studio.root, 'public/docs/data-modeling/warehouse-layers.png')))]).toEqual([0x89, 0x50, 0x4e, 0x47]);
     expect(notices).toEqual([{ kind: 'busy', text: 'Uploading warehouse-layers.png…' }, null]);
   });
 
   it('writes nothing when the name is cancelled', async () => {
     const { provider } = media(() => null);
     await expect(provider.upload(png('cancelled.png'))).rejects.toBeInstanceOf(UploadCancelled);
-    await expect(readFile(join(studio.root, 'public/notes/data-modeling/cancelled.png'))).rejects.toThrow(/ENOENT/);
+    await expect(readFile(join(studio.root, 'public/docs/data-modeling/cancelled.png'))).rejects.toThrow(/ENOENT/);
   });
 
   it('never overwrites a file that appeared after the name was picked', async () => {
-    await mkdir(join(studio.root, 'public/notes/data-modeling'), { recursive: true });
-    await writeFile(join(studio.root, 'public/notes/data-modeling/taken.png'), 'theirs');
+    await mkdir(join(studio.root, 'public/docs/data-modeling'), { recursive: true });
+    await writeFile(join(studio.root, 'public/docs/data-modeling/taken.png'), 'theirs');
     const { provider } = media(() => 'taken');
     await expect(provider.upload(png('mine.png'))).rejects.toThrow('taken.png already exists on this page. Upload it again under another name.');
-    expect(await readFile(join(studio.root, 'public/notes/data-modeling/taken.png'), 'utf8')).toBe('theirs');
+    expect(await readFile(join(studio.root, 'public/docs/data-modeling/taken.png'), 'utf8')).toBe('theirs');
   });
 
   it('refuses a type the site cannot serve before asking for a name', async () => {
@@ -103,7 +103,7 @@ describe('asset media provider', () => {
 
   it('shows site paths through the file API and leaves other sources alone', () => {
     const { provider } = media(() => null);
-    expect(provider.resolve?.('/notes/demo/pixel.png')).toBe(`${studio.origin}/api/file?path=public%2Fnotes%2Fdemo%2Fpixel.png`);
+    expect(provider.resolve?.('/docs/demo/pixel.png')).toBe(`${studio.origin}/api/file?path=public%2Fnotes%2Fdemo%2Fpixel.png`);
     expect(provider.resolve?.('https://example.com/x.png')).toBe('https://example.com/x.png');
   });
 });

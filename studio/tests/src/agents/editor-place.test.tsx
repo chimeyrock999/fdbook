@@ -8,7 +8,7 @@ import { pluginsExtension } from '../../../src/editor/extensions';
 import { createPlaceSource, useReportPlace } from '../../../src/editor/report-place';
 import { mountVisual, stubLayout, textAt } from '../../support/visual-editor';
 
-const NOTE = 'content/notes/guide/first-look.mdx';
+const NOTE = 'content/docs/guide/first-look.mdx';
 const TEXT = '---\ntitle: First look\n---\n\nA first look.\n\nTwo\nlines here.\n\n- one\n- two\n';
 const DOC = Text.of(TEXT.split('\n'));
 
@@ -25,7 +25,7 @@ describe('editor place', () => {
     places.set({ note: NOTE, selection: null, caret: 3 });
     places.set({ note: NOTE, selection: null, caret: 3 });
     expect(heard).toHaveBeenCalledTimes(1);
-    places.clear('content/notes/other.mdx');
+    places.clear('content/docs/other.mdx');
     expect(places.get()).not.toBeNull();
     places.clear(NOTE);
     expect(places.get()).toBeNull();

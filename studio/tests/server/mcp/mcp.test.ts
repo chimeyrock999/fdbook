@@ -17,7 +17,7 @@ import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '../../s
 import { json } from '../../support/http';
 import { syncWith, TextEditor } from '../../support/sync';
 
-const NOTE = 'content/notes/guide/first-look.mdx';
+const NOTE = 'content/docs/guide/first-look.mdx';
 
 // A tool that writes through ctx.files, as the diagram tools (#82) do.
 const WRITE_TOOL: StudioTool = {
@@ -68,7 +68,7 @@ describe('Studio MCP server', () => {
     repo = await makeGitRepo();
     studio = await startCrStudio(repo, { agents: [fakeProfile(), fakeProfile({ FAKE_MCP: 'http' }, 'codex')], tools: [WRITE_TOOL] });
     cr = (json(await send('/api/crs', 'POST', { name: 'Agent tools' })) as { cr: ChangeRequest }).cr;
-    await writeFile(worktree('content/notes/guide/index.mdx'), '---\ntitle: Guide\ntags: [intro]\n---\n\nThe guide. See [first look](./first-look.mdx).\n');
+    await writeFile(worktree('content/docs/guide/index.mdx'), '---\ntitle: Guide\ntags: [intro]\n---\n\nThe guide. See [first look](./first-look.mdx).\n');
     client = await connect(studio.origin);
   }, 30_000);
 
@@ -107,8 +107,8 @@ describe('Studio MCP server', () => {
       expect((await call(client, 'read_note', { cr, path: NOTE })).error).toBe(true);
     }
     expect((await call(client, 'read_note', { cr: cr.slug, path: '../../package.json' })).text).toMatch(/not an editable path/);
-    expect((await call(client, 'read_note', { cr: cr.slug, path: 'content/notes/.secret.mdx' })).text).toMatch(/not an editable path/);
-    expect((await call(client, 'read_note', { cr: cr.slug, path: 'content/notes/missing.mdx' })).text).toMatch(/no such note/);
+    expect((await call(client, 'read_note', { cr: cr.slug, path: 'content/docs/.secret.mdx' })).text).toMatch(/not an editable path/);
+    expect((await call(client, 'read_note', { cr: cr.slug, path: 'content/docs/missing.mdx' })).text).toMatch(/no such note/);
   });
 
   it('lists, creates and reads change requests and notes', async () => {
@@ -124,10 +124,10 @@ describe('Studio MCP server', () => {
 
   it('searches, draws the graph and lists assets', async () => {
     const found = await call(client, 'search_notes', { cr: cr.slug, query: 'first look' });
-    expect((found.value?.results as { path: string }[]).map((result) => result.path)).toEqual(expect.arrayContaining([NOTE, 'content/notes/guide/index.mdx']));
+    expect((found.value?.results as { path: string }[]).map((result) => result.path)).toEqual(expect.arrayContaining([NOTE, 'content/docs/guide/index.mdx']));
     const graph = await call(client, 'note_graph', { cr: cr.slug, path: NOTE });
-    expect(graph.value).toMatchObject({ linksTo: [], linkedFrom: ['content/notes/guide/index.mdx'] });
-    const index = await call(client, 'note_graph', { cr: cr.slug, path: 'content/notes/guide/index.mdx' });
+    expect(graph.value).toMatchObject({ linksTo: [], linkedFrom: ['content/docs/guide/index.mdx'] });
+    const index = await call(client, 'note_graph', { cr: cr.slug, path: 'content/docs/guide/index.mdx' });
     expect(index.value).toMatchObject({ linksTo: [NOTE], tags: ['intro'] });
     expect((await call(client, 'list_assets', { cr: cr.slug })).value).toEqual({ assets: [] });
   });
@@ -158,10 +158,10 @@ describe('Studio MCP server', () => {
   });
 
   it('creates a note that does not exist yet, on the run\'s Keep/Revert list', async () => {
-    const page = 'content/notes/guide/created.mdx';
+    const page = 'content/docs/guide/created.mdx';
     // A fix to the note the run created is written too, not proposed: the
     // note is still the run's own, on its Keep/Revert list.
-    const run = await runAgent(`mcp propose_edit {"path": "${page}", "content": "---\\ntitle: Created\\n---\\n\\nNew.\\n"}\nmcp propose_edit {"path": "content/notes/guide/broken.mdx", "content": "<Broken"}\nmcp propose_edit {"path": "${page}", "edits": [{"find": "New.", "replace": "Newer."}]}`);
+    const run = await runAgent(`mcp propose_edit {"path": "${page}", "content": "---\\ntitle: Created\\n---\\n\\nNew.\\n"}\nmcp propose_edit {"path": "content/docs/guide/broken.mdx", "content": "<Broken"}\nmcp propose_edit {"path": "${page}", "edits": [{"find": "New.", "replace": "Newer."}]}`);
     expect(run.said).toMatch(/mcp:\{\n {2}"created": true/);
     expect(run.said).toMatch(/mcp-error:the new note does not parse/);
     expect(run.said).toMatch(/mcp:\{\n {2}"written": true/);
@@ -250,7 +250,7 @@ describe('Studio MCP server', () => {
   }, 20_000);
 
   it('puts a tool\'s write through ctx.files on the run\'s Keep/Revert list', async () => {
-    const meta = 'content/notes/guide/meta.yaml';
+    const meta = 'content/docs/guide/meta.yaml';
     const before = await readFile(worktree(meta), 'utf8');
     const run = await runAgent(`mcp test_write {"path": "${meta}", "content": "title: By a tool\\n"}\nmcp test_write {"path": "../outside.txt", "content": "x"}`);
     expect(run.said).toMatch(/^mcp:\d/);
@@ -262,7 +262,7 @@ describe('Studio MCP server', () => {
   }, 20_000);
 
   it('reverts to the file as the run found it, even after a commit during the run', async () => {
-    const page = 'content/notes/index.mdx';
+    const page = 'content/docs/index.mdx';
     const before = await readFile(worktree(page), 'utf8');
     const { conversation: run } = json(await send(`/cr/${cr.slug}/api/agents/conversations`, 'POST', { agent: 'claude', role: 'author', prompt: `edit ${worktree(page)} by the agent\nhang` })) as { conversation: Conversation };
     const deadline = Date.now() + 10_000;
@@ -303,7 +303,7 @@ describe('Studio MCP server', () => {
   };
 
   it('lists a file the agent changed with its own tool and committed during the run', async () => {
-    const page = 'content/notes/guide/committed.mdx';
+    const page = 'content/docs/guide/committed.mdx';
     await committed(page, 'As found.\n');
     const run = await hangingRun(`sneak ${worktree(page)} by the agent`, async () => {
       await changed(page, 'As found.\n');
@@ -318,7 +318,7 @@ describe('Studio MCP server', () => {
 
   it('keeps the file as the run found it, not as the agent left it before a later write', async () => {
     // An asset: a write to a note that exists would be a proposal.
-    const page = 'public/notes/guide/twice.svg';
+    const page = 'public/docs/guide/twice.svg';
     await mkdir(dirname(worktree(page)), { recursive: true });
     await committed(page, 'As found.\n');
     const run = await runAgent(`sneak ${worktree(page)} first\nwrite ${worktree(page)} second`);
@@ -330,10 +330,10 @@ describe('Studio MCP server', () => {
   }, 20_000);
 
   it('never reverts a person\'s save made during the run', async () => {
-    const page = 'content/notes/guide/saved.mdx';
+    const page = 'content/docs/guide/saved.mdx';
     await committed(page, 'As found.\n');
     // The agent's first edit shows the run has started.
-    const marker = 'content/notes/guide/marker.mdx';
+    const marker = 'content/docs/guide/marker.mdx';
     const run = await hangingRun(`sneak ${worktree(marker)} started`, async () => {
       await changed(marker, '');
       const { mtimeMs } = json(await send(`/cr/${cr.slug}/api/file?path=${page}`)) as { mtimeMs: number };
@@ -350,9 +350,9 @@ describe('Studio MCP server', () => {
 
   // The editor saves through the notes sync, not the file API.
   it('never reverts a note a person saved in the editor during the run', async () => {
-    const page = 'content/notes/guide/typed.mdx';
+    const page = 'content/docs/guide/typed.mdx';
     await committed(page, 'As found.\n');
-    const marker = 'content/notes/guide/marker.mdx';
+    const marker = 'content/docs/guide/marker.mdx';
     const sync = syncWith(studio.origin, '', `/cr/${cr.slug}`);
     try {
       const run = await hangingRun(`sneak ${worktree(marker)} started`, async () => {
@@ -385,8 +385,8 @@ describe('Studio MCP server', () => {
     // Saved through the file API, then changed on disk some other way (as
     // the live editor's sync does): either way the note is no longer only
     // the run's draft, and its later edits are proposed.
-    const saved = 'content/notes/guide/drafted.mdx';
-    const synced = 'content/notes/guide/drafted-too.mdx';
+    const saved = 'content/docs/guide/drafted.mdx';
+    const synced = 'content/docs/guide/drafted-too.mdx';
     const go = (name: string) => join(cr.worktree ?? '', '..', `${cr.slug}-${name}-${String(Date.now())}`);
     const [first, second] = [go('first'), go('second')];
     const proposalsOf = async (path: string) => (json(await send(`/cr/${cr.slug}/api/proposals?path=${path}`)) as { proposals: ProposalView[] }).proposals;
@@ -419,10 +419,10 @@ describe('Studio MCP server', () => {
   }, 30_000);
 
   it('lists what a run changed with its own tools, to keep or revert', async () => {
-    const meta = 'content/notes/guide/meta.yaml';
+    const meta = 'content/docs/guide/meta.yaml';
     const metaBefore = await readFile(worktree(meta), 'utf8');
     const noteBefore = await readFile(worktree(NOTE), 'utf8');
-    const added = 'content/notes/guide/new.mdx';
+    const added = 'content/docs/guide/new.mdx';
     const run = await runAgent(`sneak ${worktree(NOTE)} rewritten\nwrite ${worktree(meta)} title: Changed\nsneak ${worktree(added)} new`);
     const base = `/cr/${cr.slug}/api/agents/conversations/${run.run.id}/turns/1/changes`;
     const { changes } = json(await send(base)) as { changes: TurnChange[] };

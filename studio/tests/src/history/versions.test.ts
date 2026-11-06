@@ -4,10 +4,10 @@ import { comparedWith, restoreBlocked, shortVersion, versionIds } from '../../..
 
 const sha = (digit: string) => digit.repeat(40);
 const history = (mtimeMs: number | null): PageHistory => ({
-  path: 'content/notes/a.mdx',
+  path: 'content/docs/a.mdx',
   mtimeMs,
   deleted: null,
-  versions: [sha('c'), sha('b'), sha('a')].map((each) => ({ sha: each, date: '2026-10-01T10:00:00Z', author: 'A', message: 'm', path: 'content/notes/a.mdx', status: 'M' as const, inChangeRequest: false })),
+  versions: [sha('c'), sha('b'), sha('a')].map((each) => ({ sha: each, date: '2026-10-01T10:00:00Z', author: 'A', message: 'm', path: 'content/docs/a.mdx', status: 'M' as const, inChangeRequest: false })),
 });
 
 describe('page versions', () => {

@@ -7,7 +7,8 @@ import { createAgentsInfoApi } from './agents/api.ts';
 import { createAgentInfo, PROFILES, type AgentProfile } from './agents/profiles.ts';
 import { createTranscripts } from './agents/transcripts.ts';
 import { createAuth, type AuthOptions } from './auth/auth.ts';
-import { DEFAULT_STUDIO_HOST, DEFAULT_STUDIO_PORT, repoRoot, studioRoot } from './config.ts';
+import { DEFAULT_STUDIO_HOST, DEFAULT_STUDIO_PORT, studioRoot } from './config.ts';
+import { currentAreas } from './security/asset-types.ts';
 import { createChangeRequestsApi } from './cr/api.ts';
 import { openChangeRequests, type ChangeRequestOptions, type ChangeRequests } from './cr/manager.ts';
 import { apiNotFound, HttpError, pathnameOf } from './http.ts';
@@ -52,7 +53,7 @@ function closeServer(server: Server) {
 // Main's slug for its agents' transcripts and MCP tokens: no change request takes it.
 const MAIN_SLUG = '_main';
 
-export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEFAULT_STUDIO_PORT, root = repoRoot, changeRequests, auth: authOptions = null, agents = PROFILES, tools = [] }: {
+export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEFAULT_STUDIO_PORT, root = process.cwd(), changeRequests, auth: authOptions = null, agents = PROFILES, tools = [] }: {
   host?: string;
   port?: number;
   root?: string;
@@ -82,6 +83,8 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
       root: studioRoot,
       appType: 'spa',
       server: { middlewareMode: true, port: boundPort, ws: { server } },
+      // The UI's copy of the project's areas (security/asset-types.ts).
+      define: { __FDBOOK_AREAS__: JSON.stringify(currentAreas()) },
     });
   } catch (error) {
     await closeServer(server);

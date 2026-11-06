@@ -12,7 +12,7 @@ import { sender } from '../../support/auth';
 import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '../../support/git-repo';
 import { json } from '../../support/http';
 
-const NOTE = 'content/notes/guide/first-look.mdx';
+const NOTE = 'content/docs/guide/first-look.mdx';
 const BODY = '---\ntitle: First look\n---\n\nA first look.\n\nA second paragraph.\n\nA third one.\n';
 
 const context = (change: Partial<MessageContext> = {}): MessageContext => ({ note: NOTE, selection: null, caret: null, mentions: [], attachments: [], ...change });
@@ -59,14 +59,14 @@ describe('message context', () => {
 
   it('sends the selection, mentions and attachments to the agent, and keeps them on the turn', async () => {
     const { body: { attachment } } = await attach('brief.md', '# Brief\n');
-    const sent = context({ selection: { lines: [7, 7], source: 'A second paragraph.', text: 'second' }, mentions: [{ kind: 'file', path: 'lib/helper.ts' }, { kind: 'note', path: 'content/notes/guide/index.mdx' }], attachments: [attachment] });
+    const sent = context({ selection: { lines: [7, 7], source: 'A second paragraph.', text: 'second' }, mentions: [{ kind: 'file', path: 'lib/helper.ts' }, { kind: 'note', path: 'content/docs/guide/index.mdx' }], attachments: [attachment] });
     const { conversation } = json(await send(api('/conversations'), 'POST', { agent: 'claude', role: 'author', prompt: 'env', context: sent })) as { conversation: Conversation };
     await settled(conversation.id);
     expect((await send(api(`/conversations/${conversation.id}/messages`), 'POST', { prompt: 'recall' })).status).toBe(200);
     const { events, said } = await settled(conversation.id);
     const turns = events.flatMap((event) => (event.type === 'turn' ? [event] : []));
     // The server names each mention's kind itself.
-    expect(turns[0]?.context).toEqual({ ...sent, mentions: [{ kind: 'file', path: 'lib/helper.ts' }, { kind: 'note', path: 'content/notes/guide/index.mdx' }], attachments: [{ id: attachment.id, name: 'brief.md', size: 8 }] });
+    expect(turns[0]?.context).toEqual({ ...sent, mentions: [{ kind: 'file', path: 'lib/helper.ts' }, { kind: 'note', path: 'content/docs/guide/index.mdx' }], attachments: [{ id: attachment.id, name: 'brief.md', size: 8 }] });
     expect(turns[1]?.context).toBeUndefined();
     const received = said.at(-1) ?? '';
     expect(received).toContain('recall:env\n\n---\nContext the Notes Studio adds');
@@ -108,7 +108,7 @@ describe('message context', () => {
   it('refuses a context that names what is not in the change request', async () => {
     await symlink('/etc/hosts', worktree('lib/hosts'));
     const start = (sent: unknown) => send(api('/conversations'), 'POST', { agent: 'claude', role: 'author', prompt: 'env', context: sent });
-    expect((await start(context({ note: 'content/notes/guide/nope.mdx' }))).status).toBe(400);
+    expect((await start(context({ note: 'content/docs/guide/nope.mdx' }))).status).toBe(400);
     expect((await start(context({ note: 'lib/helper.ts' }))).status).toBe(400);
     expect((await start(context({ note: null, selection: { lines: [1, 1], source: 'x', text: 'x' } }))).status).toBe(400);
     expect((await start(context({ selection: { lines: [3, 1], source: 'x', text: 'x' } }))).status).toBe(400);
@@ -157,12 +157,12 @@ describe('message context', () => {
 
 describe('message context helpers', () => {
   it('ranks a name that starts with the query first, then notes before assets before files', () => {
-    const paths = ['lib/first-aid.ts', 'content/notes/a/first.mdx', 'public/notes/first.png', 'content/notes/guide/my-first.mdx', 'docs/other.md'];
+    const paths = ['lib/first-aid.ts', 'content/docs/a/first.mdx', 'public/docs/first.png', 'content/docs/guide/my-first.mdx', 'docs/other.md'];
     expect(rankMentions(paths, 'FIRST')).toEqual([
-      { kind: 'note', path: 'content/notes/a/first.mdx' },
-      { kind: 'asset', path: 'public/notes/first.png' },
+      { kind: 'note', path: 'content/docs/a/first.mdx' },
+      { kind: 'asset', path: 'public/docs/first.png' },
       { kind: 'file', path: 'lib/first-aid.ts' },
-      { kind: 'note', path: 'content/notes/guide/my-first.mdx' },
+      { kind: 'note', path: 'content/docs/guide/my-first.mdx' },
     ]);
     expect(rankMentions(paths, '', 2)).toHaveLength(2);
   });

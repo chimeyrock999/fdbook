@@ -32,8 +32,8 @@ describe('publish API', () => {
   const publish = (title: string, body: string) => send(`${base()}/api/publish`, 'POST', { title, body });
   const edit = async (text: string) => {
     if (cr.worktree === null) throw new Error('no worktree');
-    await writeFile(join(cr.worktree, 'content/notes/guide/first-look.mdx'), `---\ntitle: First look\n---\n\n${text}\n`);
-    const response = await send(`${base()}/api/changes`, 'POST', { message: `docs(notes): ${text}`, paths: ['content/notes/guide/first-look.mdx'] });
+    await writeFile(join(cr.worktree, 'content/docs/guide/first-look.mdx'), `---\ntitle: First look\n---\n\n${text}\n`);
+    const response = await send(`${base()}/api/changes`, 'POST', { message: `docs(notes): ${text}`, paths: ['content/docs/guide/first-look.mdx'] });
     expect(response.status).toBe(200);
     return (json(response) as { sha: string }).sha;
   };
@@ -90,8 +90,8 @@ describe('publish API', () => {
       const probe = (json(await rawRequest(`${elsewhere.origin}/api/crs`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: elsewhere.origin }, body: JSON.stringify({ name: 'Fresh probe' }) })) as { cr: ChangeRequest }).cr;
       const at = (path: string, method = 'GET', body?: unknown) =>
         rawRequest(`${elsewhere.origin}/cr/${probe.slug}${path}`, { method, headers: { 'Content-Type': 'application/json', Origin: elsewhere.origin }, body: body === undefined ? undefined : JSON.stringify(body) });
-      await writeFile(join(probe.worktree ?? '', 'content/notes/index.mdx'), '---\ntitle: Home\n---\n\nFresh.\n');
-      expect((await at('/api/changes', 'POST', { message: 'docs(notes): fresh', paths: ['content/notes/index.mdx'] })).status).toBe(200);
+      await writeFile(join(probe.worktree ?? '', 'content/docs/index.mdx'), '---\ntitle: Home\n---\n\nFresh.\n');
+      expect((await at('/api/changes', 'POST', { message: 'docs(notes): fresh', paths: ['content/docs/index.mdx'] })).status).toBe(200);
       expect(json(await at('/api/preview'))).toMatchObject({ pr: null });
       if (elsewhere.fake.branchPrs instanceof Error) throw elsewhere.fake.branchPrs;
       elsewhere.fake.branchPrs.set('cr/fresh-probe', { number: 7, url: 'https://github.com/o/r/pull/7', state: 'OPEN', title: 'Fresh probe' });

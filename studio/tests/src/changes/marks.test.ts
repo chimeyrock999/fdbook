@@ -4,13 +4,13 @@ import type { TreeFolder, TreeMissing } from '../../../src/api/tree';
 import { folderMarked, missingStatus, treeMarks } from '../../../src/changes/marks';
 
 const files: ChangedFile[] = [
-  { path: 'content/notes/guide/one.mdx', status: 'M' },
-  { path: 'content/notes/guide/deep/new.mdx', status: 'A' },
-  { path: 'content/notes/guide/gone.mdx', status: 'D' },
-  { path: 'content/notes/other/meta.yaml', status: 'M' },
-  { path: 'content/notes/index.mdx', status: 'M' },
-  { path: 'content/notes/guide/moved.mdx', status: 'R', from: 'content/notes/guide/old.mdx' },
-  { path: 'public/notes/guide/pic.png', status: 'A' },
+  { path: 'content/docs/guide/one.mdx', status: 'M' },
+  { path: 'content/docs/guide/deep/new.mdx', status: 'A' },
+  { path: 'content/docs/guide/gone.mdx', status: 'D' },
+  { path: 'content/docs/other/meta.yaml', status: 'M' },
+  { path: 'content/docs/index.mdx', status: 'M' },
+  { path: 'content/docs/guide/moved.mdx', status: 'R', from: 'content/docs/guide/old.mdx' },
+  { path: 'public/docs/guide/pic.png', status: 'A' },
 ];
 
 const folder = (path: string, meta: string | null = `${path}/meta.yaml`) =>
@@ -20,7 +20,7 @@ const missing = (value: string, meta: string): TreeMissing => ({ kind: 'missing'
 describe('treeMarks', () => {
   const marks = treeMarks(files);
 
-  it('marks notes by their path in content/notes; assets are not in the tree', () => {
+  it('marks notes by their path in content/docs; assets are not in the tree', () => {
     expect(Object.fromEntries(marks.notes)).toEqual({
       'guide/one.mdx': 'M',
       'guide/deep/new.mdx': 'A',
@@ -44,6 +44,6 @@ describe('treeMarks', () => {
     expect(missingStatus(marks, missing('gone', 'guide/meta.yaml'))).toBe('D');
     expect(missingStatus(marks, missing('old', 'guide/meta.yaml'))).toBe('D');
     expect(missingStatus(marks, missing('nothing', 'guide/meta.yaml'))).toBeNull();
-    expect(missingStatus(treeMarks([{ path: 'content/notes/top/index.mdx', status: 'D' }]), missing('top', 'meta.yaml'))).toBe('D');
+    expect(missingStatus(treeMarks([{ path: 'content/docs/top/index.mdx', status: 'D' }]), missing('top', 'meta.yaml'))).toBe('D');
   });
 });

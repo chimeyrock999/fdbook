@@ -2,6 +2,7 @@ import type { ComponentRenderProps } from '@fumadocs-editor/ui';
 import { coerceBoolean, coerceNumber } from '@site/lib/mdx-props';
 import { Image } from 'lucide-react';
 import { publicAssetUrl } from '../../api/files';
+import { ASSETS_DIR } from '../../../server/security/asset-types';
 
 // components/mdx/svg-diagram.tsx as an image, with the site's reading of its
 // props: inline `svg` markup first, else the `src` file from the file API.
@@ -24,7 +25,7 @@ export function SvgDiagram({ props, children }: ComponentRenderProps) {
         <span className="studio-card-src">{props.svg ? 'inline svg' : props.src || 'no src'}</span>
       </div>
       <div className="studio-svg-diagram-view" contentEditable={false} data-plate={plate || undefined} data-invert={invert || undefined}>
-        {url ? <img src={url} alt={props.label} style={{ maxWidth }} /> : <span>Not a file under public/notes/</span>}
+        {url ? <img src={url} alt={props.label} style={{ maxWidth }} /> : <span>Not a file under {ASSETS_DIR}/</span>}
       </div>
       {children}
     </figure>

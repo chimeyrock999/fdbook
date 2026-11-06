@@ -29,7 +29,7 @@ function setup(preview: Preview, { unsaved = null, error = null, push = vi.fn(()
   // As the App holds it: the push in usePush, shared with the header.
   function Section({ next, nextUnsaved }: { next: Preview; nextUnsaved: string | null }) {
     const pusher = usePush(client, onPushed);
-    return <PreviewSection pusher={pusher} preview={next} error={error} unsaved={nextUnsaved} route="/notes/streaming/sinks" />;
+    return <PreviewSection pusher={pusher} preview={next} error={error} unsaved={nextUnsaved} route="/docs/streaming/sinks" />;
   }
   const view = (next: Preview, nextUnsaved: string | null = unsaved) => <Section next={next} nextUnsaved={nextUnsaved} />;
   const { rerender } = render(view(preview));
@@ -144,23 +144,23 @@ describe('PreviewSection', () => {
 
 describe('OpenPreview', () => {
   it('opens the pushed preview on the page shown, marked with its build', () => {
-    render(<OpenPreview preview={pushed('building')} route="/notes/database" />);
+    render(<OpenPreview preview={pushed('building')} route="/docs/database" />);
     const link = screen.getByRole('link', { name: 'Open preview (Building)' });
     expect(link.getAttribute('href')).toBe(`${URL}/notes/database`);
     expect(link.dataset.build).toBe('building');
   });
 
   it('shows nothing before the branch is pushed', () => {
-    const { container } = render(<OpenPreview preview={fresh} route="/notes" />);
+    const { container } = render(<OpenPreview preview={fresh} route="/docs" />);
     expect(container.textContent).toBe('');
   });
 });
 
 describe('siteRoute', () => {
   it("is the page of a note, the file of an asset, and the notes' home otherwise", () => {
-    expect(siteRoute('content/notes/database/index.mdx')).toBe('/notes/database');
-    expect(siteRoute('public/notes/guide/a b.png')).toBe('/notes/guide/a%20b.png');
-    expect(siteRoute(null)).toBe('/notes');
+    expect(siteRoute('content/docs/database/index.mdx')).toBe('/docs/database');
+    expect(siteRoute('public/docs/guide/a b.png')).toBe('/docs/guide/a%20b.png');
+    expect(siteRoute(null)).toBe('/docs');
   });
 });
 

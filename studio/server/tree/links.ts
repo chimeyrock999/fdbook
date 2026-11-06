@@ -1,6 +1,7 @@
 import { visit } from 'unist-util-visit';
 import { parseNote } from '../lint/lint.ts';
 import { joinPath, pageUrl } from '../lint/rules/links.ts';
+import { BASE_URL } from '../security/asset-types.ts';
 import { markdownRange } from '../markdown/destination.ts';
 
 // A page or folder that gets a new name in the same folder. Paths are
@@ -83,7 +84,7 @@ export function rewriteHref(href: string, notePath: string, rename: Rename, know
       : null;
     if (file !== null) return file + suffix;
   }
-  const fromUrl = (rename.folder ? `/notes/${rename.from}` : pageUrl(rename.from)).slice(1);
+  const fromUrl = (rename.folder ? `${BASE_URL}/${rename.from}` : pageUrl(rename.from)).slice(1);
   const toName = rename.folder ? name : name.replace(/\.mdx$/, '');
   const target = urlPath(path, notePath);
   if (target === null || !known.urls.has(target)) return null;

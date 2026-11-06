@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { DeletedPage } from '../api/history';
 import { timeAgo } from '../changes/labels';
 import { groupDeleted, shortVersion } from './versions';
+import { NOTES_DIR } from '../../server/security/asset-types';
 
 const matches = (page: DeletedPage, query: string) => {
   const words = query.trim().toLowerCase();
@@ -28,7 +29,7 @@ export function DeletedPagesPage({ pages, error, readOnly, onOpen }: {
             <span className="studio-diff-name truncate">Deleted pages</span>
             {pages !== null && <span className="studio-history-chip">{pages.length}</span>}
           </h1>
-          <span>content/notes, deleted on {readOnly ? 'main' : 'this change request'}</span>
+          <span>{NOTES_DIR}, deleted on {readOnly ? 'main' : 'this change request'}</span>
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">

@@ -6,6 +6,7 @@ import type { CreateKind, TreeChange, TreeClient, TreeFolder, TreeNode, TreeRequ
 import { makeOthersInert, trapFocus } from '../dialog-focus';
 import { slugify } from '../slug';
 import { renamedPath, slugOf } from './tree';
+import { BASE_URL } from '../../server/security/asset-types';
 
 const PREVIEW_MS = 200;
 
@@ -238,7 +239,7 @@ export function RenameDialog({ client, node, unsaved, onDone, onClose }: {
           />
         </label>
         <span className="text-[11.5px] text-[var(--fde-muted-foreground)]">
-          URL: /notes/{dir}{slug}. Change the title at the top of the note.
+          URL: {BASE_URL}/{dir}{slug}. Change the title at the top of the note.
         </span>
       </div>
       <Preview preview={preview} />

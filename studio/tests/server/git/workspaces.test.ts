@@ -9,7 +9,7 @@ import { json, rawRequest } from '../../support/http';
 type Changes = { branch: string | null; files: { path: string; status: string }[] };
 type History = { base: string | null; commits: { message: string; files: { status: string; path: string }[] }[] };
 
-const PAGE = 'content/notes/guide/first-look.mdx';
+const PAGE = 'content/docs/guide/first-look.mdx';
 
 // The changes API with change requests: each worktree answers at its own
 // URL, main (read only) refuses a commit, and a commit lands in the change

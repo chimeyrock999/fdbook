@@ -7,10 +7,10 @@ import { diagramPathOf } from './diagram/source.ts';
  * `src` is the path under `diagrams/` without the extension, as in
  * `data-platform/processing/apache-spark/spark-logic-to-execution`. Null when
  * it is empty or would leave `diagrams/`. The site and the Studio's lint both
- * resolve `src` here.
+ * resolve `src` here; `dir` is the diagrams folder under `root`.
  */
-export function diagramFilePath(root: string, src: string): string | null {
-  const relative = diagramPathOf(src);
+export function diagramFilePath(root: string, src: string, dir?: string): string | null {
+  const relative = diagramPathOf(src, dir);
   return relative ? path.join(root, relative) : null;
 }
 

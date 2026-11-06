@@ -9,13 +9,13 @@ import { CORPUS_TIMEOUT_MS } from '../../support/timeouts';
 
 type Answer = { changes: { type: string; path: string; to?: string; detail?: string }[]; open: string | null };
 
-// The tree API on a copy of the real content/notes. The tests run in order
+// The tree API on a copy of the real content/docs. The tests run in order
 // and build on each other's changes.
 describe('tree API', () => {
   let studio: TestStudio;
   let lintBefore: string[];
 
-  const notes = (path: string) => join(studio.root, 'content/notes', path);
+  const notes = (path: string) => join(studio.root, 'content/docs', path);
   const text = (path: string) => readFile(notes(path), 'utf8');
   const mtime = async (path: string) => (await stat(notes(path))).mtimeMs;
   const exists = (path: string) => stat(notes(path)).then(() => true, () => false);
@@ -198,7 +198,7 @@ describe('tree API', () => {
       expect(await text('computer-systems/index.mdx')).toBe(index.replace('](./operating-systems/page-cache.mdx)', '](./operating-systems/os-page-cache.mdx)'));
     });
 
-    it('renames a folder and fixes /notes links, anchors included', async () => {
+    it('renames a folder and fixes /docs links, anchors included', async () => {
       const response = await post({ op: 'rename', path: 'distributed-systems/mapreduce', slug: 'map-reduce' });
       expect(response.status).toBe(200);
       const changed = (json(response) as Answer).changes.map((change) => `${change.type} ${change.path} ${change.detail ?? change.to ?? ''}`);
@@ -209,7 +209,7 @@ describe('tree API', () => {
         'change distributed-systems/meta.yaml 1 entry',
       ]);
       expect(await text('distributed-systems/meta.yaml')).toContain('  - "map-reduce"\n');
-      expect(await text('data-platform/stacks-integration/databricks/databricks-interactive-runtime/index.mdx')).toContain('](/notes/distributed-systems/map-reduce#yarn-components)');
+      expect(await text('data-platform/stacks-integration/databricks/databricks-interactive-runtime/index.mdx')).toContain('](/docs/distributed-systems/map-reduce#yarn-components)');
       expect(await exists('distributed-systems/map-reduce/mit-65840-lab01.mdx')).toBe(true);
     });
 

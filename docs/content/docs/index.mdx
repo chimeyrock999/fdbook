@@ -1,0 +1,78 @@
+---
+title: FdBook
+description: An editor for the MDX pages of a fumadocs site, with change requests, review and coding agents.
+icon: BookOpen
+---
+
+FdBook's Studio edits the pages of a [fumadocs](https://fumadocs.dev) site:
+in Visual (the page as the site renders it) or Source (the MDX). It keeps
+the page tree, the pages' files and the diagrams in step with the pages
+that use them, lints each page against what the site gets wrong, and takes
+every edit from a change request (a `cr/<slug>` branch with its own
+worktree) through commit, preview and pull request. Coding agents (Claude
+Code, Codex, omp, Hermes Agent) can work in a change request over ACP, with
+the Studio's MCP tools, and their edits to existing pages come back as
+suggestions to accept or reject.
+
+These docs are a FdBook project themselves: the Studio's tests run on them.
+
+## Run
+
+From the repository root, after `npm install`:
+
+```sh
+npm run docs                     # the Studio on these docs, http://127.0.0.1:4310
+npm run studio -- ../my-site     # the Studio on another fumadocs site
+```
+
+It needs Node 22.18 or newer, git with an `origin` that has `main`, and `gh`
+for pull requests. Where the Studio finds the pages, their files and the
+diagrams is in [Configuration](./guide/configuration.mdx); serving on
+another address, sign-in and agents are in [Setup](./guide/setup.mdx).
+
+## Docs
+
+| Page | Read it to |
+| --- | --- |
+| [Setup](./guide/setup.mdx) | run the Studio; set `STUDIO_HOST`, `STUDIO_PORT` and the other variables; set up GitHub sign-in and roles; install the agents; connect an agent from a terminal to the MCP server |
+| [Configuration](./guide/configuration.mdx) | point the Studio at a site's pages, files and diagrams with `fdbook.config.ts` |
+| [Using the Studio](./guide/using.mdx) | use it: change requests, the editor and frontmatter, the sidebar and page tree, images and assets, diagrams, changes, diff, preview, publish, history, agents and their proposals |
+| [Architecture](./reference/architecture.mdx) | change it: the layout of `server/` and `src/`, the request checks, the HTTP API, saving and the notes sync, change requests on git, agents over ACP, the MCP server and its tools, the editor plugins, write actions |
+| [Lint](./reference/lint.mdx) | know each lint rule, what it reports and why, and add one |
+| [Checks](./reference/checks.mdx) | test a change: the commands, how the tests are set up, the live agent test, known flakes |
+| [Diagrams](./diagrams/index.mdx) | write a diagram file: architecture, sequence and lifecycle diagrams |
+
+## Where things are
+
+<Diagram src="reference/studio-layout" caption="The Studio: one Node process serving the UI, the files and the agents." />
+
+```text
+studio/
+  server/       one Node process: API, notes sync, Vite, MCP server
+    index.ts    entry point (checks the dependencies, loads the project)
+    project.ts  fdbook.config.ts and the areas it names
+    security/   Host/Origin guard, path policy, the role each request needs
+    auth/       GitHub sign-in, roles read with gh, sessions
+    cr/ git/    change requests, worktrees, commits, history
+    preview/    push, preview build check, pull requests
+    agents/     chats with agents over ACP
+    mcp/        the MCP server and its tools
+    lint/       the lint rules and their CLI
+  src/          the React UI (editor, sidebar, views, agent panel)
+    plugins/    what the editor understands of the site's MDX
+  tests/        laid out like server/ and src/; fixtures in tests/support/
+lib/            code the Studio shares with a site: diagrams, note schema
+docs/           these docs, a FdBook project
+```
+
+## Checks
+
+```sh
+npm test
+npm run lint -w studio
+npm run types:check
+npm run docs:lint
+```
+
+Run these before pushing. Details and known flakes are in
+[Checks](./reference/checks.mdx).

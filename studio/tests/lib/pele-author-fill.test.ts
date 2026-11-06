@@ -53,7 +53,7 @@ describe('markAuthorFills', () => {
   });
 
   it('marks a subgraph title Pele lifted out of its subgraph (MapReduce note)', async () => {
-    const note = readFileSync(join(process.cwd(), '../../content/notes/distributed-systems/mapreduce/index.mdx'), 'utf8');
+    const note = readFileSync(join(process.cwd(), '../../content/docs/distributed-systems/mapreduce/index.mdx'), 'utf8');
     const start = note.lastIndexOf('```mermaid', note.indexOf('HDFS_INT'));
     const block = note.slice(note.indexOf('\n', start) + 1, note.indexOf('```', start + 10));
     expect(block).toContain('style HDFS_INT fill:#FFF9C4');
@@ -68,7 +68,7 @@ describe('markAuthorFills', () => {
   // A subgraph the author cleared (`fill:transparent`) shows the surface
   // behind it, so the halo of its lifted title takes that surface.
   it('gives a lifted title of a cleared subgraph the surface for its halo (MapReduce note)', async () => {
-    const note = readFileSync(join(process.cwd(), '../../content/notes/distributed-systems/mapreduce/index.mdx'), 'utf8');
+    const note = readFileSync(join(process.cwd(), '../../content/docs/distributed-systems/mapreduce/index.mdx'), 'utf8');
     const start = note.lastIndexOf('```mermaid', note.indexOf('subgraph MapPhase'));
     const block = note.slice(note.indexOf('\n', start) + 1, note.indexOf('```', start + 10));
     expect(block).toContain('style MapPhase fill:transparent');

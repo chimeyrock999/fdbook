@@ -50,10 +50,10 @@ describe('useTree', () => {
     render(<Probe tree={{ loadTree } as unknown as TreeClient} files={files} />);
     expect(await screen.findByText('First')).toBeTruthy();
 
-    listener({ type: 'change', path: 'public/notes/a.png', mtimeMs: 1 });
-    listener({ type: 'unlink', path: 'content/notes/a.mdx', mtimeMs: null });
-    listener({ type: 'add', path: 'content/notes/b.mdx', mtimeMs: 2 });
-    listener({ type: 'change', path: 'content/notes/meta.yaml', mtimeMs: 3 });
+    listener({ type: 'change', path: 'public/docs/a.png', mtimeMs: 1 });
+    listener({ type: 'unlink', path: 'content/docs/a.mdx', mtimeMs: null });
+    listener({ type: 'add', path: 'content/docs/b.mdx', mtimeMs: 2 });
+    listener({ type: 'change', path: 'content/docs/meta.yaml', mtimeMs: 3 });
     expect(await screen.findByText('Second')).toBeTruthy();
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(loadTree).toHaveBeenCalledTimes(2);
@@ -98,7 +98,7 @@ describe('useTree', () => {
     screen.getByRole('button', { name: 'Guide' }).focus();
     // Later a file event reloads a tree that holds the folder.
     loadTree.mockImplementation(() => Promise.resolve({ ...notes, children: [...notes.children, raft] }));
-    emit({ type: 'change', path: 'content/notes/guide/one.mdx', mtimeMs: 1 });
+    emit({ type: 'change', path: 'content/docs/guide/one.mdx', mtimeMs: 1 });
     expect(await screen.findByRole('button', { name: 'Raft' })).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Guide' }));
   });

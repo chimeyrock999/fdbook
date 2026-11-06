@@ -1,6 +1,6 @@
 import { lstatSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { repoRoot, studioRoot } from './config.ts';
+import { installRoot, studioRoot } from './config.ts';
 
 // A pull that changed package-lock.json without a reinstall leaves
 // node_modules on the old versions, and the Studio then runs against
@@ -59,7 +59,7 @@ const SHOWN = 5;
 // server's startup and the test run's global setup both use it.
 export function installProblem(
   checks = [
-    { dir: repoRoot, command: 'npm install' },
+    { dir: installRoot, command: 'npm install' },
     { dir: studioRoot, command: 'npm run studio:install' },
   ],
 ): string | null {

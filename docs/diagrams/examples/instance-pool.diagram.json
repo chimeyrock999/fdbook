@@ -1,0 +1,76 @@
+{
+  "$schema": "../diagram.schema.json",
+  "version": 1,
+  "type": "lifecycle",
+  "title": "An instance in a cluster backed by an instance pool",
+  "kinds": [
+    { "id": "launch", "label": "Starting", "tone": "blue" },
+    { "id": "serving", "label": "Serving", "tone": "teal" },
+    { "id": "parked", "label": "Waiting", "tone": "orange", "icon": "hourglass" },
+    { "id": "broken", "label": "Failed", "tone": "red", "icon": "cross" },
+    { "id": "gone", "label": "Ended", "tone": "slate" }
+  ],
+  "mainPath": ["launching", "ready", "placed", "terminated"],
+  "nodes": [
+    {
+      "id": "launching",
+      "kind": "launch",
+      "label": "LAUNCHING",
+      "sublabel": "VM provisioning",
+      "note": { "role": "The platform asks the cloud provider for a VM and installs the runtime." }
+    },
+    {
+      "id": "ready",
+      "kind": "serving",
+      "label": "READY",
+      "sublabel": "instance ready",
+      "note": { "role": "The VM is up and belongs to no cluster yet." }
+    },
+    {
+      "id": "placed",
+      "kind": "serving",
+      "label": "PLACED",
+      "sublabel": "assigned to cluster",
+      "note": { "role": "The instance runs a cluster's driver or one of its workers." }
+    },
+    {
+      "id": "terminated",
+      "kind": "gone",
+      "label": "TERMINATED",
+      "sublabel": "instance removed",
+      "note": { "role": "The VM went back to the cloud provider." }
+    },
+    {
+      "id": "idle",
+      "kind": "parked",
+      "label": "IDLE IN POOL",
+      "sublabel": "warm capacity",
+      "note": { "role": "The cluster let the node go, but the pool keeps it so another cluster can take it at once." }
+    },
+    {
+      "id": "failed",
+      "kind": "broken",
+      "label": "LOST",
+      "sublabel": "cloud error",
+      "note": { "role": "The cloud provider could not give or keep the VM: quota, capacity, a spot reclaim." }
+    }
+  ],
+  "edges": [
+    { "id": "init", "from": "launching", "to": "ready", "label": "init completed" },
+    { "id": "attach", "from": "ready", "to": "placed", "label": "attach", "detail": "a cluster needs a node" },
+    { "id": "terminate", "from": "placed", "to": "terminated", "label": "terminate" },
+    { "id": "unused", "from": "ready", "to": "terminated", "label": "nobody needs it" },
+    { "id": "release", "from": "placed", "to": "idle", "label": "release", "detail": "pool enabled" },
+    { "id": "reattach", "from": "idle", "to": "placed", "label": "attach again", "variant": "emphasis" },
+    { "id": "timeout", "from": "idle", "to": "terminated", "label": "idle timeout", "variant": "dashed" },
+    { "id": "launch-lost", "from": "launching", "to": "failed", "label": "cloud error", "variant": "alert" },
+    { "id": "placed-lost", "from": "placed", "to": "failed", "label": "cloud error", "variant": "alert" }
+  ],
+  "cards": [
+    {
+      "title": "Warm capacity costs money",
+      "tone": "gold",
+      "items": ["An idle pool instance starts a cluster faster, but the cloud bills it while it waits."]
+    }
+  ]
+}

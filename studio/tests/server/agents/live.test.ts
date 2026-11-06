@@ -12,7 +12,7 @@ import { ended, messagesOf, waitFor } from '../../support/agents';
 // each and needs the logins): STUDIO_AGENT_LIVE=1 npx vitest run tests/server/agents/live.test.ts
 // An agent that is not installed is skipped.
 const LIVE = process.env.STUDIO_AGENT_LIVE === '1';
-const NOTE = 'content/notes/live.mdx';
+const NOTE = 'content/docs/live.mdx';
 const TIMEOUT_MS = 240_000;
 
 describe.skipIf(!LIVE)('real agents over ACP', () => {
@@ -23,7 +23,7 @@ describe.skipIf(!LIVE)('real agents over ACP', () => {
       const root = await realpath(await mkdtemp(join(tmpdir(), 'notes-studio-live-')));
       const home = await mkdtemp(join(tmpdir(), 'notes-studio-live-home-'));
       const body = '---\ntitle: Pelican Harbor\n---\n\nA note.\n';
-      await mkdir(join(root, 'content/notes'), { recursive: true });
+      await mkdir(join(root, 'content/docs'), { recursive: true });
       await writeFile(join(root, NOTE), body);
       let runs = createAgentConversations(root, { slug: 'live', profiles: [profile], transcripts: createTranscripts(home) });
       // Reject anything it asks: a reviewer needs no tool that asks.

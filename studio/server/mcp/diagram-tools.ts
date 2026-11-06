@@ -20,7 +20,7 @@ import type { StudioTool, StudioToolContext, ToolResult } from './tool.ts';
 
 class ToolError extends Error {}
 
-const src = z.string().min(1).describe('The diagram, as <Diagram src> names it: its path under diagrams/ without .diagram.json, e.g. "data-platform/processing/apache-spark/spark-logic-to-execution".');
+const src = z.string().min(1).describe(`The diagram, as <Diagram src> names it: its path under ${DIAGRAMS_DIR}/ without .diagram.json, e.g. "guide/request-flow".`);
 const id = z.string().regex(/^[A-Za-z][\w-]*$/);
 const note = z.object({
   role: z.string().min(1).describe('What the node does, as MDX (paragraphs, lists, **bold**, `code`, links); no {expressions} or imports.'),
@@ -29,7 +29,7 @@ const note = z.object({
 });
 
 function pathOf(name: string) {
-  const path = diagramPathOf(name);
+  const path = diagramPathOf(name, DIAGRAMS_DIR);
   if (path === null || classifyPath(path) !== 'diagram') throw new ToolError(`not a diagram path: ${name}`);
   return path;
 }
@@ -104,7 +104,7 @@ function tool<I extends z.ZodType>(definition: StudioTool<I>): StudioTool<I> {
 export const diagramTools: StudioTool[] = [
   tool({
     name: 'diagram_list',
-    description: 'Lists the diagrams of the change request (diagrams/**/*.diagram.json) by the src a note embeds them with: <Diagram src="…" />.',
+    description: `Lists the diagrams of the change request (${DIAGRAMS_DIR}/**/*.diagram.json) by the src a note embeds them with: <Diagram src="…" />.`,
     access: 'read',
     input: z.object({}),
     async run(_args, ctx) {

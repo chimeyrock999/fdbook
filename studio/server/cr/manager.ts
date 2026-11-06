@@ -12,6 +12,7 @@ import { CommandError, git, lines } from './git.ts';
 import { createPullRequestReader, ghPullRequests, type ListPullRequests } from './pull-requests.ts';
 import { deleteRemoteBranch, ghClosePullRequest, REMOTE, type ClosePullRequest } from './remote.ts';
 import { CR_BRANCH_PREFIX, crSlug, isCrSlug } from './slug.ts';
+import { NOTES_DIR } from '../security/paths.ts';
 
 export type CrStatus = 'draft' | 'previewing' | 'review' | 'merged' | 'closed';
 
@@ -82,7 +83,7 @@ const MAIN_DIR = '_main';
 // Where agents on main run: a copy of `_main` they may scribble in.
 const MAIN_AGENTS_DIR = '_main-agents';
 const NAME_MAX = 80;
-const NOTES = 'content/notes/';
+const NOTES = `${NOTES_DIR}/`;
 const DAY_MS = 24 * 3600_000;
 
 const branchOf = (slug: string) => `${CR_BRANCH_PREFIX}${slug}`;

@@ -14,7 +14,7 @@ import { sender } from '../../support/auth';
 import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '../../support/git-repo';
 import { json } from '../../support/http';
 
-const NOTE = 'content/notes/guide/first-look.mdx';
+const NOTE = 'content/docs/guide/first-look.mdx';
 const TEXT = '---\ntitle: First look\n---\n\nA first look.\n\nThe second paragraph.\n\nThe third paragraph.\n';
 
 const textOf = (result: unknown) => (result as CallToolResult).content.map((part) => (part.type === 'text' ? part.text : '')).join('');
@@ -132,20 +132,20 @@ describe('review threads over MCP', () => {
   });
 
   it('answers what the change request changed against main, note hunks and lint included', async () => {
-    await mkdir(dirname(worktree('content/notes/guide/new.mdx')), { recursive: true });
-    await writeFile(worktree('content/notes/guide/new.mdx'), '---\ntitle: New\n---\n\nA new note.\n');
-    await rm(worktree('content/notes/guide/index.mdx'));
+    await mkdir(dirname(worktree('content/docs/guide/new.mdx')), { recursive: true });
+    await writeFile(worktree('content/docs/guide/new.mdx'), '---\ntitle: New\n---\n\nA new note.\n');
+    await rm(worktree('content/docs/guide/index.mdx'));
     await git(cr.worktree ?? '', 'add', '-A');
     await git(cr.worktree ?? '', 'commit', '--quiet', '-m', 'Work');
-    await writeFile(worktree('content/notes/index.mdx'), '---\ntitle: Home\n---\n\nWelcome home.\n');
+    await writeFile(worktree('content/docs/index.mdx'), '---\ntitle: Home\n---\n\nWelcome home.\n');
     const { files } = (await call('cr_changes', {})).value as { files: { path: string; status: string; hunks?: { removed: string; added: string }[] | null }[] };
     expect(files.map((file) => [file.path, file.status])).toEqual([
-      ['content/notes/guide/first-look.mdx', 'M'],
-      ['content/notes/guide/index.mdx', 'D'],
-      ['content/notes/guide/new.mdx', 'A'],
-      ['content/notes/index.mdx', 'M'],
+      ['content/docs/guide/first-look.mdx', 'M'],
+      ['content/docs/guide/index.mdx', 'D'],
+      ['content/docs/guide/new.mdx', 'A'],
+      ['content/docs/index.mdx', 'M'],
     ]);
-    expect(files.find((file) => file.path === 'content/notes/index.mdx')?.hunks).toEqual([expect.objectContaining({ removed: expect.stringContaining('Welcome.') as string, added: expect.stringContaining('Welcome home.') as string })]);
+    expect(files.find((file) => file.path === 'content/docs/index.mdx')?.hunks).toEqual([expect.objectContaining({ removed: expect.stringContaining('Welcome.') as string, added: expect.stringContaining('Welcome home.') as string })]);
   });
 
   it('opens and moves threads from the page as the person signed in', async () => {
@@ -155,7 +155,7 @@ describe('review threads over MCP', () => {
     expect((await send(`/cr/${cr.slug}/api/threads/${thread.id}/state`, 'POST', { state: 'rejected' })).status).toBe(400);
     expect((await send(`/cr/${cr.slug}/api/threads/${thread.id}/state`, 'POST', { state: 'rejected', body: 'Fine as is.' })).status).toBe(200);
     expect((await send(`/cr/${cr.slug}/api/threads/${thread.id}/comments`, 'POST', { body: 'One more thing.' })).status).toBe(200);
-    expect((await send(`/cr/${cr.slug}/api/threads`, 'POST', { path: 'content/notes/nope.mdx', anchor: null, body: 'x' })).status).toBe(404);
+    expect((await send(`/cr/${cr.slug}/api/threads`, 'POST', { path: 'content/docs/nope.mdx', anchor: null, body: 'x' })).status).toBe(404);
     expect((await send(`/cr/${cr.slug}/api/threads`, 'POST', { path: NOTE, anchor: { index: 'x' }, body: 'x' })).status).toBe(400);
     expect((await send(`/cr/${cr.slug}/api/threads/nope/comments`, 'POST', { body: 'x' })).status).toBe(404);
   });
@@ -173,7 +173,7 @@ describe('review threads over MCP', () => {
     const { id } = (await call('add_comment', { path: NOTE, block: 1, body: 'Come along.' })).value as { id: string };
     const renamed = await send(`/cr/${cr.slug}/api/tree`, 'POST', { op: 'rename', path: 'guide/first-look.mdx', slug: 'look' });
     expect(renamed.status).toBe(200);
-    const moved = await until(id, (thread) => thread.path === 'content/notes/guide/look.mdx');
+    const moved = await until(id, (thread) => thread.path === 'content/docs/guide/look.mdx');
     // The new file's add event finds the block there; the old one's unlink orphans nothing.
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(await threadOf(id)).toMatchObject({ path: moved.path, orphaned: false, anchor: { index: 1 } });

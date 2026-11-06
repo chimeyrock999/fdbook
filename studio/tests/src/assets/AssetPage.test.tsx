@@ -6,12 +6,12 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { AssetAnswer, AssetInfo, AssetRequest, AssetsClient, AssetUsage } from '../../../src/api/assets';
 import { AssetPage } from '../../../src/assets/AssetPage';
 
-const usage = (note: string, line: number): AssetUsage => ({ note, line, column: 12, length: 20, text: `![x](/notes/guide/old_name.png) L${String(line)}`, unsure: false });
+const usage = (note: string, line: number): AssetUsage => ({ note, line, column: 12, length: 20, text: `![x](/docs/guide/old_name.png) L${String(line)}`, unsure: false });
 
-const PICTURE: AssetInfo = { path: 'public/notes/guide/old_name.png', mtimeMs: 7, size: 2048, usages: [usage('content/notes/guide/intro.mdx', 9)] };
-const SPARE: AssetInfo = { path: 'public/notes/guide/spare.svg', mtimeMs: 9, size: 300, usages: [] };
-const EMBED: AssetInfo = { path: 'public/notes/guide/flow.html', mtimeMs: 5, size: 5 * 1024 * 1024, usages: [] };
-const MODEL: AssetInfo = { path: 'public/notes/guide/scene.glb', mtimeMs: 4, size: 10, usages: [] };
+const PICTURE: AssetInfo = { path: 'public/docs/guide/old_name.png', mtimeMs: 7, size: 2048, usages: [usage('content/docs/guide/intro.mdx', 9)] };
+const SPARE: AssetInfo = { path: 'public/docs/guide/spare.svg', mtimeMs: 9, size: 300, usages: [] };
+const EMBED: AssetInfo = { path: 'public/docs/guide/flow.html', mtimeMs: 5, size: 5 * 1024 * 1024, usages: [] };
+const MODEL: AssetInfo = { path: 'public/docs/guide/scene.glb', mtimeMs: 4, size: 10, usages: [] };
 const ASSETS = [PICTURE, SPARE, EMBED, MODEL];
 
 const revoked: string[] = [];
@@ -25,11 +25,11 @@ function setup(path: string, { unsaved = false, readOnly = false, assets = ASSET
   const change = vi.fn((request: AssetRequest): Promise<AssetAnswer> => {
     if (request.op === 'replace') {
       const to = request.extension === 'png' ? request.path : request.path.replace(/\.png$/, `.${request.extension}`);
-      const notes = to === request.path ? [] : [{ type: 'change' as const, path: 'content/notes/guide/intro.mdx', detail: '1 reference' }];
+      const notes = to === request.path ? [] : [{ type: 'change' as const, path: 'content/docs/guide/intro.mdx', detail: '1 reference' }];
       return Promise.resolve({ changes: [{ type: 'replace', path: request.path, to }, ...notes], usages: PICTURE.usages });
     }
     if (request.op === 'rename') {
-      return Promise.resolve({ changes: [{ type: 'move', path: request.path, to: `public/notes/guide/${request.name}.png` }], usages: [] });
+      return Promise.resolve({ changes: [{ type: 'move', path: request.path, to: `public/docs/guide/${request.name}.png` }], usages: [] });
     }
     return Promise.resolve({ changes: [{ type: 'delete', path: request.path }], usages: [] });
   });
@@ -102,8 +102,8 @@ describe('AssetPage', () => {
   });
 
   it('says when the asset is gone, and while the list loads', () => {
-    const { rerender } = setup('public/notes/guide/nothing.png');
-    expect(screen.getByRole('status').textContent).toBe('public/notes/guide/nothing.png is not in public/notes: it may have been renamed or deleted.');
+    const { rerender } = setup('public/docs/guide/nothing.png');
+    expect(screen.getByRole('status').textContent).toBe('public/docs/guide/nothing.png is not in public/docs: it may have been renamed or deleted.');
     rerender(PICTURE.path, null);
     expect(screen.getByText('Loading old_name.png…')).toBeTruthy();
   });
@@ -115,7 +115,7 @@ describe('AssetPage', () => {
     expect(change).toHaveBeenCalledWith({ op: 'delete', path: SPARE.path, baseMtime: 9 });
     await waitFor(() => { expect(onChanged).toHaveBeenCalled(); });
     rerender(SPARE.path, [PICTURE]);
-    expect(screen.getByRole('status').textContent).toBe('Deleted public/notes/guide/spare.svg.');
+    expect(screen.getByRole('status').textContent).toBe('Deleted public/docs/guide/spare.svg.');
   });
 
   it('renames, and keeps saying so once the page follows the new path', async () => {
@@ -127,7 +127,7 @@ describe('AssetPage', () => {
     await waitFor(() => { expect(within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Rename' }).disabled).toBe(false); });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Rename' }));
     await waitFor(() => { expect(onChanged).toHaveBeenCalled(); });
-    rerender('public/notes/guide/new-name.png', [{ ...PICTURE, path: 'public/notes/guide/new-name.png' }]);
+    rerender('public/docs/guide/new-name.png', [{ ...PICTURE, path: 'public/docs/guide/new-name.png' }]);
     expect(screen.getByRole('status').textContent).toBe('Renamed to new-name.png.');
   });
 
@@ -141,7 +141,7 @@ describe('AssetPage', () => {
     await userEvent.upload(fileInput(dialog), file);
     expect(within(dialog).getByRole('figure', { name: 'now' }).textContent).toContain('old_name.png');
     expect(within(dialog).getByRole('figure', { name: 'picked' }).textContent).toContain('export.png9 B');
-    await waitFor(() => { expect(within(dialog).getByRole('list', { name: 'Files to write' }).textContent).toBe('⟳ public/notes/guide/old_name.png new content; notes stay as they are'); });
+    await waitFor(() => { expect(within(dialog).getByRole('list', { name: 'Files to write' }).textContent).toBe('⟳ public/docs/guide/old_name.png new content; notes stay as they are'); });
     expect(change).toHaveBeenLastCalledWith({ op: 'replace', path: PICTURE.path, extension: 'png', baseMtime: 7 }, true);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Replace' }));
     expect(replace).toHaveBeenCalledWith(PICTURE.path, 'png', file, 7);
@@ -158,7 +158,7 @@ describe('AssetPage', () => {
     const dialog = screen.getByRole('dialog');
     await userEvent.upload(fileInput(dialog), new File(['x'], 'export.webp', { type: 'image/webp' }));
     expect(within(dialog).getByText(/The file becomes old_name\.webp/)).toBeTruthy();
-    await waitFor(() => { expect(within(dialog).getByRole('list', { name: 'Files to write' }).textContent).toContain('public/notes/guide/old_name.png → old_name.webp'); });
+    await waitFor(() => { expect(within(dialog).getByRole('list', { name: 'Files to write' }).textContent).toContain('public/docs/guide/old_name.png → old_name.webp'); });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Replace and rename' }));
     expect(replace).toHaveBeenCalledWith(PICTURE.path, 'webp', expect.any(File), 7);
   });

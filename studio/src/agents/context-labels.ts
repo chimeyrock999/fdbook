@@ -12,10 +12,11 @@ export function mentionAt(text: string, caret: number) {
   return match === null ? null : { start: caret - match[1].length - 1, text: match[1] };
 }
 
-// A folder as typed, relative to content/notes (a leading content/notes
-// is dropped), its segments without empty ones; null when one is . or ..
+// A folder as typed, relative to the notes (a leading notes folder is
+// dropped), its segments without empty ones; null when one is . or ..
 export function cleanFolder(folder: string) {
   const segments = folder.trim().split('/').filter((segment) => segment !== '');
-  const inside = segments.slice(0, 2).join('/') === NOTES_DIR ? segments.slice(2) : segments;
+  const depth = NOTES_DIR.split('/').length;
+  const inside = segments.slice(0, depth).join('/') === NOTES_DIR ? segments.slice(depth) : segments;
   return inside.some((segment) => segment === '.' || segment === '..') ? null : inside.join('/');
 }

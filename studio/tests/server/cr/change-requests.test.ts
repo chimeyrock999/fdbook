@@ -64,18 +64,18 @@ describe('change requests', () => {
     it('opens a worktree of origin/main outside the repo', async () => {
       const main = join(await worktrees(), '_main');
       expect((await git(main, 'rev-parse', 'HEAD')).trim()).toBe((await git(repo.repo, 'rev-parse', 'origin/main')).trim());
-      expect((await readNote('', 'content/notes/index.mdx')).content).toBe(await readFile(join(main, 'content/notes/index.mdx'), 'utf8'));
+      expect((await readNote('', 'content/docs/index.mdx')).content).toBe(await readFile(join(main, 'content/docs/index.mdx'), 'utf8'));
       expect(await list()).toEqual({ enabled: true, crs: [], taken: [], prError: null, fetchError: null });
     });
 
     it('refuses every write to main', async () => {
-      const { mtimeMs } = await readNote('', 'content/notes/index.mdx');
-      expect((await putNote('', 'content/notes/index.mdx', 'changed\n', mtimeMs)).status).toBe(403);
+      const { mtimeMs } = await readNote('', 'content/docs/index.mdx');
+      expect((await putNote('', 'content/docs/index.mdx', 'changed\n', mtimeMs)).status).toBe(403);
       expect((await send('/api/tree', 'POST', { op: 'rename', path: 'guide/first-look.mdx', slug: 'x', dryRun: true })).status).toBe(403);
-      expect((await send('/api/assets', 'POST', { op: 'delete', path: 'public/notes/x.png', baseMtime: 0, dryRun: true })).status).toBe(403);
-      const lint = await send('/api/lint', 'POST', { path: 'content/notes/index.mdx', content: '# Hi\n' });
+      expect((await send('/api/assets', 'POST', { op: 'delete', path: 'public/docs/x.png', baseMtime: 0, dryRun: true })).status).toBe(403);
+      const lint = await send('/api/lint', 'POST', { path: 'content/docs/index.mdx', content: '# Hi\n' });
       expect(lint.status).toBe(200);
-      expect((await readNote('', 'content/notes/index.mdx')).content).toBe('---\ntitle: Home\n---\n\nWelcome.\n');
+      expect((await readNote('', 'content/docs/index.mdx')).content).toBe('---\ntitle: Home\n---\n\nWelcome.\n');
     });
 
     it('opens notes on main read only through the sync', async () => {
@@ -94,7 +94,7 @@ describe('change requests', () => {
     let mainTip: string;
 
     beforeAll(async () => {
-      mainTip = await repo.pushToMain({ 'content/notes/guide/second.mdx': '---\ntitle: Second\n---\n' });
+      mainTip = await repo.pushToMain({ 'content/docs/guide/second.mdx': '---\ntitle: Second\n---\n' });
       cr = await create('Sửa Driver container notes cho Databricks');
     });
 
@@ -142,7 +142,7 @@ describe('change requests', () => {
 
     it('writes through /cr/<slug>/ into its worktree only', async () => {
       const base = `/cr/${cr.slug}`;
-      const path = 'content/notes/guide/first-look.mdx';
+      const path = 'content/docs/guide/first-look.mdx';
       const { mtimeMs } = await readNote(base, path);
       expect((await putNote(base, path, 'edited in the change request\n', mtimeMs)).status).toBe(200);
       expect(await readFile(join(cr.worktree ?? '', path), 'utf8')).toBe('edited in the change request\n');
@@ -167,8 +167,8 @@ describe('change requests', () => {
       const worktree = cr.worktree ?? '';
       await git(worktree, 'add', '-A');
       await git(worktree, 'commit', '--quiet', '-m', 'edit first look');
-      await writeFile(join(worktree, 'content/notes/guide/new-page.mdx'), '---\ntitle: New\n---\n');
-      await writeFile(join(worktree, 'content/notes/guide/meta.yaml'), 'title: Guide\npages:\n  - first-look\n  - new-page\n');
+      await writeFile(join(worktree, 'content/docs/guide/new-page.mdx'), '---\ntitle: New\n---\n');
+      await writeFile(join(worktree, 'content/docs/guide/meta.yaml'), 'title: Guide\npages:\n  - first-look\n  - new-page\n');
       const found = (await list()).crs.find((each) => each.slug === cr.slug);
       expect(found).toMatchObject({ changedPages: 2, uncommitted: 2, status: 'draft', previewUrl: null, pr: null });
       expect(found?.updatedMs).toBeGreaterThan(Date.now() - 60_000);
@@ -259,8 +259,8 @@ describe('change requests', () => {
     beforeAll(async () => {
       cr = await create('Throwaway');
       const base = `/cr/${cr.slug}`;
-      const { mtimeMs } = await readNote(base, 'content/notes/index.mdx');
-      await putNote(base, 'content/notes/index.mdx', 'scratch\n', mtimeMs);
+      const { mtimeMs } = await readNote(base, 'content/docs/index.mdx');
+      await putNote(base, 'content/docs/index.mdx', 'scratch\n', mtimeMs);
     });
 
     it('says what goes in a dry run, and removes nothing', async () => {
@@ -288,7 +288,7 @@ describe('change requests', () => {
       const listed = await list();
       expect(listed.crs.find((each) => each.slug === cr.slug)?.worktree).toBeNull();
       expect((await send(`/cr/${cr.slug}/api/files`)).status).toBe(200);
-      expect(existsSync(join(cr.worktree ?? '', 'content/notes/index.mdx'))).toBe(true);
+      expect(existsSync(join(cr.worktree ?? '', 'content/docs/index.mdx'))).toBe(true);
       expect((await send(`/api/crs/${cr.slug}/discard`, 'POST', {})).status).toBe(200);
     });
 
@@ -300,7 +300,7 @@ describe('change requests', () => {
       expect((await git(repo.repo, 'worktree', 'list')).includes(cr.worktree ?? '')).toBe(false);
       expect((await list()).crs.find((each) => each.slug === cr.slug)?.worktree).toBeNull();
       expect((await send(`/cr/${cr.slug}/api/files`)).status).toBe(200);
-      expect(existsSync(join(cr.worktree ?? '', 'content/notes/index.mdx'))).toBe(true);
+      expect(existsSync(join(cr.worktree ?? '', 'content/docs/index.mdx'))).toBe(true);
     });
   });
 });

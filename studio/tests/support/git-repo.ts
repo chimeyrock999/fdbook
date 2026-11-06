@@ -12,11 +12,11 @@ import type { StudioTool } from '../../server/mcp/tool';
 import { startStudioServer } from '../../server/studio-server';
 
 const NOTES: Record<string, string> = {
-  'content/notes/index.mdx': '---\ntitle: Home\n---\n\nWelcome.\n',
-  'content/notes/meta.yaml': 'pages:\n  - index\n  - guide\n',
-  'content/notes/guide/index.mdx': '---\ntitle: Guide\n---\n\nThe guide.\n',
-  'content/notes/guide/meta.yaml': 'title: Guide\npages:\n  - first-look\n',
-  'content/notes/guide/first-look.mdx': '---\ntitle: First look\n---\n\nA first look.\n',
+  'content/docs/index.mdx': '---\ntitle: Home\n---\n\nWelcome.\n',
+  'content/docs/meta.yaml': 'pages:\n  - index\n  - guide\n',
+  'content/docs/guide/index.mdx': '---\ntitle: Guide\n---\n\nThe guide.\n',
+  'content/docs/guide/meta.yaml': 'title: Guide\npages:\n  - first-look\n',
+  'content/docs/guide/first-look.mdx': '---\ntitle: First look\n---\n\nA first look.\n',
   'package.json': '{}\n',
 };
 

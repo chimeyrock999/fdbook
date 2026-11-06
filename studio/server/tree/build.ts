@@ -7,7 +7,7 @@ import { findBlock } from '../../src/frontmatter/block.ts';
 import { listEditableFiles } from '../files/store.ts';
 import { siteIconNames } from '../icons/names.ts';
 import { joinPath } from '../lint/rules/links.ts';
-import { NOTES_DIR } from '../security/paths.ts';
+import { BASE_URL, NOTES_DIR } from '../security/paths.ts';
 import type { Hidden, TreeFolder, TreeNode } from './types.ts';
 
 // The page tree, built by the same fumadocs loader the site uses
@@ -245,7 +245,7 @@ export function buildTree(content: NotesContent, icons: ReadonlySet<string> | nu
     ...[...content.pages].map(([path, data]) => ({ type: 'page' as const, path, data })),
     ...[...content.metas].map(([path, data]) => ({ type: 'meta' as const, path, data })),
   ];
-  const source = loader({ baseUrl: '/notes', source: { files } });
+  const source = loader({ baseUrl: BASE_URL, source: { files } });
   const tree = source.getPageTree();
   const root = convertFolder(context, tree, '');
   if (tree.fallback) mergeFallback(context, folderMap(root), root, tree.fallback);

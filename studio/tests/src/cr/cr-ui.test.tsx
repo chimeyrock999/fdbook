@@ -55,7 +55,7 @@ describe('which worktree a page edits', () => {
   });
 
   it('keeps the change request in the page query, and opens the list from ?view=crs', () => {
-    const note = { kind: 'note', path: 'content/notes/a b.mdx' } as const;
+    const note = { kind: 'note', path: 'content/docs/a b.mdx' } as const;
     expect(pageQuery(note, 'driver-notes')).toBe('?cr=driver-notes&path=content%2Fnotes%2Fa%20b.mdx');
     expect(crFromSearch(pageQuery(note, 'driver-notes'))).toBe('driver-notes');
     expect(pageFromUrl(pageQuery(note, 'driver-notes'))).toEqual(note);

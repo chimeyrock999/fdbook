@@ -9,7 +9,7 @@ import { editorPlaces } from '../../../src/agents/editor-place';
 import type { MessageSelection } from '../../../src/api/agents';
 import { AGENTS, fakeClient, Harness, summary } from '../../support/agents-ui';
 
-const NOTE = 'content/notes/guide/first-look.mdx';
+const NOTE = 'content/docs/guide/first-look.mdx';
 const SELECTION: MessageSelection = { lines: [5, 5], source: 'A first look.', text: 'first look' };
 const atNote = { note: NOTE, selection: null, caret: null, mentions: [], attachments: [] };
 
@@ -170,12 +170,12 @@ describe('agent actions (#86)', () => {
     const send = screen.getByRole<HTMLButtonElement>('button', { name: 'Send' });
     expect(send.disabled).toBe(true);
     await user.type(form.getByRole('textbox', { name: 'Title' }), 'Photon và Spark SQL');
-    expect(form.getByLabelText('Path').textContent).toBe('content/notes/guide/photon-va-spark-sql.mdx');
+    expect(form.getByLabelText('Path').textContent).toBe('content/docs/guide/photon-va-spark-sql.mdx');
     await user.type(form.getByRole('textbox', { name: 'Outline' }), '- What it is');
     await user.type(form.getByRole('textbox', { name: 'Links to read' }), 'https://docs.example.com/photon');
     await vi.waitFor(() => { expect(send.disabled).toBe(false); });
     await user.click(send);
-    const prompt = draftPrompt({ path: 'content/notes/guide/photon-va-spark-sql.mdx', title: 'Photon và Spark SQL', outline: '- What it is', urls: ['https://docs.example.com/photon'] });
+    const prompt = draftPrompt({ path: 'content/docs/guide/photon-va-spark-sql.mdx', title: 'Photon và Spark SQL', outline: '- What it is', urls: ['https://docs.example.com/photon'] });
     expect(client.start).toHaveBeenCalledWith('claude', 'author', prompt, { ...atNote, caret: 3 });
     expect(screen.queryByRole('group', { name: 'New note' })).toBeNull();
   });
@@ -192,7 +192,7 @@ describe('agent actions (#86)', () => {
     await user.type(screen.getByRole('textbox', { name: 'Message' }), '{Enter}');
     expect(send.disabled).toBe(true);
     expect(client.start).not.toHaveBeenCalled();
-    await vi.waitFor(() => { expect(client.mentions).toHaveBeenCalledWith('content/notes/guide/fresh.mdx'); });
+    await vi.waitFor(() => { expect(client.mentions).toHaveBeenCalledWith('content/docs/guide/fresh.mdx'); });
     await act(async () => { answer(); await Promise.resolve(); });
     await vi.waitFor(() => { expect(send.disabled).toBe(false); });
   });
@@ -203,9 +203,9 @@ describe('agent actions (#86)', () => {
     await user.click(screen.getByRole('button', { name: 'New note' }));
     const form = within(screen.getByRole('group', { name: 'New note' }));
     await user.clear(form.getByRole('textbox', { name: 'Folder' }));
-    await user.type(form.getByRole('textbox', { name: 'Folder' }), 'content/notes/guide/');
+    await user.type(form.getByRole('textbox', { name: 'Folder' }), 'content/docs/guide/');
     await user.type(form.getByRole('textbox', { name: 'Title' }), 'First look');
-    expect(form.getByLabelText('Path').textContent).toBe('content/notes/guide/first-look.mdx');
+    expect(form.getByLabelText('Path').textContent).toBe('content/docs/guide/first-look.mdx');
     expect(await form.findByRole('alert')).toBeTruthy();
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Send' }).disabled).toBe(true);
     expect(client.start).not.toHaveBeenCalled();
@@ -213,10 +213,10 @@ describe('agent actions (#86)', () => {
 });
 
 describe('action messages', () => {
-  it('takes a folder relative to content/notes, as typed or with it', () => {
+  it('takes a folder relative to content/docs, as typed or with it', () => {
     expect(cleanFolder(' /guide//deep/ ')).toBe('guide/deep');
-    expect(cleanFolder('content/notes/guide')).toBe('guide');
-    expect(cleanFolder('content/notes')).toBe('');
+    expect(cleanFolder('content/docs/guide')).toBe('guide');
+    expect(cleanFolder('content/docs')).toBe('');
     expect(cleanFolder('guide/../x')).toBeNull();
   });
 
@@ -234,9 +234,9 @@ describe('action messages', () => {
   });
 
   it('drafts without an outline from the sources, and lists the links to read', () => {
-    const prompt = draftPrompt({ path: 'content/notes/a/b.mdx', title: 'B', outline: ' ', urls: [] });
+    const prompt = draftPrompt({ path: 'content/docs/a/b.mdx', title: 'B', outline: ' ', urls: [] });
     expect(prompt).toContain('Work out its outline from the sources.');
     expect(prompt).not.toContain('Read these sources');
-    expect(draftPrompt({ path: 'content/notes/a/b.mdx', title: 'B', outline: '', urls: ['https://x.dev'] })).toContain('Read these sources:\n- https://x.dev');
+    expect(draftPrompt({ path: 'content/docs/a/b.mdx', title: 'B', outline: '', urls: ['https://x.dev'] })).toContain('Read these sources:\n- https://x.dev');
   });
 });

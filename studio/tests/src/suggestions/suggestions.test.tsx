@@ -18,7 +18,7 @@ import { createSuggestionLayer, type SuggestionLayer } from '../../../src/sugges
 import { ToastStack } from '../../../src/actions/ToastStack';
 import { mountVisual, stubLayout } from '../../support/visual-editor';
 
-const PATH = 'content/notes/guide.mdx';
+const PATH = 'content/docs/guide.mdx';
 const NOTE = '---\ntitle: Guide\n---\n\n# Guide\n\nFirst paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n';
 
 // A proposal of `next` against NOTE, as the server would list it.
@@ -243,7 +243,7 @@ describe('NoteThreads', () => {
 
 describe('useProposals', () => {
   it('throws a failed action to the button that sent it, and says why a reload failed in a toast', async () => {
-    const other = { ...proposal(NOTE.replace('First paragraph.', 'One.'), 'p2'), path: 'content/notes/other.mdx' };
+    const other = { ...proposal(NOTE.replace('First paragraph.', 'One.'), 'p2'), path: 'content/docs/other.mdx' };
     let listing: () => Promise<ProposalView[]> = () => Promise.resolve([proposal(NOTE.replace('First paragraph.', 'One.')), other]);
     const client = {
       list: () => listing(),

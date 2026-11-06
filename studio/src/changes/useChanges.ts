@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangesClient, Changes, History } from '../api/changes';
 import type { createFilesClient } from '../api/files';
+import { EDITABLE_AREAS } from '../../server/security/asset-types';
 
 const SETTLE_MS = 300;
-const WATCHED = ['content/notes/', 'public/notes/', 'diagrams/'];
+const WATCHED = EDITABLE_AREAS.map((area) => `${area}/`);
 
 // The worktree's changes and the change request's commits. The changes load
 // again when a note, meta.yaml, asset or diagram changes on disk; both load

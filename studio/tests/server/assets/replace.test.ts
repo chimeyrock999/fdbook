@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyAssetPlan } from '../../../server/assets/ops';
 import { planAssetReplace } from '../../../server/assets/replace';
-import { repoRoot } from '../../../server/config';
+import { docsRoot } from '../../support/notes';
 import { lintWorktree } from '../../../server/lint/context';
 import { MAX_ASSET_BYTES } from '../../../server/security/asset-types';
 import { json, rawRequest } from '../../support/http';
@@ -12,16 +12,16 @@ import { CORPUS_TIMEOUT_MS } from '../../support/timeouts';
 
 type Answer = { changes: { type: string; path: string; to?: string; detail?: string }[]; mtimeMs?: number };
 
-const SUPERSET = 'public/notes/data-platform/stacks-integration/superset-trino-impersonate.jpg';
-const SUPERSET_NOTE = 'content/notes/data-platform/stacks-integration/index.mdx';
-const WAREHOUSE = 'public/notes/data-modeling/data_warehouse_architecture.webp';
+const SUPERSET = 'public/docs/data-platform/stacks-integration/superset-trino-impersonate.jpg';
+const SUPERSET_NOTE = 'content/docs/data-platform/stacks-integration/index.mdx';
+const WAREHOUSE = 'public/docs/data-modeling/data_warehouse_architecture.webp';
 // An HTML asset a regen script of the retired Archify pipeline still
 // names: the Studio no longer reads those.
-const LEGACY = { asset: 'public/notes/legacy/made.html', script: 'diagrams/legacy/made.regen.sh' };
+const LEGACY = { asset: 'public/docs/legacy/made.html', script: 'diagrams/legacy/made.regen.sh' };
 const NEW_BYTES = Buffer.from('new image bytes');
 
-// Replacing an asset's content on a copy of the real content/notes,
-// public/notes and diagrams. The tests run in order and build on each
+// Replacing an asset's content on a copy of the real content/docs,
+// public/docs and diagrams. The tests run in order and build on each
 // other's changes.
 describe('assets API: replace', () => {
   let studio: TestStudio;
@@ -44,9 +44,9 @@ describe('assets API: replace', () => {
     });
   // Every note's text, to show that a replace leaves the others byte for byte.
   const notes = async () => {
-    const entries = await readdir(file('content/notes'), { recursive: true });
+    const entries = await readdir(file('content/docs'), { recursive: true });
     const texts = new Map<string, string>();
-    for (const entry of entries.filter((name) => name.endsWith('.mdx')).sort()) texts.set(entry, await text(`content/notes/${entry}`));
+    for (const entry of entries.filter((name) => name.endsWith('.mdx')).sort()) texts.set(entry, await text(`content/docs/${entry}`));
     return texts;
   };
   const missingAssets = async () =>
@@ -54,9 +54,9 @@ describe('assets API: replace', () => {
 
   beforeAll(async () => {
     studio = await startTestStudio();
-    await cp(join(repoRoot, 'public/notes'), file('public/notes'), { recursive: true });
-    await cp(join(repoRoot, 'diagrams'), file('diagrams'), { recursive: true });
-    await mkdir(file('public/notes/legacy'), { recursive: true });
+    await cp(join(docsRoot, 'public/docs'), file('public/docs'), { recursive: true });
+    await cp(join(docsRoot, 'diagrams'), file('diagrams'), { recursive: true });
+    await mkdir(file('public/docs/legacy'), { recursive: true });
     await mkdir(file('diagrams/legacy'), { recursive: true });
     await writeFile(file(LEGACY.asset), '<!doctype html><html><body>legacy</body></html>\n');
     await writeFile(file(LEGACY.script), `#!/bin/sh\nOUT="${LEGACY.asset}"\n`);
@@ -106,7 +106,7 @@ describe('assets API: replace', () => {
     expect(await exists(SUPERSET)).toBe(false);
     expect(await readFile(file(to))).toEqual(NEW_BYTES);
     const after = await notes();
-    const key = SUPERSET_NOTE.slice('content/notes/'.length);
+    const key = SUPERSET_NOTE.slice('content/docs/'.length);
     expect(after.get(key)).toBe(before.get(key)?.replace('superset-trino-impersonate.jpg', 'superset-trino-impersonate.webp'));
     after.delete(key);
     before.delete(key);
@@ -133,21 +133,21 @@ describe('assets API: replace', () => {
     expect(await readFile(file(WAREHOUSE))).toEqual(NEW_BYTES);
   });
 
-  it('refuses a stale file, a taken name and paths outside public/notes', async () => {
-    const pixel = 'public/notes/demo/pixel.png';
+  it('refuses a stale file, a taken name and paths outside public/docs', async () => {
+    const pixel = 'public/docs/demo/pixel.png';
     const baseMtime = await mtime(pixel);
     expect((await put({ path: pixel, extension: 'png', baseMtime: baseMtime - 1000 })).status).toBe(409);
     expect((await put({ path: pixel, extension: 'png', baseMtime: 'abc' })).status).toBe(400);
     expect((await put({ path: pixel, extension: 'png', baseMtime: '' })).status).toBe(400);
-    await writeFile(file('public/notes/demo/pixel.webp'), 'taken');
+    await writeFile(file('public/docs/demo/pixel.webp'), 'taken');
     expect((await put({ path: pixel, extension: 'webp', baseMtime })).status).toBe(409);
-    expect((await put({ path: 'content/notes/index.mdx', extension: 'png', baseMtime })).status).toBe(403);
-    expect((await put({ path: 'public/notes/nothing.png', extension: 'png', baseMtime })).status).toBe(404);
+    expect((await put({ path: 'content/docs/index.mdx', extension: 'png', baseMtime })).status).toBe(403);
+    expect((await put({ path: 'public/docs/nothing.png', extension: 'png', baseMtime })).status).toBe(404);
     expect(await readFile(file(pixel))).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   });
 
   it('refuses a stale replace before reading its bytes', async () => {
-    const pixel = 'public/notes/demo/pixel.png';
+    const pixel = 'public/docs/demo/pixel.png';
     // Over the upload limit, but refused for its mtime first: 409, not 413.
     const response = await put({ path: pixel, extension: 'png', baseMtime: 1 }, Buffer.alloc(MAX_ASSET_BYTES + 1));
     expect(response.status).toBe(409);
@@ -155,7 +155,7 @@ describe('assets API: replace', () => {
   });
 
   it('refuses a file over the upload limit, and a write without X-Studio-Write', async () => {
-    const pixel = 'public/notes/demo/pixel.png';
+    const pixel = 'public/docs/demo/pixel.png';
     const baseMtime = await mtime(pixel);
     expect((await put({ path: pixel, extension: 'png', baseMtime }, Buffer.alloc(MAX_ASSET_BYTES + 1))).status).toBe(413);
     expect((await put({ path: pixel, extension: 'png', baseMtime }, NEW_BYTES, {})).status).toBe(415);
@@ -164,7 +164,7 @@ describe('assets API: replace', () => {
   });
 
   it('takes the content only through PUT', async () => {
-    const pixel = 'public/notes/demo/pixel.png';
+    const pixel = 'public/docs/demo/pixel.png';
     const response = await rawRequest(`${studio.url}api/assets`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: studio.origin },
@@ -174,22 +174,22 @@ describe('assets API: replace', () => {
   });
 
   it('removes the new file when the first note cannot be written', async () => {
-    const asset = 'public/notes/zz-replace/locked-asset.png';
-    await mkdir(file('public/notes/zz-replace'), { recursive: true });
+    const asset = 'public/docs/zz-replace/locked-asset.png';
+    await mkdir(file('public/docs/zz-replace'), { recursive: true });
     await writeFile(file(asset), 'old');
-    await mkdir(file('content/notes/zz-replace-locked'));
-    await writeFile(file('content/notes/zz-replace-locked/a.mdx'), '![a](/notes/zz-replace/locked-asset.png)\n');
+    await mkdir(file('content/docs/zz-replace-locked'));
+    await writeFile(file('content/docs/zz-replace-locked/a.mdx'), '![a](/docs/zz-replace/locked-asset.png)\n');
     const plan = await planAssetReplace(studio.root, { path: asset, extension: 'webp', baseMtime: await mtime(asset) });
-    await chmod(file('content/notes/zz-replace-locked'), 0o555);
+    await chmod(file('content/docs/zz-replace-locked'), 0o555);
     try {
       const failure: unknown = await applyAssetPlan(studio.root, plan, NEW_BYTES).then(() => null, (error: unknown) => error);
       expect(failure).toMatchObject({ status: 500 });
       expect((failure as Error).message).toContain('nothing was changed');
     } finally {
-      await chmod(file('content/notes/zz-replace-locked'), 0o755);
+      await chmod(file('content/docs/zz-replace-locked'), 0o755);
     }
     expect(await text(asset)).toBe('old');
-    expect(await exists('public/notes/zz-replace/locked-asset.webp')).toBe(false);
-    await rm(file('content/notes/zz-replace-locked'), { recursive: true });
+    expect(await exists('public/docs/zz-replace/locked-asset.webp')).toBe(false);
+    await rm(file('content/docs/zz-replace-locked'), { recursive: true });
   }, CORPUS_TIMEOUT_MS);
 });

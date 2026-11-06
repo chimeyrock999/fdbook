@@ -1,13 +1,13 @@
 import { glob, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { repoRoot } from '../../server/config';
+import { installRoot } from '../../server/config';
 
 // The Studio draws with the site's notes theme (styles/notes-theme.css) and
 // prose (styles/notes-prose.css), imported, not copied: a change there shows
 // in the Studio with no Studio edit.
 
-const read = (path: string) => readFile(join(repoRoot, path), 'utf8');
+const read = (path: string) => readFile(join(installRoot, path), 'utf8');
 
 const LIGHT = ':root:has(.notes-theme), .notes-theme';
 const DARK = '.dark:has(.notes-theme), .dark .notes-theme';
@@ -72,7 +72,7 @@ describe('notes theme', () => {
 
   it('writes each palette value once, in styles/notes-theme.css', async () => {
     const copies: string[] = [];
-    for await (const path of glob('{app,styles,components,studio/src}/**/*.css', { cwd: repoRoot })) {
+    for await (const path of glob('{app,styles,components,studio/src}/**/*.css', { cwd: installRoot })) {
       if (path === 'styles/notes-theme.css') continue;
       const css = (await read(path)).replace(/\/\*[\s\S]*?\*\//g, '');
       for (const [, name, value] of css.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {

@@ -1,10 +1,10 @@
 import { lstatSync } from 'node:fs';
 import { join } from 'node:path';
-import { ASSET_TYPES, ASSETS_DIR, classifyPath, DIAGRAMS_DIR, EDITABLE_AREAS, extensionOf, NOTES_DIR, type PathKind } from './asset-types.ts';
+import { ASSET_TYPES, ASSETS_DIR, BASE_URL, classifyPath, DIAGRAMS_DIR, EDITABLE_AREAS, extensionOf, NOTES_DIR, PUBLIC_DIR, type PathKind } from './asset-types.ts';
 
 // The path policy: what may be touched (classifyPath, in asset-types.ts so
 // the UI can ask it too) and where it is on disk.
-export { ASSET_TYPES, ASSETS_DIR, classifyPath, DIAGRAMS_DIR, EDITABLE_AREAS, extensionOf, NOTES_DIR, type PathKind };
+export { ASSET_TYPES, ASSETS_DIR, BASE_URL, classifyPath, DIAGRAMS_DIR, EDITABLE_AREAS, extensionOf, NOTES_DIR, PUBLIC_DIR, type PathKind };
 
 // Walks the path from the worktree root with lstat and refuses any symlink on
 // the way, even one that stays inside the area: a save replaces the file, so

@@ -9,11 +9,11 @@ import { startTestStudio, type TestStudio } from '../../support/studio';
 type DeletedPage = { path: string; title: string; sha: string; message: string; folderGone: boolean; committed: boolean };
 type Restore = { path: string; open: string; changes: { type: string; path: string; detail?: string }[] };
 
-const LAB = 'content/notes/restore-lab';
-const SHELF = 'content/notes/lost-shelf';
+const LAB = 'content/docs/restore-lab';
+const SHELF = 'content/docs/lost-shelf';
 // A folder that lists its index as a child, and that no meta.yaml above lists.
-const IDX = 'content/notes/idx-shelf';
-const ROOT_META = 'content/notes/meta.yaml';
+const IDX = 'content/docs/idx-shelf';
+const ROOT_META = 'content/docs/meta.yaml';
 const page = (title: string, body: string) => `---\ntitle: ${title}\n---\n\n${body}\n`;
 
 describe('deleted pages helpers', () => {
@@ -49,7 +49,7 @@ describe('deleted pages helpers', () => {
 });
 
 // Deleted pages (#114) through the real server, on a git worktree copy of
-// content/notes. A lab folder loses a page; a whole shelf folder goes; a
+// content/docs. A lab folder loses a page; a whole shelf folder goes; a
 // page is renamed, another deleted and made again. The tests run in order.
 describe('page history API: deleted pages', () => {
   let studio: TestStudio;

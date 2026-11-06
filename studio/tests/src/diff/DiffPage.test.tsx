@@ -23,7 +23,7 @@ beforeAll(() => {
 const titleOf = () => document.querySelector('.studio-asset-page-title h1')?.textContent;
 const BASE = '3f9a1c2000000000000000000000000000000000';
 const text = (value: string) => ({ kind: 'text' as const, text: value, size: value.length });
-const NOTE = 'content/notes/spark/aqe.mdx';
+const NOTE = 'content/docs/spark/aqe.mdx';
 const before = '---\ntitle: AQE\ndescription: Old.\n---\n\n# Adaptive Query Execution\n\nOne.\n\nTwo.\n\nThree.\n\nFour.\n\nAQE is on from Spark 3.0.\n';
 const after = '---\ntitle: AQE\ndescription: New.\n---\n\n# Adaptive Query Execution\n\nOne.\n\nTwo.\n\nThree.\n\nFour.\n\nAQE is on from Spark 3.2.\n';
 const noteDiff: FileDiff = { path: NOTE, base: BASE, status: 'M', before: text(before), after: text(after) };
@@ -32,7 +32,7 @@ function setup(diff: FileDiff | Error, target: DiffTarget = { path: diff instanc
   const loadDiff = vi.fn(() => (diff instanceof Error ? Promise.reject(diff) : Promise.resolve(diff)));
   const client = { loadDiff, baseFileUrl: (path: string, sha: string) => `/blob/${path}@${sha}` } as unknown as ChangesClient;
   const props = { onOpen: vi.fn(), onBack: vi.fn() };
-  const titles = new Map([[NOTE, 'Adaptive Query Execution'], ['content/notes/spark/meta.yaml', 'Spark']]);
+  const titles = new Map([[NOTE, 'Adaptive Query Execution'], ['content/docs/spark/meta.yaml', 'Spark']]);
   const view = render(<DiffPage client={client} target={target} revision={1} titles={titles} {...props} />);
   return { ...props, loadDiff, client, titles, view };
 }
@@ -74,7 +74,7 @@ describe('DiffPage', () => {
   });
 
   it('shows a meta.yaml as its source only, with no editor to open', async () => {
-    setup({ path: 'content/notes/spark/meta.yaml', base: BASE, status: 'M', before: text('pages:\n  - aqe\n'), after: text('pages:\n  - aqe\n  - joins\n') });
+    setup({ path: 'content/docs/spark/meta.yaml', base: BASE, status: 'M', before: text('pages:\n  - aqe\n'), after: text('pages:\n  - aqe\n  - joins\n') });
     expect(await screen.findByTestId('source-diff')).toBeTruthy();
     expect(titleOf()).toBe('Page order of SparkM');
     expect(screen.queryByRole('tablist')).toBeNull();
@@ -89,7 +89,7 @@ describe('DiffPage', () => {
   });
 
   it('previews an image on main and now, and a deleted one with nothing after it', async () => {
-    const image = 'public/notes/spark/aqe/flow.png';
+    const image = 'public/docs/spark/aqe/flow.png';
     const first = setup({ path: image, base: BASE, status: 'M', before: { kind: 'binary', size: 2048 }, after: { kind: 'binary', size: 4096 } });
     const figures = await screen.findAllByRole('figure');
     expect(figures.map((figure) => figure.querySelector('figcaption')?.textContent)).toEqual(['Main2.0 KB', 'Now4.0 KB']);
@@ -104,7 +104,7 @@ describe('DiffPage', () => {
   });
 
   it('gives an SVG both a preview and its source', async () => {
-    setup({ path: 'public/notes/spark/shape.svg', base: BASE, status: 'M', before: text('<svg/>'), after: text('<svg></svg>') });
+    setup({ path: 'public/docs/spark/shape.svg', base: BASE, status: 'M', before: text('<svg/>'), after: text('<svg></svg>') });
     expect((await screen.findAllByRole('tab')).map((tab) => tab.textContent)).toEqual(['Preview', 'Source']);
   });
 
@@ -134,14 +134,14 @@ describe('DiffPage', () => {
   });
 
   it('names a rename with both paths and asks for it under its old name', async () => {
-    const { loadDiff } = setup({ path: 'content/notes/spark/adaptive.mdx', from: NOTE, base: BASE, status: 'R', before: text(before), after: text(before) }, { path: 'content/notes/spark/adaptive.mdx', from: NOTE });
-    expect(await screen.findByText(`${NOTE} → content/notes/spark/adaptive.mdx`)).toBeTruthy();
-    expect(loadDiff).toHaveBeenCalledWith('content/notes/spark/adaptive.mdx', NOTE);
+    const { loadDiff } = setup({ path: 'content/docs/spark/adaptive.mdx', from: NOTE, base: BASE, status: 'R', before: text(before), after: text(before) }, { path: 'content/docs/spark/adaptive.mdx', from: NOTE });
+    expect(await screen.findByText(`${NOTE} → content/docs/spark/adaptive.mdx`)).toBeTruthy();
+    expect(loadDiff).toHaveBeenCalledWith('content/docs/spark/adaptive.mdx', NOTE);
   });
 
   it('names a rename the server found, though the request had no old name', async () => {
-    setup({ path: 'content/notes/spark/adaptive.mdx', from: NOTE, base: BASE, status: 'R', before: text(before), after: text(after) }, { path: 'content/notes/spark/adaptive.mdx' });
-    expect(await screen.findByText(`${NOTE} → content/notes/spark/adaptive.mdx`)).toBeTruthy();
+    setup({ path: 'content/docs/spark/adaptive.mdx', from: NOTE, base: BASE, status: 'R', before: text(before), after: text(after) }, { path: 'content/docs/spark/adaptive.mdx' });
+    expect(await screen.findByText(`${NOTE} → content/docs/spark/adaptive.mdx`)).toBeTruthy();
   });
 
   it('loads again when the changes do, and goes back to the list', async () => {

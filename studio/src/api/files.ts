@@ -5,6 +5,7 @@ import { watchEvents } from './connection';
 import { errorOf, readJson } from './json';
 import { studioFetch } from './session';
 import { API_BASE } from './workspace';
+import { ASSETS_DIR, publicPathOf } from '../../server/security/asset-types';
 
 export type FileKind = 'note' | 'meta' | 'asset' | 'diagram';
 export type TextFile = { path: string; content: string; mtimeMs: number };
@@ -97,12 +98,13 @@ export function createFilesClient(base = API_BASE) {
   };
 }
 
-// A site path to a file under public/notes (`/notes/…/diagram.svg`, or
+// A site path to a file in the media folder (`/docs/…/diagram.svg`, or
 // without the leading slash, as lib/read-public-asset.ts reads it) as the
 // file API URL that serves it, versioned once it changed (asset-versions.ts);
 // null for anything else, which the file API does not serve.
 export function publicAssetUrl(src: string | undefined, base = API_BASE): string | null {
   const path = src?.split(/[?#]/)[0].trim().replace(/^\/+/, '') ?? '';
-  if (!path.startsWith('notes/') || /^[a-z]+:/i.test(src ?? '')) return null;
-  return assetUrl(`public/${path}`, base);
+  const file = publicPathOf(path);
+  if (!file.startsWith(`${ASSETS_DIR}/`) || /^[a-z]+:/i.test(src ?? '')) return null;
+  return assetUrl(file, base);
 }

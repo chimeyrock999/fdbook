@@ -4,17 +4,17 @@ import { slugify } from '../../../src/slug';
 
 describe('asset names', () => {
   // The folder the site's notes already use: the page slug, and a folder's
-  // index page uses the folder (public/notes/data-modeling/… for
-  // content/notes/data-modeling/index.mdx).
+  // index page uses the folder (public/docs/data-modeling/… for
+  // content/docs/data-modeling/index.mdx).
   it('puts a page\'s assets in the folder named after its slug', () => {
-    expect(assetDirFor('content/notes/data-modeling/dimensional-modeling/dimensional-modeling-in-practice/retail-sales.mdx'))
-      .toBe('public/notes/data-modeling/dimensional-modeling/dimensional-modeling-in-practice/retail-sales');
-    expect(assetDirFor('content/notes/data-modeling/index.mdx')).toBe('public/notes/data-modeling');
-    expect(assetDirFor('content/notes/index.mdx')).toBe('public/notes');
+    expect(assetDirFor('content/docs/data-modeling/dimensional-modeling/dimensional-modeling-in-practice/retail-sales.mdx'))
+      .toBe('public/docs/data-modeling/dimensional-modeling/dimensional-modeling-in-practice/retail-sales');
+    expect(assetDirFor('content/docs/data-modeling/index.mdx')).toBe('public/docs/data-modeling');
+    expect(assetDirFor('content/docs/index.mdx')).toBe('public/docs');
   });
 
   it('writes the site path of a saved asset', () => {
-    expect(sitePath('public/notes/data-modeling/bus-matrix.png')).toBe('/notes/data-modeling/bus-matrix.png');
+    expect(sitePath('public/docs/data-modeling/bus-matrix.png')).toBe('/docs/data-modeling/bus-matrix.png');
   });
 
   it('turns any name into a kebab-case ASCII stem', () => {

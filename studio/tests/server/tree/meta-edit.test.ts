@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { repoRoot } from '../../../server/config';
+import { docsRoot } from '../../support/notes';
 import { insertEntry, keepEntries, metaTemplate, moveEntry, quote, readPages, removeKey, replaceEntry, setDefaultOpen, setFlag } from '../../../server/tree/meta-edit';
 
-const real = (path: string) => readFileSync(join(repoRoot, 'content/notes', path), 'utf8');
+const real = (path: string) => readFileSync(join(docsRoot, 'content/docs', path), 'utf8');
 
 describe('meta.yaml edits', () => {
   it('moves an entry and keeps comments, quotes and the missing final newline', () => {

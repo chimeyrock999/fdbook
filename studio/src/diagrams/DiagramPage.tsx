@@ -1,7 +1,6 @@
 import { Braces, Copy, FileText, Frame, Plus, Redo2, StickyNote, Trash2, Undo2, Workflow } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { laysItselfOut } from '@site/lib/diagram/schema';
-import { DIAGRAM_SUFFIX, DIAGRAMS_DIR } from '@site/lib/diagram/source';
 import type { AssetUsage } from '../api/assets';
 import type { createFilesClient } from '../api/files';
 import { plural } from '../assets/asset-changes';
@@ -35,6 +34,7 @@ import {
 } from './edits';
 import { useDiagramFile, type SaveStatus } from './useDiagramFile';
 import '@site/styles/diagram.css';
+import { DIAGRAMS_DIR, DIAGRAM_SUFFIX } from '../../server/security/asset-types';
 
 const STATUS: Record<SaveStatus, string> = {
   loading: 'Loading…',

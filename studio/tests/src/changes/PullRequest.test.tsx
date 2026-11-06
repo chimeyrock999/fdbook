@@ -82,7 +82,7 @@ describe('PreviewSection with a pull request open', () => {
   it('pushes to it as Update PR', async () => {
     const preview = at({ unpushed: ['c'], pr: PR });
     const pusher: Pusher = { busy: false, result: null, push: vi.fn(() => Promise.resolve(true)) };
-    render(<PreviewSection pusher={pusher} preview={preview} error={null} unsaved={null} route="/notes" />);
+    render(<PreviewSection pusher={pusher} preview={preview} error={null} unsaved={null} route="/docs" />);
     expect(screen.getByText('Pushes to the open pull request #112; no new pull request.')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Update PR (1 commit)' }));
     expect(pusher.push).toHaveBeenCalledWith(preview);

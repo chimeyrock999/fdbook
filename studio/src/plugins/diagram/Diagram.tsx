@@ -10,6 +10,7 @@ import { studioFetch } from '../../api/session';
 import type { TextFile } from '../../api/files';
 import '@site/styles/diagram.css';
 import './diagram.css';
+import { DIAGRAM_SUFFIX, DIAGRAMS_DIR } from '../../../server/security/asset-types';
 
 type Drawn = { svg: string | null; issues: DiagramIssue[] } | { failed: string };
 
@@ -17,7 +18,7 @@ type Drawn = { svg: string | null; issues: DiagramIssue[] } | { failed: string }
 // the site's renderer. Its URL carries the file's version once it changed on
 // disk (App's file events), so a save from an agent or the CLI redraws it.
 function useDiagram(src: string | undefined): Drawn | null {
-  const path = src ? diagramPathOf(src) : null;
+  const path = src ? diagramPathOf(src, DIAGRAMS_DIR) : null;
   const url = useAssetUrl(path ?? '');
   const [drawn, setDrawn] = useState<Drawn | null>(null);
   useEffect(() => {
@@ -53,7 +54,7 @@ export function Diagram({ props, children }: ComponentRenderProps) {
       <span data-fde-controls="" contentEditable={false} aria-hidden className="studio-embed-controls" />
       <div className="studio-card-bar" contentEditable={false}>
         <Workflow size={14} aria-hidden />
-        <span className="studio-card-src">{props.src ? `diagrams/${props.src}.diagram.json` : 'no src'}</span>
+        <span className="studio-card-src">{props.src ? `${DIAGRAMS_DIR}/${props.src}${DIAGRAM_SUFFIX}` : 'no src'}</span>
         {issues.length > 0 && (
           <span className="studio-diagram-issues" data-error={errors.length > 0 || undefined} title={issues.map((issue) => `${issue.code}: ${issue.message}`).join('\n')}>
             {plural(issues.length, 'issue')}

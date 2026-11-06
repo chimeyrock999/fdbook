@@ -6,7 +6,7 @@ import type { HttpError } from '../../../server/http';
 import { applyEdits, createProposals, type Proposals } from '../../../server/proposals/store';
 import type { ProposalView } from '../../../server/proposals/shared';
 
-const PATH = 'content/notes/guide.mdx';
+const PATH = 'content/docs/guide.mdx';
 const NOTE = '---\ntitle: Guide\n---\n\n# Guide\n\nFirst paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n';
 const BY = { kind: 'run', runId: 'r1', agent: 'claude', model: 'fake-1' } as const;
 
@@ -21,9 +21,9 @@ describe('proposals', () => {
   beforeEach(async () => {
     base = await mkdtemp(join(tmpdir(), 'notes-studio-proposals-'));
     root = join(base, 'worktree');
-    await mkdir(join(root, 'content/notes'), { recursive: true });
+    await mkdir(join(root, 'content/docs'), { recursive: true });
     await writeFile(join(root, PATH), NOTE);
-    await writeFile(join(root, 'content/notes/meta.yaml'), 'pages:\n  - guide\n');
+    await writeFile(join(root, 'content/docs/meta.yaml'), 'pages:\n  - guide\n');
     changes = [];
     proposals = createProposals(root, { dir: join(base, 'proposals', 'cr'), onChange: (view) => changes.push(view) });
   });
@@ -55,9 +55,9 @@ describe('proposals', () => {
   });
 
   it('refuses what is not a change to an existing note that parses', async () => {
-    expect(await status(proposals.propose({ path: 'content/notes/meta.yaml', content: 'x', by: BY }))).toBe(403);
+    expect(await status(proposals.propose({ path: 'content/docs/meta.yaml', content: 'x', by: BY }))).toBe(403);
     expect(await status(proposals.propose({ path: '../outside.mdx', content: 'x', by: BY }))).toBe(403);
-    expect(await status(proposals.propose({ path: 'content/notes/missing.mdx', content: 'x', by: BY }))).toBe(404);
+    expect(await status(proposals.propose({ path: 'content/docs/missing.mdx', content: 'x', by: BY }))).toBe(404);
     expect(await status(proposals.propose({ path: PATH, content: NOTE, by: BY }))).toBe(409);
     expect(await status(proposals.propose({ path: PATH, content: `${NOTE}\n<Broken\n`, by: BY }))).toBe(422);
     expect(await status(proposals.propose({ path: PATH, by: BY }))).toBe(400);

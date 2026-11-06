@@ -9,7 +9,7 @@ afterEach(cleanup);
 
 const request = {
   file: new File([new Uint8Array([1])], 'image.png', { type: 'image/png' }),
-  dir: 'public/notes/data-modeling',
+  dir: 'public/docs/data-modeling',
   stem: 'image',
   extension: 'png',
 };
@@ -29,7 +29,7 @@ describe('AssetNameDialog', () => {
     expect(document.activeElement).toBe(input);
     expect([input.selectionStart, input.selectionEnd]).toEqual([0, 5]);
     expect(screen.getByText('.png')).toBeTruthy();
-    expect(screen.getByTestId('asset-path').textContent).toBe('/notes/data-modeling/image.png');
+    expect(screen.getByTestId('asset-path').textContent).toBe('/docs/data-modeling/image.png');
   });
 
   it('saves the typed name in kebab-case on Enter', async () => {
@@ -40,7 +40,7 @@ describe('AssetNameDialog', () => {
   });
 
   it('blocks a name already used on this page', async () => {
-    const { onDone, input } = open(['public/notes/data-modeling/image.png', 'public/notes/data-modeling/Bus.PNG']);
+    const { onDone, input } = open(['public/docs/data-modeling/image.png', 'public/docs/data-modeling/Bus.PNG']);
     expect(screen.getByRole('alert').textContent).toBe('image.png already exists on this page. Pick another name.');
     const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Save' });
     expect(save.disabled).toBe(true);
@@ -57,7 +57,7 @@ describe('AssetNameDialog', () => {
   });
 
   it('compares names without case, folder included', () => {
-    open(['public/notes/guides/setup/image.png'], 'public/notes/Guides/Setup');
+    open(['public/docs/guides/setup/image.png'], 'public/docs/Guides/Setup');
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Save' }).disabled).toBe(true);
   });
 

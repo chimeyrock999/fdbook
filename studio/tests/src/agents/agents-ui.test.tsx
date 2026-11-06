@@ -63,13 +63,13 @@ describe('agent chat', () => {
     emit({ type: 'start', at: 0, conversation: started, conversationId: 'new' });
     emit({ type: 'turn', at: 0, prompt: 'Tighten the intro', by: 'octocat', conversationId: 'new' });
     emit(say('Shortened it.'));
-    emit({ type: 'write', at: 2, path: 'content/notes/intro.mdx', bytes: 40, conversationId: 'new' });
+    emit({ type: 'write', at: 2, path: 'content/docs/intro.mdx', bytes: 40, conversationId: 'new' });
     const view = within(screen.getByRole('region', { name: 'Chat with Claude Code' }));
     expect(view.getByText('Tighten the intro', { selector: '.studio-agent-prompt' })).toBeTruthy();
     expect(view.getByText('Shortened it.')).toBeTruthy();
     expect(view.getByText('Opus 5.5').getAttribute('title')).toBe('Opus 5.5');
     await user.click(view.getByRole('button', { name: 'View diff' }));
-    expect(onOpenDiff).toHaveBeenCalledWith('content/notes/intro.mdx');
+    expect(onOpenDiff).toHaveBeenCalledWith('content/docs/intro.mdx');
     await user.click(view.getByRole('button', { name: 'Cancel' }));
     expect(client.cancel).toHaveBeenCalledWith('new');
     const turn = { status: 'cancelled' as const, error: null, cost: { amount: 0.31, currency: 'USD' }, usage: null };

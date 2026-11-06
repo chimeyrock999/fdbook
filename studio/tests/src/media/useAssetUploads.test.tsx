@@ -21,7 +21,7 @@ function filesStub() {
 describe('useAssetUploads', () => {
   it('names images one at a time, in the order they came', async () => {
     const { files, writeAsset } = filesStub();
-    const hook = renderHook(() => useAssetUploads(files, 'content/notes/data-modeling/index.mdx', []));
+    const hook = renderHook(() => useAssetUploads(files, 'content/docs/data-modeling/index.mdx', []));
     const view = () => render(<>{hook.result.current.dialog}</>);
     let first!: Promise<unknown>;
     let second!: Promise<unknown>;
@@ -34,7 +34,7 @@ describe('useAssetUploads', () => {
     view();
     expect(screen.getByRole<HTMLInputElement>('textbox').value).toBe('one');
     await userEvent.keyboard('{Enter}');
-    await expect(first).resolves.toBe('/notes/data-modeling/one.png');
+    await expect(first).resolves.toBe('/docs/data-modeling/one.png');
     cleanup();
     await vi.waitFor(() => { expect(hook.result.current.dialog).toBeTruthy(); });
     view();
@@ -46,7 +46,7 @@ describe('useAssetUploads', () => {
 
   it('cancels the open and waiting names when the note closes', async () => {
     const { files, writeAsset } = filesStub();
-    const hook = renderHook(() => useAssetUploads(files, 'content/notes/a.mdx', []));
+    const hook = renderHook(() => useAssetUploads(files, 'content/docs/a.mdx', []));
     let uploads!: Promise<unknown>[];
     act(() => {
       uploads = ['one.png', 'two.png'].map((name) => hook.result.current.media.upload(png(name)).catch((error: unknown) => error));
@@ -60,7 +60,7 @@ describe('useAssetUploads', () => {
   it('hides an error after a while', () => {
     vi.useFakeTimers();
     const { files } = filesStub();
-    const hook = renderHook(() => useAssetUploads(files, 'content/notes/a.mdx', []));
+    const hook = renderHook(() => useAssetUploads(files, 'content/docs/a.mdx', []));
     act(() => { hook.result.current.media.onError?.(new Error('disk full'), png('a.png')); });
     expect(hook.result.current.notice).toEqual({ kind: 'error', text: 'disk full' });
     act(() => { vi.advanceTimersByTime(8000); });

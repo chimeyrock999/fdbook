@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { repoRoot } from '../../../server/config';
+import { installRoot } from '../../../server/config';
 import { keywordClassName, tagClassName } from '@site/components/graph-objects';
 import { decorateGraphObjects, KEYWORD_CLASS, TAG_CLASS } from '../../../src/plugins/graph-objects/decorate';
 import { attributes } from '../../../src/plugins/source-attributes';
@@ -10,7 +10,7 @@ import { realNotes } from '../../support/notes';
 
 const notes = await realNotes();
 
-const fixture = () => readFile(join(repoRoot, 'studio/src/plugins/graph-objects/fixtures/graph-objects.mdx'), 'utf8');
+const fixture = () => readFile(join(installRoot, 'studio/src/plugins/graph-objects/fixtures/graph-objects.mdx'), 'utf8');
 
 function decorations(state: Parameters<typeof decorateGraphObjects>[0]) {
   return decorateGraphObjects(state).map(describeDecoration);

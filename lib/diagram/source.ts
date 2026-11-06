@@ -7,8 +7,9 @@ export const DIAGRAMS_DIR = 'diagrams';
 export const DIAGRAM_SUFFIX = '.diagram.json';
 
 // The repository-relative posix path `src` names, or null when it is empty
-// or would leave diagrams/. A leading `/` and the suffix are allowed.
-export function diagramPathOf(src: string): string | null {
+// or would leave diagrams/. A leading `/` and the suffix are allowed. `dir`
+// is where the diagrams are, for a project that keeps them elsewhere.
+export function diagramPathOf(src: string, dir = DIAGRAMS_DIR): string | null {
   const segments: string[] = [];
   for (const segment of src.trim().replace(/^\/+/, '').replace(/\.diagram\.json$/, '').split('/')) {
     if (segment === '' || segment === '.') continue;
@@ -17,5 +18,5 @@ export function diagramPathOf(src: string): string | null {
       segments.pop();
     } else segments.push(segment);
   }
-  return segments.length ? `${DIAGRAMS_DIR}/${segments.join('/')}${DIAGRAM_SUFFIX}` : null;
+  return segments.length ? `${dir}/${segments.join('/')}${DIAGRAM_SUFFIX}` : null;
 }

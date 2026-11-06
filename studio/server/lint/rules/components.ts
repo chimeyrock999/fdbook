@@ -3,7 +3,7 @@ import type { ContainerDirective, LeafDirective, TextDirective } from 'mdast-uti
 import type { MdxJsxFlowElement, MdxJsxTextElement } from 'mdast-util-mdx-jsx';
 import { visit } from 'unist-util-visit';
 import { ACCORDION_KINDS, CALLOUT_TYPES } from '@site/lib/notes-syntax.ts';
-import { publicAsset } from '../../security/asset-types.ts';
+import { DIAGRAM_SUFFIX, DIAGRAMS_DIR, publicAsset } from '../../security/asset-types.ts';
 import { headOf, type LintContext, type Report } from '../types.ts';
 
 const calloutTypes = new Set<string>(CALLOUT_TYPES);
@@ -62,7 +62,7 @@ function decodeUrlPath(url: string) {
   }
 }
 
-// components/mdx/diagram.tsx reads `diagrams/<src>.diagram.json`
+// components/mdx/diagram.tsx reads `<diagrams>/<src>.diagram.json`
 // (lib/read-diagram.ts), so `src` is a path there, not a public URL, and it
 // draws only a diagram that lays out.
 function checkDiagram(node: Nodes, source: string, context: LintContext, report: Report, src: string | null | undefined) {
@@ -73,7 +73,7 @@ function checkDiagram(node: Nodes, source: string, context: LintContext, report:
   }
   const problem = context.diagramProblem(src);
   if (problem === null) return;
-  const file = `diagrams/${src.trim().replace(/^\/+/, '').replace(/\.diagram\.json$/, '')}.diagram.json`;
+  const file = `${DIAGRAMS_DIR}/${src.trim().replace(/^\/+/, '').replace(/\.diagram\.json$/, '')}${DIAGRAM_SUFFIX}`;
   if (problem === 'missing') {
     report({ rule: 'asset-missing', severity: 'error', message: `\`${file}\` does not exist, so the site shows a placeholder.`, ...headOf(node, source) });
     return;

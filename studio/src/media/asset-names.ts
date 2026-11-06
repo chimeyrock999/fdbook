@@ -1,4 +1,4 @@
-import { ASSET_TYPES, ASSETS_DIR, extensionOf } from '../../server/security/asset-types';
+import { ASSET_TYPES, ASSETS_DIR, extensionOf, siteUrlOf } from '../../server/security/asset-types';
 import { NOTES_PREFIX } from '../notes/notes';
 import { slugify } from '../slug';
 
@@ -21,8 +21,8 @@ export function assetDirFor(notePath: string) {
   return [ASSETS_DIR, ...parts].join('/');
 }
 
-// The path a note writes for an asset (`/notes/…`), from its worktree path.
-export const sitePath = (assetPath: string) => `/${assetPath.slice('public/'.length)}`;
+// The path a note writes for an asset (`/docs/…`), from its worktree path.
+export const sitePath = (assetPath: string) => siteUrlOf(assetPath);
 
 // The name to offer for an upload: the file's own, else "image".
 export function suggestedStem(fileName: string) {

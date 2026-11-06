@@ -51,7 +51,7 @@ export function relation(self: Note, other: Note, words: Set<string>, links: { t
   return { score, reasons };
 }
 
-const path = z.string().min(1).describe('The note: content/notes/<path>.mdx, or <path>.mdx relative to content/notes');
+const path = z.string().min(1).describe(`The note: ${NOTES_DIR}/<path>.mdx, or <path>.mdx relative to ${NOTES_DIR}`);
 
 export const writingTools: StudioTool[] = [
   {

@@ -7,6 +7,7 @@ import type { Auth } from '../auth/auth.ts';
 import { atLeast } from '../auth/shared.ts';
 import type { ChangeRequests } from '../cr/manager.ts';
 import { HttpError, pathnameOf, readBody, readJsonObject, sendJson, type Handler } from '../http.ts';
+import { NOTES_DIR } from '../security/paths.ts';
 import type { RunGrants } from './grants.ts';
 import type { Handoff } from './handoff.ts';
 import type { StudioFiles, StudioTool, ToolCaller, ToolResult } from './tool.ts';
@@ -15,7 +16,7 @@ import type { StudioFiles, StudioTool, ToolCaller, ToolResult } from './tool.ts'
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const MAIN = '_main';
 
-const INSTRUCTIONS = `Tools of the Notes Studio, for the notes under content/notes of one change request (CR).
+const INSTRUCTIONS = `Tools of the Notes Studio, for the notes under ${NOTES_DIR} of one change request (CR).
 - Every note tool takes \`cr\`, the change request's slug; an agent the Studio started has its CR already. Main is read only and refused: use list_crs, or create_cr for a new one.
 - An agent the Studio started on main reads main with the tools that read, and edits nothing. When a change is needed it calls create_cr with a name and a brief: the Studio opens a change request and starts an author chat there with the brief; the answer has its slug and url.
 - Edits go through propose_edit: they are not written, but shown to a person as suggestions to accept or reject. Read a note with read_note first.

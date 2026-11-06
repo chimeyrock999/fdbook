@@ -5,7 +5,7 @@ import { PendingButton } from '../actions/PendingButton';
 import type { ChangedFile, Changes, ChangesClient, Commit, History } from '../api/changes';
 import { plural } from '../assets/asset-changes';
 import { MAIN_BRANCH } from '../../server/git/branch';
-import { classifyPath } from '../../server/security/asset-types';
+import { ASSETS_DIR, classifyPath, NOTES_DIR } from '../../server/security/asset-types';
 import { labelOf, shortPath, timeAgo } from './labels';
 import { CHANGE_NAME } from './marks';
 import { suggestMessage } from './message';
@@ -161,8 +161,8 @@ export function ChangesView({ client, changes, history, error, titles, unsaved, 
   const picked = files.filter((file) => !excluded.has(file.path));
   const message = edited ?? suggestMessage(picked);
   const blocked = busy ? 'Committing…' : blockedBy({ branch: changes.branch, unsaved, picked: picked.length, message });
-  const pages = files.filter((file) => file.path.startsWith('content/'));
-  const assets = files.filter((file) => file.path.startsWith('public/'));
+  const pages = files.filter((file) => file.path.startsWith(`${NOTES_DIR}/`));
+  const assets = files.filter((file) => file.path.startsWith(`${ASSETS_DIR}/`));
   const diagrams = files.filter((file) => classifyPath(file.path) === 'diagram');
 
   const toggle = (paths: string[], pick: boolean) => {

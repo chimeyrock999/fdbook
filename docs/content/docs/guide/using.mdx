@@ -1,9 +1,11 @@
-# Using the Studio
+---
+title: Using the Studio
+---
 
 Read this to edit notes in the Studio: from opening a change request to
 publishing it, and working with agents and diagrams on the way. Setting it
-up is in [setup.md](setup.md); how each part is built is in
-[architecture.md](architecture.md).
+up is in [Setup](./setup.mdx); how each part is built is in
+[Architecture](../reference/architecture.mdx).
 
 - [Change requests](#change-requests)
 - [Signing in](#signing-in)
@@ -42,7 +44,7 @@ past pull request (whose status a new branch of that name would show) or a
 folder in `<STUDIO_HOME>/worktrees`; the dialog shows the branch the server
 will pick. Creating it fetches origin and adds branch `cr/<slug>` from
 `origin/main` with its own worktree (see
-[architecture.md](architecture.md#change-requests-and-git)).
+[Architecture](../reference/architecture.mdx#change-requests-and-git)).
 
 The page then opens `?cr=<slug>` with what was open. Switching (the picker)
 loads the page again, keeping the note or asset open.
@@ -113,7 +115,7 @@ page shows goes back to main, and the dialog says so.
 
 ## Signing in
 
-With sign-in on (see [setup.md](setup.md#sign-in)), the page shows the
+With sign-in on (see [Setup](./setup.mdx#sign-in)), the page shows the
 sign-in page until someone signs in. The header then ends with the
 signed-in person (their picture alone on a phone) and a menu with their
 role and **Sign out**, which leaves the Studio for the sign-in page.
@@ -140,8 +142,8 @@ writer made a reader on GitHub while a note is open sees that note lock
 writer sees Discard and Clean up off, with the reason, on a change
 request that is on origin. Agents are an admin's (see [Agents](#agents)).
 
-A commit from the UI has the signed-in person as its author, `Name
-<id+login@users.noreply.github.com>`, so GitHub links it to them; the
+A commit from the UI has the signed-in person as its author,
+`Name <id+login@users.noreply.github.com>`, so GitHub links it to them; the
 committer stays the host's git identity. Pushes and pull requests run as
 the host's `gh`, so Publish ends the description with `Opened in Notes
 Studio by @login.`
@@ -158,7 +160,7 @@ within a second or two) shows nothing. A session that ended brings up the
 sign-in instead, and a change request that was discarded or cleaned up
 elsewhere says so. Leaving for another page (another change request, the
 list after a discard) shows nothing. How the page decides is in
-[architecture.md](architecture.md#connection-watch).
+[Architecture](../reference/architecture.mdx#connection-watch).
 
 ## Editor
 
@@ -168,7 +170,7 @@ editor is [fumadocs-editor](https://github.com/fuma-nama/fumadocs-editor):
 - **Visual** edits blocks in place and looks like the note page: the
   frontmatter title and description on top, the site's prose, callouts,
   code frames, keywords, accordions and diagrams (see
-  [Plugins](architecture.md#plugins)). Type `/` for the block and component
+  [Plugins](../reference/architecture.mdx#plugins)). Type `/` for the block and component
   menu. Blocks you don't touch are written back byte for byte; syntax that
   no plugin understands shows as source and still round-trips.
 - **Source** is CodeMirror 6 over the whole MDX file. Text that does not
@@ -195,13 +197,13 @@ editor is [fumadocs-editor](https://github.com/fuma-nama/fumadocs-editor):
   site has it.
 - Light and dark follow the system. The look is the site's own, imported
   rather than copied, so a change on the site shows here with no Studio
-  edit (see [architecture.md](architecture.md#the-sites-look)).
+  edit (see [Architecture](../reference/architecture.mdx#the-sites-look)).
 
 ## Sidebar
 
 The left side works like VS Code's. The activity bar holds the **Notes**
 view (the page tree), the **Assets** view, the **Issues** view (the open
-note's lint issues, with their count on the icon; see [lint.md](lint.md))
+note's lint issues, with their count on the icon; see [Lint](../reference/lint.mdx))
 and the **Changes** view (with the number of changed files). Picking the
 open view again hides the sidebar, and so does the button at the foot of
 the bar. A rail marks the open view. The **Deleted pages** button (with
@@ -545,7 +547,7 @@ file is opened in the tab (a reload drops them). On main, or for a reader,
 the editor only shows.
 
 Agents edit diagrams through the `diagram_*` MCP tools (see
-[architecture.md](architecture.md#mcp-server)); the skill
+[Architecture](../reference/architecture.mdx#mcp-server)); the skill
 `skills/chimeyrock-diagram` at the repository root says how. The format is
 in `diagrams/README.md`.
 
@@ -757,8 +759,8 @@ The URLs are `?history=<path>` and `?view=deleted`.
 
 The Studio drives coding agents (Claude Code, Codex, omp, Hermes Agent)
 over the [Agent Client Protocol](https://agentclientprotocol.com). Setting
-them up is in [setup.md](setup.md#agents); how they are fenced in is in
-[architecture.md](architecture.md#agents).
+them up is in [Setup](./setup.mdx#agents); how they are fenced in is in
+[Architecture](../reference/architecture.mdx#agents).
 
 > An agent runs commands as the person who started the Studio. With sign-in
 > on, only an **admin** may start a chat, send it a message, answer,
@@ -922,7 +924,7 @@ written into the note until a person accepts it.
 ## Buttons, dialogs and errors
 
 Every button or dialog that writes to the server behaves the same way
-(details in [architecture.md](architecture.md#write-actions)):
+(details in [Architecture](../reference/architecture.mdx#write-actions)):
 
 - A second click, Enter pressed again or Escape while a write is out does
   nothing.

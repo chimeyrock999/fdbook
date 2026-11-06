@@ -8,9 +8,9 @@ import { startTestStudio, type TestStudio } from '../../support/studio';
 // Websocket upgrades are covered in routing.test.ts.
 describe('origin guard', () => {
   let studio: TestStudio;
-  const note = () => studio.fileUrl('content/notes/index.mdx');
+  const note = () => studio.fileUrl('content/docs/index.mdx');
   const putNote = (headers: Record<string, string>) =>
-    rawRequest(studio.fileUrl('content/notes/x.mdx'), {
+    rawRequest(studio.fileUrl('content/docs/x.mdx'), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify({ content: 'x', baseMtime: null }),
@@ -46,7 +46,7 @@ describe('origin guard', () => {
 
   it('refuses writes a page could send without a preflight', async () => {
     expect((await putNote({ 'Content-Type': 'text/plain' })).status).toBe(415);
-    const asset = await rawRequest(studio.fileUrl('public/notes/demo/x.png'), {
+    const asset = await rawRequest(studio.fileUrl('public/docs/demo/x.png'), {
       method: 'PUT',
       headers: { 'Content-Type': 'image/png' },
       body: Buffer.from([1]),

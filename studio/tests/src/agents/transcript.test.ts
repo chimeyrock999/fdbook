@@ -22,7 +22,7 @@ describe('agent transcripts', () => {
       { type: 'update', at: 2, update: { sessionUpdate: 'plan', entries: [{ content: 'Read', status: 'completed', priority: 'medium' }] } },
       { type: 'permission', at: 3, ask },
       { type: 'answer', at: 4, id: 'a1', optionId: 'ok', by: 'octocat' },
-      { type: 'write', at: 5, path: 'content/notes/intro.mdx', bytes: 12 },
+      { type: 'write', at: 5, path: 'content/docs/intro.mdx', bytes: 12 },
       text('agent_message_chunk', 'Done, '),
       text('agent_message_chunk', 'shorter now.'),
     ]);
@@ -37,11 +37,11 @@ describe('agent transcripts', () => {
   it('shows the edits and deletes an agent proposed', () => {
     const items = transcriptOf([
       { type: 'start', at: 0, conversation: summary() },
-      { type: 'proposal', at: 1, id: 'p1', path: 'content/notes/intro.mdx', hunks: 2 },
+      { type: 'proposal', at: 1, id: 'p1', path: 'content/docs/intro.mdx', hunks: 2 },
       { type: 'delete-proposal', at: 2, id: 'd1', path: 'guide/old.mdx' },
     ]);
     expect(items).toEqual([
-      { kind: 'proposal', key: 'proposal-p1', path: 'content/notes/intro.mdx', hunks: 2 },
+      { kind: 'proposal', key: 'proposal-p1', path: 'content/docs/intro.mdx', hunks: 2 },
       { kind: 'delete-proposal', key: 'delete-proposal-d1', path: 'guide/old.mdx' },
     ]);
   });

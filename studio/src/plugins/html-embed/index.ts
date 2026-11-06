@@ -3,6 +3,7 @@ import { definePlugin } from '../plugin';
 import '../cards.css';
 import './embed.css';
 import { HtmlEmbed } from './HtmlEmbed';
+import { ASSETS_DIR, siteUrlOf } from '../../../server/security/asset-types';
 
 // <HtmlEmbed src="/notes/….html?embed=1" title="…" caption="…" /> from
 // components/mdx/html-embed.tsx. Title and caption edit in place; src and
@@ -16,7 +17,7 @@ const htmlEmbedSpec: UiComponentSpec = {
   ],
   regions: { title: 'studio-embed-title', caption: 'studio-embed-caption' },
   props: [
-    { name: 'src', label: 'Source', type: 'string', placeholder: '/notes/…/page.html?embed=1' },
+    { name: 'src', label: 'Source', type: 'string', placeholder: `${siteUrlOf(ASSETS_DIR)}/…/page.html?embed=1` },
     { name: 'height', label: 'Height', type: 'string', placeholder: '480' },
   ],
   render: HtmlEmbed,

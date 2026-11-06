@@ -156,26 +156,26 @@ describe('links', () => {
   it('accepts links that reach a page', () => {
     const source = [
       '[a](./setup.mdx) [b](./setup.mdx#step-2) [c](../other/page.mdx) [d](./index.mdx)',
-      '[e](/notes/guide/setup) [f](/notes/guide/) [g](/notes) [h](#local) [i](https://example.com)',
+      '[e](/docs/guide/setup) [f](/docs/guide/) [g](/docs) [h](#local) [i](https://example.com)',
       '[j](./setup) [k](mailto:a@b.c) [l](/resume)',
     ].join('\n');
     expect(lint(source)).toEqual([]);
   });
 
   it('resolves an extensionless relative link against the page URL, as the browser does', () => {
-    // guide/intro.mdx is served at /notes/guide/intro, so ./x is /notes/guide/x.
+    // guide/intro.mdx is served at /docs/guide/intro, so ./x is /docs/guide/x.
     expect(lint('[x](./setup)\n')).toEqual([]);
     expect(summary(lint('[x](./setup)\n', { path: 'guide/index.mdx' }))).toEqual(['link-broken@1']);
   });
 
-  it('flags relative and /notes links that reach no page', () => {
-    const issues = lint('[a](./missing.mdx) [b](../nope/page.mdx)\n\n[c](/notes/guide/missing#x) [d](./missing)\n');
+  it('flags relative and /docs links that reach no page', () => {
+    const issues = lint('[a](./missing.mdx) [b](../nope/page.mdx)\n\n[c](/docs/guide/missing#x) [d](./missing)\n');
     expect(summary(issues)).toEqual(['link-broken@1', 'link-broken@1', 'link-broken@3', 'link-broken@3']);
     expect(issues[0]?.message).toContain('./missing.mdx');
   });
 
   it('flags a query on a relative .mdx link, which the site does not strip', () => {
-    // source.resolveHref looks up `setup.mdx?tab=a` as a file name; the browser then gets /notes/guide/setup.mdx.
+    // source.resolveHref looks up `setup.mdx?tab=a` as a file name; the browser then gets /docs/guide/setup.mdx.
     expect(summary(lint('[x](./setup.mdx?tab=a) [y](./setup.mdx#a)\n'))).toEqual(['link-broken@1']);
   });
 
@@ -194,13 +194,13 @@ describe('links', () => {
 describe('assets', () => {
   it('accepts assets that exist in public/, ignoring query and hash', () => {
     const source = [
-      '<HtmlEmbed src="/notes/guide/demo.html?embed=1" />',
+      '<HtmlEmbed src="/docs/guide/demo.html?embed=1" />',
       '',
-      '<SvgDiagram src="/notes/guide/arch.svg" />',
+      '<SvgDiagram src="/docs/guide/arch.svg" />',
       '',
-      '::html{src="/notes/guide/demo.html"}',
+      '::html{src="/docs/guide/demo.html"}',
       '',
-      '::svg{src="/notes/guide/arch.svg#x"}',
+      '::svg{src="/docs/guide/arch.svg#x"}',
       '',
       '![logo](/images/logo.png)',
       '',
@@ -215,12 +215,12 @@ describe('assets', () => {
   });
 
   it('reads an image path as the browser asks for it, percent escapes decoded', () => {
-    expect(lint('![a](/notes/guide/my%20pic.png)\n', { assets: [...ASSETS, 'notes/guide/my pic.png'] })).toEqual([]);
-    expect(summary(lint('![a](/notes/guide/my%20pic.png)\n'))).toEqual(['asset-missing@1']);
+    expect(lint('![a](/docs/guide/my%20pic.png)\n', { assets: [...ASSETS, 'notes/guide/my pic.png'] })).toEqual([]);
+    expect(summary(lint('![a](/docs/guide/my%20pic.png)\n'))).toEqual(['asset-missing@1']);
   });
 
   it('flags missing assets and embeds with no source', () => {
-    const source = '<HtmlEmbed src="/notes/guide/gone.html" />\n\n::diagram{src="/notes/x.svg"}\n\n![a](/images/none.png)\n\n<HtmlEmbed title="t" />\n';
+    const source = '<HtmlEmbed src="/docs/guide/gone.html" />\n\n::diagram{src="/docs/x.svg"}\n\n![a](/images/none.png)\n\n<HtmlEmbed title="t" />\n';
     expect(summary(lint(source))).toEqual(['asset-missing@1', 'asset-missing@3', 'asset-missing@5', 'asset-missing@7']);
   });
 });

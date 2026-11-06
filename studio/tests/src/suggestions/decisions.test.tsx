@@ -7,7 +7,7 @@ import type { ProposalHunk, ProposalView } from '../../../src/api/proposals';
 import { SuggestionBar, type NoteReview } from '../../../src/suggestions/Suggestions';
 import { LANDING_MS, useNoteSuggestions } from '../../../src/suggestions/useNoteSuggestions';
 
-const PATH = 'content/notes/guide.mdx';
+const PATH = 'content/docs/guide.mdx';
 const NOTE = '---\ntitle: Guide\n---\n\n# Guide\n\nFirst paragraph.\n\nA middle one.\n\nAnd one more.\n\nSecond paragraph.\n';
 const NEXT = NOTE.replace('First paragraph.', 'One.').replace('Second paragraph.', 'Two.');
 

@@ -31,8 +31,8 @@ describe('preview API', () => {
   const push = () => send(`${base()}/api/preview`, 'POST', {});
   const edit = async (text: string) => {
     if (cr.worktree === null) throw new Error('no worktree');
-    await writeFile(join(cr.worktree, 'content/notes/guide/first-look.mdx'), `---\ntitle: First look\n---\n\n${text}\n`);
-    const response = await send(`${base()}/api/changes`, 'POST', { message: `docs(notes): ${text}`, paths: ['content/notes/guide/first-look.mdx'] });
+    await writeFile(join(cr.worktree, 'content/docs/guide/first-look.mdx'), `---\ntitle: First look\n---\n\n${text}\n`);
+    const response = await send(`${base()}/api/changes`, 'POST', { message: `docs(notes): ${text}`, paths: ['content/docs/guide/first-look.mdx'] });
     expect(response.status).toBe(200);
     return (json(response) as { sha: string }).sha;
   };
@@ -71,7 +71,7 @@ describe('preview API', () => {
   it('counts the commits a push would send and the files not committed', async () => {
     const first = await edit('first');
     if (cr.worktree === null) throw new Error('no worktree');
-    await writeFile(join(cr.worktree, 'content/notes/index.mdx'), '---\ntitle: Home\n---\n\nNot committed.\n');
+    await writeFile(join(cr.worktree, 'content/docs/index.mdx'), '---\ntitle: Home\n---\n\nNot committed.\n');
     expect(await preview()).toMatchObject({ pushed: null, unpushed: [first], uncommitted: 1, build: null });
   });
 

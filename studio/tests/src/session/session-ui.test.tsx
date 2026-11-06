@@ -83,9 +83,9 @@ describe('studioFetch', () => {
   });
 
   it('carries the csrf token on a page history restore (#110)', async () => {
-    const calls = stubFetch({ '/cr/x/api/history/restore': () => ({ body: { path: 'content/notes/a.mdx', mtimeMs: 2 } }) });
+    const calls = stubFetch({ '/cr/x/api/history/restore': () => ({ body: { path: 'content/docs/a.mdx', mtimeMs: 2 } }) });
     setCsrf('tok');
-    await createHistoryClient('/cr/x').restore('content/notes/a.mdx', 'abc', 1);
+    await createHistoryClient('/cr/x').restore('content/docs/a.mdx', 'abc', 1);
     expect(new Headers(calls[0]?.init?.headers).get('x-studio-csrf')).toBe('tok');
   });
 

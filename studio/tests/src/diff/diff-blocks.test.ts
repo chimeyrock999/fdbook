@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { repoRoot } from '../../../server/config';
+import { docsRoot } from '../../support/notes';
 import { diffFrontmatter, diffNote, foldSame, type Run } from '../../../src/diff/diff-blocks';
 import { editorSyntax } from '../../../src/plugins';
 
-const read = (path: string) => readFileSync(join(repoRoot, 'content/notes', path), 'utf8');
+const read = (path: string) => readFileSync(join(docsRoot, 'content/docs', path), 'utf8');
 const WATERMARK = read('streaming/watermark-and-late-events.mdx');
 
 // The segments without their text: kind and block count.
@@ -16,7 +16,7 @@ const diff = (before: string, after: string) => {
   return result;
 };
 
-// Through the editor's real syntax, on real notes from content/notes.
+// Through the editor's real syntax, on real notes from content/docs.
 describe('diffNote', () => {
   it('finds nothing changed in an unchanged note', () => {
     const { body, frontmatter } = diff(WATERMARK, WATERMARK);

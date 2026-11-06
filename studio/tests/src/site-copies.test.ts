@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { repoRoot } from '../../server/config';
+import { installRoot } from '../../server/config';
 
 // Site code the Studio cannot import (server reads, fumadocs-ui, live embeds
 // the editor does not run), so a plugin draws its own copy. The site marks
@@ -46,9 +46,9 @@ function regions(source: string) {
 
 describe('site copies', () => {
   it.each(COPIES)('the parts of $site the Studio copies have not changed', async ({ site, sha256 }) => {
-    const { parts, studio } = regions(await readFile(join(repoRoot, site), 'utf8'));
+    const { parts, studio } = regions(await readFile(join(installRoot, site), 'utf8'));
     expect(parts.length, `${site} marks no studio-copy region`).toBeGreaterThan(0);
-    for (const path of studio) expect(existsSync(join(repoRoot, path)), path).toBe(true);
+    for (const path of studio) expect(existsSync(join(installRoot, path)), path).toBe(true);
     const hash = createHash('sha256').update(parts.join('\n\n')).digest('hex');
     expect(hash, `${site} changed in a part the Studio copies: check ${[...new Set(studio)].join(', ')} against it, then set its sha256 here to ${hash}`).toBe(sha256);
   });

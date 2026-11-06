@@ -6,7 +6,7 @@ import type { HttpError } from '../../../server/http';
 import type { Thread, ThreadAuthor } from '../../../server/review/shared';
 import { createThreads, type Threads } from '../../../server/review/threads';
 
-const PATH = 'content/notes/guide.mdx';
+const PATH = 'content/docs/guide.mdx';
 const NOTE = '# Guide\n\nThe first paragraph says one thing.\n\nThe second paragraph says another.\n\nThe end.';
 const REVIEWER: ThreadAuthor = { kind: 'run', runId: 'r1', agent: 'claude', model: 'opus', role: 'reviewer' };
 const AUTHOR: ThreadAuthor = { kind: 'run', runId: 'r2', agent: 'codex', model: null, role: 'author' };
@@ -39,7 +39,7 @@ describe('review threads', () => {
     expect(thread.anchor).toMatchObject({ index: 2, text: 'The second paragraph says another.', before: 'The first paragraph says one thing.', after: 'The end.' });
     expect(thread.comments).toEqual([expect.objectContaining({ body: 'Say why.', by: REVIEWER })]);
     expect(await threads.list(PATH)).toEqual([thread]);
-    expect(await threads.list('content/notes/other.mdx')).toEqual([]);
+    expect(await threads.list('content/docs/other.mdx')).toEqual([]);
     expect(changes).toEqual([thread]);
   });
 
@@ -150,9 +150,9 @@ describe('review threads', () => {
     const { id } = await threads.open({ path: PATH, text: NOTE, block: 2, body: 'x', by: REVIEWER });
     // The old path's unlink, then the new path's add (no thread there yet), then the move.
     await threads.reanchor(PATH, note(null));
-    await threads.reanchor('content/notes/handbook.mdx', note(NOTE));
+    await threads.reanchor('content/docs/handbook.mdx', note(NOTE));
     await threads.moved('guide.mdx', 'handbook.mdx', () => Promise.resolve(NOTE));
-    expect(await threads.read(id)).toMatchObject({ path: 'content/notes/handbook.mdx', orphaned: false, anchor: { index: 2 } });
+    expect(await threads.read(id)).toMatchObject({ path: 'content/docs/handbook.mdx', orphaned: false, anchor: { index: 2 } });
   });
 
   it('keeps a thread orphaned before a rename orphaned through it, and finds one whose own block the rename changed', async () => {
@@ -165,15 +165,15 @@ describe('review threads', () => {
     const v3 = v2.replace('again.', 'again later.');
     await threads.reanchor(PATH, note(v3));
     await threads.moved('guide.mdx', 'handbook.mdx', () => Promise.resolve(v3));
-    expect(await threads.read(old.id)).toMatchObject({ path: 'content/notes/handbook.mdx', orphaned: true, anchor: { text: x } });
+    expect(await threads.read(old.id)).toMatchObject({ path: 'content/docs/handbook.mdx', orphaned: true, anchor: { text: x } });
     // Orphaned by the rename's own unlink, with its block changed by the rename (a link to itself).
     const page = 'Read [this page](./guide.mdx) first.';
     const linked = `Intro.\n\n${page}\n\nEnd.\n`;
-    const own = await threads.open({ path: 'content/notes/a.mdx', text: linked, block: 1, body: 'y', by: REVIEWER });
-    await threads.reanchor('content/notes/a.mdx', note(null));
+    const own = await threads.open({ path: 'content/docs/a.mdx', text: linked, block: 1, body: 'y', by: REVIEWER });
+    await threads.reanchor('content/docs/a.mdx', note(null));
     const rewritten = linked.replace('./guide.mdx', './b.mdx');
     await threads.moved('a.mdx', 'b.mdx', () => Promise.resolve(rewritten));
-    expect(await threads.read(own.id)).toMatchObject({ path: 'content/notes/b.mdx', orphaned: false, anchor: { index: 1, text: 'Read [this page](./b.mdx) first.' } });
+    expect(await threads.read(own.id)).toMatchObject({ path: 'content/docs/b.mdx', orphaned: false, anchor: { index: 1, text: 'Read [this page](./b.mdx) first.' } });
   });
 
   it('reads no note that has no threads, and each change is later than the last', async () => {
@@ -189,15 +189,15 @@ describe('review threads', () => {
 
   it('moves the threads of a renamed page or folder with it', async () => {
     const page = await threads.open({ path: PATH, body: 'Page.', by: PERSON });
-    const inFolder = await threads.open({ path: 'content/notes/guide/deep.mdx', body: 'In the folder.', by: PERSON });
-    const other = await threads.open({ path: 'content/notes/guides.mdx', body: 'Not in it.', by: PERSON });
+    const inFolder = await threads.open({ path: 'content/docs/guide/deep.mdx', body: 'In the folder.', by: PERSON });
+    const other = await threads.open({ path: 'content/docs/guides.mdx', body: 'Not in it.', by: PERSON });
     const read = () => Promise.resolve(null);
     await threads.moved('guide.mdx', 'handbook.mdx', read);
     await threads.moved('guide', 'handbook', read);
     expect((await threads.list()).map((thread) => [thread.id, thread.path])).toEqual([
-      [page.id, 'content/notes/handbook.mdx'],
-      [inFolder.id, 'content/notes/handbook/deep.mdx'],
-      [other.id, 'content/notes/guides.mdx'],
+      [page.id, 'content/docs/handbook.mdx'],
+      [inFolder.id, 'content/docs/handbook/deep.mdx'],
+      [other.id, 'content/docs/guides.mdx'],
     ]);
   });
 

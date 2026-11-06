@@ -6,7 +6,7 @@ import { parseNote } from '../lint/lint.ts';
 import { decodeRefs, markdownRange, type Range } from '../markdown/destination.ts';
 import { pageUrl } from '../lint/rules/links.ts';
 import { diagramPathOf } from '@site/lib/diagram/source.ts';
-import { ASSETS_DIR, classifyPath, extensionOf, isAssetExtension, publicAsset } from '../security/asset-types.ts';
+import { ASSETS_DIR, classifyPath, DIAGRAMS_DIR, extensionOf, isAssetExtension, PUBLIC_DIR, publicAsset, siteUrlOf } from '../security/asset-types.ts';
 
 // References from a note to files under public/notes, found on the parsed
 // note so code blocks and the frontmatter never count. Each reference is
@@ -48,16 +48,18 @@ function urlAsset(href: string, notePath: string) {
   }
 }
 
-// `public/notes/…` for a file the Studio manages there, else null.
+// The worktree path of a file the Studio manages in the media folder, for
+// `asset` relative to the public folder, else null.
 function managed(asset: string | null) {
-  if (asset === null || !asset.startsWith('notes/') || !isAssetExtension(extensionOf(asset))) return null;
-  return `public/${asset}`;
+  if (asset === null || !isAssetExtension(extensionOf(asset))) return null;
+  const path = `${PUBLIC_DIR}/${asset}`;
+  return path.startsWith(`${ASSETS_DIR}/`) ? path : null;
 }
 
 // The file a <Diagram src> draws, as the site resolves it, or null when
 // that is no diagram file the Studio may touch.
 function diagramFile(src: string) {
-  const path = diagramPathOf(src);
+  const path = diagramPathOf(src, DIAGRAMS_DIR);
   return path !== null && classifyPath(path) === 'diagram' ? path : null;
 }
 
@@ -218,9 +220,9 @@ function movedRaw(ref: AssetRef, raw: string, from: string, to: string) {
   const markdown = ref.kind === 'image' || ref.kind === 'link';
   const name = markdown ? encodeURIComponent(baseOf(to)) : baseOf(to);
   if (dirOf(from) === dirOf(to)) return `${raw.slice(0, raw.lastIndexOf('/') + 1)}${name}`;
-  const site = `/${to.slice('public/'.length)}`;
+  const site = siteUrlOf(to);
   const path = markdown ? encodeURI(site) : site;
-  return raw.startsWith(`${ASSETS_DIR.slice('public/'.length)}/`) ? path.slice(1) : path;
+  return raw.startsWith(`${siteUrlOf(ASSETS_DIR).slice(1)}/`) ? path.slice(1) : path;
 }
 
 // The note with every reference to a moved asset pointed at its new place:

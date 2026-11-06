@@ -1,4 +1,6 @@
-# Checks
+---
+title: Checks
+---
 
 Read this before pushing a Studio change: what to run, how the tests are
 set up, and which tests are known to flake.
@@ -37,7 +39,7 @@ site's `lib/`, `components/` or `styles/` also needs the root checks:
   tests run in node with vitest's 5-second default.
 - `tests/global-setup.ts` stops the whole run, with the reinstall command,
   when the installed packages differ from the lockfiles (as the server does
-  at start; see [setup.md](setup.md#after-a-pull)).
+  at start; see [Setup](../guide/setup.mdx#after-a-pull)).
 - Tests that render the editor run in jsdom (`// @vitest-environment
   jsdom` at the top of the file). `tests/setup/jsdom.ts` runs before every
   test file: it gives the window the `matchMedia` jsdom lacks, which the
@@ -68,7 +70,7 @@ Tests that pin the site's code:
   a byte changes.
 - `tests/src/site-copies.test.ts` pins the hash of each part of a site file
   marked `// studio-copy start: …` (see
-  [architecture.md](architecture.md#the-sites-look)).
+  [Architecture](./architecture.mdx#the-sites-look)).
 - `tests/server/lint/notes.test.ts` keeps every note at zero lint issues.
 
 ## Agent tests

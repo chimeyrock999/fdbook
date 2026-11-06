@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { validateDiagram } from '@site/lib/diagram/validate.ts';
 import { diagramFilePath } from '@site/lib/read-diagram.ts';
 import { listEditableFiles } from '../files/store.ts';
-import { NOTES_DIR } from '../security/paths.ts';
+import { DIAGRAMS_DIR, NOTES_DIR, PUBLIC_DIR } from '../security/paths.ts';
 import { lintNote } from './lint.ts';
 import type { DiagramProblem, LintContext, LintIssue } from './types.ts';
 
@@ -30,7 +30,7 @@ const isFile = (path: string) => {
 const checked = new Map<string, { mtimeMs: number; size: number; problem: DiagramProblem | null }>();
 
 function diagramProblem(root: string, src: string): DiagramProblem | null {
-  const file = diagramFilePath(root, src);
+  const file = diagramFilePath(root, src, DIAGRAMS_DIR);
   let info;
   try {
     info = file ? statSync(file) : null;
@@ -54,13 +54,13 @@ function diagramProblem(root: string, src: string): DiagramProblem | null {
 }
 
 // What the rules need from the worktree at `root`, for the note at `path`
-// (relative to content/notes). Assets are looked up in the whole of public/,
-// and diagrams in diagrams/, as the site reads them at build time.
+// (relative to the notes). Assets are looked up in the whole public folder,
+// and diagrams in the diagrams folder, as the site reads them at build time.
 function contextFor(root: string, pages: ReadonlySet<string>, path: string): LintContext {
   return {
     path,
     pages,
-    assetExists: (asset) => isFile(join(root, 'public', asset)),
+    assetExists: (asset) => isFile(join(root, PUBLIC_DIR, asset)),
     diagramProblem: (src) => diagramProblem(root, src),
   };
 }

@@ -3,8 +3,8 @@ import type { ChangedFile } from '../../../src/api/changes';
 import { suggestMessage } from '../../../src/changes/message';
 
 const note = (path: string, status: ChangedFile['status'], from?: string): ChangedFile =>
-  ({ path: `content/notes/${path}`, status, ...(from === undefined ? {} : { from: `content/notes/${from}` }) });
-const asset = (path: string, status: ChangedFile['status'] = 'A'): ChangedFile => ({ path: `public/notes/${path}`, status });
+  ({ path: `content/docs/${path}`, status, ...(from === undefined ? {} : { from: `content/docs/${from}` }) });
+const asset = (path: string, status: ChangedFile['status'] = 'A'): ChangedFile => ({ path: `public/docs/${path}`, status });
 const diagram = (path: string, status: ChangedFile['status'] = 'M'): ChangedFile => ({ path: `diagrams/${path}.diagram.json`, status });
 
 describe('suggestMessage', () => {

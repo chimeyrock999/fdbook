@@ -17,15 +17,15 @@ describe('labels', () => {
   const titles = titlesOf(root);
 
   it('names notes by title, meta.yaml as the page order, diagrams by name, the rest by file name', () => {
-    expect(labelOf({ path: 'content/notes/streaming/w.mdx', status: 'M' }, titles)).toBe('Watermarks');
-    expect(labelOf({ path: 'content/notes/streaming/index.mdx', status: 'M' }, titles)).toBe('Streaming');
-    expect(labelOf({ path: 'content/notes/streaming/meta.yaml', status: 'M' }, titles)).toBe('Page order of Streaming');
-    expect(labelOf({ path: 'content/notes/meta.yaml', status: 'M' }, titles)).toBe('Page order of Notes');
-    expect(labelOf({ path: 'content/notes/new/meta.yaml', status: 'A' }, titles)).toBe('Page order of new');
-    expect(labelOf({ path: 'content/notes/streaming/gone.mdx', status: 'D' }, titles)).toBe('gone');
-    expect(labelOf({ path: 'public/notes/streaming/a.png', status: 'A' }, titles)).toBe('a.png');
+    expect(labelOf({ path: 'content/docs/streaming/w.mdx', status: 'M' }, titles)).toBe('Watermarks');
+    expect(labelOf({ path: 'content/docs/streaming/index.mdx', status: 'M' }, titles)).toBe('Streaming');
+    expect(labelOf({ path: 'content/docs/streaming/meta.yaml', status: 'M' }, titles)).toBe('Page order of Streaming');
+    expect(labelOf({ path: 'content/docs/meta.yaml', status: 'M' }, titles)).toBe('Page order of Notes');
+    expect(labelOf({ path: 'content/docs/new/meta.yaml', status: 'A' }, titles)).toBe('Page order of new');
+    expect(labelOf({ path: 'content/docs/streaming/gone.mdx', status: 'D' }, titles)).toBe('gone');
+    expect(labelOf({ path: 'public/docs/streaming/a.png', status: 'A' }, titles)).toBe('a.png');
     expect(labelOf({ path: 'diagrams/streaming/pipeline.diagram.json', status: 'M' }, titles)).toBe('pipeline');
-    expect(shortPath('public/notes/streaming/a.png')).toBe('streaming/a.png');
+    expect(shortPath('public/docs/streaming/a.png')).toBe('streaming/a.png');
     expect(shortPath('diagrams/streaming/pipeline.diagram.json')).toBe('streaming/pipeline.diagram.json');
   });
 

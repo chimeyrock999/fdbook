@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { createFilesClient } from '../api/files';
 import type { TreeClient, TreeFolder } from '../api/tree';
+import { NOTES_DIR } from '../../server/security/asset-types';
 
 const SETTLE_MS = 150;
 
@@ -34,7 +35,7 @@ export function useTree(tree: TreeClient, files: ReturnType<typeof createFilesCl
     };
     reloadRef.current = load;
     const unsubscribe = files.subscribeFileEvents((event) => {
-      if (!event.path.startsWith('content/notes/')) return;
+      if (!event.path.startsWith(`${NOTES_DIR}/`)) return;
       clearTimeout(timer);
       timer = setTimeout(() => { void load(); }, SETTLE_MS);
     });

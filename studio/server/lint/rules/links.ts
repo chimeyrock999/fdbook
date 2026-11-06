@@ -1,14 +1,14 @@
 import type { Root } from 'mdast';
 import { visit } from 'unist-util-visit';
 import { pointOf, type LintContext, type Report } from '../types.ts';
+import { BASE_URL, NOTES_DIR } from '../../security/asset-types.ts';
 
-const BASE = '/notes';
-
-// The URL fumadocs gives a note: `guide/index.mdx` is /notes/guide.
+// The URL fumadocs gives a note under the site's base URL (BASE_URL, from
+// fdbook.config.ts): `guide/index.mdx` is /docs/guide.
 export function pageUrl(path: string) {
   const slugs = path.replace(/\.mdx$/, '').split('/');
   if (slugs.at(-1) === 'index') slugs.pop();
-  return slugs.length > 0 ? `${BASE}/${slugs.join('/')}` : BASE;
+  return slugs.length > 0 ? `${BASE_URL}/${slugs.join('/')}` : BASE_URL;
 }
 
 // fumadocs' joinPath: `..` above the root is dropped, not an error.
@@ -52,15 +52,15 @@ export function resolveHref(href: string, from: string, pages: ReadonlySet<strin
     if (file.endsWith('.mdx')) return { missing: file };
   }
   const target = trimSlash(decode(new URL(href, `http://site${pageUrl(from)}`).pathname, decodeURIComponent));
-  return target === BASE || target.startsWith(`${BASE}/`) ? { url: target } : null;
+  return target === BASE_URL || target.startsWith(`${BASE_URL}/`) ? { url: target } : null;
 }
 
 // Why `href` from the note at `context.path` reaches no page, or null when it
-// does (or reaches a file under public/notes).
+// does (or reaches a file the site serves from public/).
 export function brokenLink(href: string, context: LintContext, urls: ReadonlySet<string>): string | null {
   const resolved = resolveHref(href, context.path, context.pages);
   if (resolved === null || 'page' in resolved) return null;
-  if ('missing' in resolved) return `There is no note at \`content/notes/${resolved.missing}\`.`;
+  if ('missing' in resolved) return `There is no note at \`${NOTES_DIR}/${resolved.missing}\`.`;
   if (urls.has(resolved.url) || context.assetExists(resolved.url.slice(1))) return null;
   return href.startsWith('/') ? 'No note has that URL.' : `It resolves to \`${resolved.url}\`, which no note has.`;
 }

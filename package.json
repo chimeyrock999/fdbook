@@ -6,7 +6,9 @@
     "studio"
   ],
   "scripts": {
-    "studio": "npm run dev -w studio",
+    "studio": "npm run dev -w studio --",
+    "docs": "npm run dev -w studio -- docs",
+    "docs:lint": "npm run notes:lint -w studio -- docs",
     "test": "npm test -w studio",
     "types:check": "npm run types:check -w studio"
   }

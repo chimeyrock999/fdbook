@@ -3,7 +3,7 @@ import { glob } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { createSyntax, parseMdxToDoc, serializeDocToMdx, type ParsedDoc } from '@fumadocs-editor/core';
 import { describe, expect, it } from 'vitest';
-import { repoRoot, studioRoot } from '../../../server/config';
+import { installRoot, studioRoot } from '../../../server/config';
 import { editorConfig } from '../../../src/plugins';
 
 // The editor's syntax, as the registered plugins build it, over every real
@@ -17,8 +17,8 @@ const syntax = createSyntax(editorConfig.components, editorConfig.syntax);
 // Relative to the repo root, so each test is named after its note.
 async function documents() {
   const paths: string[] = [];
-  for await (const path of glob('content/notes/**/*.mdx', { cwd: repoRoot })) paths.push(path);
-  for await (const path of glob('src/plugins/*/fixtures/*.mdx', { cwd: studioRoot })) paths.push(relative(repoRoot, join(studioRoot, path)));
+  for await (const path of glob('docs/content/docs/**/*.mdx', { cwd: installRoot })) paths.push(path);
+  for await (const path of glob('src/plugins/*/fixtures/*.mdx', { cwd: studioRoot })) paths.push(relative(installRoot, join(studioRoot, path)));
   return paths.sort();
 }
 
@@ -38,7 +38,7 @@ describe('editor syntax', () => {
   });
 
   it.each(paths)('round-trips %s byte for byte', async (path) => {
-    const source = await readFile(join(repoRoot, path), 'utf8');
+    const source = await readFile(join(installRoot, path), 'utf8');
     const parsed = parseMdxToDoc(source, syntax);
     expect(serializeDocToMdx(parsed.doc, parsed.snapshot, syntax)).toBe(source);
   });
@@ -46,8 +46,8 @@ describe('editor syntax', () => {
   // An edited block is serialized from the document, not copied from the
   // source: a Diagram must come back with the same attributes.
   it('reads Diagram in a real note as a component and writes it back', async () => {
-    const path = 'content/notes/data-platform/stacks-integration/databricks/databricks-interactive-runtime/driver-container-first-look.mdx';
-    const source = await readFile(join(repoRoot, path), 'utf8');
+    const path = 'content/docs/data-platform/stacks-integration/databricks/databricks-interactive-runtime/driver-container-first-look.mdx';
+    const source = await readFile(join(installRoot, path), 'utf8');
     const embeds = find(parseMdxToDoc(source, syntax).doc, 'Diagram');
     expect(embeds.length).toBeGreaterThan(0);
     const lines = source.split('\n').filter((line) => line.startsWith('<Diagram '));

@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { AssetInfo } from '../../../src/api/assets';
 import { buildAssetTree, foldersTo, type AssetFolder } from '../../../src/assets/asset-tree';
 
-const use = { note: 'content/notes/a.mdx', line: 1, column: 1, length: 1, text: '', unsure: false };
+const use = { note: 'content/docs/a.mdx', line: 1, column: 1, length: 1, text: '', unsure: false };
 const asset = (path: string, used = 0): AssetInfo => ({ path, mtimeMs: 1, size: 1, usages: Array.from({ length: used }, () => use) });
 
 const ASSETS = [
-  asset('public/notes/guide/b.png', 1),
-  asset('public/notes/guide/a.svg'),
-  asset('public/notes/guide/deep/flow.html', 2),
-  asset('public/notes/top.png'),
+  asset('public/docs/guide/b.png', 1),
+  asset('public/docs/guide/a.svg'),
+  asset('public/docs/guide/deep/flow.html', 2),
+  asset('public/docs/top.png'),
 ];
 
 const outline = (folder: AssetFolder): unknown => ({
@@ -19,25 +19,25 @@ const outline = (folder: AssetFolder): unknown => ({
 describe('buildAssetTree', () => {
   it('nests assets by folder, folders first, each sorted', () => {
     expect(outline(buildAssetTree(ASSETS))).toEqual({
-      'public/notes': [
-        { 'public/notes/guide': [{ 'public/notes/guide/deep': ['public/notes/guide/deep/flow.html'] }, 'public/notes/guide/a.svg', 'public/notes/guide/b.png'] },
-        'public/notes/top.png',
+      'public/docs': [
+        { 'public/docs/guide': [{ 'public/docs/guide/deep': ['public/docs/guide/deep/flow.html'] }, 'public/docs/guide/a.svg', 'public/docs/guide/b.png'] },
+        'public/docs/top.png',
       ],
     });
   });
 
   it('filters by path and by use', () => {
     expect(outline(buildAssetTree(ASSETS, { query: 'FLOW' }))).toEqual({
-      'public/notes': [{ 'public/notes/guide': [{ 'public/notes/guide/deep': ['public/notes/guide/deep/flow.html'] }] }],
+      'public/docs': [{ 'public/docs/guide': [{ 'public/docs/guide/deep': ['public/docs/guide/deep/flow.html'] }] }],
     });
     expect(outline(buildAssetTree(ASSETS, { unused: true }))).toEqual({
-      'public/notes': [{ 'public/notes/guide': ['public/notes/guide/a.svg'] }, 'public/notes/top.png'],
+      'public/docs': [{ 'public/docs/guide': ['public/docs/guide/a.svg'] }, 'public/docs/top.png'],
     });
   });
 });
 
 describe('buildAssetTree under diagrams/', () => {
-  it('builds the diagrams/ tree apart from public/notes', () => {
+  it('builds the diagrams/ tree apart from public/docs', () => {
     const diagram = { path: 'diagrams/guide/flow.diagram.json', mtimeMs: 1, size: 1, usages: [] };
     const tree = buildAssetTree([...ASSETS, diagram], { prefix: 'diagrams/' });
     expect(tree.path).toBe('diagrams');
@@ -50,8 +50,8 @@ describe('buildAssetTree under diagrams/', () => {
 
 describe('foldersTo', () => {
   it('lists the folders down to the given one', () => {
-    expect(foldersTo('public/notes/guide/deep')).toEqual(['public/notes/guide', 'public/notes/guide/deep']);
-    expect(foldersTo('public/notes')).toEqual([]);
-    expect(foldersTo('content/notes/guide')).toEqual([]);
+    expect(foldersTo('public/docs/guide/deep')).toEqual(['public/docs/guide', 'public/docs/guide/deep']);
+    expect(foldersTo('public/docs')).toEqual([]);
+    expect(foldersTo('content/docs/guide')).toEqual([]);
   });
 });

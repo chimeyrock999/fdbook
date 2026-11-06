@@ -9,7 +9,7 @@ import type { DeleteProposals } from '../proposals/deletes.ts';
 import { blocksOf, lineAt } from '../proposals/hunks.ts';
 import type { ProposalAuthor } from '../proposals/shared.ts';
 import { applyEdits, type Proposals } from '../proposals/store.ts';
-import { classifyPath, NOTES_DIR } from '../security/paths.ts';
+import { ASSETS_DIR, classifyPath, NOTES_DIR } from '../security/paths.ts';
 import { readNotesContent } from '../tree/build.ts';
 import type { StudioTool, StudioToolContext, ToolResult } from './tool.ts';
 
@@ -134,7 +134,7 @@ const authorOf = (ctx: StudioToolContext, deps: NoteToolDeps): ProposalAuthor =>
     ? { kind: 'run', runId: ctx.caller.runId, agent: ctx.caller.agent, model: deps.modelOf(ctx.slug, ctx.caller.runId) }
     : { kind: 'person', login: ctx.caller.login };
 
-const path = z.string().min(1).describe('The note: content/notes/<path>.mdx, or <path>.mdx relative to content/notes');
+const path = z.string().min(1).describe(`The note: ${NOTES_DIR}/<path>.mdx, or <path>.mdx relative to ${NOTES_DIR}`);
 
 export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
   const listNotes: StudioTool<z.ZodObject<Record<string, never>>> = {
@@ -304,7 +304,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
     name: 'propose_delete',
     description: 'Proposes deleting a page (<path>.mdx) or a folder (<path>, with every page in it). Nothing is deleted: a person sees the proposal in the Studio with what the delete takes, and accepts or rejects it. Answers the proposal and that list: the files deleted, the meta.yaml entries removed, the images deleted or kept (another note still uses them), and the notes that still link there, which the delete leaves broken: fix them with propose_edit, or say so.',
     input: z.object({
-      path: z.string().min(1).describe('A page: content/notes/<path>.mdx or <path>.mdx; a folder: content/notes/<path> or <path>'),
+      path: z.string().min(1).describe(`A page: ${NOTES_DIR}/<path>.mdx or <path>.mdx; a folder: ${NOTES_DIR}/<path> or <path>`),
       summary: z.string().max(2000).optional().describe('Why it should go, shown to the person'),
     }),
     access: 'write',
@@ -327,7 +327,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
 
   const listAssetsTool: StudioTool<z.ZodObject<Record<string, never>>> = {
     name: 'list_assets',
-    description: 'Lists the assets under public/notes: path, size, and the notes (with line) that use each one.',
+    description: `Lists the assets under ${ASSETS_DIR}: path, size, and the notes (with line) that use each one.`,
     input: z.object({}),
     access: 'read',
     async run(_args, ctx) {

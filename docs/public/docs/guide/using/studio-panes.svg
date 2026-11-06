@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family="system-ui, sans-serif" font-size="14">
+  <rect x="0" y="0" width="640" height="360" rx="10" fill="#f6f7f9"/>
+  <rect x="0" y="0" width="640" height="40" rx="10" fill="#e3e7ed"/>
+  <text x="16" y="25" fill="#333">Change request · Changes · Preview · Publish</text>
+  <rect x="12" y="52" width="150" height="296" rx="6" fill="#ffffff" stroke="#d0d5dd"/>
+  <text x="24" y="76" fill="#555">Sidebar</text>
+  <text x="24" y="100" fill="#888" font-size="12">Pages · Assets · Issues</text>
+  <rect x="174" y="52" width="290" height="296" rx="6" fill="#ffffff" stroke="#d0d5dd"/>
+  <text x="186" y="76" fill="#555">Editor</text>
+  <text x="186" y="100" fill="#888" font-size="12">Visual or Source</text>
+  <rect x="476" y="52" width="152" height="296" rx="6" fill="#ffffff" stroke="#d0d5dd"/>
+  <text x="488" y="76" fill="#555">Agent panel</text>
+  <text x="488" y="100" fill="#888" font-size="12">Chat · Review</text>
+</svg>

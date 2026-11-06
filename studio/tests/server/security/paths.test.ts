@@ -7,13 +7,13 @@ import { makeWorktree, type Worktree } from '../../support/studio';
 
 describe('classifyPath', () => {
   it.each([
-    ['content/notes/index.mdx', 'note'],
-    ['content/notes/streaming/kafka/index.mdx', 'note'],
-    ['content/notes/meta.yaml', 'meta'],
-    ['content/notes/streaming/meta.yaml', 'meta'],
-    ['public/notes/data-modeling/star.png', 'asset'],
-    ['public/notes/x/diagram.HTML', 'asset'],
-    ['public/notes/x/model.glb', 'asset'],
+    ['content/docs/index.mdx', 'note'],
+    ['content/docs/streaming/kafka/index.mdx', 'note'],
+    ['content/docs/meta.yaml', 'meta'],
+    ['content/docs/streaming/meta.yaml', 'meta'],
+    ['public/docs/data-modeling/star.png', 'asset'],
+    ['public/docs/x/diagram.HTML', 'asset'],
+    ['public/docs/x/model.glb', 'asset'],
     ['diagrams/flow.diagram.json', 'diagram'],
     ['diagrams/data-platform/processing/spark.diagram.json', 'diagram'],
   ])('allows %s as %s', (path, kind) => {
@@ -21,39 +21,39 @@ describe('classifyPath', () => {
   });
 
   it.each([
-    // outside content/notes and public/notes
+    // outside content/docs and public/docs
     'package.json',
     'content/other/a.mdx',
-    'content/notes-old/a.mdx',
+    'content/docs-old/a.mdx',
     'public/resume/index.html',
-    'public/notes.png',
+    'public/docs.png',
     // traversal and odd spellings
     '../package.json',
-    'content/notes/../../package.json',
-    'content/notes/./a.mdx',
-    'content/notes//a.mdx',
-    '/content/notes/a.mdx',
+    'content/docs/../../package.json',
+    'content/docs/./a.mdx',
+    'content/docs//a.mdx',
+    '/content/docs/a.mdx',
     'content\\notes\\a.mdx',
-    'content/notes/a.mdx\0.png',
+    'content/docs/a.mdx\0.png',
     '',
     // hidden paths
-    'content/notes/.obsidian/app.json',
-    'content/notes/.obsidian/a.mdx',
-    'content/notes/.draft.mdx',
-    'public/notes/.cache/a.png',
+    'content/docs/.obsidian/app.json',
+    'content/docs/.obsidian/a.mdx',
+    'content/docs/.draft.mdx',
+    'public/docs/.cache/a.png',
     // unknown extensions
-    'content/notes/a.md',
-    'content/notes/a.js',
-    'content/notes/a.mdx.bak',
-    'content/notes/other.yaml',
-    'content/notes/meta.json',
-    'public/notes/a.js',
-    'public/notes/a.exe',
-    'public/notes/meta.yaml',
+    'content/docs/a.md',
+    'content/docs/a.js',
+    'content/docs/a.mdx.bak',
+    'content/docs/other.yaml',
+    'content/docs/meta.json',
+    'public/docs/a.js',
+    'public/docs/a.exe',
+    'public/docs/meta.yaml',
     // names of Object.prototype, which are not types
-    'public/notes/a.constructor',
-    'public/notes/a.__proto__',
-    'public/notes/a.tostring',
+    'public/docs/a.constructor',
+    'public/docs/a.__proto__',
+    'public/docs/a.tostring',
     // diagrams: only *.diagram.json, not the schema or other files
     'diagrams/diagram.schema.json',
     'diagrams/README.md',
@@ -63,7 +63,7 @@ describe('classifyPath', () => {
     'diagrams/.cache/a.diagram.json',
     'diagrams/../package.json',
     'diagrams-old/a.diagram.json',
-    'content/notes/a.diagram.json',
+    'content/docs/a.diagram.json',
   ])('rejects %j', (path) => {
     expect(classifyPath(path)).toBeNull();
   });
@@ -71,8 +71,8 @@ describe('classifyPath', () => {
 
 describe('isTextPath', () => {
   it('reads notes, meta.yaml, SVG and HTML as text, other assets and other paths not', () => {
-    for (const path of ['content/notes/a.mdx', 'content/notes/a/meta.yaml', 'public/notes/a/b.svg', 'public/notes/a/b.html', 'diagrams/a/b.diagram.json']) expect(isTextPath(path)).toBe(true);
-    for (const path of ['public/notes/a/b.png', 'public/notes/a/b.pdf', 'package.json', 'content/notes/../x.mdx']) expect(isTextPath(path)).toBe(false);
+    for (const path of ['content/docs/a.mdx', 'content/docs/a/meta.yaml', 'public/docs/a/b.svg', 'public/docs/a/b.html', 'diagrams/a/b.diagram.json']) expect(isTextPath(path)).toBe(true);
+    for (const path of ['public/docs/a/b.png', 'public/docs/a/b.pdf', 'package.json', 'content/docs/../x.mdx']) expect(isTextPath(path)).toBe(false);
   });
 });
 
@@ -83,11 +83,11 @@ describe('resolveWorktreePath', () => {
     worktree = await makeWorktree();
     await mkdir(join(worktree.root, 'outside'));
     await writeFile(join(worktree.root, 'outside/secret.mdx'), 'secret');
-    await symlink(join(worktree.root, 'outside/secret.mdx'), join(worktree.root, 'content/notes/link.mdx'));
-    await symlink(join(worktree.root, 'outside'), join(worktree.root, 'content/notes/linked-dir'));
-    await symlink(join(worktree.root, 'content/notes/index.mdx'), join(worktree.root, 'content/notes/inside-link.mdx'));
-    await symlink(join(worktree.root, 'not-created-yet'), join(worktree.root, 'content/notes/dangling'));
-    await mkdir(join(worktree.root, 'content/notes/folder.mdx'));
+    await symlink(join(worktree.root, 'outside/secret.mdx'), join(worktree.root, 'content/docs/link.mdx'));
+    await symlink(join(worktree.root, 'outside'), join(worktree.root, 'content/docs/linked-dir'));
+    await symlink(join(worktree.root, 'content/docs/index.mdx'), join(worktree.root, 'content/docs/inside-link.mdx'));
+    await symlink(join(worktree.root, 'not-created-yet'), join(worktree.root, 'content/docs/dangling'));
+    await mkdir(join(worktree.root, 'content/docs/folder.mdx'));
   });
 
   afterAll(async () => {
@@ -95,31 +95,31 @@ describe('resolveWorktreePath', () => {
   });
 
   it('resolves an allowed path inside the worktree', () => {
-    const resolved = resolveWorktreePath(worktree.root, 'content/notes/index.mdx');
-    expect(resolved).toEqual({ kind: 'note', absolute: join(worktree.root, 'content/notes/index.mdx') });
+    const resolved = resolveWorktreePath(worktree.root, 'content/docs/index.mdx');
+    expect(resolved).toEqual({ kind: 'note', absolute: join(worktree.root, 'content/docs/index.mdx') });
   });
 
   it('resolves a file that does not exist yet', () => {
-    const resolved = resolveWorktreePath(worktree.root, 'content/notes/new-folder/new.mdx');
+    const resolved = resolveWorktreePath(worktree.root, 'content/docs/new-folder/new.mdx');
     expect(resolved?.kind).toBe('note');
   });
 
   it('rejects symlinks that leave the allowed area', () => {
-    expect(resolveWorktreePath(worktree.root, 'content/notes/link.mdx')).toBeNull();
-    expect(resolveWorktreePath(worktree.root, 'content/notes/linked-dir/secret.mdx')).toBeNull();
-    expect(resolveWorktreePath(worktree.root, 'content/notes/linked-dir/new.mdx')).toBeNull();
+    expect(resolveWorktreePath(worktree.root, 'content/docs/link.mdx')).toBeNull();
+    expect(resolveWorktreePath(worktree.root, 'content/docs/linked-dir/secret.mdx')).toBeNull();
+    expect(resolveWorktreePath(worktree.root, 'content/docs/linked-dir/new.mdx')).toBeNull();
   });
 
   it('rejects symlinks that stay inside the area, since a save would replace the link', () => {
-    expect(resolveWorktreePath(worktree.root, 'content/notes/inside-link.mdx')).toBeNull();
+    expect(resolveWorktreePath(worktree.root, 'content/docs/inside-link.mdx')).toBeNull();
   });
 
   it('rejects a new file under a dangling symlinked folder', () => {
-    expect(resolveWorktreePath(worktree.root, 'content/notes/dangling/new.mdx')).toBeNull();
+    expect(resolveWorktreePath(worktree.root, 'content/docs/dangling/new.mdx')).toBeNull();
   });
 
   it('rejects a folder named like a note', () => {
-    expect(resolveWorktreePath(worktree.root, 'content/notes/folder.mdx')).toBeNull();
+    expect(resolveWorktreePath(worktree.root, 'content/docs/folder.mdx')).toBeNull();
   });
 
   it('rejects paths the policy rejects', () => {

@@ -154,7 +154,7 @@ describe('diagram tools', () => {
   });
 
   it('refuses a src outside diagrams/', async () => {
-    for (const src of ['../content/notes/index', '../../package']) {
+    for (const src of ['../content/docs/index', '../../package']) {
       const result = await call('diagram_read', { src });
       expect(result.isError).toBe(true);
     }

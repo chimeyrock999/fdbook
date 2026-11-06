@@ -43,7 +43,7 @@ describe('the change request list (#21)', () => {
     renderList(list([
       cr('even', 'draft'),
       cr('behind', 'previewing', { drift: { behind: 3, conflicts: [] } }),
-      cr('clash', 'review', { drift: { behind: 12, conflicts: ['content/notes/databricks/interactive.mdx', 'content/notes/databricks/meta.yaml'] } }),
+      cr('clash', 'review', { drift: { behind: 12, conflicts: ['content/docs/databricks/interactive.mdx', 'content/docs/databricks/meta.yaml'] } }),
     ]));
     expect(screen.getByRole('listitem', { name: 'even' }).textContent).toContain('Up to date with main');
     expect(screen.getByRole('listitem', { name: 'behind' }).textContent).toContain('3 commits behind main');
@@ -156,7 +156,7 @@ describe('CrNotice', () => {
   it('lists the conflicting files and the command to merge main', async () => {
     const writeText = vi.fn(() => Promise.resolve());
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    render(<CrNotice cr={cr('clash', 'previewing', { drift: { behind: 12, conflicts: ['content/notes/databricks/interactive.mdx'] } })} onCleanUp={vi.fn()} />);
+    render(<CrNotice cr={cr('clash', 'previewing', { drift: { behind: 12, conflicts: ['content/docs/databricks/interactive.mdx'] } })} onCleanUp={vi.fn()} />);
     const notice = screen.getByRole('status');
     expect(notice.textContent).toContain('Conflicts with main in 1 file. Main is 12 commits ahead of this change request.');
     expect(within(notice).getByRole('list', { name: 'Conflicting files' }).textContent).toBe('databricks/interactive.mdx');

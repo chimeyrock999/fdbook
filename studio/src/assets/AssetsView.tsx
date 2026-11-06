@@ -1,7 +1,6 @@
 import { ChevronRight, FileCode, Folder, Image, MoreHorizontal, PanelRight, Pencil, Trash2, Workflow } from 'lucide-react';
-import { DIAGRAM_SUFFIX } from '@site/lib/diagram/source';
 import { useEffect, useRef, useState } from 'react';
-import { classifyPath } from '../../server/security/asset-types';
+import { ASSETS_DIR, classifyPath, DIAGRAM_SUFFIX } from '../../server/security/asset-types';
 import type { AssetAnswer, AssetInfo, AssetsClient, AssetUsage } from '../api/assets';
 import { assetDirFor } from '../media/asset-names';
 import { buildAssetTree, DIAGRAMS_PREFIX, foldersTo, nameOf, type AssetFolder } from './asset-tree';
@@ -188,7 +187,7 @@ export function AssetsView({ client, list, active, current, unsaved, readOnly = 
       </div>
       {error !== null && <p role="alert" className="studio-tree-error">Could not reload the assets: {error}</p>}
       {empty ? (
-        <p className="px-2 text-[12.5px] text-[var(--fde-muted-foreground)]">{assets.length === 0 ? 'No files in public/notes yet.' : 'No asset matches.'}</p>
+        <p className="px-2 text-[12.5px] text-[var(--fde-muted-foreground)]">{assets.length === 0 ? `No files in ${ASSETS_DIR} yet.` : 'No asset matches.'}</p>
       ) : (
         <div className="min-h-0 overflow-auto">
           <FolderItems folder={tree} view={view} />

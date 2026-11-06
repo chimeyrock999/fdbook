@@ -47,7 +47,7 @@ describe('visible: false in a page or meta.yaml', () => {
 
 describe('hiding and showing from the page tree', () => {
   let worktree: Worktree;
-  const notes = (path: string) => join(worktree.root, 'content/notes', path);
+  const notes = (path: string) => join(worktree.root, 'content/docs', path);
   const text = (path: string) => readFile(notes(path), 'utf8');
   const exists = (path: string) => stat(notes(path)).then(() => true, () => false);
   const change = async (path: string, visible: boolean) => {

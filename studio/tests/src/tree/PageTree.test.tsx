@@ -72,10 +72,10 @@ describe('PageTree', () => {
 
   it('marks git changes: a status per note, a dot on a folder holding them, D on a deleted entry', async () => {
     const marks = treeMarks([
-      { path: 'content/notes/guide/two.mdx', status: 'M' },
-      { path: 'content/notes/guide/gone.mdx', status: 'D' },
-      { path: 'content/notes/old/x.mdx', status: 'A' },
-      { path: 'content/notes/guide/index.mdx', status: 'M' },
+      { path: 'content/docs/guide/two.mdx', status: 'M' },
+      { path: 'content/docs/guide/gone.mdx', status: 'D' },
+      { path: 'content/docs/old/x.mdx', status: 'A' },
+      { path: 'content/docs/guide/index.mdx', status: 'M' },
     ]);
     const { client } = fakeClient(() => ({ changes: [], open: null }));
     render(<PageTree root={root} client={client} active="guide/two.mdx" marks={marks} onOpen={vi.fn()} onRenamed={vi.fn()} onChanged={loaded()} />);
@@ -173,7 +173,7 @@ describe('PageTree', () => {
   });
 
   it('reports a move the server refused', async () => {
-    setup(() => new Error('content/notes/guide/meta.yaml changed on disk'));
+    setup(() => new Error('content/docs/guide/meta.yaml changed on disk'));
     await userEvent.click(screen.getByRole('button', { name: 'Actions for One' }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'Move down' }));
     expect((await screen.findByRole('alert')).textContent).toContain('changed on disk');
@@ -182,7 +182,7 @@ describe('PageTree', () => {
   it('creates a page below the chosen one and opens it', async () => {
     const { change, onOpen } = setup((request, dryRun) =>
       request.op === 'create' && request.slug === 'taken'
-        ? new Error('content/notes/guide/taken.mdx already exists')
+        ? new Error('content/docs/guide/taken.mdx already exists')
         : { changes: [{ type: 'add', path: 'guide/raft-consensus.mdx' }, { type: 'change', path: 'guide/meta.yaml', detail: 'adds "raft-consensus"' }], open: dryRun ? null : 'guide/raft-consensus.mdx' },
     );
     await userEvent.click(screen.getByRole('button', { name: 'Actions for One' }));
@@ -336,7 +336,7 @@ describe('PageTree', () => {
   });
 
   it('reports a hide with nothing to change, or one the server refused', async () => {
-    setup((request) => (request.op === 'visibility' && request.path === 'loose' ? new Error('content/notes/loose/meta.yaml changed on disk') : { changes: [], open: null }));
+    setup((request) => (request.op === 'visibility' && request.path === 'loose' ? new Error('content/docs/loose/meta.yaml changed on disk') : { changes: [], open: null }));
     await userEvent.click(screen.getByRole('button', { name: 'Actions for Guide' }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'Hide from sidebar' }));
     expect((await screen.findByRole('status')).textContent).toBe('Nothing to change.');
@@ -346,7 +346,7 @@ describe('PageTree', () => {
   });
 
   it('shows why a create would be refused', async () => {
-    setup((request) => (request.op === 'create' && request.slug === 'taken' ? new Error('content/notes/taken.mdx already exists') : { changes: [], open: null }));
+    setup((request) => (request.op === 'create' && request.slug === 'taken' ? new Error('content/docs/taken.mdx already exists') : { changes: [], open: null }));
     await userEvent.click(screen.getByRole('button', { name: 'New page' }));
     const dialog = screen.getByRole('dialog', { name: 'New page in Notes' });
     await userEvent.type(within(dialog).getByLabelText('Slug'), 'Taken');

@@ -25,7 +25,7 @@ export type ReviewToolDeps = {
 // cr_changes answers at most this much hunk text; read_note has the rest.
 const MAX_CHANGES_TEXT = 200_000;
 
-const path = z.string().min(1).describe('The note: content/notes/<path>.mdx, or <path>.mdx relative to content/notes');
+const path = z.string().min(1).describe(`The note: ${NOTES_DIR}/<path>.mdx, or <path>.mdx relative to ${NOTES_DIR}`);
 const thread = z.string().min(1).max(64).describe('The thread id, as add_comment or list_threads gave it');
 const body = z.string().min(1).max(10_000);
 const edits = z.array(z.object({ find: z.string().min(1), replace: z.string() })).max(100);

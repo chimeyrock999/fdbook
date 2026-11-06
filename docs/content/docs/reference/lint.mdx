@@ -1,4 +1,6 @@
-# Lint
+---
+title: Lint
+---
 
 Read this to know what the Issues view reports and why, or to add a rule.
 
@@ -7,9 +9,7 @@ Read this to know what the Issues view reports and why, or to add a rule.
 The rules follow what the site does, not a style guide: the site turns many
 mistakes into plain text or a placeholder instead of failing the build, so
 they would otherwise only show on the page. The one style rule,
-`emphasis-marker`, keeps the markers the editor writes. How to write a
-note so it passes, rule by rule, is in the authoring guide's
-[style.md](../../../docs/authoring/style.md#lint).
+`emphasis-marker`, keeps the markers the editor writes.
 
 The sidebar's Issues view shows the open note's issues, checked about
 400 ms after typing stops (`src/lint/useLint.ts`) and again when another
@@ -17,7 +17,7 @@ file changes on disk. The toolbar shows the count and opens the view;
 picking an issue opens Source with the problem selected and marked. The
 frontmatter is blanked before the note is parsed, so no rule reports in it;
 `notesPageSchema` checks it in the frontmatter form instead (see
-[Editor](using.md#editor)).
+[Editor](../guide/using.mdx#editor)).
 
 The rules live in `server/lint/` (`lint.ts` runs them, `rules/` holds them)
 and run on `POST /api/lint`, which writes nothing. Code blocks and inline

@@ -24,7 +24,7 @@ describe('file events (SSE)', () => {
   });
 
   it('reports a file changed outside the Studio', async () => {
-    const path = 'content/notes/streaming/index.mdx';
+    const path = 'content/docs/streaming/index.mdx';
     const seen = await collectEvents(
       events(),
       () => writeFile(join(studio.root, path), 'changed by obsidian\n'),
@@ -51,17 +51,17 @@ describe('file events (SSE)', () => {
     const seen = await collectEvents(
       events(),
       async () => {
-        await writeFile(join(studio.root, 'content/notes/.obsidian-tmp.mdx'), 'x');
-        await writeFile(join(studio.root, 'content/notes/notes.txt'), 'x');
-        await writeFile(join(studio.root, 'public/notes/demo/added.png'), 'x');
+        await writeFile(join(studio.root, 'content/docs/.obsidian-tmp.mdx'), 'x');
+        await writeFile(join(studio.root, 'content/docs/notes.txt'), 'x');
+        await writeFile(join(studio.root, 'public/docs/demo/added.png'), 'x');
       },
-      (list) => list.some((event) => event.path === 'public/notes/demo/added.png'),
+      (list) => list.some((event) => event.path === 'public/docs/demo/added.png'),
     );
-    expect(seen).toMatchObject([{ type: 'add', path: 'public/notes/demo/added.png' }]);
+    expect(seen).toMatchObject([{ type: 'add', path: 'public/docs/demo/added.png' }]);
   });
 
   it('reports a deleted file', async () => {
-    const path = 'content/notes/database/meta.yaml';
+    const path = 'content/docs/database/meta.yaml';
     const seen = await collectEvents(
       events(),
       () => rm(join(studio.root, path)),
@@ -71,8 +71,8 @@ describe('file events (SSE)', () => {
   });
 
   it('reports the files of a renamed folder', async () => {
-    const before = 'content/notes/personal-reflections';
-    const after = 'content/notes/reflections';
+    const before = 'content/docs/personal-reflections';
+    const after = 'content/docs/reflections';
     const seen = await collectEvents(
       events(),
       () => rename(join(studio.root, before), join(studio.root, after)),

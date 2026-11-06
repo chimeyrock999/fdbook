@@ -85,7 +85,7 @@ export function AssetPage({ client, list, path, unsaved, readOnly = false, onOpe
   if (!asset) {
     return (
       <p role="status" className="studio-asset-page-note">
-        {shownStatus ?? `${path} is not in public/notes: it may have been renamed or deleted.`}
+        {shownStatus ?? `${path} is not in ${ASSETS_DIR}: it may have been renamed or deleted.`}
       </p>
     );
   }

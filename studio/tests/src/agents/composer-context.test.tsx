@@ -6,7 +6,7 @@ import { editorPlaces } from '../../../src/agents/editor-place';
 import type { Attachment, MessageSelection } from '../../../src/api/agents';
 import { fakeClient, Harness, summary } from '../../support/agents-ui';
 
-const NOTE = 'content/notes/guide/first-look.mdx';
+const NOTE = 'content/docs/guide/first-look.mdx';
 const SELECTION: MessageSelection = { lines: [5, 7], source: 'A first look.\n\nMore.', text: 'first look' };
 
 beforeEach(() => {
@@ -72,7 +72,7 @@ describe('message context in the composer (#86)', () => {
     const list = await screen.findByRole('listbox', { name: 'Mention' });
     expect(within(list).getAllByRole('group').map((group) => group.getAttribute('aria-label'))).toEqual(['Notes', 'Assets', 'Repo files']);
     await user.type(box, 'h');
-    await waitFor(() => { expect(within(list).getAllByRole('option').map((option) => option.textContent)).toEqual(['public/notes/guide/chart.png', 'lib/helper.ts']); });
+    await waitFor(() => { expect(within(list).getAllByRole('option').map((option) => option.textContent)).toEqual(['public/docs/guide/chart.png', 'lib/helper.ts']); });
     await user.keyboard('{ArrowDown}{Enter}');
     expect(screen.queryByRole('listbox', { name: 'Mention' })).toBeNull();
     expect(box.value).toBe('Compare with ');
@@ -169,9 +169,9 @@ describe('message context in the composer (#86)', () => {
 
   it('shows what went with each message in the thread', async () => {
     const { emit } = await openChat();
-    emit({ type: 'turn', at: 2, prompt: 'Tighten', by: 'octocat', context: { note: NOTE, selection: SELECTION, caret: null, mentions: [{ kind: 'asset', path: 'public/notes/guide/chart.png' }], attachments: [] }, conversationId: 'c1' });
+    emit({ type: 'turn', at: 2, prompt: 'Tighten', by: 'octocat', context: { note: NOTE, selection: SELECTION, caret: null, mentions: [{ kind: 'asset', path: 'public/docs/guide/chart.png' }], attachments: [] }, conversationId: 'c1' });
     const sent = await screen.findByLabelText('Sent with the message', { selector: '.studio-agent-prompt-context' });
-    expect(within(sent).getAllByText(/./, { selector: '.studio-agent-chip-label' }).map((label) => label.textContent)).toEqual(['guide/first-look.mdx:L5-L7', '@public/notes/guide/chart.png']);
+    expect(within(sent).getAllByText(/./, { selector: '.studio-agent-chip-label' }).map((label) => label.textContent)).toEqual(['guide/first-look.mdx:L5-L7', '@public/docs/guide/chart.png']);
     expect(within(sent).queryByRole('button')).toBeNull();
   });
 });

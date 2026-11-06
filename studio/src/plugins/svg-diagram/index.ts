@@ -4,6 +4,7 @@ import '../cards.css';
 import '../html-embed/embed.css';
 import './svg-diagram.css';
 import { SvgDiagram } from './SvgDiagram';
+import { ASSETS_DIR, siteUrlOf } from '../../../server/security/asset-types';
 
 // <SvgDiagram src="/notes/….svg" label="…" caption="…" /> from
 // components/mdx/svg-diagram.tsx. The caption edits in place; the rest sit in
@@ -14,7 +15,7 @@ const svgDiagramSpec: UiComponentSpec = {
   attributeRegions: [{ attribute: 'caption', region: 'caption', placeholder: 'Caption…' }],
   regions: { caption: 'studio-embed-caption' },
   props: [
-    { name: 'src', label: 'Source', type: 'string', placeholder: '/notes/…/diagram.svg' },
+    { name: 'src', label: 'Source', type: 'string', placeholder: `${siteUrlOf(ASSETS_DIR)}/…/diagram.svg` },
     { name: 'svg', label: 'Inline SVG', type: 'string' },
     { name: 'label', label: 'Label', type: 'string' },
     { name: 'maxWidth', label: 'Max width', type: 'string', placeholder: '720' },

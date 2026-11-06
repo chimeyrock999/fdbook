@@ -31,7 +31,7 @@ describe('subscribeFileEvents', () => {
     const stopFirst = files.subscribeFileEvents(first);
     const stopSecond = files.subscribeFileEvents(second);
     expect(FakeEventSource.opened).toHaveLength(1);
-    const event: FileEvent = { type: 'add', path: 'content/notes/x.mdx', mtimeMs: 1 };
+    const event: FileEvent = { type: 'add', path: 'content/docs/x.mdx', mtimeMs: 1 };
     FakeEventSource.opened[0]?.send(event);
     expect(first).toHaveBeenCalledWith(event);
     expect(second).toHaveBeenCalledWith(event);

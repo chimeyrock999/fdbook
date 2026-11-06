@@ -1,8 +1,11 @@
 {
-  "name": "notes-studio",
+  "name": "@fdbook/studio",
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./config": "./server/project.ts"
+  },
   "engines": {
     "node": ">=22.18"
   },

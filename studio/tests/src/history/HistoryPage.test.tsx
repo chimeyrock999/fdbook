@@ -17,8 +17,8 @@ beforeAll(() => {
   };
 });
 
-const PAGE = 'content/notes/streaming/groups.mdx';
-const OLD = 'content/notes/streaming/group.mdx';
+const PAGE = 'content/docs/streaming/groups.mdx';
+const OLD = 'content/docs/streaming/group.mdx';
 const sha = (digit: string) => digit.repeat(40);
 const note = (body: string) => `---\ntitle: Groups\n---\n\n${body}\n`;
 const contents: Record<string, string> = { [NOW]: note('Now.'), [sha('d')]: note('Fourth.'), [sha('c')]: note('Third.'), [sha('b')]: note('Second.'), [sha('a')]: note('First.') };

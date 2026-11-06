@@ -25,12 +25,12 @@ const PLAN: TreeAnswer = {
   changes: [
     { type: 'delete', path: 'guide/setup.mdx' },
     { type: 'change', path: 'guide/meta.yaml', detail: 'removes "setup"' },
-    { type: 'keep', path: 'public/notes/guide/setup/shared.png', detail: 'used by solo.mdx' },
-    { type: 'delete', path: 'public/notes/guide/setup/shot.png' },
+    { type: 'keep', path: 'public/docs/guide/setup/shared.png', detail: 'used by solo.mdx' },
+    { type: 'delete', path: 'public/docs/guide/setup/shot.png' },
   ],
   open: null,
   base: 'base-one',
-  links: [{ note: 'solo.mdx', line: 5, href: '/notes/guide/setup' }],
+  links: [{ note: 'solo.mdx', line: 5, href: '/docs/guide/setup' }],
   deleted: ['guide/setup.mdx'],
 };
 

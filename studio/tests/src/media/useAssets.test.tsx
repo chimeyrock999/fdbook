@@ -35,23 +35,23 @@ describe('useAssets', () => {
     const { files, emit, list } = fakes();
     const { result } = renderHook(() => useAssets(files));
     expect(result.current).toEqual([]);
-    emit({ type: 'add', path: 'public/notes/a/new.png', mtimeMs: 2 });
-    emit({ type: 'unlink', path: 'public/notes/a/old.png', mtimeMs: null });
-    emit({ type: 'change', path: 'content/notes/a.mdx', mtimeMs: 2 });
-    await list([entry('public/notes/a/old.png'), entry('public/notes/b.svg'), entry('content/notes/a.mdx', 'note')]);
-    expect(result.current).toEqual(['public/notes/a/new.png', 'public/notes/b.svg']);
-    emit({ type: 'add', path: 'public/notes/a/upload.png', mtimeMs: 3 });
-    emit({ type: 'unlink', path: 'public/notes/b.svg', mtimeMs: null });
-    expect(result.current).toEqual(['public/notes/a/new.png', 'public/notes/a/upload.png']);
+    emit({ type: 'add', path: 'public/docs/a/new.png', mtimeMs: 2 });
+    emit({ type: 'unlink', path: 'public/docs/a/old.png', mtimeMs: null });
+    emit({ type: 'change', path: 'content/docs/a.mdx', mtimeMs: 2 });
+    await list([entry('public/docs/a/old.png'), entry('public/docs/b.svg'), entry('content/docs/a.mdx', 'note')]);
+    expect(result.current).toEqual(['public/docs/a/new.png', 'public/docs/b.svg']);
+    emit({ type: 'add', path: 'public/docs/a/upload.png', mtimeMs: 3 });
+    emit({ type: 'unlink', path: 'public/docs/b.svg', mtimeMs: null });
+    expect(result.current).toEqual(['public/docs/a/new.png', 'public/docs/a/upload.png']);
   });
 
   it('keeps following the disk when the list fails', async () => {
     const { files, emit, fail } = fakes();
     const { result } = renderHook(() => useAssets(files));
-    emit({ type: 'add', path: 'public/notes/a/early.png', mtimeMs: 2 });
+    emit({ type: 'add', path: 'public/docs/a/early.png', mtimeMs: 2 });
     await fail();
-    expect(result.current).toEqual(['public/notes/a/early.png']);
-    emit({ type: 'add', path: 'public/notes/a/upload.png', mtimeMs: 3 });
-    expect(result.current).toEqual(['public/notes/a/early.png', 'public/notes/a/upload.png']);
+    expect(result.current).toEqual(['public/docs/a/early.png']);
+    emit({ type: 'add', path: 'public/docs/a/upload.png', mtimeMs: 3 });
+    expect(result.current).toEqual(['public/docs/a/early.png', 'public/docs/a/upload.png']);
   });
 });

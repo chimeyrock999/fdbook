@@ -12,7 +12,7 @@ import { json } from '../../support/http';
 
 type Read = { conversation: Conversation; events: ConversationEvent[] };
 
-const NOTE = 'content/notes/index.mdx';
+const NOTE = 'content/docs/index.mdx';
 
 // Agents on main: any role, fenced to reading, in a copy of main, and
 // create_cr hands the work to a new change request (#167).
@@ -106,7 +106,7 @@ describe('agents on main', () => {
     await settled('', started.id);
     await git(copy, 'commit', '--quiet', '--allow-empty', '-m', 'an agent commits');
     // Main moves on: a new change request fetches it.
-    await repo.pushToMain({ 'content/notes/index.mdx': '---\ntitle: Home\n---\n\nWelcome back.\n' });
+    await repo.pushToMain({ 'content/docs/index.mdx': '---\ntitle: Home\n---\n\nWelcome back.\n' });
     expect((await send('/api/crs', 'POST', { name: 'Moves main' })).status).toBe(200);
     const branches = await git(repo.repo, 'for-each-ref', '--format=%(refname) %(objectname)');
     await say(started.id, 'env');

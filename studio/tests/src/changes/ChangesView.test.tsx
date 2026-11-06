@@ -16,20 +16,20 @@ afterEach(() => {
 });
 
 const files: ChangedFile[] = [
-  { path: 'content/notes/streaming/exactly-once-sinks.mdx', status: 'A' },
-  { path: 'content/notes/streaming/meta.yaml', status: 'M' },
-  { path: 'content/notes/streaming/watermarks.mdx', status: 'M' },
-  { path: 'content/notes/distributed-systems/rpc-and-threads.mdx', status: 'D' },
-  { path: 'public/notes/streaming/timeline.png', status: 'A' },
+  { path: 'content/docs/streaming/exactly-once-sinks.mdx', status: 'A' },
+  { path: 'content/docs/streaming/meta.yaml', status: 'M' },
+  { path: 'content/docs/streaming/watermarks.mdx', status: 'M' },
+  { path: 'content/docs/distributed-systems/rpc-and-threads.mdx', status: 'D' },
+  { path: 'public/docs/streaming/timeline.png', status: 'A' },
 ];
 const titles = new Map([
-  ['content/notes/streaming/watermarks.mdx', 'Watermark and late events'],
-  ['content/notes/streaming/exactly-once-sinks.mdx', 'Exactly-once sinks'],
-  ['content/notes/streaming/meta.yaml', 'Streaming'],
+  ['content/docs/streaming/watermarks.mdx', 'Watermark and late events'],
+  ['content/docs/streaming/exactly-once-sinks.mdx', 'Exactly-once sinks'],
+  ['content/docs/streaming/meta.yaml', 'Streaming'],
 ]);
 const history: History = {
   base: 'origin/main',
-  commits: [{ sha: '8e41c2a0000000000000000000000000000000aa', date: new Date(Date.now() - 42 * 60_000).toISOString(), message: 'docs(notes): add watermarks', files: [{ status: 'A', path: 'content/notes/streaming/watermarks.mdx' }, { status: 'M', path: 'package.json' }] }],
+  commits: [{ sha: '8e41c2a0000000000000000000000000000000aa', date: new Date(Date.now() - 42 * 60_000).toISOString(), message: 'docs(notes): add watermarks', files: [{ status: 'A', path: 'content/docs/streaming/watermarks.mdx' }, { status: 'M', path: 'package.json' }] }],
 };
 const made: Commit = { sha: '1234567890abcdef1234567890abcdef12345678', date: new Date().toISOString(), message: 'm', files: [{ status: 'M', path: 'x' }] };
 
@@ -110,10 +110,10 @@ describe('ChangesView', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'Commit streaming/timeline.png' }));
     await userEvent.click(submit());
     expect(commit).toHaveBeenCalledWith('docs(notes): update 3 pages', [
-      'content/notes/streaming/exactly-once-sinks.mdx',
-      'content/notes/streaming/meta.yaml',
-      'content/notes/streaming/watermarks.mdx',
-      'content/notes/distributed-systems/rpc-and-threads.mdx',
+      'content/docs/streaming/exactly-once-sinks.mdx',
+      'content/docs/streaming/meta.yaml',
+      'content/docs/streaming/watermarks.mdx',
+      'content/docs/distributed-systems/rpc-and-threads.mdx',
     ]);
     expect((await screen.findByRole('status')).textContent).toBe('Committed 1 file (1234567).');
     expect(onCommitted).toHaveBeenCalledTimes(1);
@@ -168,7 +168,7 @@ describe('ChangesView', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'Pick all diagrams' }));
     expect(submit().textContent).toBe('Commit 1 file');
     await userEvent.click(submit());
-    expect(commit).toHaveBeenCalledWith('docs(notes): update watermarks', ['content/notes/streaming/watermarks.mdx']);
+    expect(commit).toHaveBeenCalledWith('docs(notes): update watermarks', ['content/docs/streaming/watermarks.mdx']);
   });
 
   it('on main (read only) lists the changes without a commit box', () => {
@@ -190,7 +190,7 @@ describe('ChangesView', () => {
     await userEvent.click(item);
     // A commit's file opens its diff against main, too.
     await userEvent.click(screen.getByRole('button', { name: 'A streaming/watermarks.mdx' }));
-    expect(onOpen).toHaveBeenCalledWith({ status: 'A', path: 'content/notes/streaming/watermarks.mdx' });
+    expect(onOpen).toHaveBeenCalledWith({ status: 'A', path: 'content/docs/streaming/watermarks.mdx' });
     // A file the Studio does not touch (a commit made in a terminal) is only named.
     expect(screen.getByText('package.json').closest('button')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: /History/ }));
@@ -223,8 +223,8 @@ describe('useChanges', () => {
     const loadHistory = vi.fn(() => Promise.resolve(history));
     render(<Probe client={{ loadChanges, loadHistory } as unknown as ChangesClient} events={events} />);
     expect(await screen.findByText('0')).toBeTruthy();
-    listener({ type: 'change', path: 'content/notes/a.mdx', mtimeMs: 1 });
-    listener({ type: 'add', path: 'public/notes/b.png', mtimeMs: 2 });
+    listener({ type: 'change', path: 'content/docs/a.mdx', mtimeMs: 1 });
+    listener({ type: 'add', path: 'public/docs/b.png', mtimeMs: 2 });
     listener({ type: 'change', path: 'package.json', mtimeMs: 3 });
     expect(await screen.findByText('1')).toBeTruthy();
     await new Promise((resolve) => setTimeout(resolve, 400));

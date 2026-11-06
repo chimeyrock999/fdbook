@@ -7,7 +7,7 @@ import { useAssetList } from '../../../src/assets/useAssetList';
 
 function clients() {
   let listener: ((event: FileEvent) => void) | null = null;
-  const listAssets = vi.fn(() => Promise.resolve([{ path: 'public/notes/a.png', mtimeMs: 1, usages: [] }]));
+  const listAssets = vi.fn(() => Promise.resolve([{ path: 'public/docs/a.png', mtimeMs: 1, usages: [] }]));
   const subscribeFileEvents = vi.fn((next: (event: FileEvent) => void) => {
     listener = next;
     return () => { listener = null; };
@@ -41,9 +41,9 @@ describe('useAssetList', () => {
     const { client, files, listAssets, emit } = clients();
     renderHook(() => useAssetList(client, files));
     await waitFor(() => { expect(listAssets).toHaveBeenCalledTimes(1); });
-    emit({ type: 'change', path: 'content/notes/guide/meta.yaml', mtimeMs: 2 });
-    emit({ type: 'change', path: 'content/notes/guide/a.mdx', mtimeMs: 2 });
-    emit({ type: 'add', path: 'public/notes/b.png', mtimeMs: 2 });
+    emit({ type: 'change', path: 'content/docs/guide/meta.yaml', mtimeMs: 2 });
+    emit({ type: 'change', path: 'content/docs/guide/a.mdx', mtimeMs: 2 });
+    emit({ type: 'add', path: 'public/docs/b.png', mtimeMs: 2 });
     await waitFor(() => { expect(listAssets).toHaveBeenCalledTimes(2); });
   });
 });

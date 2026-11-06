@@ -25,7 +25,7 @@ async function until(check: () => boolean | Promise<boolean>, what: string, ms =
 describe('an edit made as the session ends', () => {
   let studio: AuthStudio;
   const clients: SyncClient[] = [];
-  const page = () => readFile(join(studio.root, 'content/notes', PAGE), 'utf8');
+  const page = () => readFile(join(studio.root, 'content/docs', PAGE), 'utf8');
 
   beforeAll(async () => {
     studio = await startAuthStudio({ checkEveryMs: CHECK_MS });

@@ -17,7 +17,7 @@ const PATH = 'diagrams/data-platform/processing/apache-spark/spark-logic-to-exec
 const real = readFileSync(join(import.meta.dirname, '../../../..', PATH), 'utf8');
 type Doc = { nodes: { id: string; label: string }[]; edges: { id: string; from: string; to: string }[]; layout: { nodes: Record<string, { x: number; y: number }>; edges?: Record<string, { via?: number[][]; fromSide?: string; toSide?: string }> } };
 
-const USAGE: AssetUsage = { note: 'content/notes/data-platform/processing/apache-spark/index.mdx', line: 12, column: 14, length: 20, text: '<Diagram src="…" />', unsure: false };
+const USAGE: AssetUsage = { note: 'content/docs/data-platform/processing/apache-spark/index.mdx', line: 12, column: 14, length: 20, text: '<Diagram src="…" />', unsure: false };
 
 // jsdom lays out no text: CodeMirror measures ranges.
 beforeAll(stubLayout);

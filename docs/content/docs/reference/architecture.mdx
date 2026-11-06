@@ -1,9 +1,11 @@
-# How the Studio is built
+---
+title: How the Studio is built
+---
 
 Read this to change the Studio: where each part lives, the checks every
 request goes through, the HTTP API, how change requests sit on git, and how
 agents, the MCP server and the editor plugins are wired. What each feature
-does for the person using it is in [using.md](using.md).
+does for the person using it is in [Using the Studio](../guide/using.mdx).
 
 - [Layout](#layout)
 - [Request checks](#request-checks)
@@ -36,7 +38,7 @@ the React app through Vite.
     lint, tree, assets, changes, diff and history, preview and publish,
     agent chats and their context, proposals and review threads.
   - `config.ts` holds the host, the port, the root paths and the other
-    `STUDIO_*` settings (see [setup.md](setup.md#other-settings)).
+    `STUDIO_*` settings (see [Setup](../guide/setup.mdx#other-settings)).
   - `routing.ts` runs the guard on every request and upgrade, then hands
     the request to a handler. `http.ts` holds small HTTP helpers.
   - `security/` has the Host/Origin guard (`guard.ts`), the path policy
@@ -47,7 +49,7 @@ the React app through Vite.
   - `files/` has the file API, the file events and the file store.
   - `sync/` is the fumadocs-editor sync server for `content/notes`.
   - `lint/` checks a note against the site's rules, and its CLI (see
-    [lint.md](lint.md)).
+    [Lint](./lint.mdx)).
   - `tree/` builds the page tree and creates, renames, reorders, hides and
     shows pages.
   - `assets/` finds where notes use the files under `public/notes`, and
@@ -115,7 +117,7 @@ the React app through Vite.
 - `tests/`: laid out like `server/` and `src/`, plus `tests/lib/` for the
   site's `lib/`. `tests/support/` holds the fixtures, `tests/setup/` and
   `tests/global-setup.ts` the setup every run gets (see
-  [checks.md](checks.md)).
+  [Checks](./checks.mdx)).
 - Shared code from the site is imported as `@site/...`, for example the
   notes frontmatter and `meta.yaml` schemas in `@site/lib/notes-schema`.
 
@@ -159,7 +161,7 @@ Everything the server touches goes through these checks.
 
 ## Sign-in and sessions
 
-Settings and roles are in [setup.md](setup.md#sign-in); this is how they
+Settings and roles are in [Setup](../guide/setup.mdx#sign-in); this is how they
 are enforced (`server/auth/`).
 
 - The session is a random id in an `HttpOnly`, `SameSite=Strict` cookie
@@ -222,7 +224,7 @@ Raw bodies are capped too: 25 MB for an asset, 10 MB for an attachment.
 | `GET /api/file?path=…` | Notes, `meta.yaml` and diagrams come back as `{ path, content, mtimeMs }`. Assets come back as bytes with an `X-Mtime` header and `Content-Security-Policy: sandbox`. |
 | `PUT /api/file?path=…` | Notes, `meta.yaml` and diagrams take a JSON body `{ content, baseMtime }`. Assets take the raw bytes plus `X-Studio-Write: 1` and `X-Base-Mtime` (empty: a new file). Answers `{ path, mtimeMs }`; see [Saving files](#saving-files). |
 | `GET /api/events` | Server-sent events: `{ type: "add" \| "change" \| "unlink", path, mtimeMs }` |
-| `POST /api/lint` | Takes `{ path, content }` for a note and returns `{ path, issues }` (see [lint.md](lint.md)). Writes nothing. |
+| `POST /api/lint` | Takes `{ path, content }` for a note and returns `{ path, issues }` (see [Lint](./lint.mdx)). Writes nothing. |
 | `GET /api/icons` | The lucide names a note's `icon` can take: `{ names }` |
 | `GET /api/tree` | The page tree: `{ tree }` |
 | `POST /api/tree` | Takes `{ op: "create" \| "rename" \| "move" \| "set-open" \| "visibility", dryRun?, … }`, changes the tree and returns `{ changes, open, created? }`. With `dryRun` it writes nothing. `{ op: "delete", path, base?, dryRun? }` deletes a page, folder page or folder (`server/tree/delete.ts`): its dry run also answers `{ base, links, deleted }`, and the delete must send that `base` back (`400` without, `409` when anything it read changed since). |
@@ -572,7 +574,7 @@ agent is started in the change request's worktree without the Studio's own
   with its changes from `<id>.changes.json`. For Claude Code's "default"
   model, the summary's model is the one it stands for (`connection.ts`).
 - **Live test.** `STUDIO_AGENT_LIVE=1` runs a real chat with each installed
-  agent (see [checks.md](checks.md#agent-tests)); the other tests use a
+  agent (see [Checks](./checks.mdx#agent-tests)); the other tests use a
   stand-in ACP agent.
 
 ## MCP server
@@ -580,7 +582,7 @@ agent is started in the change request's worktree without the Studio's own
 The tools every agent gets, at `POST /api/mcp` (Streamable HTTP,
 stateless; `server/mcp/http.ts`, body up to 4 MB). The same server serves
 the chats the Studio starts and your own agents in a terminal (see
-[setup.md](setup.md#connect-an-agent-from-a-terminal)).
+[Setup](../guide/setup.mdx#connect-an-agent-from-a-terminal)).
 
 | Tool | Access | What it does |
 | --- | --- | --- |

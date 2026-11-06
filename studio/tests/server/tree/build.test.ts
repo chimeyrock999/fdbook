@@ -1,7 +1,7 @@
 import type * as PageTree from 'fumadocs-core/page-tree';
 import { loader } from 'fumadocs-core/source';
 import { describe, expect, it } from 'vitest';
-import { repoRoot } from '../../../server/config';
+import { docsRoot } from '../../support/notes';
 import { buildTree, loadTree, readNotesContent, type NotesContent } from '../../../server/tree/build';
 import type { TreeFolder, TreeNode } from '../../../server/tree/types';
 
@@ -36,7 +36,7 @@ function content(pages: Record<string, Record<string, unknown>>, metas: Record<s
   return { pages: new Map(Object.entries(pages)), metas: new Map(Object.entries(metas)) };
 }
 
-describe('page tree on content/notes', () => {
+describe('page tree on content/docs', () => {
   it('carries the icons the site shows, a folder falling back to its index page', async () => {
     const icons: Record<string, string> = {};
     const walk = (nodes: TreeNode[]) => {
@@ -46,7 +46,7 @@ describe('page tree on content/notes', () => {
       }
     };
     // loadTree: with the site's icon names, as the Studio serves it.
-    walk((await loadTree(repoRoot)).children);
+    walk((await loadTree(docsRoot)).children);
     expect(icons).toEqual({
       'index.mdx': 'Brain',
       'data-platform': 'TreePine',
@@ -62,19 +62,19 @@ describe('page tree on content/notes', () => {
   });
 
   it('lists what the site lists, in the same order', async () => {
-    const notes = await readNotesContent(repoRoot);
+    const notes = await readNotesContent(docsRoot);
     const tree = buildTree(notes);
     // The site's own build: the loader over the same files (lib/source.ts).
     const files = [
       ...[...notes.pages].map(([path, data]) => ({ type: 'page' as const, path, data })),
       ...[...notes.metas].map(([path, data]) => ({ type: 'meta' as const, path, data })),
     ];
-    const site = loader({ baseUrl: '/notes', source: { files } }).getPageTree();
+    const site = loader({ baseUrl: '/docs', source: { files } }).getPageTree();
     expect(outline(tree.children, 0, (node) => !('hidden' in node) || node.hidden !== 'unlisted')).toEqual(siteOutline(site.children));
   });
 
   it('marks what the site leaves out of the sidebar, in place', async () => {
-    const tree = buildTree(await readNotesContent(repoRoot));
+    const tree = buildTree(await readNotesContent(docsRoot));
     const hidden = (path: string) => {
       const node = find(tree, path);
       return node && 'hidden' in node ? node.hidden : 'not found';
@@ -95,7 +95,7 @@ describe('page tree on content/notes', () => {
   });
 
   it('numbers entries so the UI knows what it can move', async () => {
-    const tree = buildTree(await readNotesContent(repoRoot));
+    const tree = buildTree(await readNotesContent(docsRoot));
     const computer = find(tree, 'computer-systems');
     // computer-systems/meta.yaml lists its index and nested pages (`operating-systems/page-cache`).
     expect(computer?.kind === 'folder' && computer.children.map((child) => [child.entry, child.kind === 'page' ? child.path : ''])).toEqual([

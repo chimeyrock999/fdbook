@@ -19,7 +19,7 @@ import { useNoteSuggestions } from '../../../src/suggestions/useNoteSuggestions'
 import { createSuggestionLayer, type SuggestionLayer } from '../../../src/suggestions/visual';
 import { mountVisual, stubLayout, textAt } from '../../support/visual-editor';
 
-const PATH = 'content/notes/guide.mdx';
+const PATH = 'content/docs/guide.mdx';
 const NOTE = '---\ntitle: Guide\n---\n\n# Guide\n\nFirst paragraph.\n\nSecond paragraph.\n';
 const CLAUDE: ThreadAuthor = { kind: 'run', runId: 'r1', agent: 'claude', model: 'opus', role: 'reviewer' };
 const PERSON: ThreadAuthor = { kind: 'person', login: 'thoai' };
@@ -51,7 +51,7 @@ describe('ReviewPanel', () => {
   const threads = () => [
     thread({ severity: 'blocking', body: 'Wrong fact.' }),
     thread({ severity: 'nit', state: 'addressed', body: 'Shorter.' }),
-    thread({ severity: null, by: PERSON, path: 'content/notes/other.mdx', body: 'A person asks.' }),
+    thread({ severity: null, by: PERSON, path: 'content/docs/other.mdx', body: 'A person asks.' }),
     thread({ severity: 'blocking', state: 'needs-decision', body: 'Kept by the reviewer.' }),
     thread({ state: 'resolved', body: 'Done long ago.' }),
   ];

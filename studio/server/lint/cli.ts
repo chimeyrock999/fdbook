@@ -1,9 +1,13 @@
-import { repoRoot } from '../config.ts';
-import { lintWorktree } from './context.ts';
+import { resolve } from 'node:path';
+import { loadProject } from '../project.ts';
+import { setAreas } from '../security/asset-types.ts';
 
-// Lints every note in this checkout: `npm run studio:lint` from the repo root.
-// Prints one line per issue and exits 1 when any is an error.
-const results = await lintWorktree(repoRoot);
+// Lints every note of a project: `npm run studio:lint -- <folder>` from the
+// repo root. Prints one line per issue and exits 1 when any is an error.
+const project = await loadProject(resolve(process.env.INIT_CWD ?? process.cwd(), process.argv[2] ?? '.'));
+setAreas(project.areas);
+const { lintWorktree } = await import('./context.ts');
+const results = await lintWorktree(project.repo);
 let errors = 0;
 let warnings = 0;
 for (const { path, issues } of results) {

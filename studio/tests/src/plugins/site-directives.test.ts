@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseMdxToDoc, serializeDocToMdx, type ParsedDoc } from '@fumadocs-editor/core';
 import { describe, expect, it } from 'vitest';
-import { repoRoot } from '../../../server/config';
+import { installRoot } from '../../../server/config';
 import { parseAccordions, withAccordionAttributes, withAccordionBody } from '../../../src/plugins/site-directives/accordions';
 import { decorateSiteDirectives } from '../../../src/plugins/site-directives/decorate';
 import { defined, describeDecoration, editorState, nodesOf, syntax, withNode } from '../../support/editor-state';
@@ -10,7 +10,7 @@ import { realNotes } from '../../support/notes';
 
 const notes = await realNotes();
 
-const fixture = () => readFile(join(repoRoot, 'studio/src/plugins/site-directives/fixtures/site-directives.mdx'), 'utf8');
+const fixture = () => readFile(join(installRoot, 'studio/src/plugins/site-directives/fixtures/site-directives.mdx'), 'utf8');
 
 async function groups() {
   return nodesOf(editorState(await fixture()), 'verbatim').map(({ node }) => String(node.attrs.value));

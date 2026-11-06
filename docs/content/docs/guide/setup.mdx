@@ -1,9 +1,11 @@
-# Set up and run the Studio
+---
+title: Set up and run the Studio
+---
 
 Read this to start the Studio, serve it to other machines, turn on sign-in,
 install the agents it drives, or connect an agent from a terminal. How to
-use it is in [using.md](using.md); how it is built is in
-[architecture.md](architecture.md).
+use it is in [Using the Studio](./using.mdx); how it is built is in
+[Architecture](../reference/architecture.mdx).
 
 ## Needs
 
@@ -11,7 +13,7 @@ use it is in [using.md](using.md); how it is built is in
   (`engines` in `package.json`).
 - **git**, in a clone whose `origin` has a `main` branch. The Studio opens
   main read only and edits in change requests, each a `cr/<slug>` branch
-  with its own worktree (see [Change requests](using.md#change-requests)).
+  with its own worktree (see [Change requests](./using.mdx#change-requests)).
 - **gh**, logged in, for the pull request statuses, Publish and, with
   sign-in on, the roles. Without it the Studio still runs: statuses come
   from git alone and Publish is off.
@@ -122,11 +124,11 @@ so a restart keeps everyone signed in and Studios on other ports keep their
 own. The cookie is not `Secure`, because the Studio serves plain `http://`;
 on a tailnet the traffic is already encrypted. How sessions, roles and the
 csrf token are checked is in
-[architecture.md](architecture.md#sign-in-and-sessions).
+[Architecture](../reference/architecture.mdx#sign-in-and-sessions).
 
 ## Agents
 
-The Studio drives coding agents over ACP (see [Agents](using.md#agents)).
+The Studio drives coding agents over ACP (see [Agents](./using.mdx#agents)).
 Each agent signs in on its own (its CLI's login, or its own API key
 variable): the Studio holds no key, and starts the agent without its own
 `STUDIO_*`, `GH_*` and `GITHUB_*` variables.
@@ -148,7 +150,7 @@ Studio warns while `terminal` or `code_execution` is on.
 ## Connect an agent from a terminal
 
 The Studio's MCP server (`POST /api/mcp`, see
-[architecture.md](architecture.md#mcp-server)) also serves your own agents
+[Architecture](../reference/architecture.mdx#mcp-server)) also serves your own agents
 while the Studio is open. **Connect an agent…** in the agent menu gives the
 address, a token with sign-in on, and the command for Claude Code, Codex or
 the stdio bridge. By hand:

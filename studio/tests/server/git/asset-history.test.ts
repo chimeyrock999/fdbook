@@ -9,10 +9,10 @@ type Side = { kind: 'text'; text: string; size: number } | { kind: 'binary'; siz
 type Version = { sha: string; path: string; status: string; from?: string };
 type History = { path: string; mtimeMs: number | null; deleted: unknown; versions: Version[] };
 
-const PNG = 'public/notes/demo/pixel.png';
-const WEBP = 'public/notes/demo/pixel.webp';
-const SVG = 'public/notes/demo/shape.svg';
-const NOTE = 'content/notes/streaming/asset-history.mdx';
+const PNG = 'public/docs/demo/pixel.png';
+const WEBP = 'public/docs/demo/pixel.webp';
+const SVG = 'public/docs/demo/shape.svg';
+const NOTE = 'content/docs/streaming/asset-history.mdx';
 const v1 = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 const v2 = Buffer.from('second pixel bytes');
 const v3 = Buffer.from('third pixel, as webp');
@@ -51,16 +51,16 @@ describe('page history API: assets', () => {
   beforeAll(async () => {
     studio = await startTestStudio({ git: true });
     first = git(studio.root, 'rev-parse', 'HEAD').trim();
-    await writeFile(at(NOTE), '---\ntitle: Asset history\n---\n\n![Pixel](/notes/demo/pixel.png)\n');
+    await writeFile(at(NOTE), '---\ntitle: Asset history\n---\n\n![Pixel](/docs/demo/pixel.png)\n');
     await writeFile(at(PNG), v2);
     second = commit('docs: second pixel');
     // Git follows a rename only while the content stays alike: the bytes change after.
     git(studio.root, 'mv', PNG, WEBP);
-    await writeFile(at(NOTE), '---\ntitle: Asset history\n---\n\n![Pixel](/notes/demo/pixel.webp)\n');
+    await writeFile(at(NOTE), '---\ntitle: Asset history\n---\n\n![Pixel](/docs/demo/pixel.webp)\n');
     renamed = commit('docs: pixel as webp');
     await writeFile(at(WEBP), v3);
     third = commit('docs: third pixel');
-    await mkdir(at('public/notes/demo'), { recursive: true });
+    await mkdir(at('public/docs/demo'), { recursive: true });
     shapes = [];
     for (const size of [10, 20]) {
       await writeFile(at(SVG), `<svg xmlns="http://www.w3.org/2000/svg" width="${String(size)}"/>`);
@@ -116,11 +116,11 @@ describe('page history API: assets', () => {
     expect(json(response)).toEqual({ path: PNG, mtimeMs: await mtimeOf(PNG) });
     expect(await readFile(at(PNG))).toEqual(v2);
     await expect(stat(at(WEBP))).rejects.toThrow();
-    expect(await readFile(at(NOTE), 'utf8')).toContain('](/notes/demo/pixel.png)');
+    expect(await readFile(at(NOTE), 'utf8')).toContain('](/docs/demo/pixel.png)');
   });
 
   it('restores an asset a leftover regen script names', async () => {
-    const legacy = 'public/notes/demo/legacy.svg';
+    const legacy = 'public/docs/demo/legacy.svg';
     await mkdir(at('diagrams'), { recursive: true });
     await writeFile(at('diagrams/demo.regen.sh'), `OUT=${legacy}\n`);
     await writeFile(at(legacy), '<svg xmlns="http://www.w3.org/2000/svg" width="1"/>');
@@ -136,6 +136,6 @@ describe('page history API: assets', () => {
   it('refuses a stale asset, and still refuses a meta.yaml', async () => {
     const response = await restore({ path: PNG, sha: first, mtimeMs: (await mtimeOf(PNG)) - 1000 });
     expect(response.status).toBe(409);
-    expect((await rawRequest(`${studio.url}api/history?path=${encodeURIComponent('content/notes/meta.yaml')}`)).status).toBe(403);
+    expect((await rawRequest(`${studio.url}api/history?path=${encodeURIComponent('content/docs/meta.yaml')}`)).status).toBe(403);
   });
 });

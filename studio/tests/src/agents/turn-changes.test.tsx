@@ -15,13 +15,13 @@ const end = (writes: string[]) => ({ type: 'end' as const, at: 2, conversation: 
 
 describe('what a turn changed', () => {
   it('shows a proposal with a way to the note, and keeps or reverts what each turn changed itself', async () => {
-    const done = summary({ status: 'done', turns: 2, writes: ['content/notes/meta.yaml', 'content/notes/late.mdx', 'package.json', 'content/notes/saved.mdx'] });
+    const done = summary({ status: 'done', turns: 2, writes: ['content/docs/meta.yaml', 'content/docs/late.mdx', 'package.json', 'content/docs/saved.mdx'] });
     const changes: TurnChange[] = [
-      { path: 'content/notes/meta.yaml', existed: true, decided: null, reason: null },
-      { path: 'content/notes/late.mdx', existed: true, decided: null, reason: null },
+      { path: 'content/docs/meta.yaml', existed: true, decided: null, reason: null },
+      { path: 'content/docs/late.mdx', existed: true, decided: null, reason: null },
       // The server keeps no earlier version outside the notes (existed: false).
       { path: 'package.json', existed: false, decided: null, reason: 'outside the notes and their assets: revert it by hand' },
-      { path: 'content/notes/saved.mdx', existed: true, decided: null, reason: 'also saved by a person during the turn: revert it by hand' },
+      { path: 'content/docs/saved.mdx', existed: true, decided: null, reason: 'also saved by a person during the turn: revert it by hand' },
     ];
     const { client, emit } = fakeClient([done], changes);
     client.read.mockResolvedValue({
@@ -30,10 +30,10 @@ describe('what a turn changed', () => {
       events: [
         { type: 'start', at: 0, conversation: done },
         { type: 'turn', at: 0, prompt: 'Tighten the intro', by: null },
-        { type: 'proposal', at: 1, id: 'p1', path: 'content/notes/guide.mdx', hunks: 2 },
+        { type: 'proposal', at: 1, id: 'p1', path: 'content/docs/guide.mdx', hunks: 2 },
         end([]),
         { type: 'turn', at: 3, prompt: 'Fix the meta too', by: null },
-        { type: 'write', at: 4, path: 'content/notes/meta.yaml', bytes: 10 },
+        { type: 'write', at: 4, path: 'content/docs/meta.yaml', bytes: 10 },
         end(done.writes),
       ],
     });
@@ -43,7 +43,7 @@ describe('what a turn changed', () => {
     await user.click(await screen.findByRole('button', { name: 'History' }));
     await user.click(await screen.findByRole('button', { name: /^Tighten the intro/ }));
     await user.click(await screen.findByRole('button', { name: 'Review in editor' }));
-    expect(onOpenNote).toHaveBeenCalledWith('content/notes/guide.mdx');
+    expect(onOpenNote).toHaveBeenCalledWith('content/docs/guide.mdx');
     expect(screen.getByText('2 suggestions')).toBeTruthy();
 
     // Only the turn that changed files lists them, and asks for that turn's.
@@ -54,16 +54,16 @@ describe('what a turn changed', () => {
     expect(await section.findAllByText(/revert it by hand/)).toHaveLength(2);
     // A file a person saved too keeps its diff, only not Keep/Revert; one
     // outside the notes has no earlier version to show.
-    const saved = within(section.getByText('content/notes/saved.mdx').closest('li') as HTMLElement);
+    const saved = within(section.getByText('content/docs/saved.mdx').closest('li') as HTMLElement);
     expect(saved.queryByRole('button', { name: 'Revert' })).toBeNull();
     await user.click(saved.getByRole('button', { name: 'View diff' }));
-    expect(client.compare).toHaveBeenCalledWith('c1', 2, 'content/notes/saved.mdx');
+    expect(client.compare).toHaveBeenCalledWith('c1', 2, 'content/docs/saved.mdx');
     expect(within(section.getByText('package.json').closest('li') as HTMLElement).queryByRole('button', { name: 'View diff' })).toBeNull();
-    const meta = within(section.getByText('content/notes/meta.yaml').closest('li') as HTMLElement);
+    const meta = within(section.getByText('content/docs/meta.yaml').closest('li') as HTMLElement);
     await user.click(meta.getByRole('button', { name: 'Revert' }));
-    expect(client.decide).toHaveBeenCalledWith('c1', 2, 'content/notes/meta.yaml', 'revert');
+    expect(client.decide).toHaveBeenCalledWith('c1', 2, 'content/docs/meta.yaml', 'revert');
     expect(await meta.findByText('Reverted')).toBeTruthy();
-    const late = within(section.getByText('content/notes/late.mdx').closest('li') as HTMLElement);
+    const late = within(section.getByText('content/docs/late.mdx').closest('li') as HTMLElement);
     await user.click(late.getByRole('button', { name: 'Revert' }));
     // The failure is a toast; the row stays, to try again or keep.
     expect((await screen.findByRole('alert')).textContent).toMatch(/changed since the turn ended/);
@@ -73,7 +73,7 @@ describe('what a turn changed', () => {
 
     // A decision on another page reads the turn's list again.
     expect(client.changes).toHaveBeenCalledTimes(1);
-    emit({ type: 'decided', at: 9, conversationId: 'c1', turn: 2, path: 'content/notes/saved.mdx', decided: 'kept' });
+    emit({ type: 'decided', at: 9, conversationId: 'c1', turn: 2, path: 'content/docs/saved.mdx', decided: 'kept' });
     await waitFor(() => { expect(client.changes).toHaveBeenCalledTimes(2); });
   });
 });

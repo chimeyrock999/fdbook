@@ -8,9 +8,9 @@ import { HistoryPage } from '../../../src/history/HistoryPage';
 afterEach(cleanup);
 
 const sha = (digit: string) => digit.repeat(40);
-const ASSET = 'public/notes/demo/pixel.webp';
-const OLD_ASSET = 'public/notes/demo/pixel.png';
-const PAGE = 'content/notes/shelf/one.mdx';
+const ASSET = 'public/docs/demo/pixel.webp';
+const OLD_ASSET = 'public/docs/demo/pixel.png';
+const PAGE = 'content/docs/shelf/one.mdx';
 const binary = (size: number) => ({ kind: 'binary' as const, size });
 const text = (value: string) => ({ kind: 'text' as const, text: value, size: value.length });
 const version = (digit: string, path: string, message: string, status: 'A' | 'M' | 'R' = 'M') =>
@@ -29,7 +29,7 @@ function clientFor(history: PageHistory, sides: (from: string | null, to: string
       path,
       open: path,
       changes: dryRun === true
-        ? [{ type: 'add', path }, { type: 'add', path: 'content/notes/shelf/meta.yaml' }, { type: 'change', path: 'content/notes/meta.yaml', detail: 'adds "shelf"' }]
+        ? [{ type: 'add', path }, { type: 'add', path: 'content/docs/shelf/meta.yaml' }, { type: 'change', path: 'content/docs/meta.yaml', detail: 'adds "shelf"' }]
         : [],
     })),
   };
@@ -73,7 +73,7 @@ describe('HistoryPage: assets', () => {
   });
 
   it('shows an SVG source too', async () => {
-    const svg = 'public/notes/demo/shape.svg';
+    const svg = 'public/docs/demo/shape.svg';
     const client = clientFor({ path: svg, mtimeMs: 1, deleted: null, versions: [version('b', svg, 'docs: wider'), version('a', svg, 'docs: shape', 'A')] }, (from, to) => ({
       before: from === null ? null : text('<svg width="1"/>'),
       after: text(to === NOW ? '<svg width="3"/>' : '<svg width="2"/>'),
@@ -109,7 +109,7 @@ describe('HistoryPage: a deleted page', () => {
     await user.click(screen.getByRole('button', { name: 'Restore page…' }));
     const dialog = screen.getByRole('alertdialog', { name: 'Restore this page' });
     const writes = within(await within(dialog).findByRole('list', { name: 'Files the restore writes' }));
-    expect(writes.getAllByRole('listitem').map((item) => item.textContent)).toEqual([`A${PAGE}`, 'Acontent/notes/shelf/meta.yaml', 'Mcontent/notes/meta.yaml: adds "shelf"']);
+    expect(writes.getAllByRole('listitem').map((item) => item.textContent)).toEqual([`A${PAGE}`, 'Acontent/docs/shelf/meta.yaml', 'Mcontent/docs/meta.yaml: adds "shelf"']);
     expect(dialog.textContent).toContain('Its folder was deleted with it');
     expect(client.restoreDeleted).toHaveBeenCalledWith(PAGE, sha('a'), true);
     await user.click(within(dialog).getByRole('button', { name: 'Restore and open' }));

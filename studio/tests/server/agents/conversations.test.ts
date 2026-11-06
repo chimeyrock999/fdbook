@@ -9,7 +9,7 @@ import { ended, fakeProfile, messagesOf, waitFor } from '../../support/agents';
 import { makeGitWorktree } from '../../support/git';
 import type { Worktree } from '../../support/studio';
 
-const NOTE = 'content/notes/agent-note.mdx';
+const NOTE = 'content/docs/agent-note.mdx';
 
 describe('agent conversations', () => {
   let worktree: Worktree;
@@ -65,11 +65,11 @@ describe('agent conversations', () => {
   });
 
   it('records the files the agent changes with its own tools, reported or not', async () => {
-    const reported = join(root, 'content/notes/reported.mdx');
+    const reported = join(root, 'content/docs/reported.mdx');
     const quiet = join(root, 'server-side.ts');
     const done = await waitFor(runs, startRun(`edit ${reported} By its tool.\nsneak ${quiet} export {};`).id, ended);
-    expect(done.events.filter((event) => event.type === 'changed')).toMatchObject([{ paths: ['content/notes/reported.mdx'] }, { paths: ['server-side.ts'] }]);
-    expect(done.conversation.writes).toEqual(['content/notes/reported.mdx', 'server-side.ts']);
+    expect(done.events.filter((event) => event.type === 'changed')).toMatchObject([{ paths: ['content/docs/reported.mdx'] }, { paths: ['server-side.ts'] }]);
+    expect(done.conversation.writes).toEqual(['content/docs/reported.mdx', 'server-side.ts']);
     await rm(reported);
     await rm(quiet);
   });
@@ -101,16 +101,16 @@ describe('agent conversations', () => {
   it('refuses reads and writes outside what the Studio allows', async () => {
     const outside = await mkdtemp(join(tmpdir(), 'notes-studio-outside-'));
     await writeFile(join(outside, 'secret.txt'), 'secret');
-    await symlink(join(outside, 'secret.txt'), join(root, 'content/notes/link.mdx'));
+    await symlink(join(outside, 'secret.txt'), join(root, 'content/docs/link.mdx'));
     await writeFile(join(root, '.env'), 'TOKEN=1');
     const prompt = [
       `read ${join(outside, 'secret.txt')}`,
-      `read ${join(root, 'content/notes/link.mdx')}`,
+      `read ${join(root, 'content/docs/link.mdx')}`,
       `read ${join(root, '.env')}`,
       `read ${join(root, '.git/config')}`,
-      `read ${root}/content/notes/../../../etc/passwd`,
+      `read ${root}/content/docs/../../../etc/passwd`,
       `write ${join(root, 'package.json')} {}`,
-      `write ${join(root, 'content/notes/link.mdx')} replaced`,
+      `write ${join(root, 'content/docs/link.mdx')} replaced`,
       `write ${join(outside, 'new.mdx')} x`,
       `read ${join(root, 'package.json')}`,
     ].join('\n');
@@ -121,7 +121,7 @@ describe('agent conversations', () => {
     // A repo file outside the editable areas can still be read.
     expect(said[8]).toBe('read:{}\n');
     expect(await readFile(join(outside, 'secret.txt'), 'utf8')).toBe('secret');
-    await rm(join(root, 'content/notes/link.mdx'));
+    await rm(join(root, 'content/docs/link.mdx'));
     await rm(join(root, '.env'));
     await rm(outside, { recursive: true, force: true });
   });

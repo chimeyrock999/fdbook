@@ -11,7 +11,7 @@ import { json, rawRequest } from '../../support/http';
 type List = { enabled: boolean; crs: ChangeRequest[]; taken: string[]; prError: string | null; fetchError: string | null };
 
 const DAY_MS = 24 * 3600_000;
-const FIRST_LOOK = 'content/notes/guide/first-look.mdx';
+const FIRST_LOOK = 'content/docs/guide/first-look.mdx';
 
 // Stale, drift from main, and discarding what is on origin too (#21).
 describe('cleaning up change requests', () => {
@@ -62,7 +62,7 @@ describe('cleaning up change requests', () => {
       clash = await create('Clash');
       apart = await create('Apart');
       await commit(clash, FIRST_LOOK, '---\ntitle: First look\n---\n\nThe change request says this.\n');
-      await commit(apart, 'content/notes/guide/apart.mdx', '---\ntitle: Apart\n---\n');
+      await commit(apart, 'content/docs/guide/apart.mdx', '---\ntitle: Apart\n---\n');
     });
 
     it('is up to date with the main it branched from', async () => {
@@ -87,7 +87,7 @@ describe('cleaning up change requests', () => {
     });
 
     it('lists a conflicting path with non-ASCII characters as it is', async () => {
-      const path = 'content/notes/guide/ghi-chú.mdx';
+      const path = 'content/docs/guide/ghi-chú.mdx';
       await repo.pushToMain({ [path]: 'main\n' });
       const viet = await create('Ghi chu');
       await repo.pushToMain({ [path]: 'main again\n' });

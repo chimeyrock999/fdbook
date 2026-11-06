@@ -16,8 +16,8 @@ export const AGENTS: AgentInfo[] = [
 
 // What the fake client finds to mention.
 export const MENTIONS: Mention[] = [
-  { kind: 'note', path: 'content/notes/guide/first-look.mdx' },
-  { kind: 'asset', path: 'public/notes/guide/chart.png' },
+  { kind: 'note', path: 'content/docs/guide/first-look.mdx' },
+  { kind: 'asset', path: 'public/docs/guide/chart.png' },
   { kind: 'file', path: 'lib/helper.ts' },
 ];
 
@@ -45,8 +45,8 @@ export function fakeClient(conversations: Conversation[] = [], changes: TurnChan
     cancel: vi.fn(() => Promise.resolve()),
     answer: vi.fn(() => Promise.resolve()),
     changes: vi.fn((): Promise<TurnChange[]> => Promise.resolve(changes)),
-    // A revert of content/notes/late.mdx fails: a later edit changed it.
-    decide: vi.fn((_id: string, _turn: number, path: string, op: 'keep' | 'revert') => (path === 'content/notes/late.mdx' && op === 'revert' ? Promise.reject(new Error('content/notes/late.mdx changed since the turn ended')) : Promise.resolve({ path, existed: true, decided: op === 'keep' ? 'kept' as const : 'reverted' as const, reason: null }))),
+    // A revert of content/docs/late.mdx fails: a later edit changed it.
+    decide: vi.fn((_id: string, _turn: number, path: string, op: 'keep' | 'revert') => (path === 'content/docs/late.mdx' && op === 'revert' ? Promise.reject(new Error('content/docs/late.mdx changed since the turn ended')) : Promise.resolve({ path, existed: true, decided: op === 'keep' ? 'kept' as const : 'reverted' as const, reason: null }))),
     compare: vi.fn(() => Promise.resolve({ before: 'Before.\n', after: 'After.\n' })),
     mentions: vi.fn((query: string): Promise<Mention[]> => Promise.resolve(MENTIONS.filter((mention) => mention.path.includes(query)))),
     attach: vi.fn((file: File): Promise<Attachment> => Promise.resolve({ id: `a${String(file.size)}`, name: file.name, size: file.size })),
