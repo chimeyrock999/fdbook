@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NOTE_ICON_NAMES } from '@fdbook/mdx/notes-icons.ts';
 import { NoteHeader } from '#editor/NoteHeader.tsx';
 import { useFrontmatter } from '#frontmatter/useFrontmatter.ts';
 import type { FieldReveal } from '#frontmatter/MetadataStrip.tsx';
+import { readDoc } from '#tests/support/docs.ts';
 
 const note = `---
 title: "Streaming"
@@ -353,11 +352,10 @@ describe('NoteHeader', () => {
 
   // Through a real note: only the title line moves.
   it('edits the title of a real note and nothing else', async () => {
-    // jsdom's import.meta.url is not a file URL; tests run from the Studio root.
-    const real = await readFile(join(process.cwd(), '../../content/docs/distributed-systems/mapreduce/index.mdx'), 'utf8');
+    const real = readDoc('content/docs/guide/configuration.mdx');
     const writes: string[] = [];
     render(<Harness initial={real} onWrite={(s) => writes.push(s)} />);
     await userEvent.type(screen.getByLabelText('Title'), '!');
-    expect(writes.at(-1)).toBe(real.replace('title: "MapReduce"', 'title: "MapReduce!"'));
+    expect(writes.at(-1)).toBe(real.replace('title: Configuration\n', 'title: Configuration!\n'));
   });
 });

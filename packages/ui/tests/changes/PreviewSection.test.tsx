@@ -103,7 +103,7 @@ describe('PreviewSection', () => {
   it('opens the preview on the page being edited, with the build log', () => {
     setup(pushed('ready', {}, { at: new Date().toISOString() }));
     const open = screen.getByRole('link', { name: 'Open preview' });
-    expect(open.getAttribute('href')).toBe(`${URL}/notes/streaming/sinks`);
+    expect(open.getAttribute('href')).toBe(`${URL}/docs/streaming/sinks`);
     expect(open.getAttribute('target')).toBe('_blank');
     expect(screen.getByRole('link', { name: 'View log' }).getAttribute('href')).toBe(LOG);
     expect(screen.getByText('cr-sinks.chimeyrock.pages.dev')).toBeTruthy();
@@ -146,7 +146,7 @@ describe('OpenPreview', () => {
   it('opens the pushed preview on the page shown, marked with its build', () => {
     render(<OpenPreview preview={pushed('building')} route="/docs/database" />);
     const link = screen.getByRole('link', { name: 'Open preview (Building)' });
-    expect(link.getAttribute('href')).toBe(`${URL}/notes/database`);
+    expect(link.getAttribute('href')).toBe(`${URL}/docs/database`);
     expect(link.dataset.build).toBe('building');
   });
 

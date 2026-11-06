@@ -33,7 +33,7 @@ function find(node: JSONContent, type: string): JSONContent[] {
 
 describe('editor syntax', () => {
   it('finds every note and fixture', () => {
-    expect(paths.length).toBeGreaterThan(50);
+    expect(paths).toEqual(expect.arrayContaining(['docs/content/docs/index.mdx', 'docs/content/docs/guide/using.mdx']));
     expect(paths.some((path) => path.includes('/fixtures/'))).toBe(true);
   });
 
@@ -46,7 +46,7 @@ describe('editor syntax', () => {
   // An edited block is serialized from the document, not copied from the
   // source: a Diagram must come back with the same attributes.
   it('reads Diagram in a real note as a component and writes it back', async () => {
-    const path = 'content/docs/data-platform/stacks-integration/databricks/databricks-interactive-runtime/driver-container-first-look.mdx';
+    const path = 'docs/content/docs/diagrams/examples.mdx';
     const source = await readFile(join(installRoot, path), 'utf8');
     const embeds = find(parseMdxToDoc(source, syntax).doc, 'Diagram');
     expect(embeds.length).toBeGreaterThan(0);

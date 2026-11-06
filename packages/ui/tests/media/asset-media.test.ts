@@ -103,7 +103,7 @@ describe('asset media provider', () => {
 
   it('shows site paths through the file API and leaves other sources alone', () => {
     const { provider } = media(() => null);
-    expect(provider.resolve?.('/docs/demo/pixel.png')).toBe(`${studio.origin}/api/file?path=public%2Fnotes%2Fdemo%2Fpixel.png`);
+    expect(provider.resolve?.('/docs/demo/pixel.png')).toBe(`${studio.origin}/api/file?path=public%2Fdocs%2Fdemo%2Fpixel.png`);
     expect(provider.resolve?.('https://example.com/x.png')).toBe('https://example.com/x.png');
   });
 });

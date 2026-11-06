@@ -45,6 +45,7 @@ describe('insert-only specs', () => {
   });
 
   it('read every note', () => {
-    expect(notes.length).toBeGreaterThan(50);
+    // A top-level page and one in a folder: the glob reaches both.
+    expect(notes.map((note) => note.path)).toEqual(expect.arrayContaining(['content/docs/index.mdx', 'content/docs/guide/using.mdx']));
   });
 });

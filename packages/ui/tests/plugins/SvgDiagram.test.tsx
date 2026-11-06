@@ -11,13 +11,13 @@ const draw = (props: Record<string, string>) =>
 
 describe('SvgDiagram', () => {
   it('shows the SVG from the file API with the site options', () => {
-    const container = draw({ src: '/docs/spark/narrow.svg', label: 'Narrow', maxWidth: '480px', invertOnDark: 'yes' });
+    const container = draw({ src: '/docs/guide/narrow.svg', label: 'Narrow', maxWidth: '480px', invertOnDark: 'yes' });
     const image = defined(container.querySelector('img'));
-    expect(image.getAttribute('src')).toBe('/api/file?path=public%2Fnotes%2Fspark%2Fnarrow.svg');
+    expect(image.getAttribute('src')).toBe('/api/file?path=public%2Fdocs%2Fguide%2Fnarrow.svg');
     expect(image.alt).toBe('Narrow');
     expect(image.style.maxWidth).toBe('480px');
     expect(container.querySelector('[data-invert]')).not.toBeNull();
-    const plated = draw({ src: 'notes/x.svg', plate: '1', invertOnDark: 'true' });
+    const plated = draw({ src: 'docs/x.svg', plate: '1', invertOnDark: 'true' });
     expect(plated.querySelector('[data-invert]')).toBeNull();
     expect(plated.querySelector('[data-plate]')).not.toBeNull();
     expect(draw({ src: '/docs/x.svg', plate: 'no' }).querySelector('[data-plate]')).toBeNull();

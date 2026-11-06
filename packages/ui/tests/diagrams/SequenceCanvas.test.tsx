@@ -1,6 +1,4 @@
 // @vitest-environment jsdom
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -10,10 +8,11 @@ import { setWaypoints } from '#diagrams/edits.ts';
 import { buildScene } from '@fdbook/diagram/scene.ts';
 import { parseDiagram, type DiagramInput } from '@fdbook/diagram/schema.ts';
 import { stubLayout } from '#tests/support/visual-editor.tsx';
+import { readDoc } from '#tests/support/docs.ts';
 
 const PATH = 'diagrams/examples/coroutine-yield.diagram.json';
-// The repository root, from studio/tests/src/diagrams.
-const real = readFileSync(join(import.meta.dirname, '../../../..', PATH), 'utf8');
+// An example diagram of FdBook's docs.
+const real = readDoc(PATH);
 const drawn = buildScene(parseDiagram(JSON.parse(real))).sequence;
 if (!drawn) throw new Error('not a sequence');
 const layer = drawn;

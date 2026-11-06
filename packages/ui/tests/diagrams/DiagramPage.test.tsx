@@ -1,6 +1,4 @@
 // @vitest-environment jsdom
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EditorView } from '@codemirror/view';
@@ -10,14 +8,15 @@ import type { AssetUsage } from '#api/assets.ts';
 import { FileConflictError, type createFilesClient } from '#api/files.ts';
 import { DiagramPage } from '#diagrams/DiagramPage.tsx';
 import { useLeftEdits } from '#diagrams/useDiagramFile.ts';
+import { readDoc } from '#tests/support/docs.ts';
 import { stubLayout } from '#tests/support/visual-editor.tsx';
 
-const PATH = 'diagrams/data-platform/processing/apache-spark/spark-logic-to-execution.diagram.json';
-// The repository root, from studio/tests/src/diagrams.
-const real = readFileSync(join(import.meta.dirname, '../../../..', PATH), 'utf8');
+const PATH = 'diagrams/examples/program-to-tasks.diagram.json';
+// An example diagram of FdBook's docs.
+const real = readDoc(PATH);
 type Doc = { nodes: { id: string; label: string }[]; edges: { id: string; from: string; to: string }[]; layout: { nodes: Record<string, { x: number; y: number }>; edges?: Record<string, { via?: number[][]; fromSide?: string; toSide?: string }> } };
 
-const USAGE: AssetUsage = { note: 'content/docs/data-platform/processing/apache-spark/index.mdx', line: 12, column: 14, length: 20, text: '<Diagram src="…" />', unsure: false };
+const USAGE: AssetUsage = { note: 'content/docs/diagrams/examples.mdx', line: 11, column: 1, length: 20, text: '<Diagram src="…" />', unsure: false };
 
 // jsdom lays out no text: CodeMirror measures ranges.
 beforeAll(stubLayout);
@@ -102,7 +101,7 @@ describe('DiagramPage', () => {
     const { container, onOpenUsage } = await open();
     expect(container.querySelectorAll('.dg-svg [data-node-id]')).toHaveLength(6);
     expect(screen.getByRole('status').textContent).toBe('Saved');
-    await userEvent.click(screen.getByRole('button', { name: /apache-spark\/index\.mdx:12/ }));
+    await userEvent.click(screen.getByRole('button', { name: /diagrams\/examples\.mdx:11/ }));
     expect(onOpenUsage).toHaveBeenCalledWith(USAGE);
   });
 

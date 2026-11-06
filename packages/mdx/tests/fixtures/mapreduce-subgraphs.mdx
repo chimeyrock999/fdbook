@@ -1,0 +1,174 @@
+---
+title: Styled subgraphs
+---
+
+{/* Two mermaid blocks from the MapReduce note of the old notes site, which
+the author-fill tests read: a subgraph the author cleared (fill:transparent)
+and one with a fill whose title Pele lifts out. */}
+
+The MapReduce execution overview.
+
+```mermaid
+---
+config:
+  layout: dagre
+  theme: redux
+  look: classic
+---
+flowchart TB
+ subgraph InputFiles["Input files"]
+        S0["split 0"]
+        S1["split 1"]
+        S2["split 2"]
+        S3["split 3"]
+        S4["split 4"]
+  end
+ subgraph MapPhase["Map phase"]
+        Wm1(["worker"])
+        Wm2(["worker"])
+        Wm3(["worker"])
+  end
+ subgraph ReducePhase["Reduce phase"]
+        Wr1(["worker"])
+        Wr2(["worker"])
+  end
+ subgraph IntermediateFiles["Intermediate files (on local disks)"]
+        I1[[" "]]
+        I2[[" "]]
+        I3[[" "]]
+  end
+ subgraph OutputFiles["Output files"]
+        O0["output file 0"]
+        O1["output file 1"]
+  end
+    U(["User Program"]) -. (1) fork .-> M(["Master"]) & Wm1 & Wr1
+    M -. (2) assign map .-> Wm1
+    M -. (2) assign reduce .-> Wr1
+    S0 --> Wm1
+    S1 --> Wm1
+    S2 -- (3) read --> Wm2
+    S3 --> Wm3
+    S4 --> Wm2
+    Wm1 --> I1
+    Wm2 -- (4) local write --> I2
+    Wm3 --> I3
+    I1 --> Wr1 & Wr2
+    I2 -- (5) remote read --> Wr1
+    I2 --> Wr2
+    I3 --> Wr1 & Wr2
+    Wr1 -- (6) write --> O0
+    Wr2 --> O1
+
+    style S0 fill:#C8E6C9,color:#000000
+    style S1 fill:#C8E6C9,color:#000000
+    style S2 fill:#C8E6C9,color:#000000
+    style S3 fill:#C8E6C9,color:#000000
+    style S4 fill:#C8E6C9,color:#000000
+    style I1 fill:#E1BEE7
+    style I2 fill:#E1BEE7
+    style I3 fill:#E1BEE7
+    style O0 fill:#BBDEFB
+    style O1 fill:#BBDEFB
+    style InputFiles fill:transparent,stroke:#757575,color:#757575
+    style MapPhase fill:transparent,stroke:#757575,color:#757575
+    style ReducePhase stroke:#757575,fill:transparent,color:#757575
+    style IntermediateFiles fill:transparent,stroke:#757575,color:#757575
+    style OutputFiles stroke:#757575,fill:transparent,color:#757575
+    linkStyle 0 stroke:#2962FF,fill:none
+    linkStyle 1 stroke:#2962FF,fill:none
+    linkStyle 2 stroke:#2962FF,fill:none
+    linkStyle 3 stroke:#2962FF,fill:none
+    linkStyle 4 stroke:#2962FF,fill:none
+    linkStyle 5 stroke:#BBDEFB,fill:none
+    linkStyle 6 stroke:#BBDEFB,fill:none
+    linkStyle 7 stroke:#2962FF,fill:none
+    linkStyle 8 stroke:#BBDEFB,fill:none
+    linkStyle 9 stroke:#BBDEFB,fill:none
+    linkStyle 10 stroke:#BBDEFB,fill:none
+    linkStyle 11 stroke:#2962FF,fill:none
+    linkStyle 12 stroke:#BBDEFB,fill:none
+    linkStyle 13 stroke:#BBDEFB,fill:none
+    linkStyle 14 stroke:#BBDEFB,fill:none
+    linkStyle 15 stroke:#2962FF,fill:none
+    linkStyle 16 stroke:#BBDEFB,fill:none
+    linkStyle 17 stroke:#BBDEFB,fill:none
+    linkStyle 18 stroke:#BBDEFB,fill:none
+    linkStyle 19 stroke:#2962FF,fill:none
+    linkStyle 20 stroke:#BBDEFB,fill:none
+```
+
+Hadoop's components.
+
+```mermaid
+flowchart TB
+    %% =========================
+    %% Client Layer
+    %% =========================
+    subgraph CLIENT["Client Layer"]
+        Client["Client<br/>(hadoop jar, spark-submit, etc.)"]
+    end
+
+    %% =========================
+    %% Hadoop Logical Components
+    %% =========================
+    subgraph LOGICAL["Hadoop Logical Components"]
+        Common["Hadoop Common"]
+        HDFS["HDFS"]
+        YARN["YARN"]
+        MR["MapReduce"]
+    end
+
+    %% =========================
+    %% YARN Internals
+    %% =========================
+    subgraph YARN_INT["YARN Internals"]
+        RM["ResourceManager"]
+        AM["ApplicationMaster"]
+        NM1["NodeManager"]
+        NM2["NodeManager"]
+        NM3["NodeManager"]
+    end
+
+    %% =========================
+    %% HDFS Internals
+    %% =========================
+    subgraph HDFS_INT["HDFS Internals"]
+        NN["NameNode"]
+        DN1["DataNode"]
+        DN2["DataNode"]
+        DN3["DataNode"]
+    end
+
+    %% =========================
+    %% Relationships (Logical)
+    %% =========================
+    Common --> HDFS
+    Common --> YARN
+    Common --> MR
+
+    MR --> YARN
+    YARN --> RM & AM & NM1 & NM2 & NM3
+    HDFS --> NN & DN1 & DN2 & DN3
+
+    %% =========================
+    %% Runtime Flow
+    %% =========================
+    Client -->|Submit Job| YARN
+    Client -->|Read Metadata| NN
+
+    RM -->|Launch| AM
+    AM -->|Request Containers| RM
+    AM -->|Run Tasks| NM1 & NM2 & NM3
+
+    NM1 -->|Read/Write Blocks| DN1
+    NM2 -->|Read/Write Blocks| DN2
+    NM3 -->|Read/Write Blocks| DN3
+
+    %% =========================
+    %% Styling
+    %% =========================
+    style LOGICAL fill:#C8E6C9
+    style YARN_INT fill:#BBDEFB
+    style HDFS_INT fill:#FFF9C4
+    style CLIENT fill:#E1BEE7
+```
