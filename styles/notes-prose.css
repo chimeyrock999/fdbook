@@ -1,7 +1,7 @@
 /* The note body's prose: headings, lists, inline code, links, blockquotes,
    tables, callouts, steps, tabs, code blocks and footnote markers. Plain CSS
    under `.notes-prose` so both the note page (app/notes/[[...slug]]/page.tsx)
-   and the Notes Studio's editor (tools/notes-studio/src/notes-prose.css) use
+   and the Notes Studio's editor (studio/src/notes-prose.css) use
    this one file. The page's title and description lines come first. */
 
 .notes-title {

@@ -1,6 +1,6 @@
 /* The notes palette and fonts, the only place they are written. Plain CSS so
    both the site (app/notes/notes.css) and the Notes Studio
-   (tools/notes-studio/src/notes-theme.css) import this one file.
+   (studio/src/notes-theme.css) import this one file.
    The palette sits on `.notes-theme` (the notes layout's container) and on
    the page while it shows one: what renders outside the layout, like the
    search dialog portalled to <body>, keeps the garden colours, and the

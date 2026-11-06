@@ -2,7 +2,7 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 // The classes of <Keyword> and <Tag>, exported so the Notes Studio draws its
-// keyword decorations with the same ones (tools/notes-studio scans this file).
+// keyword decorations with the same ones (studio scans this file).
 // Bold inside a keyword keeps the keyword colour instead of the prose bold colour.
 export const keywordClassName =
 	"font-medium text-[var(--color-graph-primary)] underline decoration-dotted underline-offset-4 [&_strong]:text-inherit";

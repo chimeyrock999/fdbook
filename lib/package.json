@@ -1,0 +1,5 @@
+{
+  "name": "@site/lib",
+  "private": true,
+  "type": "module"
+}

@@ -1,6 +1,6 @@
 // The note syntax the site renders, in one place: the directive plugin
 // (lib/remark-notes-directives.ts), the callout and accordion components and
-// the Notes Studio lint (tools/notes-studio/server/lint) all read these lists.
+// the Notes Studio lint (studio/server/lint) all read these lists.
 // No imports, so Node can load this file as is (the Studio server, node --test).
 
 // `:::name` container directives that become a <Callout type="name">.
