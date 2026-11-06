@@ -30,6 +30,11 @@ const attr = (tag: string, name: string) => {
   if (!match) throw new Error(`no ${name} in ${tag.slice(0, 120)}`);
   return match[1];
 };
+const found = (pattern: RegExp, text: string) => {
+  const match = pattern.exec(text);
+  if (!match) throw new Error(`no ${String(pattern)} in ${text.slice(0, 120)}`);
+  return match;
+};
 const box = (tag: string): Box => [Number(attr(tag, 'x')), Number(attr(tag, 'y')), Number(attr(tag, 'width')), Number(attr(tag, 'height'))].map(round) as Box;
 const unescape = (text: string) => text.replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code))).replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
 
@@ -50,8 +55,8 @@ export function sequenceFixtureOf(html: string, source: string): SequenceLayoutF
     .map((match) => [round(Number(match[1])), Number(match[2]), Number(match[3])] as [number, number, number]);
   const activations = [...section('Activations', 'Messages').matchAll(/<rect [^>]*class="c-mask"\/>/g)].map((match) => box(match[0]));
   const messages = section('Messages', 'Segment Labels').split(/(?=<g data-edge-from=)/).filter((part) => part.startsWith('<g data-edge-from=')).map((part) => {
-    const points = attr(/<path [^>]*>/.exec(part)![0], 'data-composition-points').split(';').map((point) => numbers(point).map(round) as [number, number]);
-    const label = box(/<g data-detail="context">\s*(<rect [^>]*>)/.exec(part)![1]);
+    const points = attr(found(/<path [^>]*>/, part)[0], 'data-composition-points').split(';').map((point) => numbers(point).map(round) as [number, number]);
+    const label = box(found(/<g data-detail="context">\s*(<rect [^>]*>)/, part)[1]);
     const noteTag = /<text data-detail="context" x="([\d.]+)" y="([\d.]+)"[^>]*font-size="7">(.*?)<\/text>/s.exec(part);
     if (!noteTag) return { points, label };
     const spans = [...noteTag[3].matchAll(/<tspan[^>]*>(.*?)<\/tspan>/g)].map((span) => unescape(span[1]));
@@ -76,7 +81,8 @@ export function sequenceFixtureOf(html: string, source: string): SequenceLayoutF
 
 // The same reading of a scene, so the test compares like with like.
 export function sequenceFixtureOfScene(scene: Scene, source: string): SequenceLayoutFixture {
-  const layer = scene.sequence!;
+  const layer = scene.sequence;
+  if (!layer) throw new Error('sequenceFixtureOfScene takes a sequence scene');
   const rect = (r: { x: number; y: number; width: number; height: number }): Box => [r.x, r.y, r.width, r.height].map(round) as Box;
   return {
     source,
@@ -85,7 +91,8 @@ export function sequenceFixtureOfScene(scene: Scene, source: string): SequenceLa
     participants: scene.nodes.map(rect),
     lifelines: layer.lifelines.map((line) => [round(line.x), line.top, line.bottom]),
     messages: layer.messages.map((message, index) => {
-      const label = scene.edges[index].label!;
+      const { label } = scene.edges[index];
+      if (!label) throw new Error(`message "${message.edge.id}" has no label plate`);
       const entry = { points: [[round(message.start), message.y], [round(message.end), message.y]] as [number, number][], label: rect(label) };
       return message.note ? { ...entry, note: { x: round(message.note.x), baseline: message.note.baseline, lines: message.note.lines } } : entry;
     }),
@@ -97,7 +104,8 @@ export function sequenceFixtureOfScene(scene: Scene, source: string): SequenceLa
 
 export const formatSequenceFixture = (fixture: SequenceLayoutFixture) => formatDiagramJson(fixture);
 
-const placement = ({ source: _source, ...rest }: SequenceLayoutFixture) => JSON.stringify(rest);
+// Everything but the source: JSON leaves an undefined field out.
+const placement = (fixture: SequenceLayoutFixture) => JSON.stringify({ ...fixture, source: undefined });
 
 export function sameSequenceLayout(a: SequenceLayoutFixture, b: SequenceLayoutFixture) {
   return placement(a) === placement(b);

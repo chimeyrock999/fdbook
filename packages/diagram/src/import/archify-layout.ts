@@ -26,7 +26,7 @@ export type LayoutReport = {
 
 export function layoutFixtureOf(report: LayoutReport, source: string): LayoutFixture {
   if (report.ok !== true) throw new Error('the layout report is not ok');
-  if (report.diagram_type !== 'architecture') throw new Error(`expected an architecture report, got ${report.diagram_type}`);
+  if (report.diagram_type !== 'architecture') throw new Error(`expected an architecture report, got ${String(report.diagram_type)}`);
   return {
     source,
     viewBox: report.viewBox,

@@ -84,15 +84,12 @@ export const CALLOUT_ICONS: Record<SemanticCalloutType, LucideIcon> = {
 };
 
 function getCalloutIcon(type: SemanticCalloutType): ReactNode {
-  const Icon = CALLOUT_ICONS[type] ?? Carrot;
+  const Icon = CALLOUT_ICONS[type];
   return <Icon width={18} height={18} aria-hidden="true" />;
 }
 
 export function NotesCallout({
   className,
-  displayName: _displayName,
-  graphKind: _graphKind,
-  graphType: _graphType,
   icon,
   title,
   type = 'info',
@@ -100,6 +97,10 @@ export function NotesCallout({
   style,
   ...props
 }: NotesCalloutProps) {
+  // The graph fields are for MDX and the graph, not the div.
+  delete props.displayName;
+  delete props.graphKind;
+  delete props.graphType;
   const semanticType = getSemanticCalloutType(type);
   const resolvedTitle = title ?? LABELS[semanticType];
 

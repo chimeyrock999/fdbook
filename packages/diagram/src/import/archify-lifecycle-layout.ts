@@ -57,7 +57,8 @@ export function lifecycleFixtureOf(html: string, source: string): LifecycleLayou
 
 // The same reading of a scene drawn without its legend.
 export function lifecycleFixtureOfScene(scene: Scene, source: string): LifecycleLayoutFixture {
-  const layer = scene.lifecycle!;
+  const layer = scene.lifecycle;
+  if (!layer) throw new Error('lifecycleFixtureOfScene takes a lifecycle scene');
   const rect = (r: { x: number; y: number; width: number; height: number }): Box => [r.x, r.y, r.width, r.height].map(round) as Box;
   return {
     source,
@@ -76,7 +77,8 @@ export function lifecycleFixtureOfScene(scene: Scene, source: string): Lifecycle
 
 export const formatLifecycleFixture = (fixture: LifecycleLayoutFixture) => formatDiagramJson(fixture);
 
-const placement = ({ source: _source, ...rest }: LifecycleLayoutFixture) => JSON.stringify(rest);
+// Everything but the source: JSON leaves an undefined field out.
+const placement = (fixture: LifecycleLayoutFixture) => JSON.stringify({ ...fixture, source: undefined });
 
 export function sameLifecycleLayout(a: LifecycleLayoutFixture, b: LifecycleLayoutFixture) {
   return placement(a) === placement(b);

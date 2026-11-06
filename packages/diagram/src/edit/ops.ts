@@ -119,13 +119,14 @@ export type NodeMove = {
 export function moveNode(diagram: Input, { id, x, y, dx = 0, dy = 0, w, h }: NodeMove): Input {
   const next = structuredClone(diagram);
   nodeOf(next, id);
-  const layout = placedOnly(next, 'position');
-  const at = layout.nodes[id];
+  // A node without a position has no entry.
+  const nodes: Partial<Record<string, Box>> = placedOnly(next, 'position').nodes;
+  const at = nodes[id];
   if (!at && (x === undefined || y === undefined || w === undefined || h === undefined)) {
     throw new DiagramOpError('op/unplaced-node', `Node "${id}" has no position yet: give x, y, w and h, or run layout first.`);
   }
   const box = at ?? { x: 0, y: 0, w: 0, h: 0 };
-  layout.nodes[id] = { x: (x ?? box.x) + dx, y: (y ?? box.y) + dy, w: w ?? box.w, h: h ?? box.h };
+  nodes[id] = { x: (x ?? box.x) + dx, y: (y ?? box.y) + dy, w: w ?? box.w, h: h ?? box.h };
   return next;
 }
 
@@ -152,7 +153,7 @@ export function connect(diagram: Input, { id, after, from, to, label, detail, va
   let edgeId = id ?? `${from}-${to}`;
   if (id === undefined) {
     const taken = allIds(next);
-    for (let count = 2; taken.has(edgeId); count += 1) edgeId = `${from}-${to}-${count}`;
+    for (let count = 2; taken.has(edgeId); count += 1) edgeId = `${from}-${to}-${String(count)}`;
   }
   freeId(next, edgeId);
   const edge: EdgeInput = { id: edgeId, from, to };
@@ -204,9 +205,9 @@ export function removeNode(diagram: Input, id: string): Input {
   }
   if (next.mainPath) next.mainPath = next.mainPath.filter((step) => step !== id);
   const { layout } = next;
-  if (layout) for (const key of gone) {
-    delete layout.nodes[key];
-    if (layout.groups) delete layout.groups[key];
+  if (layout) {
+    layout.nodes = Object.fromEntries(Object.entries(layout.nodes).filter(([key]) => !gone.has(key)));
+    if (layout.groups) layout.groups = Object.fromEntries(Object.entries(layout.groups).filter(([key]) => !gone.has(key)));
   }
   return next;
 }
@@ -227,11 +228,10 @@ export function updateNode(diagram: Input, id: string, change: NodeChange): Inpu
   }
   if (change.label !== undefined) node.label = change.label;
   if (change.kind !== undefined) node.kind = change.kind;
-  for (const field of ['sublabel', 'tag'] as const) {
-    const value = change[field];
-    if (value === null) delete node[field];
-    else if (value !== undefined) node[field] = value;
-  }
+  if (change.sublabel === null) delete node.sublabel;
+  else if (change.sublabel !== undefined) node.sublabel = change.sublabel;
+  if (change.tag === null) delete node.tag;
+  else if (change.tag !== undefined) node.tag = change.tag;
   return next;
 }
 
@@ -253,11 +253,10 @@ export function updateEdge(diagram: Input, id: string, change: EdgeChange): Inpu
   const next = structuredClone(diagram);
   const edge = (next.edges ?? []).find((candidate) => candidate.id === id);
   if (!edge) throw new DiagramOpError('op/unknown-edge', `No edge has the id "${id}".`);
-  for (const field of ['label', 'detail'] as const) {
-    const value = change[field];
-    if (value === null) delete edge[field];
-    else if (value !== undefined) edge[field] = value;
-  }
+  if (change.label === null) delete edge.label;
+  else if (change.label !== undefined) edge.label = change.label;
+  if (change.detail === null) delete edge.detail;
+  else if (change.detail !== undefined) edge.detail = change.detail;
   if (change.variant !== undefined) {
     if (change.variant === 'default') delete edge.variant;
     else edge.variant = change.variant;
@@ -269,16 +268,17 @@ export function updateEdge(diagram: Input, id: string, change: EdgeChange): Inpu
   const pinning = (['fromSide', 'toSide', 'labelDx', 'labelDy', 'labelAt'] as const).filter((field) => change[field] !== undefined);
   if (!pinning.length) return next;
   const layout = placedOnly(next, pinning.join(', '));
-  const pins = { ...(layout.edges?.[id] ?? {}) } as Record<string, unknown>;
+  // Maps keep a key where it was when it is set again, as the file's objects do.
+  const pins = new Map<string, unknown>(Object.entries(layout.edges?.[id] ?? {}));
   for (const field of pinning) {
     const value = change[field];
-    if (value === null) delete pins[field];
-    else pins[field] = value;
+    if (value === null) pins.delete(field);
+    else pins.set(field, value);
   }
-  const edges = { ...(layout.edges ?? {}) };
-  if (Object.keys(pins).length) edges[id] = pins;
-  else delete edges[id];
-  if (Object.keys(edges).length) layout.edges = edges;
+  const edges = new Map(Object.entries(layout.edges ?? {}));
+  if (pins.size) edges.set(id, Object.fromEntries(pins));
+  else edges.delete(id);
+  if (edges.size) layout.edges = Object.fromEntries(edges);
   else delete layout.edges;
   return next;
 }

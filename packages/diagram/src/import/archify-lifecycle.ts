@@ -5,7 +5,7 @@
 // kept: a diagram has no step rail. lifecycleSpecOf turns a diagram back
 // into a spec Archify draws, for the parity fixture (scripts/archify-fixtures.ts).
 
-import { DOT_TONE, EVIDENCE, defined, mdxText, uniqueId, type ArchifyNote, type ImportOptions } from './import-archify.ts';
+import { DOT_TONE, EVIDENCE, defined, mdxText, nonEmpty, uniqueId, type ArchifyNote, type ImportOptions } from './import-archify.ts';
 import { diagramSchema, type Diagram, type DiagramInput, type EdgeVariant, type ICONS, type Tone } from '#model/schema.ts';
 
 export type ArchifyLifecycleSpec = {
@@ -63,12 +63,14 @@ export function importArchifyLifecycle(spec: ArchifyLifecycleSpec, { schemaPath,
     mainPath: spec.mainPath,
     nodes: spec.states.map((state) => {
       const note = notes?.[state.id];
+      const kind = kindIds.get(state.type);
+      if (kind === undefined) throw new Error(`state "${state.id}" has no kind`);
       return defined({
         id: state.id,
-        kind: kindIds.get(state.type)!,
+        kind,
         label: state.label,
-        sublabel: state.sublabel || undefined,
-        tag: state.tag || undefined,
+        sublabel: nonEmpty(state.sublabel),
+        tag: nonEmpty(state.tag),
         note: note && defined({ role: mdxText(note.role), badge: note.evidence, points: note.points?.map(mdxText) }),
       });
     }),
@@ -76,8 +78,8 @@ export function importArchifyLifecycle(spec: ArchifyLifecycleSpec, { schemaPath,
       id: transition.id ?? uniqueId(`${transition.from}-${transition.to}`, 'transition', taken),
       from: transition.from,
       to: transition.to,
-      label: transition.label || undefined,
-      detail: transition.note || undefined,
+      label: nonEmpty(transition.label),
+      detail: nonEmpty(transition.note),
       variant: VARIANT_IN[transition.variant ?? ''],
     })),
     cards: (spec.cards ?? []).map((card) => {

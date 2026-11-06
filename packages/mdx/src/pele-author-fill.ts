@@ -19,9 +19,6 @@ const COLOR_MARK = 'data-author-color';
 // `transparent` are no colour for the label to sit on.
 const AUTHOR_FILL = /(?:^|;)\s*fill\s*:([^;]+)/i;
 const NO_FILL = /^(?:none|transparent)$/i;
-// Pele mixes a title's halo deeper for each subgraph it sits in; only a
-// top-level one sits on its own rect over the surface.
-const TOP_LEVEL_HALO = /var\(--_a\) 50%/;
 
 export function markAuthorFills(root: ParentNode): void {
   const filled = new Map<string, string | null>();

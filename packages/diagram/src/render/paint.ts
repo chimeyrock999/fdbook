@@ -18,12 +18,14 @@ function parseColor(value: string): Rgba {
   if (text === 'transparent' || text === 'none') return [0, 0, 0, 0];
   const hex = HEX.exec(text);
   if (hex) {
-    const digits = hex[1].length === 3 ? [...hex[1]].map((digit) => digit + digit).join('') : hex[1];
+    const digits = hex[1].length === 3 ? hex[1].replace(/./g, (digit) => digit + digit) : hex[1];
     return [0, 2, 4].map((at) => parseInt(digits.slice(at, at + 2), 16)).concat(1) as Rgba;
   }
   const rgb = RGB.exec(text);
   if (rgb) {
-    const alpha = rgb[4] === undefined ? 1 : rgb[4].endsWith('%') ? Number(rgb[4].slice(0, -1)) / 100 : Number(rgb[4]);
+    // The alpha group is optional: undefined when the colour has none.
+    const alphaText = rgb.at(4);
+    const alpha = alphaText === undefined ? 1 : alphaText.endsWith('%') ? Number(alphaText.slice(0, -1)) / 100 : Number(alphaText);
     return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3]), alpha];
   }
   throw new Error(`diagram paint: cannot read the colour "${value}"`);
@@ -79,6 +81,12 @@ export function diagramPalette(css: string, theme: Theme, notesCss?: string) {
 export type Palette = ReturnType<typeof diagramPalette>;
 
 type Attributes = Record<string, string | number>;
+
+function colorOf(palette: Palette, name: string) {
+  const color = palette.get(name);
+  if (!color) throw new Error(`diagram paint: the palette has no ${name}`);
+  return color;
+}
 type Parent = 'node' | 'edge-label' | null;
 
 const TONED = /\btone-([a-z]+)\b/;
@@ -89,11 +97,7 @@ const classOf = (tag: string) => / class="([^"]*)"/.exec(tag)?.[1].split(/\s+/) 
 function paintOf(tag: string, classes: string[], tone: string | null, parent: Parent, palette: Palette, theme: Theme): Attributes | null {
   const parentIsNode = parent === 'node';
   const parentIsEdgeLabel = parent === 'edge-label';
-  const token = (name: string) => {
-    const color = palette.get(name);
-    if (!color) throw new Error(`diagram paint: the palette has no ${name}`);
-    return color;
-  };
+  const token = (name: string) => colorOf(palette, name);
   const toneFill = () => token(`--${tone ?? 'slate'}-fill`);
   const toneStroke = () => token(`--${tone ?? 'slate'}-stroke`);
   const fill = (color: Rgba): Attributes => ({ fill: hex(color), 'fill-opacity': opacity(color) });
@@ -124,7 +128,7 @@ function paintOf(tag: string, classes: string[], tone: string | null, parent: Pa
   if (has('c-composite')) return { fill: 'none', ...stroke(token('--arrow')), 'stroke-opacity': 0.55, 'stroke-dasharray': '1.5 3.5', 'stroke-linecap': 'round' };
   if (has('c-junction')) return { ...fill(token('--arrow')), stroke: 'none' };
   if (has('m-return')) return { fill: 'none', ...stroke(token('--arrow')), 'stroke-width': 1.1 };
-  const text: Record<string, () => Rgba> = {
+  const text: Partial<Record<string, () => Rgba>> = {
     't-primary': () => token('--text'),
     't-muted': () => token('--text-muted'),
     't-dim': () => token('--text-dim'),
@@ -139,8 +143,11 @@ function paintOf(tag: string, classes: string[], tone: string | null, parent: Pa
     'm-alert': () => token('--red-stroke'),
     'm-dashed': () => token('--gold-stroke'),
   };
-  for (const name of classes) if (text[name]) return fill(text[name]());
-  const arrows: Record<string, [string, string | null]> = {
+  for (const name of classes) {
+    const color = text[name];
+    if (color) return fill(color());
+  }
+  const arrows: Partial<Record<string, [string, string | null]>> = {
     'a-default': ['--arrow', null],
     'a-emphasis': ['--arrow-emphasis', null],
     'a-alert': ['--red-stroke', '5 5'],
@@ -148,8 +155,9 @@ function paintOf(tag: string, classes: string[], tone: string | null, parent: Pa
     'a-return': ['--arrow', '3 5'],
   };
   for (const name of classes) {
-    if (!arrows[name]) continue;
-    const [color, dashes] = arrows[name];
+    const arrow = arrows[name];
+    if (!arrow) continue;
+    const [color, dashes] = arrow;
     return { ...stroke(token(color)), fill: 'none', ...(dashes ? { 'stroke-dasharray': dashes } : {}) };
   }
   if (has('semantic-sigil')) {
@@ -163,7 +171,7 @@ function withAttributes(tag: string, attributes: Attributes) {
   let next = tag;
   for (const [name, value] of Object.entries(attributes)) {
     const pattern = new RegExp(` ${name}="[^"]*"`);
-    next = pattern.test(next) ? next.replace(pattern, ` ${name}="${value}"`) : next.replace(/\s*(\/?)>$/, ` ${name}="${value}"$1>`);
+    next = pattern.test(next) ? next.replace(pattern, ` ${name}="${String(value)}"`) : next.replace(/\s*(\/?)>$/, ` ${name}="${String(value)}"$1>`);
   }
   return next;
 }
@@ -181,7 +189,7 @@ export type PaintOptions = {
 export function paintDiagramSvg(svg: string, palette: Palette, { theme = 'light', expanded = false, background = true, fontFamily = 'Be Vietnam Pro' }: PaintOptions = {}) {
   const tones: (string | null)[] = [];
   const parents: Parent[] = [];
-  const mask = palette.get('--mask')!;
+  const mask = colorOf(palette, '--mask');
   const output = svg.replace(/<(\/?)([a-zA-Z]+)([^>]*?)(\/?)>/g, (tag, closing: string, name: string, _rest: string, selfClosing: string) => {
     if (closing) {
       tones.pop();
@@ -199,7 +207,7 @@ export function paintDiagramSvg(svg: string, palette: Palette, { theme = 'light'
       painted = withAttributes(painted, { 'font-family': fontFamily });
       if (background) {
         const box = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(tag);
-        if (box) painted += `<rect width="${box[1]}" height="${box[2]}" fill="${hex(palette.get('--dg-bg')!)}"/>`;
+        if (box) painted += `<rect width="${box[1]}" height="${box[2]}" fill="${hex(colorOf(palette, '--dg-bg'))}"/>`;
       }
     }
     if (!selfClosing) {
