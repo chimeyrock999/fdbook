@@ -1,0 +1,190 @@
+/* Sign-in (src/views/SignInPage.tsx, src/features/session): the page that
+   stands in for the Studio while nobody is signed in, and the account chip at
+   the end of the header. */
+@layer components {
+  .studio-signin {
+    display: grid;
+    place-items: center;
+    min-height: 100dvh;
+    padding: 20px;
+    background: var(--fde-background);
+    color: var(--fde-foreground);
+  }
+  /* Over the Studio once its session ended: the Studio stays behind. */
+  .studio-signin-over {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    min-height: 0;
+    overflow: auto;
+    background: color-mix(in oklab, var(--fde-background) 70%, transparent);
+    backdrop-filter: blur(2px);
+  }
+  .studio-signin-over:focus {
+    outline: none;
+  }
+  .studio-signin-over .studio-signin-card {
+    box-shadow: 0 10px 32px rgb(0 0 0 / 0.18);
+  }
+  .studio-signin-card {
+    display: grid;
+    gap: 14px;
+    width: 100%;
+    max-width: 380px;
+    padding: 22px;
+    border: 1px solid var(--fde-border);
+    border-radius: 12px;
+    background: var(--fde-card);
+  }
+  .studio-signin-card h1 {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .studio-disconnected-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .studio-disconnected-title svg {
+    flex: none;
+    color: var(--fde-error);
+  }
+  .studio-signin-card p {
+    font-size: 13px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-signin-card p b {
+    color: var(--fde-foreground);
+    font-weight: 600;
+  }
+  .studio-signin-button {
+    justify-content: center;
+    width: 100%;
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+  .studio-signin-or {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-signin-or::before,
+  .studio-signin-or::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--fde-border);
+  }
+  .studio-signin-card .studio-signin-foot {
+    font-size: 11.5px;
+    text-align: center;
+  }
+  .studio-signin-card .studio-signin-error,
+  .studio-signin .studio-signin-error {
+    color: var(--fde-error);
+  }
+  .studio-signin-code {
+    display: block;
+    padding: 10px;
+    border-radius: 8px;
+    background: var(--fde-muted);
+    font-family: var(--font-garden-mono), ui-monospace, monospace;
+    font-size: 26px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-align: center;
+    user-select: all;
+  }
+  .studio-signin-row {
+    display: flex;
+    gap: 8px;
+  }
+  .studio-signin-row > * {
+    flex: 1;
+    justify-content: center;
+  }
+  .studio-signin-wait {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .studio-signin-wait span {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--fde-warning);
+    animation: studio-signin-pulse 1.4s infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .studio-signin-wait span {
+      animation: none;
+    }
+  }
+
+  .studio-user-chip {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 7px;
+    padding: 2px 8px 2px 2px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 12.5px;
+  }
+  .studio-user-chip:hover,
+  .studio-user-chip[aria-expanded='true'] {
+    border-color: var(--fde-border);
+  }
+  .studio-user-avatar {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--fde-accent);
+    color: var(--fde-primary);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .studio-user-who {
+    display: grid;
+    gap: 3px;
+    padding: 6px 8px 8px;
+    font-size: 13px;
+  }
+  .studio-user-who > span {
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-role-badge {
+    --role-color: var(--fde-muted-foreground);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--role-color);
+    background: color-mix(in srgb, var(--role-color) 12%, transparent);
+  }
+  .studio-role-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--role-color);
+  }
+  .studio-role-badge[data-role='reader'] { --role-color: var(--fde-info); }
+  .studio-role-badge[data-role='writer'] { --role-color: var(--fde-success); }
+  .studio-role-badge[data-role='admin'] { --role-color: var(--fde-error); }
+}
+
+@keyframes studio-signin-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}

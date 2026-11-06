@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToastStack } from '#components/ToastStack.tsx';
 import type { AssetInfo, AssetsClient } from '#api/assets.ts';
 import type { TreeClient, TreeFolder } from '#api/tree.ts';
-import { DeleteAssetDialog, RenameAssetDialog } from '#assets/AssetDialogs.tsx';
-import { CreateDialog, RenameDialog } from '#tree/TreeDialogs.tsx';
+import { DeleteAssetDialog, RenameAssetDialog } from '#features/assets/AssetDialogs.tsx';
+import { CreateDialog, RenameDialog } from '#features/tree/TreeDialogs.tsx';
 
 // The write dialogs (#138): Enter twice sends one request, the dialog
 // neither closes nor sends again while it is out, and a refusal says why

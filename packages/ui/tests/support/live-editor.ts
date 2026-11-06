@@ -1,6 +1,6 @@
 import { editorExtensions, parseMdxToDoc } from '@fumadocs-editor/core';
 import { Editor, type AnyExtension } from '@tiptap/core';
-import { editorConfig } from '#plugins/index.ts';
+import { editorConfig } from '#features/editor/plugins/index.ts';
 import { syntax } from './editor-state';
 
 // A live editor as the Visual surface mounts one: TipTap leaves itself on the

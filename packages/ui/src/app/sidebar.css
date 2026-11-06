@@ -1,0 +1,20 @@
+/* The activity bar's page buttons (src/app/Sidebar.tsx): a page opens in the
+   main pane, not as a view, so it is filled rather than railed and sits at
+   the foot, above the hide button. The rest of the bar is in index.css. */
+@layer components {
+  .studio-activity-button[aria-current='page'] {
+    color: var(--fde-foreground);
+    background: var(--fde-accent);
+  }
+  .studio-activity-page {
+    margin-top: auto;
+  }
+  .studio-activity-page + .studio-activity-bottom,
+  .studio-activity-page + .studio-activity-page {
+    margin-top: 0;
+  }
+  .studio-activity-count[data-muted] {
+    background: var(--fde-muted);
+    color: var(--fde-muted-foreground);
+  }
+}

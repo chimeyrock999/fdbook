@@ -3,7 +3,7 @@ import { getSchema } from '@tiptap/core';
 import { Node } from '@tiptap/pm/model';
 import { EditorState, NodeSelection, TextSelection } from '@tiptap/pm/state';
 import type { Decoration } from '@tiptap/pm/view';
-import { editorConfig } from '#plugins/index.ts';
+import { editorConfig } from '#features/editor/plugins/index.ts';
 
 // Notes as the editor holds them: parsed with the plugins' syntax into the
 // editor's own ProseMirror schema, so decorators see what they see live.

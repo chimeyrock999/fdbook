@@ -1,10 +1,10 @@
 import { act } from '@testing-library/react';
 import { ToastStack } from '#components/ToastStack.tsx';
 import { vi } from 'vitest';
-import { AgentControl } from '#agents/AgentControl.tsx';
-import { AgentPanel } from '#agents/AgentPanel.tsx';
-import { useAgents } from '#agents/useAgents.ts';
-import { useAsking } from '#agents/useAsking.ts';
+import { AgentControl } from '#features/agents/AgentControl.tsx';
+import { AgentPanel } from '#views/AgentPanel.tsx';
+import { useAgents } from '#features/agents/useAgents.ts';
+import { useAsking } from '#features/agents/useAsking.ts';
 import type { AgentInfo, AgentsClient, Attachment, Conversation, ConversationRead, Mention, StreamEvent, TurnChange } from '#api/agents.ts';
 
 export const AGENTS: AgentInfo[] = [

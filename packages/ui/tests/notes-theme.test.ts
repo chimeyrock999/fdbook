@@ -104,7 +104,7 @@ describe('notes prose', () => {
     const index = await read('packages/ui/src/index.css');
     expect(index.indexOf("@import '@fdbook/mdx/styles/notes-prose.css';")).toBeGreaterThan(-1);
     expect(index.indexOf("@import '@fdbook/mdx/styles/notes-prose.css';")).toBeLessThan(index.indexOf("@import './notes-prose.css';"));
-    expect(await read('packages/ui/src/editor/NoteEditor.tsx')).toContain('className="studio-prose notes-prose"');
+    expect(await read('packages/ui/src/views/NoteEditor.tsx')).toContain('className="studio-prose notes-prose"');
   });
 
   // P3: the site's own page comes back with the chimeyrock preset.

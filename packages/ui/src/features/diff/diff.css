@@ -1,0 +1,225 @@
+/* The diff page in the main pane (src/views/DiffPage.tsx). The bar and its
+   title come from asset-page.css; the change colours from changes.css. */
+@layer components {
+  .studio-diff-page {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+  /* The bar's title is the file's label, not its path (asset-page.css sets
+     spans in the title as the path). */
+  .studio-asset-page-title h1 > .studio-diff-name {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+  }
+  .studio-diff-chip {
+    flex: none;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--change) 14%, transparent);
+    color: var(--change);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+  .studio-diff-tab {
+    border-radius: 6px;
+    padding: 2px 10px;
+    font-size: 12.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-diff-tab[aria-selected='true'] {
+    background: var(--fde-accent);
+    color: var(--fde-foreground);
+    font-weight: 600;
+  }
+  .studio-diff-summary {
+    padding: 6px 16px;
+    border-bottom: 1px dashed var(--fde-border);
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-diff-note {
+    padding: 16px;
+    font-size: 13px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-diff-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  /* Rendered: one column, as wide as the editor's. */
+  .studio-diff-rendered {
+    width: 100%;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 20px clamp(16px, 5vw, 56px) 40px;
+  }
+  .studio-diff-block {
+    margin: 0 -12px;
+    padding: 0 12px;
+    border-left: 3px solid transparent;
+    border-radius: 0 4px 4px 0;
+  }
+  .studio-diff-block[data-diff='added'] {
+    border-left-color: var(--fde-success);
+    background: color-mix(in srgb, var(--fde-success) 11%, transparent);
+  }
+  .studio-diff-block[data-diff='removed'] {
+    border-left-color: var(--fde-error);
+    background: color-mix(in srgb, var(--fde-error) 9%, transparent);
+    opacity: 0.8;
+  }
+  .studio-diff-block[data-diff='removed'] .ProseMirror {
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--fde-error) 45%, transparent);
+  }
+  .studio-diff-fold {
+    display: block;
+    width: 100%;
+    margin: 6px 0;
+    padding: 4px;
+    border: 1px dashed var(--fde-border);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-diff-fold:hover,
+  .studio-diff-fold:focus-visible {
+    background: var(--fde-accent);
+    color: var(--fde-foreground);
+  }
+  .studio-diff-frontmatter {
+    width: 100%;
+    margin-bottom: 16px;
+    border: 1px solid var(--fde-border);
+    border-collapse: separate;
+    border-radius: 8px;
+    background: var(--fde-card);
+    font-size: 12.5px;
+  }
+  .studio-diff-frontmatter caption {
+    padding: 6px 10px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-diff-frontmatter th,
+  .studio-diff-frontmatter td {
+    padding: 5px 10px;
+    border-top: 1px solid var(--fde-border);
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+  .studio-diff-frontmatter th {
+    width: 9rem;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .studio-diff-frontmatter del,
+  .studio-diff-frontmatter ins {
+    display: block;
+    white-space: pre-wrap;
+  }
+  .studio-diff-frontmatter del {
+    color: var(--fde-error);
+  }
+  .studio-diff-frontmatter ins {
+    color: var(--fde-success);
+    text-decoration: none;
+  }
+
+  /* Source: CodeMirror's merge view, filling the pane. */
+  .studio-source-diff {
+    min-height: 0;
+    flex: 1;
+  }
+  .studio-source-diff .cm-mergeView,
+  .studio-source-diff > .cm-editor {
+    height: 100%;
+  }
+  .studio-source-diff .cm-changedLine,
+  .studio-source-diff .cm-insertedLine {
+    background: color-mix(in srgb, var(--fde-success) 14%, transparent);
+  }
+  .studio-source-diff .cm-merge-a .cm-changedLine,
+  .studio-source-diff .cm-deletedChunk {
+    background: color-mix(in srgb, var(--fde-error) 12%, transparent);
+  }
+  .studio-source-diff .cm-changedText {
+    background: color-mix(in srgb, var(--fde-success) 32%, transparent);
+  }
+  .studio-source-diff .cm-merge-a .cm-changedText,
+  .studio-source-diff .cm-deletedChunk .cm-deletedText {
+    background: color-mix(in srgb, var(--fde-error) 30%, transparent);
+  }
+  .studio-source-diff .cm-collapsedLines {
+    background: var(--fde-muted);
+    color: var(--fde-muted-foreground);
+  }
+
+  /* Images: main and now side by side, stacked on a phone. */
+  .studio-diff-images {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    padding: 16px;
+  }
+  .studio-diff-image {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--fde-border);
+    border-radius: 9px;
+    background: var(--fde-card);
+  }
+  .studio-diff-image[data-side='before'] {
+    box-shadow: inset 0 3px 0 var(--fde-error);
+  }
+  .studio-diff-image[data-side='after'] {
+    box-shadow: inset 0 3px 0 var(--fde-success);
+  }
+  .studio-diff-image figcaption {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--fde-border);
+    font-size: 12px;
+  }
+  .studio-diff-image figcaption span {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-diff-checker {
+    display: grid;
+    place-items: center;
+    min-height: 160px;
+    padding: 12px;
+    background: conic-gradient(var(--fde-muted) 25%, transparent 0 50%, var(--fde-muted) 0 75%, transparent 0) 0 0 / 16px 16px;
+  }
+  .studio-diff-checker img {
+    max-width: 100%;
+    max-height: 60vh;
+  }
+}
+
+/* Each part of a rendered diff is a whole editor: none of its page height
+   and padding. Outside the layers, like notes-prose.css, since the editor's
+   layer comes after Tailwind's (src/index.css). */
+.studio-diff-block .ProseMirror {
+  min-height: 0;
+  padding: 4px 0;
+}
