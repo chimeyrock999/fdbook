@@ -2,34 +2,34 @@ import type { IncomingMessage } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
-import { createAgentConversationsApi } from '#agents/api.ts';
-import { createAttachments } from '#agents/attachments.ts';
-import { createAgentContextApi } from '#agents/context-api.ts';
-import { createAgentConversations, type AgentConversationsOptions } from '#agents/conversations.ts';
-import { createAssetsApi } from '#assets/api.ts';
-import { createFilesApi } from '#files/api.ts';
-import { createFileEvents } from '#files/events.ts';
-import { createKeyedLock } from '#files/store.ts';
-import { createChangesApi } from '#git/api.ts';
-import { createPageHistoryApi } from '#git/page-history-api.ts';
-import { pathnameOf, sendJson, type Handler } from '#http/http.ts';
-import { createLintApi } from '#lint/api.ts';
-import { createPreviewApi } from '#preview/api.ts';
-import { createBuildReader, ghCheckRun } from '#preview/check-runs.ts';
-import type { PreviewOptions } from '#preview/preview.ts';
-import { createBranchPullRequestReader, ghPullRequest } from '#preview/pull-request.ts';
+import { createAgentConversationsApi } from '#routes/agents.ts';
+import { createAttachments } from '#services/agents/context/attachments.ts';
+import { createAgentContextApi } from '#routes/agent-context.ts';
+import { createAgentConversations, type AgentConversationsOptions } from '#services/agents/chat/conversations.ts';
+import { createAssetsApi } from '#routes/assets.ts';
+import { createFilesApi } from '#routes/files.ts';
+import { createFileEvents } from '#routes/file-events.ts';
+import { createKeyedLock } from '#services/files/store.ts';
+import { createChangesApi } from '#routes/git.ts';
+import { createPageHistoryApi } from '#routes/page-history.ts';
+import { pathnameOf, sendJson, type Handler } from '#infra/http.ts';
+import { createLintApi } from '#routes/lint.ts';
+import { createPreviewApi } from '#routes/preview.ts';
+import { createBuildReader, ghCheckRun } from '#services/preview/check-runs.ts';
+import type { PreviewOptions } from '#services/preview/preview.ts';
+import { createBranchPullRequestReader, ghPullRequest } from '#services/preview/pull-request.ts';
 import { refuseUpgrade } from './routing.ts';
-import { createNotesSync } from '#sync/notes-sync.ts';
-import { createStudioFiles } from '#files/studio-files.ts';
-import type { ToolCaller } from '#mcp/tool.ts';
-import { createProposalsApi, createProposalStream, type ProposalStream } from '#proposals/api.ts';
-import { createDeleteProposals, type DeleteProposals } from '#proposals/deletes.ts';
-import { createProposals, type Proposals } from '#proposals/store.ts';
-import { createThreadsApi } from '#review/api.ts';
-import { createThreads, type Threads } from '#review/threads.ts';
-import { createTreeApi } from '#tree/api.ts';
-import { runDelete } from '#tree/delete.ts';
-import { classifyPath, NOTES_DIR, resolveWorktreePath } from '#security/paths.ts';
+import { createNotesSync } from '#routes/notes-sync.ts';
+import { createStudioFiles } from '#services/files/studio-files.ts';
+import type { ToolCaller } from '#routes/mcp/tool.ts';
+import { createProposalsApi, createProposalStream, type ProposalStream } from '#routes/proposals.ts';
+import { createDeleteProposals, type DeleteProposals } from '#services/proposals/deletes.ts';
+import { createProposals, type Proposals } from '#services/proposals/store.ts';
+import { createThreadsApi } from '#routes/review.ts';
+import { createThreads, type Threads } from '#services/review/threads.ts';
+import { createTreeApi } from '#routes/tree.ts';
+import { runDelete } from '#services/tree/delete.ts';
+import { classifyPath, NOTES_DIR, resolveWorktreePath } from '#infra/security/paths.ts';
 
 // Methods that change nothing, and the one POST that writes nothing.
 const READS = new Set(['GET', 'HEAD']);
@@ -41,7 +41,7 @@ const AGENT_CHAT_WRITES = /^\/api\/agents\/(?:attachments|conversations(?:\/[a-z
 // Refuses every write to a read-only worktree (main), before a handler
 // sees it: the UI hides the writes, this is what stops them. Its agent
 // chats write only their transcripts, outside the worktree, and their
-// agents run in a copy of it (agents/main-only.ts).
+// agents run in a copy of it (services/agents/acp/main-only.ts).
 const refuseWrites: Handler = (request, response) => {
   const pathname = pathnameOf(request);
   if (READS.has(request.method ?? 'GET') || READ_ONLY_POSTS.has(pathname) || !pathname.startsWith('/api/')) return Promise.resolve(false);
@@ -55,12 +55,13 @@ const refuseWrites: Handler = (request, response) => {
 const defaultPreview = (): PreviewOptions => ({ builds: createBuildReader(ghCheckRun), pullRequests: createBranchPullRequestReader(ghPullRequest), pagesProject: null });
 
 // What agent conversations need besides the worktree: its change request's
-// slug, the profiles and where transcripts go (agents/conversations.ts); and
-// the Studio home, where the change request's proposals and review threads are kept.
+// slug, the profiles and where transcripts go
+// (services/agents/chat/conversations.ts); and the Studio home, where the
+// change request's proposals and review threads are kept.
 export type WorkspaceAgents = Omit<AgentConversationsOptions, 'slug'> & { home: string };
 
 // Main's agents: where they run instead of the worktree (a copy of it),
-// and what makes that copy fresh before each turn (cr/manager.ts).
+// and what makes that copy fresh before each turn (services/cr/manager.ts).
 export type MainAgents = { root: string; prepare: () => Promise<unknown> };
 
 // Where a change request's proposals and review threads are kept, outside its worktree.
@@ -148,7 +149,7 @@ export function createWorkspace(
   const handlers: Handler[] = [
     ...(readOnly ? [refuseWrites] : []),
     fileEvents.handle,
-    // A person's save is never reverted by a turn going on (agents/watch.ts).
+    // A person's save is never reverted by a turn going on (services/agents/chat/watch.ts).
     createFilesApi(root, pathLock, conversations === null ? undefined : (path) => { conversations.savedByPerson(path); }),
     createLintApi(root),
     createTreeApi(root, notesLock, { onDeleted, onMoved: (from, to) => review?.threads.moved(from, to, (path) => { const resolved = resolveWorktreePath(root, path); return resolved === null ? Promise.resolve(null) : readFile(resolved.absolute, 'utf8'); }) }),
@@ -167,7 +168,7 @@ export function createWorkspace(
     handlers,
     conversations,
     review,
-    // The worktree's files for an MCP tool call (mcp/http.ts): under the
+    // The worktree's files for an MCP tool call (routes/mcp/http.ts): under the
     // notes lock, and on the turn's Keep/Revert list when an agent writes
     // (a caller's `runId` is its conversation).
     files: (caller: ToolCaller) => {

@@ -1,16 +1,16 @@
 import type { IncomingMessage, RequestListener, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { Auth } from '#auth/auth.ts';
-import { CALLBACK_PATH } from '#auth/config.ts';
-import { pathnameOf, type Handler } from '#http/http.ts';
+import type { Auth } from '#services/auth/auth.ts';
+import { CALLBACK_PATH } from '#services/auth/config.ts';
+import { pathnameOf, type Handler } from '#infra/http.ts';
 import type { Role } from '@fdbook/shared/auth.ts';
-import { rejectForeignRequest } from '#security/guard.ts';
+import { rejectForeignRequest } from '#infra/security/guard.ts';
 
 type UpgradeListener = (request: IncomingMessage, socket: Duplex, head: Buffer) => void;
 
-// Guard first, then the sign-in gate (auth/auth.ts), then each handler in
-// order, then the fallback (Vite). Only the web sign-in's callback may be
-// a cross-site page load: GitHub redirects the browser there.
+// Guard first, then the sign-in gate (services/auth/auth.ts), then each
+// handler in order, then the fallback (Vite). Only the web sign-in's callback
+// may be a cross-site page load: GitHub redirects the browser there.
 export function createRequestListener(hosts: string[], handlers: Handler[], fallback: RequestListener, auth: Pick<Auth, 'gate' | 'enabled'> | null = null): RequestListener {
   return (request, response) => {
     const reason = rejectForeignRequest(request, hosts, { navigation: auth?.enabled === true && pathnameOf(request) === CALLBACK_PATH });

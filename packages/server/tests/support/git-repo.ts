@@ -2,13 +2,13 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { git } from '#process/command.ts';
-import type { PullRequest } from '#cr/pull-requests.ts';
-import { createBuildReader, type CheckRun } from '#preview/check-runs.ts';
-import { createBranchPullRequestReader, type BranchPullRequest, type NewPullRequest, type PullRequestGh } from '#preview/pull-request.ts';
-import type { AgentProfile } from '#agents/profiles.ts';
-import type { AuthOptions } from '#auth/auth.ts';
-import type { StudioTool } from '#mcp/tool.ts';
+import { git } from '#infra/command.ts';
+import type { PullRequest } from '#services/cr/pull-requests.ts';
+import { createBuildReader, type CheckRun } from '#services/preview/check-runs.ts';
+import { createBranchPullRequestReader, type BranchPullRequest, type NewPullRequest, type PullRequestGh } from '#services/preview/pull-request.ts';
+import type { AgentProfile } from '#services/agents/acp/profiles.ts';
+import type { AuthOptions } from '#services/auth/auth.ts';
+import type { StudioTool } from '#routes/mcp/tool.ts';
 import { startStudioServer } from '#app/studio-server.ts';
 
 const NOTES: Record<string, string> = {

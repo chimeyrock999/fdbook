@@ -1,13 +1,13 @@
 import { readFile, stat } from 'node:fs/promises';
-import { writeAtomic } from '#files/store.ts';
-import type { StudioFiles } from '#files/studio-files.ts';
-import type { StudioToolContext } from '#mcp/tool.ts';
-import { resolveWorktreePath } from '#security/paths.ts';
+import { writeAtomic } from '#services/files/store.ts';
+import type { StudioFiles } from '#services/files/studio-files.ts';
+import type { StudioToolContext } from '#routes/mcp/tool.ts';
+import { resolveWorktreePath } from '#infra/security/paths.ts';
 
-// A StudioFiles with the contract's shape (server/files/studio-files.ts) over a
-// worktree, for testing tools before the MCP host's own one lands: the path
-// policy, and a write refused with a FileConflictError when the disk moved
-// on since `baseMtime`.
+// A StudioFiles with the contract's shape (services/files/studio-files.ts)
+// over a worktree, for testing tools before the MCP host's own one lands: the
+// path policy, and a write refused with a FileConflictError when the disk
+// moved on since `baseMtime`.
 export class FileConflictError extends Error {
   constructor(readonly content: string | null, readonly mtimeMs: number | null) {
     super('the file changed on disk');

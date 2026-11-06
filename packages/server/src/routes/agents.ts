@@ -1,0 +1,109 @@
+import { HttpError, pathnameOf, readJsonObject, sendJson, type Handler } from '#infra/http.ts';
+import { viewerOf } from '#services/auth/access.ts';
+import type { AgentConversations } from '#services/agents/chat/conversations.ts';
+import type { AgentInfo } from '@fdbook/shared/agents.ts';
+import type { Transcripts } from '#services/agents/chat/transcripts.ts';
+
+// A message's context carries a selection of up to 40k characters, twice (services/agents/context/context.ts).
+const MAX_BODY_BYTES = 512 * 1024;
+const NO_CR = 'Agents work in a change request: open one first.';
+
+// GET /api/agents: the agents this Studio knows and whether each can run
+// here. GET /api/agents/totals: the conversations and cost of each change
+// request (empty without change requests).
+export function createAgentsInfoApi(info: () => Promise<AgentInfo[]>, transcripts: Transcripts | null): Handler {
+  return async (request, response) => {
+    const pathname = pathnameOf(request);
+    if (pathname !== '/api/agents' && pathname !== '/api/agents/totals') return false;
+    if (request.method !== 'GET') {
+      response.setHeader('Allow', 'GET');
+      sendJson(response, 405, { error: 'method not allowed' });
+      return true;
+    }
+    if (pathname === '/api/agents') sendJson(response, 200, { agents: await info() });
+    else sendJson(response, 200, { totals: (await transcripts?.totals()) ?? {} });
+    return true;
+  };
+}
+
+const LIST = '/api/agents/conversations';
+const ONE = /^\/api\/agents\/conversations\/([a-z0-9-]+)(?:\/(messages|cancel|permissions\/([a-f0-9]+)|turns\/([1-9][0-9]*)\/changes(\/before)?))?$/;
+
+// The conversations of one worktree (services/agents/chat/conversations.ts),
+// or null where agents may not work (a Studio without change requests).
+// `prepare` runs before each turn starts (on main: a fresh copy for its
+// agents).
+// On main every route answers alike, but Keep/Revert (nothing to keep):
+// GET    /api/agents/conversations                         every one, last active first
+// POST   /api/agents/conversations { agent, role, prompt, context? } starts one
+// GET    /api/agents/conversations/<id>                    its summary and events
+// DELETE /api/agents/conversations/<id>                    deletes it (not during a turn)
+// POST   /api/agents/conversations/<id>/messages { prompt, context? } its next turn
+// POST   /api/agents/conversations/<id>/cancel {}          stops the turn going on
+// POST   /api/agents/conversations/<id>/permissions/<ask> { optionId } (null rejects)
+// GET    /api/agents/conversations/<id>/turns/<n>/changes  the files turn n changed, for Keep/Revert
+// POST   /api/agents/conversations/<id>/turns/<n>/changes { path, op: keep | revert }
+// GET    /api/agents/conversations/<id>/turns/<n>/changes/before?path=…  what the file held before it
+// GET    /api/agents/events                                server-sent events of every conversation
+export function createAgentConversationsApi(conversations: AgentConversations | null, prepare: () => Promise<unknown> = () => Promise.resolve()): Handler {
+  async function answer(pathname: string, request: Parameters<Handler>[0]): Promise<unknown> {
+    if (conversations === null) throw new HttpError(409, NO_CR);
+    const by = viewerOf(request).user?.login ?? null;
+    if (pathname === LIST) {
+      if (request.method === 'GET') return { conversations: await conversations.list() };
+      if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
+      const body = await readJsonObject(request, MAX_BODY_BYTES, 'a conversation');
+      const context = await conversations.context(body.context);
+      await prepare();
+      return { conversation: conversations.start({ agent: body.agent, role: body.role, prompt: body.prompt, by, context }) };
+    }
+    const match = ONE.exec(pathname);
+    const id = match?.[1] ?? '';
+    const action: string | undefined = match?.[2];
+    if (action === undefined) {
+      if (request.method === 'GET') return conversations.read(id);
+      if (request.method !== 'DELETE') throw new HttpError(405, 'method not allowed');
+      await conversations.remove(id);
+      return { ok: true };
+    }
+    if (match?.[4] !== undefined) {
+      const turn = Number(match[4]);
+      if (match[5] === '/before') {
+        if (request.method !== 'GET') throw new HttpError(405, 'method not allowed');
+        return conversations.before(id, turn, new URL(request.url ?? '/', 'http://studio').searchParams.get('path') ?? '');
+      }
+      if (request.method === 'GET') return { changes: await conversations.changes(id, turn) };
+      if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
+      const body = await readJsonObject(request, MAX_BODY_BYTES, 'a decision');
+      if (typeof body.path !== 'string') throw new HttpError(400, 'path must be a worktree path');
+      return { change: await conversations.decide(id, turn, body.path, body.op) };
+    }
+    if (request.method !== 'POST') throw new HttpError(405, 'method not allowed');
+    if (action === 'messages') {
+      const body = await readJsonObject(request, MAX_BODY_BYTES, 'a message');
+      const context = await conversations.context(body.context);
+      await prepare();
+      return { conversation: await conversations.message(id, body.prompt, by, context) };
+    }
+    const body = await readJsonObject(request, MAX_BODY_BYTES, action === 'cancel' ? 'a cancel' : 'an answer');
+    if (action === 'cancel') conversations.cancel(id);
+    else conversations.answer(id, match?.[3] ?? '', 'optionId' in body ? body.optionId : null, by);
+    return { ok: true };
+  }
+
+  return async (request, response) => {
+    const pathname = pathnameOf(request);
+    if (pathname === '/api/agents/events') {
+      if (conversations === null) sendJson(response, 409, { error: NO_CR });
+      else conversations.subscribe(response, viewerOf(request));
+      return true;
+    }
+    if (pathname !== LIST && !ONE.test(pathname)) return false;
+    try {
+      sendJson(response, 200, await answer(pathname, request));
+    } catch (error) {
+      sendJson(response, error instanceof HttpError ? error.status : 500, { error: (error as Error).message });
+    }
+    return true;
+  };
+}

@@ -1,4 +1,4 @@
-import type { FileEvent } from '#files/events.ts';
+import type { FileEvent } from '#routes/file-events.ts';
 
 // Opens /api/events, runs `action` once the watcher is ready, and collects
 // events until `stop` says enough (or 5 s pass).

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
-import type { AgentConversations } from '#agents/conversations.ts';
-import type { AgentProfile } from '#agents/profiles.ts';
+import type { AgentConversations } from '#services/agents/chat/conversations.ts';
+import type { AgentProfile } from '#services/agents/acp/profiles.ts';
 import type { Conversation } from '@fdbook/shared/agents.ts';
 
 const FAKE_AGENT = fileURLToPath(new URL('./fake-agent.mjs', import.meta.url));

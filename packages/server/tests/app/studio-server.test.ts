@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { installRoot } from '#config/config.ts';
+import { installRoot } from '#infra/config/config.ts';
 import { rawRequest } from '#tests/support/http.ts';
 import { startStudioServer, type StudioServer } from '#app/studio-server.ts';
 

@@ -5,10 +5,10 @@
   "description": "The Studio server: one Node process for the API, the notes sync, the UI, change requests, agents and the MCP server.",
   "type": "module",
   "exports": {
-    "./config": "./src/config/project.ts",
-    "./config.ts": "./src/config/config.ts",
-    "./deps.ts": "./src/config/deps.ts",
-    "./lint/lint.ts": "./src/lint/lint.ts",
+    "./config": "./src/infra/config/project.ts",
+    "./config.ts": "./src/infra/config/config.ts",
+    "./deps.ts": "./src/infra/config/deps.ts",
+    "./lint/lint.ts": "./src/services/lint/lint.ts",
     "./studio-server.ts": "./src/app/studio-server.ts"
   },
   "imports": {
@@ -19,8 +19,8 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "dev": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/index.ts",
-    "lint:notes": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/lint/cli.ts"
+    "dev": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/bin/index.ts",
+    "lint:notes": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/bin/lint.ts"
   },
   "dependencies": {
     "@fdbook/diagram": "*",

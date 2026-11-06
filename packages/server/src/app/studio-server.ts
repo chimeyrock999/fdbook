@@ -1,30 +1,31 @@
 import { rm } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { fileURLToPath } from 'node:url';
 import { SYNC_ENDPOINT } from '@fumadocs-editor/core/sync';
 import { createServer as createViteServer } from 'vite';
-import { createAgentsInfoApi } from '#agents/api.ts';
-import { createAgentInfo, PROFILES, type AgentProfile } from '#agents/profiles.ts';
-import { createTranscripts } from '#agents/transcripts.ts';
-import { createAuth, type AuthOptions } from '#auth/auth.ts';
-import { DEFAULT_STUDIO_HOST, DEFAULT_STUDIO_PORT, uiRoot } from '#config/config.ts';
+import { createAgentsInfoApi } from '#routes/agents.ts';
+import { createAgentInfo, PROFILES, type AgentProfile } from '#services/agents/acp/profiles.ts';
+import { createTranscripts } from '#services/agents/chat/transcripts.ts';
+import { createAuth, type AuthOptions } from '#services/auth/auth.ts';
+import { DEFAULT_STUDIO_HOST, DEFAULT_STUDIO_PORT, uiRoot } from '#infra/config/config.ts';
 import { currentAreas } from '@fdbook/shared/asset-types.ts';
-import { createChangeRequestsApi } from '#cr/api.ts';
-import { openChangeRequests, type ChangeRequestOptions, type ChangeRequests } from '#cr/manager.ts';
-import { apiNotFound, HttpError, pathnameOf } from '#http/http.ts';
-import { createRunGrants } from '#mcp/grants.ts';
-import { createHandoff } from '#mcp/handoff.ts';
-import { createMcpApi } from '#mcp/http.ts';
-import { diagramTools } from '#mcp/diagram-tools.ts';
-import { writingTools } from '#mcp/writing-tools.ts';
-import { createReviewTools } from '#mcp/review-tools.ts';
-import { createNoteTools } from '#mcp/note-tools.ts';
-import type { StudioTool } from '#mcp/tool.ts';
-import { createIconsApi } from '#icons/api.ts';
-import { createBuildReader, ghCheckRun } from '#preview/check-runs.ts';
-import { createBranchPullRequestReader, ghPullRequest } from '#preview/pull-request.ts';
+import { createChangeRequestsApi } from '#routes/cr.ts';
+import { openChangeRequests, type ChangeRequestOptions, type ChangeRequests } from '#services/cr/manager.ts';
+import { apiNotFound, HttpError, pathnameOf } from '#infra/http.ts';
+import { createRunGrants } from '#services/agents/acp/grants.ts';
+import { createHandoff } from '#routes/mcp/handoff.ts';
+import { createMcpApi } from '#routes/mcp/http.ts';
+import { diagramTools } from '#routes/mcp/diagram-tools.ts';
+import { writingTools } from '#routes/mcp/writing-tools.ts';
+import { createReviewTools } from '#routes/mcp/review-tools.ts';
+import { createNoteTools } from '#routes/mcp/note-tools.ts';
+import type { StudioTool } from '#routes/mcp/tool.ts';
+import { createIconsApi } from '#routes/icons.ts';
+import { createBuildReader, ghCheckRun } from '#services/preview/check-runs.ts';
+import { createBranchPullRequestReader, ghPullRequest } from '#services/preview/pull-request.ts';
 import { createRequestListener, routeUpgrades } from './routing.ts';
-import { ownHosts } from '#security/guard.ts';
+import { ownHosts } from '#infra/security/guard.ts';
 import { commentsFileOf, createWorkspace, createWorkspaceRouter, proposalsDirOf } from './workspace.ts';
 export type StudioServer = {
   server: Server;
@@ -47,11 +48,15 @@ function closeServer(server: Server) {
 // and /__fde_sync) and each change request's worktree under /cr/<slug>/
 // (see workspace.ts). Without it, it edits the one worktree at `root`.
 // With `auth`, everyone signs in with GitHub first and may do what their
-// access to the repository allows (auth/auth.ts). Agents (`agents`, the
-// Studio's profiles by default) run in change requests, and read only on
-// main (agents/main-only.ts), their transcripts in the Studio home (agents/).
+// access to the repository allows (services/auth/auth.ts). Agents
+// (`agents`, the Studio's profiles by default) run in change requests, and
+// read only on main (services/agents/acp/main-only.ts), their transcripts
+// in the Studio home (services/agents/).
 // Main's slug for its agents' transcripts and MCP tokens: no change request takes it.
 const MAIN_SLUG = '_main';
+// The MCP server over stdio, for an agent that cannot speak HTTP: started
+// by path, so the agents' processes are told where it is.
+const STDIO_BRIDGE = fileURLToPath(import.meta.resolve('#routes/mcp/stdio.ts'));
 
 export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEFAULT_STUDIO_PORT, root = process.cwd(), changeRequests, auth: authOptions = null, agents = PROFILES, tools = [] }: {
   host?: string;
@@ -60,7 +65,7 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
   changeRequests?: ChangeRequestOptions;
   auth?: AuthOptions | null;
   agents?: AgentProfile[];
-  // MCP tools mounted beside the note tools (mcp/tool.ts).
+  // MCP tools mounted beside the note tools (routes/mcp/tool.ts).
   tools?: StudioTool[];
 } = {}): Promise<StudioServer> {
   const server = createServer();
@@ -106,10 +111,10 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
   };
   const transcripts = changeRequests ? createTranscripts(changeRequests.home) : null;
   const shared = [createIconsApi(), createAgentsInfoApi(createAgentInfo(agents), transcripts), apiNotFound];
-  // The Studio's MCP server (mcp/http.ts): each agent run gets a token for it.
+  // The Studio's MCP server (routes/mcp/http.ts): each agent run gets a token for it.
   const grants = createRunGrants();
   const mcpUrl = `http://${hosts[0]}/api/mcp`;
-  const workspaceAgents = transcripts && changeRequests ? { profiles: agents, transcripts, home: changeRequests.home, mcp: { url: mcpUrl, grants } } : null;
+  const workspaceAgents = transcripts && changeRequests ? { profiles: agents, transcripts, home: changeRequests.home, mcp: { url: mcpUrl, bridge: STDIO_BRIDGE, grants } } : null;
   // Main's agents run in a copy of it, made fresh before each turn.
   const main = createWorkspace(crs?.mainRoot ?? root, hosts, {
     readOnly: crs !== null,
@@ -139,7 +144,7 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
     tools: createNoteTools({
       proposalsOf: async (slug) => (slug === MAIN_SLUG ? null : (await reviewOf(slug)).proposals),
       deletesOf: async (slug) => (slug === MAIN_SLUG ? null : (await reviewOf(slug)).deletes),
-      // An MCP caller's `runId` is its conversation (agents/conversations.ts).
+      // An MCP caller's `runId` is its conversation (services/agents/chat/conversations.ts).
       modelOf: (slug, runId) => workspaces.peek(slug)?.conversations?.modelOf(runId) ?? null,
       createdBy: (slug, runId, path) => workspaces.peek(slug)?.conversations?.created(runId, path) ?? Promise.resolve(false),
       selectionOf: (slug, runId) => workspaces.peek(slug)?.conversations?.selection(runId) ?? null,
