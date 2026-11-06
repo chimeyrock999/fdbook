@@ -85,7 +85,7 @@ describe('assets API', () => {
       mtimeMs: await mtime(PANES_SVG),
       usages: [{ note: PANES.note, line: (await text(PANES.note)).split('\n').indexOf(PANES.line) + 1, unsure: false }],
     });
-    expect(byPath(PANES_SVG)?.usages[0].text).toMatch(/^!\[The Studio's .*studio-panes\.svg\)$/);
+    expect(byPath(PANES_SVG)?.usages[0].text).toMatch(/^!\[The Studio: .*studio-panes\.svg\)$/);
     expect(byPath('public/docs/demo/pixel.png')?.usages).toEqual([]);
     // The three images and the embed written above, and the six <Diagram>s of the docs.
     expect(assets.flatMap((asset) => asset.usages).length).toBeGreaterThanOrEqual(10);

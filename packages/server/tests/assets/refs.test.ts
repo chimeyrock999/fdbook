@@ -194,12 +194,13 @@ describe('findAssetRefs', () => {
       found.push(...refs);
     });
 
-    it('finds the diagrams among them', () => {
-      // The docs show no image: their files are the <Diagram>s of the home
-      // page (one) and of diagrams/examples (five); the kinds above cover the rest.
-      expect(found.length).toBeGreaterThanOrEqual(6);
-      expect(new Set(found.map((ref) => ref.kind))).toEqual(new Set(['diagram']));
-      expect(found.map((ref) => ref.asset)).toEqual(expect.arrayContaining(['diagrams/reference/studio-layout.diagram.json', 'diagrams/examples/deployment-release.diagram.json']));
+    it('finds images and diagrams among them', () => {
+      // The docs' files: the <Diagram>s of the home page (one) and of
+      // diagrams/examples (five), and the image in guide/using; the inline
+      // cases above cover the other kinds.
+      expect(found.length).toBeGreaterThanOrEqual(7);
+      expect(new Set(found.map((ref) => ref.kind))).toEqual(new Set(['image', 'diagram']));
+      expect(found.map((ref) => ref.asset)).toEqual(expect.arrayContaining(['public/docs/guide/using/studio-panes.svg', 'diagrams/reference/studio-layout.diagram.json', 'diagrams/examples/deployment-release.diagram.json']));
     });
   });
 });
