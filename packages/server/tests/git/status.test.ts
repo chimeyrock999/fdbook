@@ -103,34 +103,34 @@ describe('loadChanges', () => {
   });
 
   it('lists notes, meta.yaml and assets changed in the worktree, nothing else', async () => {
-    await write('content/docs/streaming/index.mdx', '---\ntitle: Streaming\n---\n\nChanged.\n');
-    await write('content/docs/streaming/new-page.mdx', '---\ntitle: New\n---\n');
-    await rm(join(worktree.root, 'content/docs/distributed-systems/rpc-and-threads.mdx'));
-    await write('public/docs/streaming/new.png', 'png');
+    await write('content/docs/diagrams/index.mdx', '---\ntitle: Diagrams\n---\n\nChanged.\n');
+    await write('content/docs/diagrams/new-page.mdx', '---\ntitle: New\n---\n');
+    await rm(join(worktree.root, 'content/docs/reference/lint.mdx'));
+    await write('public/docs/diagrams/new.png', 'png');
     await write('package.json', '{"changed":true}\n');
     await write('content/docs/notes.txt', 'not a note');
     expect(await loadChanges(worktree.root)).toEqual({
       branch: 'cr/test',
       files: [
-        { path: 'content/docs/distributed-systems/rpc-and-threads.mdx', status: 'D' },
-        { path: 'content/docs/streaming/index.mdx', status: 'M' },
-        { path: 'content/docs/streaming/new-page.mdx', status: 'A' },
-        { path: 'public/docs/streaming/new.png', status: 'A' },
+        { path: 'content/docs/diagrams/index.mdx', status: 'M' },
+        { path: 'content/docs/diagrams/new-page.mdx', status: 'A' },
+        { path: 'content/docs/reference/lint.mdx', status: 'D' },
+        { path: 'public/docs/diagrams/new.png', status: 'A' },
       ],
     });
   });
 
   it('shows a rename staged in a terminal as one entry', async () => {
-    git(worktree.root, 'mv', 'content/docs/streaming/watermark-and-late-events.mdx', 'content/docs/streaming/watermarks.mdx');
+    git(worktree.root, 'mv', 'content/docs/diagrams/examples.mdx', 'content/docs/diagrams/samples.mdx');
     expect((await loadChanges(worktree.root)).files).toEqual([
-      { path: 'content/docs/streaming/watermarks.mdx', status: 'R', from: 'content/docs/streaming/watermark-and-late-events.mdx' },
+      { path: 'content/docs/diagrams/samples.mdx', status: 'R', from: 'content/docs/diagrams/examples.mdx' },
     ]);
   });
 
   it('lists a file taken out of the index once: modified if it differs from HEAD, else not at all', async () => {
-    git(worktree.root, 'rm', '-q', '--cached', 'content/docs/streaming/index.mdx', 'content/docs/database/index.mdx');
-    await write('content/docs/streaming/index.mdx', 'changed\n');
-    expect((await loadChanges(worktree.root)).files).toEqual([{ path: 'content/docs/streaming/index.mdx', status: 'M' }]);
+    git(worktree.root, 'rm', '-q', '--cached', 'content/docs/diagrams/index.mdx', 'content/docs/guide/setup.mdx');
+    await write('content/docs/diagrams/index.mdx', 'changed\n');
+    expect((await loadChanges(worktree.root)).files).toEqual([{ path: 'content/docs/diagrams/index.mdx', status: 'M' }]);
   });
 
   it('refuses a root that is not the top of a git worktree', async () => {

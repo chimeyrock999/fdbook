@@ -24,7 +24,7 @@ describe('file events (SSE)', () => {
   });
 
   it('reports a file changed outside the Studio', async () => {
-    const path = 'content/docs/streaming/index.mdx';
+    const path = 'content/docs/guide/configuration.mdx';
     const seen = await collectEvents(
       events(),
       () => writeFile(join(studio.root, path), 'changed by obsidian\n'),
@@ -61,7 +61,7 @@ describe('file events (SSE)', () => {
   });
 
   it('reports a deleted file', async () => {
-    const path = 'content/docs/database/meta.yaml';
+    const path = 'content/docs/diagrams/meta.yaml';
     const seen = await collectEvents(
       events(),
       () => rm(join(studio.root, path)),
@@ -71,8 +71,8 @@ describe('file events (SSE)', () => {
   });
 
   it('reports the files of a renamed folder', async () => {
-    const before = 'content/docs/personal-reflections';
-    const after = 'content/docs/reflections';
+    const before = 'content/docs/reference';
+    const after = 'content/docs/references';
     const seen = await collectEvents(
       events(),
       () => rename(join(studio.root, before), join(studio.root, after)),

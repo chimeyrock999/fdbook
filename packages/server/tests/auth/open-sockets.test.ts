@@ -12,7 +12,7 @@ import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '#tests/
 import { json } from '#tests/support/http.ts';
 import { syncSignedIn, syncWith, TextEditor } from '#tests/support/sync.ts';
 
-const PAGE = 'streaming/index.mdx';
+const PAGE = 'guide/configuration.mdx';
 const CHECK_MS = 50;
 
 async function until(check: () => boolean, what: string) {

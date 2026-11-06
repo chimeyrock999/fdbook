@@ -8,7 +8,7 @@ import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '#tests/
 import { json } from '#tests/support/http.ts';
 import { syncWith, TextEditor } from '#tests/support/sync.ts';
 
-const NOTE = 'content/docs/database/index.mdx';
+const NOTE = 'content/docs/guide/setup.mdx';
 
 describe('what each role may do', () => {
   let studio: AuthStudio;
@@ -27,8 +27,8 @@ describe('what each role may do', () => {
     const reader = syncWith(studio.origin, (await studio.signIn('reader')).cookie);
     const writer = syncWith(studio.origin, (await studio.signIn('writer')).cookie);
     try {
-      expect((await reader.open('database/index.mdx', { editor: new TextEditor() }).opened).writable).toBe(false);
-      expect((await writer.open('database/index.mdx', { editor: new TextEditor() }).opened).writable).toBe(true);
+      expect((await reader.open('guide/setup.mdx', { editor: new TextEditor() }).opened).writable).toBe(false);
+      expect((await writer.open('guide/setup.mdx', { editor: new TextEditor() }).opened).writable).toBe(true);
     } finally {
       reader.close();
       writer.close();
@@ -40,7 +40,7 @@ describe('what each role may do', () => {
     const sync = syncWith(studio.origin, cookie);
     try {
       const editor = new TextEditor();
-      const doc = sync.open('streaming/index.mdx', { editor });
+      const doc = sync.open('guide/configuration.mdx', { editor });
       const opened = await doc.opened;
       expect(opened.writable).toBe(true);
       expect((await studio.send('/api/session/logout', { method: 'POST', body: {}, cookie, csrf })).status).toBe(200);
@@ -49,7 +49,7 @@ describe('what each role may do', () => {
       // The socket is closed (#115): the save waits for a connection that never comes back.
       void doc.flush().catch(() => undefined);
       await new Promise((resolve) => setTimeout(resolve, 300));
-      expect(await readFile(join(studio.root, 'content/docs/streaming/index.mdx'), 'utf8')).toBe(opened.text);
+      expect(await readFile(join(studio.root, 'content/docs/guide/configuration.mdx'), 'utf8')).toBe(opened.text);
       // Nor does it read any more: the socket is gone and its reconnects are refused.
       expect(sync.status()).toBe('offline');
     } finally {

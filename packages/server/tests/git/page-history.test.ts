@@ -11,8 +11,8 @@ type Version = { sha: string; date: string; author: string; message: string; pat
 type PageHistory = { path: string; mtimeMs: number | null; versions: Version[] };
 type Comparison = { path: string; from: { version: string; path: string } | null; to: { version: string; path: string }; before: Side | null; after: Side | null };
 
-const OLD = 'content/docs/streaming/history-old.mdx';
-const PAGE = 'content/docs/streaming/history-page.mdx';
+const OLD = 'content/docs/guide/history-old.mdx';
+const PAGE = 'content/docs/guide/history-page.mdx';
 const first = '---\ntitle: History\n---\n\nFirst version.\n';
 const second = '---\ntitle: History\n---\n\nSecond version.\n';
 const third = '---\ntitle: History\n---\n\nThird version, in the change request.\n';
@@ -134,7 +134,7 @@ describe('page history API', () => {
   });
 
   it('answers a page not committed yet with no versions, and compares it as it is now', async () => {
-    const fresh = 'content/docs/streaming/history-fresh.mdx';
+    const fresh = 'content/docs/guide/history-fresh.mdx';
     await writeFile(at(fresh), first);
     expect(await historyOf(fresh)).toEqual({ path: fresh, mtimeMs: await mtimeOf(fresh), deleted: null, versions: [] });
     expect(await comparisonOf({ path: fresh, to: 'now' })).toMatchObject({ from: null, before: null, after: { kind: 'text', text: first } });
@@ -148,12 +148,12 @@ describe('page history API', () => {
     expect((await compare({ path: PAGE, to: created.slice(0, 7) })).status).toBe(400);
     expect((await compare({ path: PAGE })).status).toBe(400);
     expect((await history('package.json')).status).toBe(403);
-    expect((await history('content/docs/streaming/meta.yaml')).status).toBe(403);
+    expect((await history('content/docs/guide/meta.yaml')).status).toBe(403);
     expect((await history('content/docs/../package.json')).status).toBe(403);
-    expect((await history('content/docs/streaming/never.mdx')).status).toBe(404);
+    expect((await history('content/docs/guide/never.mdx')).status).toBe(404);
     expect((await rawRequest(`${studio.url}api/history`)).status).toBe(400);
-    await symlink(at(PAGE), at('content/docs/streaming/linked.mdx'));
-    expect((await history('content/docs/streaming/linked.mdx')).status).toBe(403);
+    await symlink(at(PAGE), at('content/docs/guide/linked.mdx'));
+    expect((await history('content/docs/guide/linked.mdx')).status).toBe(403);
   });
 
   it('restores an old version into the page, uncommitted, under its current name', async () => {

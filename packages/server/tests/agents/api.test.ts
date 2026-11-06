@@ -96,7 +96,7 @@ describe('agents API', () => {
     expect(proposals[0]?.hunks.map((hunk) => hunk.added).join('')).toContain('Agent wrote this.');
     // The agent hears that its write became a proposal.
     const said = events.flatMap((event) => (event.type === 'update' && event.update.sessionUpdate === 'agent_message_chunk' && event.update.content.type === 'text' ? [event.update.content.text] : []));
-    expect(said.join('\n')).toMatch(/refused:.*made this write a proposal .* content\/notes\/guide\/first-look\.mdx is unchanged/);
+    expect(said.join('\n')).toMatch(/refused:.*made this write a proposal .* content\/docs\/guide\/first-look\.mdx is unchanged/);
 
     const run = await waitEnded(started?.id ?? '');
     expect(run.conversation, JSON.stringify(run.events.slice(-4))).toMatchObject({ status: 'done', writes: ['content/docs/guide/added.mdx'], model: 'Fake One' });

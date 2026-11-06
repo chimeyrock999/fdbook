@@ -8,7 +8,7 @@ import { startTestStudio, type TestStudio } from '@fdbook/testing/studio.ts';
 type Side = { kind: 'text'; text: string; size: number } | { kind: 'binary'; size: number };
 type Diff = { path: string; from?: string; base: string | null; status: string; before: Side | null; after: Side | null };
 
-const NOTE = 'content/docs/streaming/index.mdx';
+const NOTE = 'content/docs/diagrams/index.mdx';
 const PIXEL = 'public/docs/demo/pixel.png';
 
 // The diff API on a git worktree copy of content/docs, through the real
@@ -65,26 +65,26 @@ describe('diff API', () => {
     // main moves in a worktree of its own, as another change request merging would.
     const other = `${studio.root}-main`;
     git(studio.root, 'worktree', 'add', '--quiet', other, 'main');
-    await writeFile(join(other, 'content/docs/streaming/meta.yaml'), 'title: Moved on\n');
+    await writeFile(join(other, 'content/docs/diagrams/meta.yaml'), 'title: Moved on\n');
     git(other, 'commit', '--quiet', '-am', 'main moved');
     git(studio.root, 'update-ref', 'refs/remotes/origin/main', 'main');
     git(studio.root, 'worktree', 'remove', '--force', other);
-    const meta = await diffOf('content/docs/streaming/meta.yaml');
+    const meta = await diffOf('content/docs/diagrams/meta.yaml');
     expect(meta.base).toBe(forked);
     // main's own change is not this change request's work.
     expect(meta.status).toBe('same');
   });
 
   it('shows a new file with nothing before it, and a deleted one with nothing after it', async () => {
-    await writeFile(at('content/docs/streaming/new-page.mdx'), '# New page\n');
-    expect(await diffOf('content/docs/streaming/new-page.mdx')).toMatchObject({ status: 'A', before: null, after: { kind: 'text', text: '# New page\n' } });
-    await rm(at('content/docs/streaming/watermark-and-late-events.mdx'));
-    expect(await diffOf('content/docs/streaming/watermark-and-late-events.mdx')).toMatchObject({ status: 'D', before: { kind: 'text' }, after: null });
+    await writeFile(at('content/docs/diagrams/new-page.mdx'), '# New page\n');
+    expect(await diffOf('content/docs/diagrams/new-page.mdx')).toMatchObject({ status: 'A', before: null, after: { kind: 'text', text: '# New page\n' } });
+    await rm(at('content/docs/diagrams/examples.mdx'));
+    expect(await diffOf('content/docs/diagrams/examples.mdx')).toMatchObject({ status: 'D', before: { kind: 'text' }, after: null });
   });
 
   it('reads a renamed file under its old name on main', async () => {
-    const page = 'content/docs/streaming/index.mdx';
-    const moved = 'content/docs/streaming/overview.mdx';
+    const page = 'content/docs/diagrams/index.mdx';
+    const moved = 'content/docs/diagrams/overview.mdx';
     git(studio.root, 'mv', page, moved);
     const answer = await diffOf(moved, page);
     expect(answer).toMatchObject({ path: moved, from: page, status: 'R', before: { kind: 'text', text: original } });
@@ -92,8 +92,8 @@ describe('diff API', () => {
   });
 
   it('finds a rename already committed, and reads main under the old name', async () => {
-    const page = 'content/docs/streaming/index.mdx';
-    const moved = 'content/docs/streaming/moved.mdx';
+    const page = 'content/docs/diagrams/index.mdx';
+    const moved = 'content/docs/diagrams/moved.mdx';
     const edited = await readFile(at(page), 'utf8');
     git(studio.root, 'mv', page, moved);
     git(studio.root, 'commit', '--quiet', '-am', 'docs: move the page');
@@ -150,13 +150,13 @@ describe('diff API', () => {
     expect((await diff(NOTE, 'package.json')).status).toBe(403);
     expect((await blob('package.json')).status).toBe(403);
     expect((await rawRequest(`${studio.url}api/changes/diff`)).status).toBe(400);
-    await symlink(at(NOTE), at('content/docs/streaming/linked.mdx'));
-    expect((await diff('content/docs/streaming/linked.mdx')).status).toBe(403);
+    await symlink(at(NOTE), at('content/docs/diagrams/linked.mdx'));
+    expect((await diff('content/docs/diagrams/linked.mdx')).status).toBe(403);
     expect((await rawRequest(`${studio.url}api/changes/diff?path=${encodeURIComponent(NOTE)}`, { method: 'POST', headers: { Origin: studio.origin } })).status).toBe(405);
   });
 
   it('answers a path that is on neither side as not found', async () => {
-    expect((await diff('content/docs/streaming/never.mdx')).status).toBe(404);
+    expect((await diff('content/docs/diagrams/never.mdx')).status).toBe(404);
   });
 
   it('has no base without a main to compare with', async () => {

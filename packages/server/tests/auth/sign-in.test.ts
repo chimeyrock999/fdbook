@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { json, tryUpgrade } from '#tests/support/http.ts';
 import { startAuthStudio, testAuthConfig, type AuthStudio } from '#tests/support/auth.ts';
 
-const NOTE = 'content/docs/database/index.mdx';
+const NOTE = 'content/docs/guide/setup.mdx';
 const fileApi = (path: string) => `/api/file?path=${encodeURIComponent(path)}`;
 
 // Sign-in with GitHub through the real server: the device and web flows,
