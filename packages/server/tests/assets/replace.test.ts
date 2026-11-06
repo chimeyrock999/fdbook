@@ -1,27 +1,28 @@
-import { chmod, cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyAssetPlan } from '#assets/ops.ts';
 import { planAssetReplace } from '#assets/replace.ts';
-import { docsRoot } from '@fdbook/testing/notes.ts';
 import { lintWorktree } from '#lint/context.ts';
 import { MAX_ASSET_BYTES } from '@fdbook/shared/asset-types.ts';
 import { json, rawRequest } from '#tests/support/http.ts';
 import { startTestStudio, type TestStudio } from '@fdbook/testing/studio.ts';
 import { CORPUS_TIMEOUT_MS } from '#tests/support/timeouts.ts';
+import { PANES, SIGN_IN, writeAssetCases } from '#tests/support/asset-cases.ts';
 
 type Answer = { changes: { type: string; path: string; to?: string; detail?: string }[]; mtimeMs?: number };
 
-const SUPERSET = 'public/docs/data-platform/stacks-integration/superset-trino-impersonate.jpg';
-const SUPERSET_NOTE = 'content/docs/data-platform/stacks-integration/index.mdx';
-const WAREHOUSE = 'public/docs/data-modeling/data_warehouse_architecture.webp';
+const PANES_SVG = PANES.asset;
+const PANES_NOTE = PANES.note;
+const SIGN_IN_WEBP = SIGN_IN.asset;
 // An HTML asset a regen script of the retired Archify pipeline still
 // names: the Studio no longer reads those.
 const LEGACY = { asset: 'public/docs/legacy/made.html', script: 'diagrams/legacy/made.regen.sh' };
 const NEW_BYTES = Buffer.from('new image bytes');
 
 // Replacing an asset's content on a copy of the real content/docs,
-// public/docs and diagrams. The tests run in order and build on each
+// public/docs and diagrams, with images the pages use
+// (support/asset-cases.ts). The tests run in order and build on each
 // other's changes.
 describe('assets API: replace', () => {
   let studio: TestStudio;
@@ -54,8 +55,7 @@ describe('assets API: replace', () => {
 
   beforeAll(async () => {
     studio = await startTestStudio();
-    await cp(join(docsRoot, 'public/docs'), file('public/docs'), { recursive: true });
-    await cp(join(docsRoot, 'diagrams'), file('diagrams'), { recursive: true });
+    await writeAssetCases(studio.root);
     await mkdir(file('public/docs/legacy'), { recursive: true });
     await mkdir(file('diagrams/legacy'), { recursive: true });
     await writeFile(file(LEGACY.asset), '<!doctype html><html><body>legacy</body></html>\n');
@@ -68,46 +68,46 @@ describe('assets API: replace', () => {
 
   it('lists each asset with its size', async () => {
     const assets = (json(await rawRequest(`${studio.url}api/assets`)) as { assets: { path: string; size: number }[] }).assets;
-    expect(assets.find((asset) => asset.path === SUPERSET)?.size).toBe((await stat(file(SUPERSET))).size);
+    expect(assets.find((asset) => asset.path === PANES_SVG)?.size).toBe((await stat(file(PANES_SVG))).size);
   }, CORPUS_TIMEOUT_MS);
 
   it('shows a dry run with the same extension: only the file, and writes nothing', async () => {
-    const before = await readFile(file(WAREHOUSE));
-    const response = await dryRun({ path: WAREHOUSE, extension: 'webp', baseMtime: await mtime(WAREHOUSE) });
+    const before = await readFile(file(SIGN_IN_WEBP));
+    const response = await dryRun({ path: SIGN_IN_WEBP, extension: 'webp', baseMtime: await mtime(SIGN_IN_WEBP) });
     expect(response.status).toBe(200);
-    expect((json(response) as Answer).changes).toEqual([{ type: 'replace', path: WAREHOUSE, to: WAREHOUSE }]);
-    expect(await readFile(file(WAREHOUSE))).toEqual(before);
+    expect((json(response) as Answer).changes).toEqual([{ type: 'replace', path: SIGN_IN_WEBP, to: SIGN_IN_WEBP }]);
+    expect(await readFile(file(SIGN_IN_WEBP))).toEqual(before);
   });
 
   it('replaces the content with the same extension and changes no note', async () => {
     const before = await notes();
-    const response = await put({ path: WAREHOUSE, extension: 'webp', baseMtime: await mtime(WAREHOUSE) });
+    const response = await put({ path: SIGN_IN_WEBP, extension: 'webp', baseMtime: await mtime(SIGN_IN_WEBP) });
     expect(response.status).toBe(200);
-    expect(await readFile(file(WAREHOUSE))).toEqual(NEW_BYTES);
-    expect((json(response) as Answer).mtimeMs).toBe(await mtime(WAREHOUSE));
+    expect(await readFile(file(SIGN_IN_WEBP))).toEqual(NEW_BYTES);
+    expect((json(response) as Answer).mtimeMs).toBe(await mtime(SIGN_IN_WEBP));
     expect(await notes()).toEqual(before);
   });
 
   it('takes the extension in any case', async () => {
-    const response = await dryRun({ path: WAREHOUSE, extension: 'WEBP', baseMtime: await mtime(WAREHOUSE) });
-    expect((json(response) as Answer).changes).toEqual([{ type: 'replace', path: WAREHOUSE, to: WAREHOUSE }]);
+    const response = await dryRun({ path: SIGN_IN_WEBP, extension: 'WEBP', baseMtime: await mtime(SIGN_IN_WEBP) });
+    expect((json(response) as Answer).changes).toEqual([{ type: 'replace', path: SIGN_IN_WEBP, to: SIGN_IN_WEBP }]);
   });
 
   it('with another extension, moves the file and rewrites its references, leaving every other byte', async () => {
-    const to = SUPERSET.replace(/\.jpg$/, '.webp');
-    const dry = await dryRun({ path: SUPERSET, extension: 'webp', baseMtime: await mtime(SUPERSET) });
+    const to = PANES_SVG.replace(/\.svg$/, '.webp');
+    const dry = await dryRun({ path: PANES_SVG, extension: 'webp', baseMtime: await mtime(PANES_SVG) });
     expect((json(dry) as Answer).changes).toEqual([
-      { type: 'replace', path: SUPERSET, to },
-      { type: 'change', path: SUPERSET_NOTE, detail: '1 reference' },
+      { type: 'replace', path: PANES_SVG, to },
+      { type: 'change', path: PANES_NOTE, detail: '1 reference' },
     ]);
     const before = await notes();
-    const response = await put({ path: SUPERSET, extension: 'webp', baseMtime: await mtime(SUPERSET) });
+    const response = await put({ path: PANES_SVG, extension: 'webp', baseMtime: await mtime(PANES_SVG) });
     expect(response.status).toBe(200);
-    expect(await exists(SUPERSET)).toBe(false);
+    expect(await exists(PANES_SVG)).toBe(false);
     expect(await readFile(file(to))).toEqual(NEW_BYTES);
     const after = await notes();
-    const key = SUPERSET_NOTE.slice('content/docs/'.length);
-    expect(after.get(key)).toBe(before.get(key)?.replace('superset-trino-impersonate.jpg', 'superset-trino-impersonate.webp'));
+    const key = PANES_NOTE.slice('content/docs/'.length);
+    expect(after.get(key)).toBe(before.get(key)?.replace('studio-panes.svg', 'studio-panes.webp'));
     after.delete(key);
     before.delete(key);
     expect(after).toEqual(before);
@@ -124,13 +124,13 @@ describe('assets API: replace', () => {
   });
 
   it('refuses a type the Studio does not store, and a missing extension', async () => {
-    const baseMtime = await mtime(WAREHOUSE);
-    expect((await put({ path: WAREHOUSE, extension: 'exe', baseMtime })).status).toBe(400);
-    expect((await put({ path: WAREHOUSE, extension: 'constructor', baseMtime })).status).toBe(400);
-    expect((await dryRun({ path: WAREHOUSE, extension: '__proto__', baseMtime })).status).toBe(400);
-    expect((await put({ path: WAREHOUSE, baseMtime })).status).toBe(400);
-    expect((await dryRun({ path: WAREHOUSE, extension: 'txt', baseMtime })).status).toBe(400);
-    expect(await readFile(file(WAREHOUSE))).toEqual(NEW_BYTES);
+    const baseMtime = await mtime(SIGN_IN_WEBP);
+    expect((await put({ path: SIGN_IN_WEBP, extension: 'exe', baseMtime })).status).toBe(400);
+    expect((await put({ path: SIGN_IN_WEBP, extension: 'constructor', baseMtime })).status).toBe(400);
+    expect((await dryRun({ path: SIGN_IN_WEBP, extension: '__proto__', baseMtime })).status).toBe(400);
+    expect((await put({ path: SIGN_IN_WEBP, baseMtime })).status).toBe(400);
+    expect((await dryRun({ path: SIGN_IN_WEBP, extension: 'txt', baseMtime })).status).toBe(400);
+    expect(await readFile(file(SIGN_IN_WEBP))).toEqual(NEW_BYTES);
   });
 
   it('refuses a stale file, a taken name and paths outside public/docs', async () => {
