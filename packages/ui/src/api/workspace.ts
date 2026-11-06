@@ -1,5 +1,5 @@
 // Which worktree this page edits. `?cr=<slug>` opens a change request,
-// served under /cr/<slug>/ (server/workspace.ts); without it the page reads
+// served under /cr/<slug>/ (server/app/workspace.ts); without it the page reads
 // main. Switching loads the page again, so every client made on this page
 // talks to one worktree.
 import { isCrSlug } from '@fdbook/shared/cr-slug.ts';

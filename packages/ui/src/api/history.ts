@@ -1,6 +1,6 @@
-// Client for the page history API (server/git/page-history-api.ts), in the
+// Client for the page history API (server/routes/page-history.ts), in the
 // worktree the page edits (src/api/workspace.ts). Types mirror
-// server/git/page-history.ts and server/git/deleted-pages.ts; paths are
+// server/services/git/page-history.ts and server/services/git/deleted-pages.ts; paths are
 // worktree paths, of a note or an asset.
 
 import type { DiffSide } from './changes';

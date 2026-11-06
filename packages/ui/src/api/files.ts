@@ -1,4 +1,4 @@
-// Client for the Studio file API (server/files/api.ts, server/files/events.ts).
+// Client for the Studio file API (server/routes/files.ts, server/routes/file-events.ts).
 
 import { assetUrl } from './asset-versions';
 import { watchEvents } from './connection';

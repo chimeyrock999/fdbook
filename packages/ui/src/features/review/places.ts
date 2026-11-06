@@ -3,7 +3,7 @@ import { locate } from '@fdbook/shared/anchors.ts';
 import type { ProposalHunk, ProposalView, Thread } from '#api/proposals.ts';
 
 // A hunk waiting for a person, set on the note as the editor holds it now
-// (the server's own placement, server/proposals/hunks.ts, run on the live
+// (the server's own placement, @fdbook/shared text/hunks.ts, run on the live
 // text, so typing does not wait for a save). `from`..`to` is the text it
 // replaces; `first` the index of the first block there (the frontmatter is
 // block 0, as in the editor's document) and `count` how many blocks it

@@ -1,4 +1,4 @@
-// Client for sign-in (server/auth/auth.ts), and the fetch every other
+// Client for sign-in (server/services/auth/auth.ts), and the fetch every other
 // client goes through: it adds the session's csrf token to each write and
 // tells the page when the server answers that nobody is signed in.
 

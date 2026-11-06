@@ -33,97 +33,87 @@ where each package's `exports` lists the modules it offers.
 Below, `server/…` is short for `packages/server/src/…` and `src/…` for
 `packages/ui/src/…`.
 
-- `packages/server/src/` (`@fdbook/server`)
-  - `index.ts` is the entry point; it checks the dependencies are installed
-    and loads the project before anything else loads.
+- `packages/server/src/` (`@fdbook/server`), in layers: `routes` call
+  `services`, both use `infra`, and `app` puts them together; a service
+  never imports a route, and `infra` imports nothing of the server.
+  - `bin/`: `index.ts` is the entry point; it checks the dependencies are
+    installed and loads the project before anything else loads. `lint.ts`
+    is the lint's CLI (see [Lint](./lint.mdx)).
   - `app/`: `studio-server.ts` puts the pieces together: it binds the port,
-    mounts Vite, the MCP server and the handlers below, and serves each
-    change request's workspace under `/cr/<slug>/`. `workspace.ts` holds
-    the handlers of one worktree: files, events, sync, lint, tree, assets,
-    changes, diff and history, preview and publish, agent chats and their
-    context, proposals and review threads. `routing.ts` runs the guard on
-    every request and upgrade, then hands the request to a handler.
-  - `config/`: `config.ts` holds the host, the port and the other
-    `STUDIO_*` settings (see [Setup](../guide/setup.mdx#other-settings)),
-    `project.ts` reads `fdbook.config.ts` (see
-    [Configuration](../guide/configuration.mdx)), `deps.ts` checks the
-    install against the lockfile.
-  - `http/` holds small HTTP helpers.
-  - `process/` runs git and gh without a shell; every folder may use it.
-  - `security/` has the Host/Origin guard (`guard.ts`) and where an
-    editable path is on disk (`paths.ts`).
-  - `auth/` is sign-in with GitHub: settings, the device and web flows, the
-    roles read with gh, the sessions, and the role each request needs
-    (`access.ts`).
-  - `files/` has the file API, the file events and the file store.
-  - `sync/` is the fumadocs-editor sync server for the notes.
-  - `lint/` checks a note against the site's rules, and its CLI (see
-    [Lint](./lint.mdx)); `destination.ts` parses link destinations for the
-    tree and asset rewrites.
-  - `tree/` builds the page tree and creates, renames, reorders, hides and
-    shows pages.
-  - `assets/` finds where notes use the files in the media folder, and
-    renames, replaces and deletes them.
-  - `icons/` lists the lucide names a note's `icon` can take.
-  - `cr/` has the change requests: branches, worktrees, statuses, drift
-    from main, discard.
-  - `git/` reads `git status` and the change request's commits, commits
-    picked files, reads a file as main holds it, and reads, compares and
-    restores a file's versions and deleted pages.
-  - `preview/` pushes a change request, reads its build check and its pull
-    request, builds its preview URL, and publishes it.
-  - `agents/` runs chats with agents over ACP in a change request, with
-    their context, file policy, transcripts and per-turn changes.
-  - `mcp/` is the Studio's MCP server: its HTTP endpoint, the note,
-    writing, review and diagram tools, the grants, and the stdio bridge.
-  - `proposals/` keeps the edits agents propose, per change request.
-  - `review/` keeps the review threads of a change request (#87): the store
-    and its HTTP API.
-- `packages/ui/src/` (`@fdbook/ui`): the React UI.
-  - `main.tsx` mounts `app/App.tsx`; `app/` is the shell: the page shown
-    and its URL (`route.ts`), the check that a note can be opened, and the
-    header's Open preview button.
+    mounts Vite, the MCP server and the routes, and serves each change
+    request's workspace under `/cr/<slug>/`. `workspace.ts` holds the
+    routes of one worktree. `routing.ts` runs the guard on every request
+    and upgrade, then hands the request to a route.
+  - `routes/`: every way in, one module per domain: the HTTP API (files,
+    file events, tree, assets, lint, icons, git, page history, cr, preview,
+    agents and their context, proposals, review), the notes sync socket
+    (`notes-sync.ts`), and the MCP server in `mcp/`: its HTTP endpoint, the
+    stdio bridge, and the note, writing, review and diagram tools.
+  - `services/`: the logic, by domain.
+    - `auth/` is sign-in with GitHub: settings, the device and web flows
+      and their endpoints, the roles read with gh, the sessions, and the
+      role each request needs (`access.ts`).
+    - `files/` is the file store; `tree/` builds the page tree and creates,
+      renames, reorders, hides and shows pages; `assets/` finds where notes
+      use the files in the media folder, and renames, replaces and deletes
+      them; `icons/` lists the lucide names a note's `icon` can take.
+    - `lint/` checks a note against the site's rules (`rules/`);
+      `destination.ts` parses link destinations for the tree and asset
+      rewrites.
+    - `cr/` has the change requests: branches, worktrees, statuses, drift
+      from main, discard. `git/` reads `git status` and the change
+      request's commits, commits picked files, reads a file as main holds
+      it, and reads, compares and restores a file's versions and deleted
+      pages. `preview/` pushes a change request, reads its build check and
+      its pull request, builds its preview URL, and publishes it.
+    - `agents/` runs chats with agents over ACP in a change request:
+      `acp/` (connections, sessions, the agent profiles, file policy, the
+      MCP run grants, main's read-only copy), `chat/` (conversations,
+      transcripts, per-turn changes, watching the worktree) and `context/`
+      (what a message carries along).
+    - `proposals/` keeps the edits agents propose, and `review/` the review
+      threads (#87), per change request.
+  - `infra/`: what has no domain: `config/` (the `STUDIO_*` settings, see
+    [Setup](../guide/setup.mdx#other-settings); `fdbook.config.ts`, see
+    [Configuration](../guide/configuration.mdx); the install check),
+    `security/` (the Host/Origin guard, and where an editable path is on
+    disk), `http.ts` (small HTTP helpers) and `command.ts` (git and gh
+    without a shell).
+- `packages/ui/src/` (`@fdbook/ui`), in layers: `app` shows `views`,
+  views compose `features`, and every layer may use `components`, `api`
+  and `lib`; a feature never imports a view.
+  - `main.tsx` mounts `app/App.tsx`; the global stylesheets sit next to it.
+  - `app/` is the shell: the page shown and its URL (`route.ts`), the
+    sign-in gate, the banner when the server goes away, the sidebar and
+    activity bar, the check that a note can be opened, and the header's
+    Open preview button.
+  - `views/`: one component per page or view: the note page
+    (`NoteEditor.tsx`), the page tree, the Assets view and an asset's page,
+    the diagram page, the Changes view, a diff, a history and the deleted
+    pages, the change request list, the Review view, the agent panel and
+    the sign-in page.
+  - `features/`: the logic, hooks and smaller components of each feature.
+    - `editor/` is the note editor: Visual and Source modes, save status,
+      the conflict dialog, unsaved edits kept per tab, Source's asset
+      completion; with `frontmatter/` (the YAML frontmatter and its form),
+      `graph/` (graph markers and their ids) and `plugins/` (see
+      [Plugins](#plugins)).
+    - `tree/`, `assets/`, `diagrams/` (the diagram editor's canvases,
+      panels and saving), `media/` (pasted and dropped images),
+      `changes/` (the commit message, Preview, Pull request, Publish, the
+      header's main action, the reminder on leaving), `cr/`, `diff/`,
+      `history/`, `lint/` (the Issues panel and count), `session/` (who is
+      signed in, the user menu), `agents/` (the header's agent control,
+      the chat, actions, the Connect an agent dialog; `logos/` holds each
+      agent's mark with its source), `review/` (thread marks and cards,
+      Comment on the format bubble; `suggestions/` shows agents'
+      proposals in the editor).
   - `components/` holds what every feature uses: the dialog, the popup
     menu, and what every button that writes to the server uses (see
     [Write actions](#write-actions)).
-  - `lib/` holds small helpers: the clipboard, keys, session storage, and
-    a note's paths.
   - `api/` holds the clients for the server; `workspace.ts` says which
-    worktree the page edits (`?cr=`).
-  - `session/` is the sign-in gate and page, the user menu, and what each
-    role may do.
-  - `cr/` is the change request picker, the Edit menu, their dialogs, the
-    list page and the notice on top of the Changes view.
-  - `editor/` is the note editor: Visual and Source modes, save status, the
-    conflict dialog, unsaved edits kept per tab, Source's asset completion.
-  - `frontmatter/` reads and writes a note's YAML frontmatter and holds the
-    form.
-  - `lint/` is the Issues view and the issue count in the toolbar.
-  - `media/` saves pasted and dropped images in the media folder.
-  - `sidebar/` is the activity bar and the sidebar, its width and whether
-    it is shown.
-  - `tree/` is the page tree in the Notes view, its dialogs and its change
-    marks.
-  - `assets/` is the Assets view, the asset page and its dialogs.
-  - `diagrams/` is the diagram editor: the page and canvas
-    (`DiagramPage.tsx`, `DiagramCanvas.tsx`), the panel (`DiagramPanel.tsx`),
-    where a copy goes (`placement.ts`), the sequence and lifecycle canvases
-    and panels (`SequenceCanvas.tsx`/`SequencePanel.tsx`,
-    `LifecycleCanvas.tsx`/`LifecyclePanel.tsx`), and saving
-    (`useDiagramFile.ts`).
-  - `changes/` is the Changes view, the suggested commit message, the
-    Preview and Pull request sections, the Publish dialog, the header's
-    main action and the reminder on leaving a change request.
-  - `diff/` is a file's diff against main.
-  - `history/` is a note's or an asset's history, and the deleted pages.
-  - `graph/` wraps text as graph markers and edits their ids.
-  - `agents/` is the header's agent control, the agent panel, the actions,
-    the chat history, agent replies as markdown and the Connect an agent
-    dialog; `logos/` holds each agent's mark with its source in the file.
-  - `review/` shows the review threads: their marks and cards in the
-    editor, Comment on the format bubble, and the Review view;
-    `review/suggestions/` shows agents' proposals in the editor.
-  - `plugins/` holds the editor plugins (see [Plugins](#plugins)).
+    worktree the page edits (`?cr=`). `lib/` holds small helpers: the
+    clipboard, keys, session storage, and a note's paths.
 - `packages/shared/src/` (`@fdbook/shared`), read by both: the shapes the
   server and the UI exchange (`api/`), the project's areas and the path
   policy (`paths/`), and the text algorithms both run: proposal hunks,
@@ -144,7 +134,7 @@ Below, `server/…` is short for `packages/server/src/…` and `src/…` for
 
 Everything the server touches goes through these checks.
 
-- **Origin guard** (`packages/server/src/security/guard.ts`). Every request and every
+- **Origin guard** (`packages/server/src/infra/security/guard.ts`). Every request and every
   websocket upgrade must carry `Host: 127.0.0.1:<port>` or
   `localhost:<port>` (with `STUDIO_HOST`, `<that address>:<port>`), which
   stops DNS rebinding. If it sends `Origin`, it must be this origin, and
@@ -153,7 +143,7 @@ Everything the server touches goes through these checks.
   Vite HMR nor the notes sync is closed. The web sign-in's callback is the
   one cross-site page load let through: a `GET` with
   `Sec-Fetch-Mode: navigate` on that path.
-- **Path policy** (`server/security/paths.ts`). Paths are relative to the
+- **Path policy** (`server/infra/security/paths.ts`). Paths are relative to the
   worktree, in posix form. Only `content/notes/**/*.mdx`,
   `content/notes/**/meta.yaml`, assets under `public/notes/` (png, jpg,
   jpeg, gif, webp, avif, svg, html, glb, pdf) and diagrams,
@@ -163,7 +153,7 @@ Everything the server touches goes through these checks.
   a save replaces the file, so it would turn a linked note into a copy. The
   file API, the file events, the notes sync and the MCP tools all use this
   check.
-- **Role** (`server/auth/access.ts`, `requiredRole`), when sign-in is
+- **Role** (`server/services/auth/access.ts`, `requiredRole`), when sign-in is
   on. After the guard, every `/api` request and the notes sync need a
   session with enough access, decided from the method and path alone, so a
   new write endpoint is closed until it is listed there:
@@ -181,7 +171,7 @@ Everything the server touches goes through these checks.
 ## Sign-in and sessions
 
 Settings and roles are in [Setup](../guide/setup.mdx#sign-in); this is how they
-are enforced (`server/auth/`).
+are enforced (`server/services/auth/`).
 
 - The session is a random id in an `HttpOnly`, `SameSite=Strict` cookie
   named after the port (browsers share cookies between the ports of one
@@ -210,7 +200,7 @@ are enforced (`server/auth/`).
   stream ends at its next event or
   heartbeat (every 25 seconds) once the session is gone.
 - The page asks `GET /api/session` before it loads the Studio
-  (`src/session/SessionGate.tsx`). Before each sync connection, reconnects
+  (`src/app/SessionGate.tsx`). Before each sync connection, reconnects
   included, it reads the session the browser holds now (`checkSeat` in
   `src/api/session.ts`) and refuses it unless it is the person the Studio
   runs for, so a sign-in in another tab never saves under another account.
@@ -246,7 +236,7 @@ Raw bodies are capped too: 25 MB for an asset, 10 MB for an attachment.
 | `POST /api/lint` | Takes `{ path, content }` for a note and returns `{ path, issues }` (see [Lint](./lint.mdx)). Writes nothing. |
 | `GET /api/icons` | The lucide names a note's `icon` can take: `{ names }` |
 | `GET /api/tree` | The page tree: `{ tree }` |
-| `POST /api/tree` | Takes `{ op: "create" \| "rename" \| "move" \| "set-open" \| "visibility", dryRun?, … }`, changes the tree and returns `{ changes, open, created? }`. With `dryRun` it writes nothing. `{ op: "delete", path, base?, dryRun? }` deletes a page, folder page or folder (`server/tree/delete.ts`): its dry run also answers `{ base, links, deleted }`, and the delete must send that `base` back (`400` without, `409` when anything it read changed since). |
+| `POST /api/tree` | Takes `{ op: "create" \| "rename" \| "move" \| "set-open" \| "visibility", dryRun?, … }`, changes the tree and returns `{ changes, open, created? }`. With `dryRun` it writes nothing. `{ op: "delete", path, base?, dryRun? }` deletes a page, folder page or folder (`server/services/tree/delete.ts`): its dry run also answers `{ base, links, deleted }`, and the delete must send that `base` back (`400` without, `409` when anything it read changed since). |
 | `GET /api/assets` | Every file under `public/notes`, then every `diagrams/**/*.diagram.json`, with where notes use it (a diagram: the `<Diagram src>` that draw it): `{ assets: [{ path, mtimeMs, size, usages: [{ note, line, column, length, text, unsure }] }] }` |
 | `POST /api/assets` | Takes `{ op: "rename" \| "delete" \| "replace", path, name?, extension?, baseMtime, dryRun? }`, changes the asset and the notes that use it, and returns `{ changes, usages }`. A replace is a dry run only here. |
 | `PUT /api/assets?path=…&extension=…&baseMtime=…` | Replaces the asset's content with the raw bytes (`X-Studio-Write: 1`, up to 25 MB), at its path or, with another extension, at its name with that one, and returns `{ changes, usages, mtimeMs }` |
@@ -285,10 +275,10 @@ Restores write under the notes lock; main and a reader answer `403`.
 | `POST /api/publish` | Takes `{ title, body }`, pushes what is not pushed, opens the pull request and answers the preview. `400` for a title that is empty or over 256 characters or a description over 60,000; `409` with nothing committed or when the branch already has a pull request; `502` when gh cannot read the pull request or open one (a push already made stays); main answers `403` first. |
 
 The push is `git push origin <HEAD>:refs/heads/cr/<slug>`
-(`server/preview/preview.ts`), never forced; after it the server moves
+(`server/services/preview/preview.ts`), never forced; after it the server moves
 `origin/cr/<slug>` itself with `git update-ref`. The build is the
 `Cloudflare Pages` check run on the pushed commit, read with `gh api` from
-origin's GitHub repository (`server/preview/check-runs.ts`) at most every 10
+origin's GitHub repository (`server/services/preview/check-runs.ts`) at most every 10
 seconds per commit, and a finished one every minute (Cloudflare can retry a
 build on the same commit). The 3 minutes before "No build" count from when
 `origin/cr/<slug>` last moved in this clone (its reflog: the push, or the
@@ -297,14 +287,14 @@ fetch that saw a push made elsewhere). The fallback preview link is
 branch slugged as Cloudflare does (`cr-<slug>`) and cut to 28 characters.
 
 The pull request is read with `gh pr list --repo <origin> --head
-cr/<slug> --state all` (`server/preview/pull-request.ts`; `--repo` only
+cr/<slug> --state all` (`server/services/preview/pull-request.ts`; `--repo` only
 when origin is on GitHub), the newest of this repository's winning, forks
 left out (`gh pr view <branch>` would take a fork's pull request from a
 branch of the same name). It is read at most every 15 seconds while there
 is none or it is open, every minute once merged or closed, and again after
 each push or publish. Publish runs `gh pr create --repo <origin> --base
-main --head cr/<slug>` (`create` in `server/preview/pull-request.ts`,
-called from `server/preview/publish.ts`).
+main --head cr/<slug>` (`create` in `server/services/preview/pull-request.ts`,
+called from `server/services/preview/publish.ts`).
 
 ### Change requests
 
@@ -391,7 +381,7 @@ events, so images reload without a page reload.
 ## Notes sync
 
 `/__fde_sync` (websocket) is the fumadocs-editor sync server for
-`content/notes` (`server/sync/notes-sync.ts`). It reads `.mdx` only, writes
+`content/notes` (`server/routes/notes-sync.ts`). It reads `.mdx` only, writes
 only notes that already exist (no page or folder creation; that goes
 through the file API), and merges changes made on disk into open documents.
 Page tree and asset changes never go through it, since it cannot update
@@ -431,13 +421,13 @@ instead of every stream retrying forever.
   10 seconds; a network failure, or a proxy's or gateway's error for a
   Studio that stopped, is not.
 - Then every stream and the sync are closed for good, so the page sends no
-  more requests, and `src/session/ServerDisconnected.tsx` covers the page.
+  more requests, and `src/app/ServerDisconnected.tsx` covers the page.
   A page leaving for another one shows nothing; one still there 10 seconds
   later, or back from the browser's back-forward cache, is watched again.
 
 ## Change requests and git
 
-`server/cr/` keeps no state of its own: git holds everything.
+`server/services/cr/` keeps no state of its own: git holds everything.
 
 - Main is a worktree of `origin/main` at `<STUDIO_HOME>/worktrees/_main`,
   checked out again at startup, on a fresh list and when a change request
@@ -453,14 +443,14 @@ instead of every stream retrying forever.
 - The pull request statuses come from `gh pr list` (the newest 1000; one
   older shows as Previewing), read at most every 30 seconds.
 - Drift from main is read with `git merge-tree`, in memory, so no worktree
-  is touched (`server/cr/drift.ts`).
+  is touched (`server/services/cr/drift.ts`).
 - Discard removes origin's side first (`gh pr close` with a comment, `git
   push origin --delete`). Then `beforeDiscard` (set from `onDiscard` in
   `server/app/studio-server.ts`) closes the change request's agents, watchers
   and sync and removes its transcripts, proposals and review threads under
   `STUDIO_HOME`; then the worktree and the local branch go
-  (`server/cr/manager.ts`).
-- A commit (`server/git/commit.ts`) adds and commits the picked paths alone
+  (`server/services/cr/manager.ts`).
+- A commit (`server/services/git/commit.ts`) adds and commits the picked paths alone
   with `git commit --cleanup=whitespace`, rolling the index back
   (`write-tree`/`read-tree`) when it fails. It is authored by the signed-in
   person, `Name <id+login@users.noreply.github.com>`.
@@ -470,7 +460,7 @@ instead of every stream retrying forever.
 ## Page tree and asset changes
 
 The page tree runs the same fumadocs `loader()` as `lib/source.ts` over
-`content/notes` (`server/tree/build.ts`), so it comes out as the site's
+`content/notes` (`server/services/tree/build.ts`), so it comes out as the site's
 sidebar does; hidden pages come from `lib/visible-page-tree.ts`.
 
 Tree changes go through `POST /api/tree`, asset changes through `POST
@@ -484,20 +474,20 @@ dry run plans without the lock.
 
 - A tree rename moves the page or folder first, so a move that fails writes
   nothing. Reorders swap the text of the `meta.yaml` entry lines
-  (`server/tree/meta-edit.ts`); hide and show edit one line
-  (`server/tree/visible-edit.ts`).
+  (`server/services/tree/meta-edit.ts`); hide and show edit one line
+  (`server/services/tree/visible-edit.ts`).
 - An asset rename moves the asset first, then writes each note
   atomically; if the first note cannot be written, the asset moves back. A
   replace that changes the extension writes the new file, rewrites the
   notes, and removes the old one only once the notes are written; if the
   first note cannot be written, the new file is removed instead.
-  References are read on the parsed note (`server/assets/refs.ts`), the
+  References are read on the parsed note (`server/services/assets/refs.ts`), the
   same reading as lint's `asset-missing`; rewritten Markdown destinations
   are percent-encoded.
 
 ## Agents
 
-The Studio is an ACP client (`server/agents/`). A chat is one ACP session
+The Studio is an ACP client (`server/services/agents/`). A chat is one ACP session
 over many turns: its agent is a process the Studio starts for the first
 message and keeps between turns (`connection.ts`, `conversations.ts`). The
 agent is started in the change request's worktree without the Studio's own
@@ -523,7 +513,7 @@ agent is started in the change request's worktree without the Studio's own
   chats share it). A message's context is checked against `_main` itself. A turn on main lists no changed
   files and has nothing to keep or revert. After each message the Studio
   adds one line saying the chat is on main and how to hand work on: an
-  agent there gets `create_cr { name, brief }` (`server/mcp/handoff.ts`),
+  agent there gets `create_cr { name, brief }` (`server/routes/mcp/handoff.ts`),
   once per message, which opens a change request and starts an author chat
   there with the same agent, for the person who sent the message, its
   brief as the first message (`from` on that turn names the chat on main).
@@ -599,7 +589,7 @@ agent is started in the change request's worktree without the Studio's own
 ## MCP server
 
 The tools every agent gets, at `POST /api/mcp` (Streamable HTTP,
-stateless; `server/mcp/http.ts`, body up to 4 MB). The same server serves
+stateless; `server/routes/mcp/http.ts`, body up to 4 MB). The same server serves
 the chats the Studio starts and your own agents in a terminal (see
 [Setup](../guide/setup.mdx#connect-an-agent-from-a-terminal)).
 
@@ -632,30 +622,30 @@ the chats the Studio starts and your own agents in a terminal (see
 - **Change request.** Every note and diagram tool takes `cr`, the change
   request's slug; a chat's token holds it to its own. `main` and `_main`
   are refused, as is a change request that does not exist. Paths go
-  through the path policy (`server/files/studio-files.ts`).
+  through the path policy (`server/services/files/studio-files.ts`).
 - **Access.** A `write` tool is refused to a reviewer chat and to a reader,
   and `tools/list` leaves out the tools a caller may not use; the others
   are open to anyone who may read. A reviewer comments instead of
   proposing; a suggestion it gives with a comment is a proposal a person
   still accepts, so it writes nothing.
-- **Who.** From the bearer token: a chat's (`server/mcp/grants.ts`, made
+- **Who.** From the bearer token: a chat's (`server/services/agents/acp/grants.ts`, made
   when its agent process starts, dropped when it stops, refused between
   turns; the grant's `runId` is the chat's id), or with sign-in on, a
   person's agent token from `POST /api/mcp/tokens`, acting with their role
   until they clear it or their session ends. With sign-in off a request
   without a token acts for the one person of this machine.
-- **Diagram writes** (`server/mcp/diagram-tools.ts`) go through `ctx.files`
+- **Diagram writes** (`server/routes/mcp/diagram-tools.ts`) go through `ctx.files`
   with the mtime they read, so a save made meanwhile is refused, not
   overwritten. Each write lays out what has no position
   (`packages/diagram/src/edit/auto-layout.ts`) and answers with the checks; elkjs and
   resvg load on first use, from the repository root's packages. The edits
   are shared with the site's CLI in `packages/diagram/src/edit/ops.ts`.
-- **More tools.** A tool is a `StudioTool` (`server/mcp/tool.ts`): a name,
+- **More tools.** A tool is a `StudioTool` (`server/routes/mcp/tool.ts`): a name,
   a zod input, `read` or `write`, and `run(args, ctx)` with the change
   request's worktree and its files. `writing-tools.ts`, `note-tools.ts` and
   `diagram-tools.ts` hold the tools; `studio-server.ts` mounts them
   together. `list_crs` and `create_cr` are the exception: they take no
-  change request, so they are `crTools` in `server/mcp/http.ts`, left out
+  change request, so they are `crTools` in `server/routes/mcp/http.ts`, left out
   of a chat's `tools/list` and refused to it, but for `create_cr` with a
   brief to a chat on main. A chat on main reads main with the read tools;
   every write tool tells it to call `create_cr`.
@@ -700,13 +690,13 @@ written whole through a temp file), outside `content/`. A comment of #85
 - **Who.** `by` is a person (their login) or an agent run with its agent,
   model and role.
 - **Review this CR.** The Review view starts a reviewer chat with a fixed
-  message (`src/review/texts.ts`): `cr_changes`, `read_note`, the style
+  message (`src/features/review/texts.ts`): `cr_changes`, `read_note`, the style
   guide when the repository has one (#90), `list_threads`, then
   `add_comment` per finding.
 
 ## Proposals
 
-Proposals live in `server/proposals/`, stored in
+Proposals live in `server/services/proposals/`, stored in
 `<STUDIO_HOME>/proposals/<slug>/`, outside the branch; a discarded change
 request's go with it.
 
@@ -718,7 +708,7 @@ request's go with it.
 - **Placement.** A hunk applies where its own blocks still are, word for
   word; its neighbours only break a tie. Once its own blocks changed it is
   stale. The page runs the same placement on the text in the editor
-  (`src/review/suggestions/`), so typing never waits for a save.
+  (`src/features/review/suggestions/`), so typing never waits for a save.
 - **Accept** writes under the notes lock, from the mtime it read.
 
 ## The site's look
@@ -749,7 +739,7 @@ the site shows here with no Studio edit:
   the code block frame sets `--notes-diagram-bg`, the plate behind each
   edge label;
 - `<Diagram>` cards and the diagram editor: `styles/diagram.css`, imported
-  by `src/plugins/diagram/Diagram.tsx` (`src/diagrams/diagram-page.css`
+  by `src/features/editor/plugins/diagram/Diagram.tsx` (`src/features/diagrams/diagram-page.css`
   adds only the editor's chrome).
 
 What the editor cannot import stays a copy in its plugin: the accordion
@@ -760,19 +750,19 @@ card, the code block frame, `SvgDiagram`, `YouTube`, `HtmlEmbed` and the
 changes, not on other edits to the file.
 
 The editor's block drag handle is drawn as a grip
-(`src/editor/drag-handle.css`, found by its `aria-label`;
-`tests/src/editor/drag-handle.test.ts` fails if a new editor version
+(`src/features/editor/drag-handle.css`, found by its `aria-label`;
+`tests/features/editor/drag-handle.test.ts` fails if a new editor version
 changes it).
 
 ## Plugins
 
 What the editor understands comes from plugins in `src/plugins/<name>/`.
-`src/plugins/index.ts` finds every `index.ts` or `index.tsx` there
-(`import.meta.glob`), and the registry (`src/plugins/registry.ts`) checks
+`src/features/editor/plugins/index.ts` finds every `index.ts` or `index.tsx` there
+(`import.meta.glob`), and the registry (`src/features/editor/plugins/registry.ts`) checks
 and merges them, so adding a plugin needs no change anywhere else.
 
 ```ts
-// src/plugins/svg-diagram/index.ts, shortened
+// src/features/editor/plugins/svg-diagram/index.ts, shortened
 import type { UiComponentSpec } from '@fumadocs-editor/ui';
 import { definePlugin } from '../plugin';
 import './svg-diagram.css'; // the plugin's own styles
@@ -797,14 +787,14 @@ export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] })
 - `decorate` draws over what the editor keeps as source (inline JSX tags,
   text directives, verbatim blocks) with ProseMirror decorations. It
   changes how the document looks, never the document.
-  `src/editor/decorations.ts` puts every plugin's decorator on the live
+  `src/features/editor/decorations.ts` puts every plugin's decorator on the live
   editor, as one of `MdxEditor.Root`'s `extensions` (the suggestion
   layer, the graph tools and the agent panel's place come the same way,
   made with the root in `NoteEditor.tsx`). Cards share
-  `src/plugins/cards.css`; `.studio-hidden` hides the source a card covers.
+  `src/features/editor/plugins/cards.css`; `.studio-hidden` hides the source a card covers.
 - A plugin must export a default; two plugins may not share an `id` or
   define the same component.
-- `tests/src/plugins/round-trip.test.ts` parses and writes back every note
+- `tests/features/editor/plugins/round-trip.test.ts` parses and writes back every note
   with all plugins loaded, one test per note, and fails if a byte changes.
   Put sample MDX for a new component in `src/plugins/<name>/fixtures/*.mdx`
   to add it to that test.
@@ -816,7 +806,7 @@ The plugins:
   and an icon menu to change them. The editor only parses the admonition
   names in core's `ADMONITION_TYPES`, so the plugin adds the site's own
   (`example`, `caution`, `important`, `error`, from `packages/mdx/src/notes-syntax.ts`)
-  to that object at load; `tests/src/plugins/callout.test.ts` fails if a
+  to that object at load; `tests/features/editor/plugins/callout.test.ts` fails if a
   new editor version stops reading it. A callout whose title has
   formatting, or that holds an accordion group, stays source (the editor's
   rule).
@@ -839,7 +829,7 @@ The plugins:
   and a Mermaid diagram. The menu lists components, so each is a spec named
   `studio-insert-…` whose `insert` returns the site's syntax (or, for
   Mermaid, the editor's code block) instead of a node of its own; no note
-  has such a tag, and `tests/src/plugins/site-inserts.test.ts` checks that
+  has such a tag, and `tests/features/editor/plugins/site-inserts.test.ts` checks that
   none parses. The menu matches the query against labels only, hence the
   label "Mermaid diagram".
 - `diagram`: `<Diagram>`, drawn with the site's renderer and the count of
@@ -868,19 +858,19 @@ read-only. Hence (#174):
 
 - **Graph tools.** Keyword and Tag, which wrap a text selection and
   toggle the marker around it, are `bubbleItems`
-  (`src/graph/bubble-items.tsx`). Graph node is a widget button at the end
+  (`src/features/editor/graph/bubble-items.tsx`). Graph node is a widget button at the end
   of a heading and a click on a keyword or tag opens its fields, both from
-  the graph plugin (`src/graph/graph-plugin.ts`), since they also work at
+  the graph plugin (`src/features/editor/graph/graph-plugin.ts`), since they also work at
   a caret, which the bubble does not show for. The fields
   (`GraphTools.tsx`) keep their own state and focus, so they stay a React
-  popup, placed at the marker (`src/graph/place.ts`); Remove and the
+  popup, placed at the marker (`src/features/editor/graph/place.ts`); Remove and the
   frontmatter note are in them (#176).
 - **Suggestion decisions** stay custom. The cards and thread marks
-  (`src/review/visual.ts`, `Suggestions.tsx`) are drawn at blocks,
+  (`src/features/review/visual.ts`, `Suggestions.tsx`) are drawn at blocks,
   several at once, whatever the selection, and also in read-only review;
   `SuggestionBar` is a fixed bar over the editor with counts and
   Accept all / Reject all. None of them is tied to the selection.
-- **Place reporting** (`src/editor/report-place.ts`) draws nothing: it
+- **Place reporting** (`src/features/editor/report-place.ts`) draws nothing: it
   tells the agent panel where the selection is. It stays a plugin in
   `extensions`.
 

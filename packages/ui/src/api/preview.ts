@@ -1,7 +1,7 @@
-// Client for the preview API (server/preview/api.ts), in the worktree the
-// page edits (src/api/workspace.ts). Types mirror server/preview/preview.ts,
-// server/preview/check-runs.ts, server/preview/pull-request.ts and
-// server/preview/publish.ts.
+// Client for the preview API (server/routes/preview.ts), in the worktree the
+// page edits (src/api/workspace.ts). Types mirror server/services/preview/preview.ts,
+// server/services/preview/check-runs.ts, server/services/preview/pull-request.ts and
+// server/services/preview/publish.ts.
 
 import { errorOf, readJson } from './json';
 import { studioFetch } from './session';

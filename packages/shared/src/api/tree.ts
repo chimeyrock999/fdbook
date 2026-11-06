@@ -37,5 +37,5 @@ export type TreeMissing = Base & { kind: 'missing'; value: string; meta: string 
 export type TreeNode = TreeFolder | TreePage | TreeSeparator | TreeLink | TreeMissing;
 
 // The 409 of a delete whose files changed since its dry run: the UI reads
-// the list again on it (src/tree/DeleteDialog.tsx). No Node imports here.
+// the list again on it (src/features/tree/DeleteDialog.tsx). No Node imports here.
 export const CHANGED_SINCE = 'the notes changed since the dry run: check the list again';

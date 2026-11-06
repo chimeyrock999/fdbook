@@ -15,7 +15,7 @@ import { NewNote } from '#features/agents/NewNote.tsx';
 import { roleLabel } from '#features/agents/transcript.ts';
 import { pickOf, type Agents } from '#features/agents/useAgents.ts';
 
-// Not a conversation id (server/agents/conversations.ts makes those of [a-z0-9-]).
+// Not a conversation id (server/services/agents/chat/conversations.ts makes those of [a-z0-9-]).
 const NEW_CHAT = ':new';
 
 // A message on its way: in its chat (null: the new chat it starts), shown
@@ -80,7 +80,7 @@ function NewChat({ agents, onMain, sending, onSend, onAction }: {
 // The agent panel, at the right of the editor: a chat with an agent over
 // many turns, a new chat, and the earlier chats here (History). On main
 // (not `inCr`) agents only read: no actions, no new note, and an agent
-// opens a change request for a change (server/agents/main-only.ts).
+// opens a change request for a change (server/services/agents/acp/main-only.ts).
 // Agents run only for someone who may run them (`canRun`); others follow
 // and read. `?chat=` opens a chat (OPENED_CHAT). `canDecide`: may keep
 // or revert what a turn changed (a writer). `asking`: the chat whose agent

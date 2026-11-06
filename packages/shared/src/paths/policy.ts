@@ -31,7 +31,7 @@ export function classifyPath(path: string): PathKind | null {
 }
 
 // Whether a file the Studio may touch is text: notes, meta.yaml, diagrams,
-// and SVG and HTML assets. The diff (server/git/diff.ts) sends only the size of others.
+// and SVG and HTML assets. The diff (server/services/git/diff.ts) sends only the size of others.
 export function isTextPath(path: string) {
   const kind = classifyPath(path);
   return kind !== null && (kind !== 'asset' || ['svg', 'html'].includes(extensionOf(path)));

@@ -12,13 +12,13 @@ export const SessionContext = createContext<SessionValue>(OFF);
 
 export const useSession = () => useContext(SessionContext);
 
-// What the server lets the role do (server/security/access.ts): the UI
+// What the server lets the role do (server/services/auth/access.ts): the UI
 // hides the rest, the server is what refuses it.
 export function rightsOf(role: Role | null) {
   const has = (needed: Role) => atLeast(role ?? 'none', needed);
   return {
     write: has('writer'),
-    // Agents run as the host's user (server/agents): an admin's.
+    // Agents run as the host's user (server/services/agents): an admin's.
     agents: has('admin'),
     // What is on origin (a pushed branch, an open pull request) needs an admin.
     discard: (cr: ChangeRequest) => has('admin') || (has('writer') && !touchesOrigin(cr)),

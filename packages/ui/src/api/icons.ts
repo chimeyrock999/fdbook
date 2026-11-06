@@ -1,4 +1,4 @@
-// Client for the icon names (server/icons/api.ts).
+// Client for the icon names (server/routes/icons.ts).
 
 import { readJson } from './json';
 import { studioFetch } from './session';

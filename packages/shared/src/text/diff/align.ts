@@ -1,5 +1,5 @@
 // Which items of two lists are the same, by exact text. No imports, so the
-// server (server/proposals) aligns blocks the same way as the diff view.
+// server (server/services/proposals) aligns blocks the same way as the diff view.
 
 // The most cells the alignment table may have (a million: under 10 MB, a
 // few milliseconds). A middle larger than that, a note rewritten through,

@@ -4,7 +4,7 @@ import { blockSpans } from './diff/block-spans.ts';
 import { findBlock } from './frontmatter-block.ts';
 
 // The dialects the editor parses notes with: what the plugins turn on
-// (src/plugins, buildEditorConfig). The server cannot load the plugins (they
+// (src/features/editor/plugins, buildEditorConfig). The server cannot load the plugins (they
 // are React), so a test keeps this equal to theirs. Only the dialects decide
 // where a block starts and ends; the components do not.
 export const NOTE_SYNTAX: SyntaxOptions = { directives: true };

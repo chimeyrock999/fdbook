@@ -132,7 +132,7 @@ account.
 
 Until a note's edits are saved, the page also keeps them in the tab's
 sessionStorage, per person, change request and note
-(`src/editor/unsaved.ts`). If the page went away first (the web sign-in
+(`src/features/editor/unsaved.ts`). If the page went away first (the web sign-in
 leaves for GitHub, a reload), opening the note again offers **Restore
 edits**, with a warning when the note changed on disk since; someone who
 may no longer write can copy them.
@@ -195,7 +195,7 @@ editor is [fumadocs-editor](https://github.com/fuma-nama/fumadocs-editor):
   editor, an agent) are merged into the open note. If the same block
   changed on both sides, a dialog asks which version to keep.
 - Images under `/notes/…` show through the file API
-  (`src/media/asset-media.ts`), so a new or replaced one shows before the
+  (`src/features/media/asset-media.ts`), so a new or replaced one shows before the
   site has it.
 - Light and dark follow the system. The look is the site's own, imported
   rather than copied, so a change on the site shows here with no Studio
@@ -421,7 +421,7 @@ when none does). Under
 not renamed or deleted here. Filter by name, or show the unused files only.
 The list loads only while the Assets view, an asset page or the diagram
 editor is shown; otherwise it keeps the last one and asks the server
-nothing (`src/assets/useAssetList.ts`).
+nothing (`src/features/assets/useAssetList.ts`).
 
 A file opens its asset page in the main pane, and its row is marked as the
 open one. The URL names it (`?asset=public/notes/…`), so back and forward
@@ -564,7 +564,7 @@ the file's [diff against main](#diff). Every file starts picked, and so
 does a file that changes later; uncheck what should wait.
 
 The commit message is required. It starts as a suggestion for the picked
-files (`src/changes/message.ts`), for example:
+files (`src/features/changes/message.ts`), for example:
 
 | Picked | Suggestion |
 | --- | --- |
@@ -610,7 +610,7 @@ an asset that is still there.
 
 - **Rendered**, for a note: its changed frontmatter keys, old over new,
   then its blocks as the editor renders them, matched by text
-  (`src/diff/diff-blocks.ts`); between two unchanged blocks, what main had
+  (`src/features/diff/diff-blocks.ts`); between two unchanged blocks, what main had
   shows struck through in red over what replaced it in green. Each run is
   rendered from its own side's text, read only. An unchanged stretch keeps
   one block at each end and folds the rest behind a button. A side that does
@@ -684,7 +684,7 @@ The header's main action follows the change request: **Commit** (files not
 committed; it opens Changes at the commit message) → **Preview** (commits
 not pushed) → **Publish** (all pushed, no pull request) → **View PR** (the
 pull request on GitHub, whatever its state), and **Update PR** for commits
-made after publishing (`src/changes/primary-action.ts`). With nothing to
+made after publishing (`src/features/changes/primary-action.ts`). With nothing to
 commit yet, Commit is off. Pushes and Publish wait while the open note has
 edits not saved yet. On a phone the action shows its icon only, named for
 assistive tech, with its tooltip still saying what it does; the **Notes**
@@ -808,7 +808,7 @@ the agent for each role, kept in this browser.
   with their chat or the change request. While that turn goes on, an edit
   the agent proposes to other lines of the selected note is flagged.
 - **Actions.** In an author chat (and a new one), a row over the message
-  box offers one-click actions (`src/agents/actions.ts`): with a selection,
+  box offers one-click actions (`src/features/agents/actions.ts`): with a selection,
   **Rewrite**, **Tighten**, **Expand**, **VI ↔ EN**, **Callout**, **Table**
   and **Diagram**; without one, **Fill frontmatter**, **Suggest links** and
   **Diagram**. **Diagram** changes the diagram the note shows there

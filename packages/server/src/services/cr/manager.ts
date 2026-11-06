@@ -69,9 +69,9 @@ export type ChangeRequestOptions = {
   pullRequests?: ListPullRequests;
   // The Cloudflare Pages project, for the preview links.
   pagesProject?: string | null;
-  // Reads the preview builds (server/preview); gh unless a test stands in.
+  // Reads the preview builds (server/services/preview); gh unless a test stands in.
   builds?: BuildReader;
-  // Reads and opens a branch's pull request (server/preview); gh unless a test stands in.
+  // Reads and opens a branch's pull request (server/services/preview); gh unless a test stands in.
   branchPullRequests?: BranchPullRequestReader;
   closePullRequest?: ClosePullRequest;
   // STUDIO_STALE_DAYS.

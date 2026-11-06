@@ -2,8 +2,8 @@ import { errorOf, readJson } from './json';
 import { studioFetch } from './session';
 import { API_BASE } from './workspace';
 
-// Client for the assets API (server/assets/api.ts). Types mirror
-// server/assets/ops.ts; paths are worktree paths (`public/notes/…`,
+// Client for the assets API (server/routes/assets.ts). Types mirror
+// server/services/assets/ops.ts; paths are worktree paths (`public/notes/…`,
 // `content/notes/…`).
 
 // Where a note uses an asset. `unsure`: the Studio cannot rewrite it (the

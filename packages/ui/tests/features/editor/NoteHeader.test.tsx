@@ -58,7 +58,7 @@ function Fixed({ source, onOpenSource = vi.fn() }: { source: string; onOpenSourc
 
 const details = () => userEvent.click(screen.getByRole('button', { name: /Edit details/ }));
 
-// The server's list (server/icons/api.ts), read here as Node reads it.
+// The server's list (server/routes/icons.ts), read here as Node reads it.
 // `without` drops names, as an older site lucide-react would lack them.
 const iconNames = vi.hoisted(() => ({ fail: 0, without: [] as string[] }));
 vi.mock('#api/icons.ts', () => ({

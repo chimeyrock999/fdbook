@@ -1,5 +1,5 @@
-// Client for the page tree (server/tree/api.ts). Types mirror
-// server/tree/types.ts and server/tree/ops.ts; paths are relative to
+// Client for the page tree (server/routes/tree.ts). Types mirror
+// @fdbook/shared api/tree.ts and server/services/tree/ops.ts; paths are relative to
 // content/notes.
 
 import { errorOf, readJson } from './json';

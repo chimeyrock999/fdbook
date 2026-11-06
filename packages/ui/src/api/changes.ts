@@ -1,6 +1,6 @@
-// Client for the changes API (server/git/api.ts), in the worktree the page
-// edits (src/api/workspace.ts). Types mirror server/git/status.ts,
-// server/git/history.ts and server/git/diff.ts; paths are worktree paths.
+// Client for the changes API (server/routes/git.ts), in the worktree the page
+// edits (src/api/workspace.ts). Types mirror server/services/git/status.ts,
+// server/services/git/history.ts and server/services/git/diff.ts; paths are worktree paths.
 
 import { errorOf, readJson } from './json';
 import { studioFetch } from './session';

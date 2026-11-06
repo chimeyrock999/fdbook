@@ -1,5 +1,5 @@
-// Client for change requests (server/cr/api.ts). Types mirror
-// server/cr/manager.ts. Always at /api/crs, whichever worktree the page edits.
+// Client for change requests (server/routes/cr.ts). Types mirror
+// server/services/cr/manager.ts. Always at /api/crs, whichever worktree the page edits.
 
 import { errorOf, readJson } from './json';
 import { studioFetch } from './session';

@@ -55,7 +55,7 @@ export function pickOf(agents: AgentInfo[] | null, picks: Picks, role: AgentRole
 // The agents this Studio can run, the one picked per role (kept in this
 // browser), whether the agent panel is open, and, with change requests on
 // (`enabled`: main and each change request), the conversations here as
-// they stream in (server/agents/conversations.ts).
+// they stream in (server/services/agents/chat/conversations.ts).
 export function useAgents(client: AgentsClient, enabled: boolean, onMain = false) {
   const [agents, setAgents] = useState<AgentInfo[] | null>(null);
   const [picks, setPicks] = useState(readPicks);

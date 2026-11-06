@@ -2,7 +2,7 @@
 // paths: the notes, the pages' files (under `publicDir`, which the site
 // serves at /), the diagrams <Diagram src> draws, and the URL the site gives
 // the notes. Set once from fdbook.config.ts when the server starts
-// (server/project.ts); the UI gets the same through Vite's `define`. No Node
+// (server/infra/config/project.ts); the UI gets the same through Vite's `define`. No Node
 // imports: the UI reads this module too.
 export type Areas = { notes: string; assets: string; publicDir: string; diagrams: string; baseUrl: string };
 

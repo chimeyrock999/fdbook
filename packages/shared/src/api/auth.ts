@@ -1,5 +1,5 @@
 // What the server and the page both need to know about sign-in. No Node
-// imports: the UI reads this module too (src/api/session.ts, src/session).
+// imports: the UI reads this module too (src/api/session.ts, src/features/session).
 
 // How people sign in: a code typed on github.com (device), or a redirect to
 // GitHub and back (web). The first one is the sign-in page's main button.
@@ -33,5 +33,5 @@ export const SESSION_OFF: SessionState = { auth: 'off', flows: [], repo: null, u
 
 // Whether discarding a change request touches origin: its branch is there
 // (it goes too) or its pull request is open (it is closed). Only an admin
-// may do that (server/cr/manager.ts).
+// may do that (server/services/cr/manager.ts).
 export const touchesOrigin = ({ pushed, status }: { pushed: boolean; status: string }) => pushed || status === 'review';

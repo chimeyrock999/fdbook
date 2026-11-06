@@ -1,5 +1,5 @@
-// Client for the agents API (server/agents/api.ts), in the worktree the page
-// edits (src/api/workspace.ts). Types are server/agents/shared.ts.
+// Client for the agents API (server/routes/agents.ts), in the worktree the page
+// edits (src/api/workspace.ts). Types are @fdbook/shared api/agents.ts.
 
 import type { AgentId, AgentInfo, AgentRole, Attachment, Conversation, ConversationEvent, ConversationRead, ConversationTotals, Mention, MentionKind, MessageContext, MessageSelection, StreamEvent, TurnChange } from '@fdbook/shared/agents.ts';
 import { watchEvents } from './connection';

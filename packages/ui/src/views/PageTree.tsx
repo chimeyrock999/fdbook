@@ -59,7 +59,7 @@ type View = {
 };
 
 // The icon the site's sidebar shows. The server keeps only names the site's
-// lucide has (server/tree/build.ts); the Studio's lucide-react, already
+// lucide has (server/services/tree/build.ts); the Studio's lucide-react, already
 // loaded for the UI, still has every one. Null: Folder / FileText.
 const iconOf = (name: string | null): LucideIcon | undefined => (name === null ? undefined : (icons as Partial<Record<string, LucideIcon>>)[name]);
 

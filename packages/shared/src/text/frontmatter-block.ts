@@ -1,5 +1,5 @@
 // Where a note's YAML frontmatter block sits. No imports, so the server
-// (server/tree) finds the same block as the editor.
+// (server/services/tree) finds the same block as the editor.
 
 // `---` on the first line, the YAML, then `---` on its own line.
 const BLOCK = /^---(\r?\n)(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)/;

@@ -1,6 +1,6 @@
-// Client for the proposals and review threads APIs (server/proposals/api.ts,
-// server/review/api.ts), in the worktree the page edits (src/api/workspace.ts).
-// Types are server/proposals/shared.ts and server/review/shared.ts.
+// Client for the proposals and review threads APIs (server/routes/proposals.ts,
+// server/routes/review.ts), in the worktree the page edits (src/api/workspace.ts).
+// Types are @fdbook/shared api/proposals.ts and @fdbook/shared api/review.ts.
 
 import type { DeleteProposalView, ProposalHunk, ProposalOp, ProposalView } from '@fdbook/shared/proposals.ts';
 import type { Anchor } from '@fdbook/shared/anchors.ts';

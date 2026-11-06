@@ -1,5 +1,5 @@
-// Client for the Studio lint (server/lint/api.ts). Types mirror
-// server/lint/types.ts.
+// Client for the Studio lint (server/routes/lint.ts). Types mirror
+// server/services/lint/types.ts.
 
 import { errorOf, readJson } from './json';
 import { studioFetch } from './session';

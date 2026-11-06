@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 // editor's look; the note's content, and the Studio's own components, keep
 // the site's prose. The rule's own selector, run against editor-like DOM.
 
-// The Studio's root: jsdom tests cannot read server/config's file URLs.
+// The Studio's root: jsdom tests cannot read server/infra/config's file URLs.
 const studioProse = readFileSync(join(import.meta.dirname, '../src/notes-prose.css'), 'utf8');
 
 function scopeSelector() {

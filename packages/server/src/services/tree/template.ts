@@ -1,7 +1,7 @@
 // A new page gets the frontmatter the notes use, as the retired Obsidian
 // plugin wrote it: title, an empty description, and graph metadata named
 // after the slug. The title is a double-quoted YAML string, with `\` and `"`
-// escaped. Slugs come from the UI's `slugify` (src/slug.ts), so the server
+// escaped. Slugs come from the UI's `slugify` (@fdbook/shared text/slug.ts), so the server
 // accepts exactly what the dialogs make.
 
 import { slugify } from '@fdbook/shared/slug.ts';

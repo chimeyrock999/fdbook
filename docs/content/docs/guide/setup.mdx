@@ -27,7 +27,7 @@ npm run docs                     # the Studio on these docs, http://127.0.0.1:43
 npm run studio -- <folder>       # the Studio on another project
 ```
 
-Both run `packages/server/src/index.ts`; which folder it opens and what it
+Both run `packages/server/src/bin/index.ts`; which folder it opens and what it
 reads there is in [Configuration](./configuration.mdx).
 
 ### After a pull
@@ -39,7 +39,7 @@ to restart the Studio.
 
 The server refuses to start when a direct dependency is missing or
 installed at another version than the root `package-lock.json`
-pins, and names the command to run and the packages (`server/config/deps.ts`).
+pins, and names the command to run and the packages (`server/infra/config/deps.ts`).
 The tests stop the same way (`@fdbook/testing`'s `global-setup.ts`). A package put in place with `npm link` is skipped.
 
 ## Host and port
@@ -161,7 +161,7 @@ claude mcp add --transport http notes-studio http://127.0.0.1:4310/api/mcp
 codex mcp add notes-studio --url http://127.0.0.1:4310/api/mcp
 
 # Any stdio client (add STUDIO_MCP_TOKEN=<token> with sign-in on)
-STUDIO_MCP_URL=http://127.0.0.1:4310/api/mcp node packages/server/src/mcp/stdio.ts
+STUDIO_MCP_URL=http://127.0.0.1:4310/api/mcp node packages/server/src/routes/mcp/stdio.ts
 ```
 
 With sign-in on, a token acts with the role of the person who made it,
