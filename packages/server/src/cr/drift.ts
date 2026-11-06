@@ -1,4 +1,4 @@
-import { CommandError, git } from '#git/command.ts';
+import { CommandError, git } from '#process/command.ts';
 
 // How far a change request is from main (#21): the commits main has that the
 // branch does not, and the files a merge of main into it would conflict in.

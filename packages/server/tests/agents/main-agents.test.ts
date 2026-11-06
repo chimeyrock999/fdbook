@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Conversation, ConversationEvent } from '@fdbook/shared/agents.ts';
 import type { ChangeRequest } from '#cr/manager.ts';
-import { git } from '#git/command.ts';
+import { git } from '#process/command.ts';
 import { onMainInfo } from '@fdbook/shared/agents.ts';
 import { fakeProfile, messagesOf } from '#tests/support/agents.ts';
 import { sender } from '#tests/support/auth.ts';

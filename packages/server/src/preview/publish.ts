@@ -1,4 +1,4 @@
-import { CommandError, git } from '#git/command.ts';
+import { CommandError, git } from '#process/command.ts';
 import { HttpError } from '#http/http.ts';
 import { loadHistory } from '#git/history.ts';
 import { loadPreview, previewUrlOf, pushHead, type Preview, type PreviewOptions } from './preview.ts';

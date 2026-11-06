@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { parse } from 'yaml';
-import { run } from '#git/command.ts';
+import { run } from '#process/command.ts';
 import { NOTES_DIR } from '#security/paths.ts';
 import { AGENT_NAMES, type AgentId, type AgentInfo, type AgentRole } from '@fdbook/shared/agents.ts';
 

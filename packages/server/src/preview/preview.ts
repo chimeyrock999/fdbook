@@ -1,5 +1,5 @@
 import { HttpError } from '#http/http.ts';
-import { CommandError, git, run } from '#git/command.ts';
+import { CommandError, git, run } from '#process/command.ts';
 import { CR_BRANCH_PREFIX } from '@fdbook/shared/cr-slug.ts';
 import { loadChanges } from '#git/status.ts';
 import { buildOf, type Build, type BuildReader } from './check-runs.ts';

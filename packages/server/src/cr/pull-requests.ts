@@ -1,4 +1,4 @@
-import { run } from '#git/command.ts';
+import { run } from '#process/command.ts';
 import { CR_BRANCH_PREFIX } from '@fdbook/shared/cr-slug.ts';
 
 export type PullRequest = { number: number; url: string; state: 'OPEN' | 'MERGED' | 'CLOSED'; headRefName: string };

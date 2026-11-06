@@ -1,4 +1,4 @@
-import { CommandError, git, run } from '#git/command.ts';
+import { CommandError, git, run } from '#process/command.ts';
 
 export type ClosePullRequest = (number: number) => Promise<void>;
 

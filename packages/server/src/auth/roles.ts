@@ -1,4 +1,4 @@
-import { CommandError, run } from '#git/command.ts';
+import { CommandError, run } from '#process/command.ts';
 
 import type { Role } from '@fdbook/shared/auth.ts';
 

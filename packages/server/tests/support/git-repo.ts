@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { git } from '#git/command.ts';
+import { git } from '#process/command.ts';
 import type { PullRequest } from '#cr/pull-requests.ts';
 import { createBuildReader, type CheckRun } from '#preview/check-runs.ts';
 import { createBranchPullRequestReader, type BranchPullRequest, type NewPullRequest, type PullRequestGh } from '#preview/pull-request.ts';

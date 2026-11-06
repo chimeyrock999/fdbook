@@ -5,7 +5,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { git } from '#git/command.ts';
+import { git } from '#process/command.ts';
 import type { StudioTool } from '#mcp/tool.ts';
 import type { Conversation, TurnChange } from '@fdbook/shared/agents.ts';
 import type { ChangeRequest } from '#cr/manager.ts';

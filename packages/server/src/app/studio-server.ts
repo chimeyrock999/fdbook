@@ -83,7 +83,7 @@ export async function startStudioServer({ host = DEFAULT_STUDIO_HOST, port = DEF
       root: uiRoot,
       appType: 'spa',
       server: { middlewareMode: true, port: boundPort, ws: { server } },
-      // The UI's copy of the project's areas (security/asset-types.ts).
+      // The UI's copy of the project's areas (@fdbook/shared, paths/areas.ts).
       define: { __FDBOOK_AREAS__: JSON.stringify(currentAreas()) },
     });
   } catch (error) {

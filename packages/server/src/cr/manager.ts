@@ -9,7 +9,7 @@ import { previewUrlOf } from '#preview/preview.ts';
 import { DEFAULT_STALE_DAYS } from '#config/config.ts';
 import type { BranchPullRequestReader } from '#preview/pull-request.ts';
 import { driftOf, type Drift } from './drift.ts';
-import { CommandError, git, lines } from '#git/command.ts';
+import { CommandError, git, lines } from '#process/command.ts';
 import { createPullRequestReader, ghPullRequests, type ListPullRequests } from './pull-requests.ts';
 import { deleteRemoteBranch, ghClosePullRequest, REMOTE, type ClosePullRequest } from './remote.ts';
 import { CR_BRANCH_PREFIX, crSlug, isCrSlug } from '@fdbook/shared/cr-slug.ts';

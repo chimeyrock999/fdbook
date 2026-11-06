@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { git } from '#git/command.ts';
+import { git } from '#process/command.ts';
 import type { ChangeRequest, Discard } from '#cr/manager.ts';
 import { fakeAuth, sender, signInWith, startAuthStudio, type AuthStudio, type FakeGitHub, type Send } from '#tests/support/auth.ts';
 import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '#tests/support/git-repo.ts';

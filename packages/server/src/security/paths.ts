@@ -2,7 +2,7 @@ import { lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import { ASSET_TYPES, ASSETS_DIR, BASE_URL, classifyPath, DIAGRAMS_DIR, EDITABLE_AREAS, extensionOf, NOTES_DIR, PUBLIC_DIR, type PathKind } from '@fdbook/shared/asset-types.ts';
 
-// The path policy: what may be touched (classifyPath, in asset-types.ts so
+// The path policy: what may be touched (classifyPath, in @fdbook/shared so
 // the UI can ask it too) and where it is on disk.
 export { ASSET_TYPES, ASSETS_DIR, BASE_URL, classifyPath, DIAGRAMS_DIR, EDITABLE_AREAS, extensionOf, NOTES_DIR, PUBLIC_DIR, type PathKind };
 
