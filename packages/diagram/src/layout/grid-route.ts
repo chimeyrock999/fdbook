@@ -23,13 +23,12 @@ class MinHeap {
 
   pop() {
     const first = this.entries[0];
-    const last = this.entries.pop()!;
-    if (!this.entries.length) return first;
+    const last = this.entries.pop();
+    if (last === undefined || !this.entries.length) return first;
     let index = 0;
-    while (true) {
+    while (index * 2 + 1 < this.entries.length) {
       const left = index * 2 + 1;
       const right = left + 1;
-      if (left >= this.entries.length) break;
       const child = right < this.entries.length && this.entries[right].distance < this.entries[left].distance ? right : left;
       if (this.entries[child].distance >= last.distance) break;
       this.entries[index] = this.entries[child];
@@ -62,7 +61,7 @@ function pointOnSegmentInterior(point: Point, start: Point, end: Point) {
   return dot < -epsilon;
 }
 
-const pointKey = (point: Point) => `${point[0]}\u0000${point[1]}`;
+const pointKey = (point: Point) => `${String(point[0])}\u0000${String(point[1])}`;
 
 function segmentBlocked(start: Point, end: Point, obstacles: readonly Rect[]) {
   const minX = Math.min(start[0], end[0]);
@@ -122,7 +121,7 @@ function segmentConflictsWithAvoided(start: Point, end: Point, avoided: readonly
       || minX > Math.max(segment.start[0], segment.end[0]) + 0.0001
       || maxY < Math.min(segment.start[1], segment.end[1]) - 0.0001
       || minY > Math.max(segment.start[1], segment.end[1]) + 0.0001)) return false;
-    return (!allowCrossings && (properSegmentIntersection(start, end, segment.start, segment.end)
+    return (!allowCrossings && (properSegmentIntersection(start, end, segment.start, segment.end) !== null
       || orthogonalTouchOnInterior(start, end, segment.start, segment.end)))
       || collinearOverlap(start, end, segment.start, segment.end) >= minimumOverlapPx;
   });
@@ -230,7 +229,12 @@ export function shortestOrthogonalGridRoute({
     if (!nodes.has(pointKey(startStub)) || !nodes.has(pointKey(endStub))) return null;
 
     type Direction = 'R' | 'L' | 'D' | 'U';
-    const adjacency = new Map<string, [string, number, Direction][]>([...nodes.keys()].map((key) => [key, []]));
+    const adjacency = new Map<string, [string, number, Direction][]>();
+    const link = (from: Point, to: Point, distance: number, direction: Direction) => {
+      const links = adjacency.get(pointKey(from)) ?? [];
+      links.push([pointKey(to), distance, direction]);
+      adjacency.set(pointKey(from), links);
+    };
     const connectLine = (line: Point[], horizontal: boolean) => {
       for (let index = 0; index < line.length - 1; index += 1) {
         const left = line[index];
@@ -239,8 +243,8 @@ export function shortestOrthogonalGridRoute({
         if (segmentConflictsWithAvoided(left, right, avoidedSegments, minimumAvoidedOverlapPx, allowAvoidedCrossings)) continue;
         if (borderSegments.some((segment) => collinearOverlap(left, right, segment.start, segment.end) > 0.0001)) continue;
         const distance = Math.abs(right[0] - left[0]) + Math.abs(right[1] - left[1]);
-        adjacency.get(pointKey(left))!.push([pointKey(right), distance, horizontal ? 'R' : 'D']);
-        adjacency.get(pointKey(right))!.push([pointKey(left), distance, horizontal ? 'L' : 'U']);
+        link(left, right, distance, horizontal ? 'R' : 'D');
+        link(right, left, distance, horizontal ? 'L' : 'U');
       }
     };
     for (const y of orderedY) connectLine(orderedX.map((x) => nodes.get(pointKey([x, y]))).filter((point) => point !== undefined), true);
@@ -287,7 +291,9 @@ export function shortestOrthogonalGridRoute({
     if (!targetState) continue;
     const reversed: Point[] = [];
     for (let key: string | undefined = targetState.key; key; key = previous.get(key)) {
-      reversed.push(nodes.get(key.split('|')[0])!);
+      const node = nodes.get(key.split('|')[0]);
+      if (!node) throw new Error('a search state names a point outside the graph');
+      reversed.push(node);
       if (key === sourceState) break;
     }
     if (pointKey(reversed[reversed.length - 1]) !== source) return null;

@@ -37,7 +37,7 @@ function createSpatialGrid<T>(cellSize: number, maxCells = 4096) {
   const items: T[] = [];
   // Items whose own box cannot be walked are candidates for every query.
   const overflow: T[] = [];
-  const keyOf = (x: number, y: number) => `${x}:${y}`;
+  const keyOf = (x: number, y: number) => `${String(x)}:${String(y)}`;
   const rangeOf = (box: Bounds) => ({
     x0: Math.floor(box.minX / cellSize), x1: Math.floor(box.maxX / cellSize),
     y0: Math.floor(box.minY / cellSize), y1: Math.floor(box.maxY / cellSize),

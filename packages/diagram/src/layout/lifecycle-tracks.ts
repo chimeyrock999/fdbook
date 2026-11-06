@@ -46,8 +46,9 @@ export function assignTracks(runs: Run[]) {
       best = { assignment, crossings, count: tracks.length };
     }
   }
-  for (const run of needs) run.track = best!.assignment.get(run);
-  return best!.count;
+  if (!best) throw new Error('assignTracks tries at least one ordering');
+  for (const run of needs) run.track = best.assignment.get(run);
+  return best.count;
 }
 
 function countCrossings(runs: Run[], assignment: Map<Run, number>) {

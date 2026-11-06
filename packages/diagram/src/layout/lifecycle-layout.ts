@@ -57,7 +57,7 @@ export type LayoutResult = {
 type Connector =
   | { kind: 'single'; transition: DiagramEdge; down: boolean; upperId: string; lowerId: string; gap: number; order: number }
   | { kind: 'bracket'; bracket: Bracket; gap: number; order: number }
-  | { kind: 'frame'; bracket: Bracket; rect: Rect; lowerId: string; gap: number; order: number; exitX?: number }
+  | { kind: 'frame'; bracket: Bracket; frame: NonNullable<Bracket['frame']>; rect: Rect; lowerId: string; gap: number; order: number; exitX?: number }
   | { kind: 'loop'; transition: DiagramEdge; gap: number; order: number };
 
 type PortKey = Connector | string;
@@ -66,9 +66,29 @@ type Ports = Map<string, Map<PortKey, Port>>;
 
 type Arc = { transition: DiagramEdge; key: string; lo: number; hi: number; index: number; level: number }
 
+// A state of the model by id; every id a pass looks up names one.
+export function stateOf(model: Pick<Model, 'states'>, id: string) {
+  const each = model.states.get(id);
+  if (!each) throw new Error(`No state has the id "${id}".`);
+  return each;
+}
+
+// The ports already requested on one side of a state.
+function sideOf(ports: Ports, id: string, side: string) {
+  const slot = ports.get(`${id}|${side}`);
+  if (!slot) throw new Error(`No port was requested on the ${side} of "${id}".`);
+  return slot;
+}
+
+function portIn(ports: Ports, id: string, side: string, key: PortKey) {
+  const port = sideOf(ports, id, side).get(key);
+  if (!port) throw new Error(`No such port on the ${side} of "${id}".`);
+  return port;
+}
+
 export function layout(model: Model, { spineGap, rowGap, drop, firstTrack, ports: portMode }: Spacing): LayoutResult {
   const { states, mainPath, transitions, rows, rowCount, depthOf, spineEdges, brackets, bracketOf } = model;
-  const state = (id: string) => states.get(id)!;
+  const state = (id: string) => stateOf(model, id);
   const hasLabel = model.hasLabel;
   const labelBox = model.labelBox;
   const ofKind = (kind: string) => transitions.filter((transition) => model.kindOf.get(transition) === kind);
@@ -97,11 +117,12 @@ export function layout(model: Model, { spineGap, rowGap, drop, firstTrack, ports
   const spineTop = MARGIN_TOP + (maxLevel ? ARC_BASE + (maxLevel - 1) * ARC_STEP + arcLabelReserve : 0);
 
   const ports: Ports = new Map();
-  const portOf = (id: string, side: string, key: PortKey) => ports.get(`${id}|${side}`)!.get(key)!;
+  const portOf = (id: string, side: string, key: PortKey) => portIn(ports, id, side, key);
   const requestPort = (id: string, side: string, key: PortKey, otherX: number, order: number) => {
     const slot = `${id}|${side}`;
-    if (!ports.has(slot)) ports.set(slot, new Map());
-    if (!ports.get(slot)!.has(key)) ports.get(slot)!.set(key, { key, otherX, order, x: 0 });
+    const entries = ports.get(slot) ?? new Map<PortKey, Port>();
+    ports.set(slot, entries);
+    if (!entries.has(key)) entries.set(key, { key, otherX, order, x: 0 });
   };
   const cx = (id: string) => state(id).cx;
 
@@ -127,7 +148,7 @@ export function layout(model: Model, { spineGap, rowGap, drop, firstTrack, ports
     const last = state(mainPath[bracket.frame.hi]);
     const rect = { x: first.x - FRAME_PAD, y: spineTop - FRAME_PAD, width: last.x + last.width - first.x + FRAME_PAD * 2, height: STATE_H + FRAME_PAD * 2 };
     frames.push(rect);
-    for (const target of bracket.targets) connectors.push({ kind: 'frame', bracket, rect, lowerId: target, gap: 0, order });
+    for (const target of bracket.targets) connectors.push({ kind: 'frame', bracket, frame: bracket.frame, rect, lowerId: target, gap: 0, order });
   }
   // Neighbours in one lower row connect side to side; others loop underneath.
   const rowOrder = rows.map((list) => [...list].sort((a, b) => a.x - b.x).map((each) => each.id));
@@ -140,8 +161,9 @@ export function layout(model: Model, { spineGap, rowGap, drop, firstTrack, ports
   const sideGroups = new Map<string, DiagramEdge[]>();
   for (const transition of sides) {
     const key = [transition.from, transition.to].sort().join('\u0000');
-    if (!sideGroups.has(key)) sideGroups.set(key, []);
-    sideGroups.get(key)!.push(transition);
+    const group = sideGroups.get(key) ?? [];
+    group.push(transition);
+    sideGroups.set(key, group);
   }
   const sideLanes: { ordered: DiagramEdge[]; step: number }[] = [];
   const rowHeights = rows.map(() => STATE_H);
@@ -174,11 +196,11 @@ export function layout(model: Model, { spineGap, rowGap, drop, firstTrack, ports
     } else if (connector.kind === 'loop') {
       const { from, to } = connector.transition;
       if (from === to) {
-        requestPort(from, 'bottom', `${connector.order}:out`, Infinity, 0);
-        requestPort(from, 'bottom', `${connector.order}:in`, Infinity, 1);
+        requestPort(from, 'bottom', `${String(connector.order)}:out`, Infinity, 0);
+        requestPort(from, 'bottom', `${String(connector.order)}:in`, Infinity, 1);
       } else {
-        requestPort(from, 'bottom', `${connector.order}:out`, cx(to), connector.order);
-        requestPort(to, 'bottom', `${connector.order}:in`, cx(from), connector.order);
+        requestPort(from, 'bottom', `${String(connector.order)}:out`, cx(to), connector.order);
+        requestPort(to, 'bottom', `${String(connector.order)}:in`, cx(from), connector.order);
       }
     } else {
       const { sources, targets } = connector.bracket;
@@ -205,7 +227,7 @@ export function layout(model: Model, { spineGap, rowGap, drop, firstTrack, ports
   const runs: Run<Connector>[] = connectors.map((connector) => {
     if (connector.kind === 'loop') {
       const { from, to } = connector.transition;
-      const tops = [portOf(from, 'bottom', `${connector.order}:out`).x, portOf(to, 'bottom', `${connector.order}:in`).x];
+      const tops = [portOf(from, 'bottom', `${String(connector.order)}:out`).x, portOf(to, 'bottom', `${String(connector.order)}:in`).x];
       return { connector, tops, bottoms: [], lo: Math.min(...tops), hi: Math.max(...tops), straight: false };
     }
     if (connector.kind === 'bracket') {
@@ -215,7 +237,13 @@ export function layout(model: Model, { spineGap, rowGap, drop, firstTrack, ports
       const xs = [...tops, ...bottoms];
       return { connector, tops, bottoms, lo: Math.min(...xs), hi: Math.max(...xs), straight: false };
     }
-    const top = connector.kind === 'frame' ? connector.exitX! : portOf(connector.upperId, 'bottom', connector).x;
+    let top: number;
+    if (connector.kind === 'frame') {
+      if (connector.exitX === undefined) throw new Error('placeFrameExits places every frame exit.');
+      top = connector.exitX;
+    } else {
+      top = portOf(connector.upperId, 'bottom', connector).x;
+    }
     const bottom = portOf(connector.lowerId, 'top', connector).x;
     return { connector, tops: [top], bottoms: [bottom], lo: Math.min(top, bottom), hi: Math.max(top, bottom), straight: Math.abs(top - bottom) < 0.5 };
   });
@@ -322,11 +350,10 @@ export function layout(model: Model, { spineGap, rowGap, drop, firstTrack, ports
 function placeFrameExits(model: Model, connectors: Connector[], ports: Ports, portOf: (id: string, side: string, key: PortKey) => Port) {
   const frameConnectors = connectors.filter((connector): connector is Extract<Connector, { kind: 'frame' }> => connector.kind === 'frame');
   for (const connector of frameConnectors) {
-    const { rect, bracket } = connector;
-    const frame = bracket.frame!;
+    const { rect, frame } = connector;
     const inner = model.mainPath.slice(frame.lo, frame.hi + 1)
       .flatMap((id) => [...(ports.get(`${id}|bottom`)?.values() ?? [])].map((port) => port.x));
-    const taken = [...inner, ...frameConnectors.filter((other) => other.rect === rect && other.exitX !== undefined).map((other) => other.exitX!)];
+    const taken = [...inner, ...frameConnectors.flatMap((other) => (other.rect === rect && other.exitX !== undefined ? [other.exitX] : []))];
     const target = portOf(connector.lowerId, 'top', connector);
     const low = rect.x + 16;
     const high = rect.x + rect.width - 16;
@@ -340,8 +367,8 @@ function placeFrameExits(model: Model, connectors: Connector[], ports: Ports, po
     // Snap the target's port to the exit when that keeps its spacing.
     const delta = Math.abs(exitX - target.x);
     if (delta >= 0.5 && delta < 24) {
-      const lower = model.states.get(connector.lowerId)!;
-      const others = [...ports.get(`${connector.lowerId}|top`)!.values()].filter((port) => port !== target);
+      const lower = stateOf(model, connector.lowerId);
+      const others = [...sideOf(ports, connector.lowerId, 'top').values()].filter((port) => port !== target);
       if (exitX >= lower.x + 12 && exitX <= lower.x + lower.width - 12 && others.every((port) => Math.abs(port.x - exitX) >= 12)) {
         target.x = exitX;
       } else if (delta < 16) {
@@ -354,30 +381,30 @@ function placeFrameExits(model: Model, connectors: Connector[], ports: Ports, po
 // Each lower row starts every state under the states it connects to in the
 // row above; overlapping blocks merge and centre on their combined ideal.
 function placeRow(model: Model, row: number, rowGap: number) {
-  const { states, transitions, rows, depthOf, mainPath, brackets, bracketTargets } = model;
+  const { transitions, rows, depthOf, mainPath, brackets, bracketTargets } = model;
   const members = rows[row];
   const ideal = new Map<string, number>();
   for (const each of members) {
     const xs = transitions.flatMap((transition) => {
       const other = transition.to === each.id ? transition.from : transition.from === each.id ? transition.to : null;
-      return other && depthOf(other) === row - 1 ? [states.get(other)!.cx] : [];
+      return other && depthOf(other) === row - 1 ? [stateOf(model, other).cx] : [];
     });
     if (xs.length) ideal.set(each.id, xs.reduce((sum, x) => sum + x, 0) / xs.length);
   }
   if (row === 1) {
     for (const bracket of brackets.values()) {
-      const center = bracket.sources.reduce((sum, id) => sum + states.get(id)!.cx, 0) / bracket.sources.length;
+      const center = bracket.sources.reduce((sum, id) => sum + stateOf(model, id).cx, 0) / bracket.sources.length;
       bracket.targets.forEach((id) => ideal.set(id, center));
     }
   }
-  const fallback = mainPath.length ? Math.max(...mainPath.map((id) => states.get(id)!.cx)) + 1 : MARGIN_X;
+  const fallback = mainPath.length ? Math.max(...mainPath.map((id) => stateOf(model, id).cx)) + 1 : MARGIN_X;
   type Block = { members: LifeState[]; ideal: number; weight: number; order: number };
   const blocks: Block[] = [];
   const grouped = new Set<string>();
   for (const each of members) {
     if (grouped.has(each.id)) continue;
     const bracket = row === 1 ? bracketTargets.get(each.id) : null;
-    const list = bracket ? bracket.targets.map((id) => states.get(id)!) : [each];
+    const list = bracket ? bracket.targets.map((id) => stateOf(model, id)) : [each];
     list.forEach((member) => grouped.add(member.id));
     blocks.push({ members: list, ideal: ideal.get(each.id) ?? fallback, weight: ideal.has(each.id) ? list.length : 0.05, order: members.indexOf(each) });
   }
@@ -387,23 +414,24 @@ function placeRow(model: Model, row: number, rowGap: number) {
       || (transition.from === right.id && transition.to === left.id)))
     .map((transition) => model.labelBox(transition).width + 32));
   blocks.sort((a, b) => a.ideal - b.ideal || a.order - b.order);
-  const offsets = new Map<LifeState, number>();
-  // Lays a cluster of blocks side by side; each block's centre offset.
+  // Lays a cluster of blocks side by side; each block's centre offset, and
+  // each member's left offset.
   const arrange = (list: Block[]) => {
     const centres: number[] = [];
+    const members: [LifeState, number][] = [];
     let x = 0;
     let previous: LifeState | null = null;
     for (const block of list) {
       const start = x;
       for (const member of block.members) {
         if (previous) x += gapBetween(previous, member);
-        offsets.set(member, x);
+        members.push([member, x]);
         x += member.width;
         previous = member;
       }
       centres.push((start + x) / 2);
     }
-    return { width: x, offsets: centres.map((offset) => offset - x / 2) };
+    return { width: x, offsets: centres.map((offset) => offset - x / 2), members };
   };
   // A cluster's centre is the weighted mean of (ideal - offset) over its
   // blocks, which minimises their squared drift.
@@ -426,12 +454,9 @@ function placeRow(model: Model, row: number, rowGap: number) {
   }
   for (const cluster of clusters) {
     const { x, width } = centre(cluster);
-    arrange(cluster);
-    for (const block of cluster) {
-      for (const member of block.members) {
-        member.x = x - width / 2 + offsets.get(member)!;
-        member.cx = member.x + member.width / 2;
-      }
+    for (const [member, offset] of arrange(cluster).members) {
+      member.x = x - width / 2 + offset;
+      member.cx = member.x + member.width / 2;
     }
   }
 }
@@ -440,8 +465,9 @@ function placeRow(model: Model, row: number, rowGap: number) {
 function assignArcLevels(model: Model): Arc[] {
   const { transitions, spineIndex } = model;
   const arcs: Arc[] = transitions.filter((transition) => model.kindOf.get(transition) === 'arc').map((transition, index) => {
-    const a = spineIndex.get(transition.from)!;
-    const b = spineIndex.get(transition.to)!;
+    const a = spineIndex.get(transition.from);
+    const b = spineIndex.get(transition.to);
+    if (a === undefined || b === undefined) throw new Error('An arc joins two main-path states.');
     return { transition, key: `arc${String(transitions.indexOf(transition))}`, lo: Math.min(a, b), hi: Math.max(a, b), index, level: 0 };
   });
   const sorted = [...arcs].sort((left, right) => (left.hi - left.lo) - (right.hi - right.lo) || left.lo - right.lo || left.index - right.index);
@@ -466,7 +492,7 @@ function distributePorts(model: Model, ports: Ports, arcs: Arc[], mode: Spacing[
   const slots = [...ports].sort(([a], [b]) => Number(lowerTop(a)) - Number(lowerTop(b)));
   for (const [slot, entries] of slots) {
     const id = slot.split('|')[0];
-    const owner = model.states.get(id)!;
+    const owner = stateOf(model, id);
     const list = [...entries.values()];
     if (lowerTop(slot)) {
       for (const port of list) {
@@ -507,9 +533,11 @@ function fitPorts(wanted: number[], step: number, low: number, high: number) {
   wanted.forEach((x, index) => {
     pools.push({ sum: (Number.isFinite(x) ? x : x > 0 ? high : low) - index * step, count: 1 });
     while (pools.length > 1 && pools[pools.length - 2].sum / pools[pools.length - 2].count > pools[pools.length - 1].sum / pools[pools.length - 1].count) {
-      const last = pools.pop()!;
-      pools[pools.length - 1].sum += last.sum;
-      pools[pools.length - 1].count += last.count;
+      const last = pools.pop();
+      const previous = pools.at(-1);
+      if (!last || !previous) break;
+      previous.sum += last.sum;
+      previous.count += last.count;
     }
   });
   return pools.flatMap((pool) => Array<number>(pool.count).fill(clamp(pool.sum / pool.count))).map((x, index) => x + index * step);
@@ -519,9 +547,9 @@ function fitPorts(wanted: number[], step: number, low: number, high: number) {
 // without crowding its neighbours; otherwise its jog widens to a readable run.
 function snapPorts(model: Model, ports: Ports, mode: Spacing['ports']) {
   const fits = (id: string, side: string, moving: Port, x: number) => {
-    const owner = model.states.get(id)!;
+    const owner = stateOf(model, id);
     return x >= owner.x + PORT_PAD - 8 && x <= owner.x + owner.width - PORT_PAD + 8
-      && [...ports.get(`${id}|${side}`)!.values()].every((other) => other === moving || Math.abs(other.x - x) >= 12);
+      && [...sideOf(ports, id, side).values()].every((other) => other === moving || Math.abs(other.x - x) >= 12);
   };
   for (const [slot, entries] of ports) {
     if (!slot.endsWith('|top')) continue;
@@ -529,20 +557,20 @@ function snapPorts(model: Model, ports: Ports, mode: Spacing['ports']) {
     if (model.spineIndex.has(lowerId)) continue;
     // Validate the final group, since neighbouring ports may move together.
     const group = [...entries.values()].sort((a, b) => a.x - b.x);
-    const owner = model.states.get(lowerId)!;
+    const owner = stateOf(model, lowerId);
     const targets = group.map((port) => (typeof port.key !== 'string' && port.key.kind === 'single'
       ? ports.get(`${port.key.upperId}|bottom`)?.get(port.key)?.x : undefined));
-    if (targets.every((x, index) => x !== undefined && Number.isFinite(x)
+    if (targets.every((x): x is number => x !== undefined) && targets.every((x, index) => Number.isFinite(x)
       && x >= owner.x + PORT_PAD - 8 && x <= owner.x + owner.width - PORT_PAD + 8
-      && (index === 0 || x - targets[index - 1]! >= 12))) {
-      group.forEach((port, index) => { port.x = targets[index]!; });
+      && (index === 0 || x - targets[index - 1] >= 12))) {
+      group.forEach((port, index) => { port.x = targets[index]; });
       continue;
     }
     for (const port of entries.values()) {
       const connector = port.key;
       if (typeof connector === 'string') continue;
       if (connector.kind === 'single') {
-        const upperPort = ports.get(`${connector.upperId}|bottom`)!.get(connector)!;
+        const upperPort = portIn(ports, connector.upperId, 'bottom', connector);
         const delta = Math.abs(upperPort.x - port.x);
         if (delta < 0.5 || (delta >= 16 && mode === 'even')) continue;
         if (fits(lowerId, 'top', port, upperPort.x)) port.x = upperPort.x;
@@ -555,7 +583,7 @@ function snapPorts(model: Model, ports: Ports, mode: Spacing['ports']) {
         }
       } else if (connector.kind === 'bracket') {
         // A drop next to a tick would leave a micro run on the shared bus.
-        const ticks = connector.bracket.sources.map((id) => ports.get(`${id}|bottom`)!.get(connector)!.x);
+        const ticks = connector.bracket.sources.map((id) => portIn(ports, id, 'bottom', connector).x);
         const near = ticks.find((x) => Math.abs(x - port.x) >= 0.5 && Math.abs(x - port.x) < 16);
         if (near !== undefined && fits(lowerId, 'top', port, near)) port.x = near;
       }
@@ -574,15 +602,10 @@ function placeLabels(model: Model, routes: Map<DiagramEdge, Route>, contentRight
     const points = routes.get(transition)?.points ?? [];
     return points.slice(1).map((end, index) => ({ start: points[index], end }));
   };
-  // The transitions drawn as one exit with each, worked out once.
-  const siblingsOf = new Map(transitions.map((transition) => {
+  // The transitions drawn as one exit with a transition, itself included.
+  const siblingsOf = (transition: DiagramEdge) => {
     const bracket = routes.get(transition)?.bracket;
-    return [transition, new Set(bracket ? bracket.transitions.filter((other) => other.to === transition.to) : [transition])];
-  }));
-  const siblings = (transition: DiagramEdge) => [...siblingsOf.get(transition)!];
-  const others = (transition: DiagramEdge) => {
-    const own = siblingsOf.get(transition)!;
-    return transitions.filter((other) => !own.has(other));
+    return new Set(bracket ? bracket.transitions.filter((other) => other.to === transition.to) : [transition]);
   };
   for (const transition of transitions) {
     const route = routes.get(transition);
@@ -602,7 +625,7 @@ function placeLabels(model: Model, routes: Map<DiagramEdge, Route>, contentRight
       const verticals = route.points.slice(1).map((point, index): [Point, Point] => [route.points[index], point])
         .filter(([a, b]) => Math.abs(a[0] - b[0]) < 0.5);
       const preferred: [Point, Point][] = [[start, end], ...verticals.filter(([a]) => a !== start)];
-      const rowState = states.get(model.depthOf(transition.to) < model.depthOf(transition.from) ? transition.from : transition.to)!;
+      const rowState = stateOf(model, model.depthOf(transition.to) < model.depthOf(transition.from) ? transition.from : transition.to);
       for (const [a, b] of preferred) {
         const x = a[0];
         const mid = (a[1] + b[1]) / 2;
@@ -615,8 +638,9 @@ function placeLabels(model: Model, routes: Map<DiagramEdge, Route>, contentRight
         .find(([a, b]) => Math.abs(a[1] - b[1]) < 0.5 && Math.abs(a[0] - b[0]) > width + 8);
       if (horizontal) candidates.push(at((horizontal[0][0] + horizontal[1][0]) / 2, horizontal[0][1]));
     }
-    const otherSegments = others(transition).flatMap(segmentsOf);
-    const ownSegments = siblings(transition).flatMap(segmentsOf);
+    const own = siblingsOf(transition);
+    const otherSegments = transitions.filter((other) => !own.has(other)).flatMap(segmentsOf);
+    const ownSegments = [...own].flatMap(segmentsOf);
     const free = (rect: PlacedLabel) => rect.x >= 8 && rect.x + rect.width <= contentRight + MARGIN_X - 8 && rect.y >= 4
       && [...states.values()].every((each) => !rectsOverlap(rect, each, 4))
       && [...placedLabels.values()].every((other) => !rectsOverlap(rect, other, 4))

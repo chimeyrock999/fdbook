@@ -62,9 +62,11 @@ export function legendEntries(diagram: Diagram): LegendEntry[] {
   if (!diagram.legend) return [];
   const counts = new Map<string, number>();
   for (const node of diagram.nodes) counts.set(node.kind, (counts.get(node.kind) ?? 0) + 1);
-  return diagram.kinds.filter((kind) => counts.has(kind.id)).map(({ id, label, tone }) => {
+  return diagram.kinds.flatMap(({ id, label, tone }): LegendEntry[] => {
+    const count = counts.get(id);
+    if (count === undefined) return [];
     const width = Math.ceil(SWATCH_WIDTH + SWATCH_GAP + textUnits(label) * legendTextSize() * TEXT_ADVANCE_EM + INTERACTIVE_BADGE_ALLOWANCE);
-    return { kind: id, tone, label, count: counts.get(id)!, width };
+    return [{ kind: id, tone, label, count, width }];
   });
 }
 
@@ -72,14 +74,18 @@ export function variantLegendEntries(diagram: Diagram): LegendEntry[] {
   if (!diagram.legend) return [];
   const counts = new Map<EdgeVariant, number>();
   for (const edge of diagram.edges) counts.set(edge.variant, (counts.get(edge.variant) ?? 0) + 1);
-  return VARIANT_ORDER.filter(([variant]) => counts.has(variant)).map(([variant, label]) => ({
-    kind: variant,
-    tone: 'slate',
-    label,
-    count: counts.get(variant)!,
-    width: Math.ceil(LINE_SWATCH_OFFSET + textUnits(label) * legendTextSize() * TEXT_ADVANCE_EM),
-    variant,
-  }));
+  return VARIANT_ORDER.flatMap(([variant, label]): LegendEntry[] => {
+    const count = counts.get(variant);
+    if (count === undefined) return [];
+    return [{
+      kind: variant,
+      tone: 'slate',
+      label,
+      count,
+      width: Math.ceil(LINE_SWATCH_OFFSET + textUnits(label) * legendTextSize() * TEXT_ADVANCE_EM),
+      variant,
+    }];
+  });
 }
 
 // A lifecycle's legend: the initial marker, the kinds in use, and the final

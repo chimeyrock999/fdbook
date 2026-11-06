@@ -10,7 +10,7 @@
 
 import { availableTextWidth, fittedNodeFontSize, minimumTextWidth, NODE_TEXT_PADDING, roundedPath, type Point, type Rect } from './geometry.ts';
 import { legendFootprint, lifecycleLegendEntries, placeLegend } from './legend.ts';
-import { layout, MARGIN_X, STATE_H, type LayoutResult, type Spacing } from './lifecycle-layout.ts';
+import { layout, MARGIN_X, STATE_H, stateOf, type LayoutResult } from './lifecycle-layout.ts';
 import type { Scene, SceneEdge, SceneNode } from './scene.ts';
 import type { Diagram, DiagramEdge, DiagramNode, EdgeVariant } from '#model/schema.ts';
 
@@ -127,7 +127,7 @@ function buildModel(diagram: Diagram): Model {
   const mainPath = [...new Set(diagram.mainPath)].filter((id) => known.has(id));
   const states = new Map(diagram.nodes.map((node) => [node.id, { id: node.id, node, x: 0, y: 0, width: preferredWidth(node), height: STATE_H, cx: 0, cy: 0 }]));
   const spineIndex = new Map(mainPath.map((id, index) => [id, index]));
-  const hasLabel = (transition: DiagramEdge) => Boolean(transition.label || transition.detail);
+  const hasLabel = (transition: DiagramEdge) => Boolean(transition.label) || Boolean(transition.detail);
   const labelBox = (transition: DiagramEdge) => {
     const text = transition.label ?? '';
     const note = transition.detail ?? '';
@@ -151,13 +151,14 @@ function buildModel(diagram: Diagram): Model {
   // Every other state sits in a row below the main path at its distance
   // from it, so each transition stays within one row or joins two adjacent rows.
   const depth = new Map(mainPath.map((id) => [id, 0]));
-  for (let frontier = [...mainPath]; frontier.length;) {
+  // Every state of a frontier sits at the same depth, one less than the next's.
+  for (let frontier = [...mainPath], level = 1; frontier.length; level += 1) {
     const next: string[] = [];
     for (const id of frontier) {
       for (const transition of transitions) {
         const other = transition.from === id ? transition.to : transition.to === id ? transition.from : null;
         if (other && states.has(other) && !depth.has(other)) {
-          depth.set(other, depth.get(id)! + 1);
+          depth.set(other, level);
           next.push(other);
         }
       }
@@ -165,15 +166,24 @@ function buildModel(diagram: Diagram): Model {
     frontier = next;
   }
   for (const id of states.keys()) if (!depth.has(id)) depth.set(id, 1);
-  const depthOf = (id: string) => depth.get(id)!;
+  const depthOf = (id: string) => {
+    const each = depth.get(id);
+    if (each === undefined) throw new Error(`No state has the id "${id}".`);
+    return each;
+  };
+  const spineIndexOf = (id: string) => {
+    const index = spineIndex.get(id);
+    if (index === undefined) throw new Error(`"${id}" is not on the main path.`);
+    return index;
+  };
   const rowCount = Math.max(...depth.values()) + 1;
   const rows = Array.from({ length: rowCount }, (_, row) => (row === 0
-    ? mainPath.map((id) => states.get(id)!)
+    ? mainPath.map((id) => stateOf({ states }, id))
     : [...states.values()].filter((each) => depthOf(each.id) === row)));
 
   const kindOf = new Map<DiagramEdge, Kind>(transitions.map((transition) => {
     const [from, to] = [depthOf(transition.from), depthOf(transition.to)];
-    if (from === 0 && to === 0) return [transition, spineEdges.get(spineIndex.get(transition.from)!) === transition ? 'spine' : 'arc'];
+    if (from === 0 && to === 0) return [transition, spineEdges.get(spineIndexOf(transition.from)) === transition ? 'spine' : 'arc'];
     return [transition, from === to ? 'same' : 'between'];
   }));
   const model = { kindOf };
@@ -185,8 +195,9 @@ function buildModel(diagram: Diagram): Model {
   const downByTarget = new Map<string, DiagramEdge[]>();
   for (const transition of transitions.filter((each) => kindOf.get(each) === 'between')) {
     if (depthOf(transition.from) !== 0) continue;
-    if (!downByTarget.has(transition.to)) downByTarget.set(transition.to, []);
-    downByTarget.get(transition.to)!.push(transition);
+    const down = downByTarget.get(transition.to) ?? [];
+    down.push(transition);
+    downByTarget.set(transition.to, down);
   }
   const signature = (transition: DiagramEdge) => [transition.label ?? '', transition.detail ?? '', variantOf(model, transition)].join('\u0000');
   const brackets = new Map<string, Bracket>();
@@ -194,17 +205,19 @@ function buildModel(diagram: Diagram): Model {
     const buckets = new Map<string, DiagramEdge[]>();
     for (const transition of list) {
       const key = signature(transition);
-      if (!buckets.has(key)) buckets.set(key, []);
-      buckets.get(key)!.push(transition);
+      const bucket = buckets.get(key) ?? [];
+      bucket.push(transition);
+      buckets.set(key, bucket);
     }
     const eligible = [...buckets.values()].filter((bucket) => new Set(bucket.map((transition) => transition.from)).size >= 2);
     if (eligible.length !== 1) continue;
     const [group] = eligible;
-    const sources = [...new Set(group.map((transition) => transition.from))].sort((a, b) => spineIndex.get(a)! - spineIndex.get(b)!);
+    const sources = [...new Set(group.map((transition) => transition.from))].sort((a, b) => spineIndexOf(a) - spineIndexOf(b));
     const key = sources.join('\u0000');
-    if (!brackets.has(key)) brackets.set(key, { key, sources, targets: [], transitions: [] });
-    brackets.get(key)!.targets.push(target);
-    brackets.get(key)!.transitions.push(...group);
+    const bracket = brackets.get(key) ?? { key, sources, targets: [], transitions: [] };
+    brackets.set(key, bracket);
+    bracket.targets.push(target);
+    bracket.transitions.push(...group);
   }
   const bracketOf = new Map<DiagramEdge, Bracket>();
   for (const bracket of brackets.values()) for (const transition of bracket.transitions) bracketOf.set(transition, bracket);
@@ -212,7 +225,7 @@ function buildModel(diagram: Diagram): Model {
   // partially overlap, and such a bracket keeps a shared bus.
   const frameSpans: { lo: number; hi: number }[] = [];
   for (const bracket of brackets.values()) {
-    const indexes = bracket.sources.map((id) => spineIndex.get(id)!);
+    const indexes = bracket.sources.map(spineIndexOf);
     const lo = Math.min(...indexes);
     const hi = Math.max(...indexes);
     if (hi - lo + 1 !== indexes.length || frameSpans.some((span) => span.lo <= hi && lo <= span.hi)) continue;
@@ -233,7 +246,7 @@ function buildModel(diagram: Diagram): Model {
 // a label left without a clear spot widens the spacing for the next round,
 // up to five rounds, the main-path gaps only within the readable width.
 function settle(model: Model, readableWidth: number): LayoutResult {
-  const mainPathStateWidth = model.mainPath.reduce((sum, id) => sum + model.states.get(id)!.width, 0);
+  const mainPathStateWidth = model.mainPath.reduce((sum, id) => sum + stateOf(model, id).width, 0);
   let spacing = { spineGap: 72, rowGap: 44, drop: 58, firstTrack: 34 };
   let result: LayoutResult | null = null;
   // A pass moves the shared states; each candidate keeps where it put them.
@@ -257,7 +270,8 @@ function settle(model: Model, readableWidth: number): LayoutResult {
       rowGap: spacing.rowGap + 28, drop: spacing.drop + 14, firstTrack: spacing.firstTrack + 6,
     };
   }
-  return result!;
+  if (!result) throw new Error('settle runs at least one round.');
+  return result;
 }
 
 function routeCost(routes: LayoutResult['routes']) {
@@ -290,20 +304,22 @@ export function buildLifecycleScene(diagram: Diagram): Scene {
   const legend = placeLegend(entries, { x: 40, baselineY: height - 32, width: width - 80, minTitleY: geometry.contentBottom + 12, obstacles: [] });
 
   const nodes: SceneNode[] = diagram.nodes.map((node) => {
-    const box = model.states.get(node.id)!;
+    const box = stateOf(model, node.id);
+    const kind = diagram.kinds.find((each) => each.id === node.kind);
+    if (!kind) throw new Error(`Node "${node.id}" is of a kind the diagram does not list.`);
     const fitted = fonts(node, box.width);
     const hasSub = Boolean(node.sublabel);
     // Baselines keep each row's whole glyph box apart.
     const [labelY, sublabelY, tagY] = hasSub && node.tag ? [23, 40, 55] : hasSub ? [27, 45, 0] : node.tag ? [29, 0, 50] : [37, 0, 0];
     const offset = (box.height - STATE_H) / 2;
     const rows = [{ text: node.label, font: fitted.label, y: labelY + offset }];
-    if (hasSub) rows.push({ text: node.sublabel!, font: fitted.sublabel, y: sublabelY + offset });
+    if (node.sublabel) rows.push({ text: node.sublabel, font: fitted.sublabel, y: sublabelY + offset });
     if (node.tag) rows.push({ text: node.tag, font: fitted.tag, y: tagY + offset });
     const text = textLayout(box.width, box.height, rows);
     return {
       id: node.id, x: box.x, y: box.y, width: box.width, height: box.height, cx: box.cx, cy: box.cy,
       node,
-      kind: diagram.kinds.find((kind) => kind.id === node.kind)!,
+      kind,
       labelFont: fitted.label,
       sublabelFont: fitted.sublabel,
       tagFont: fitted.tag,
@@ -311,7 +327,7 @@ export function buildLifecycleScene(diagram: Diagram): Scene {
       text: { label: box.y + text.ys[0], sublabel: box.y + (text.ys[1] ?? 0), tag: node.tag ? box.y + text.ys[hasSub ? 2 : 1] : undefined, x: box.x + text.x },
       // Ordinary states carry no corner sigil unless their kind names one;
       // one that ends the lifecycle is an outcome and gets the stop sigil.
-      icon: diagram.kinds.find((kind) => kind.id === node.kind)?.icon ?? (finals.has(node.id) ? 'stop' : 'none'),
+      icon: kind.icon ?? (finals.has(node.id) ? 'stop' : 'none'),
     };
   });
 

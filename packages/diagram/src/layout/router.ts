@@ -135,8 +135,8 @@ function sideAwareBridgeCandidates(start: Point, end: Point, fromSide: Side, toS
   rawCandidates.push([startStub, [endStub[0], startStub[1]], endStub], [startStub, [startStub[0], endStub[1]], endStub]);
   return rawCandidates.map((candidate) => normalizeRoutePoints([start, ...candidate, end]))
     .filter((points) => points.length >= 2)
-    .filter((points) => !collinearBacktrack(points[0], points[1], points[2] || points[1]))
-    .filter((points) => !collinearBacktrack(points.at(-3) || points[points.length - 2], points[points.length - 2], points[points.length - 1]))
+    .filter((points) => !collinearBacktrack(points[0], points[1], points[2] ?? points[1]))
+    .filter((points) => !collinearBacktrack(points.at(-3) ?? points[points.length - 2], points[points.length - 2], points[points.length - 1]))
     .filter((points) => routeHonorsEndpointSides(points, fromSide, toSide))
     .sort((a, b) => a.length - b.length)
     .map((points) => points.slice(1, -1));
@@ -147,6 +147,8 @@ export type RouterContext = {
   components: ReadonlyMap<string, Box>;
   // The box an edge end attaches to: a node, or a group's frame.
   boxOf: (id: string) => Box | undefined;
+  // The boxes a routed edge joins; only edges with both are routed.
+  endsOf: (conn: RouteEdge) => { from: Box; to: Box };
   connections: readonly RouteEdge[];
   frames: Frame[];
   labelRectFor: LabelRectFor | null;
@@ -170,8 +172,14 @@ export function createRouter(components: ReadonlyMap<string, Box>, connections: 
   const { frames, groupBoxes, labelRectFor, readabilityBottomMargin } = options;
   const frameBorders = frames.flatMap((frame) => frameBorderSegments(frame));
   const boxOf = (id: string) => components.get(id) ?? groupBoxes.get(id);
+  const endsOf = (conn: RouteEdge) => {
+    const from = boxOf(conn.from);
+    const to = boxOf(conn.to);
+    if (!from || !to) throw new Error(`Edge "${conn.id}" does not join two boxes.`);
+    return { from, to };
+  };
   const ctx = {
-    components, boxOf, connections, frames, labelRectFor, readabilityBottomMargin,
+    components, boxOf, endsOf, connections, frames, labelRectFor, readabilityBottomMargin,
     reservedLabels: [] as ReservedLabel[],
     honourReservedLabels: true,
     allowGridSearch: true,
@@ -401,7 +409,7 @@ export function createRouter(components: ReadonlyMap<string, Box>, connections: 
         routes: resolvedRoutes.map((entry) => entry.points),
         labels: ctx.reservedLabels.map((entry) => entry.rect),
       })) return candidate;
-      firstFeasible ||= candidate;
+      firstFeasible ??= candidate;
     }
     if (firstFeasible) return firstFeasible;
     // Siblings fanning out from one side all want the same midpoint channel:
@@ -473,7 +481,8 @@ export function createRouter(components: ReadonlyMap<string, Box>, connections: 
   const markerSpacing = (left: RouteEdge, right: RouteEdge) => 3.5 * (stroke(left) + stroke(right));
   const portSpacing = (left: RouteEdge, right: RouteEdge) => Math.max(14, markerSpacing(left, right) + 3.5);
   function inferredSide(conn: RouteEdge, endpoint: 'source' | 'target') {
-    const fanOut = rowFanOutSides(boxOf(conn.from)!, boxOf(conn.to)!);
+    const { from, to } = endsOf(conn);
+    const fanOut = rowFanOutSides(from, to);
     return endpoint === 'source' ? fanOut?.fromSide : fanOut?.toSide;
   }
   // Only groups whose arrowheads cannot fit the 14px slots are widened.
@@ -489,11 +498,10 @@ export function createRouter(components: ReadonlyMap<string, Box>, connections: 
     }
   }
   function inferredConnectionSides(conn: RouteEdge): Sides {
-    const from = boxOf(conn.from)!;
-    const to = boxOf(conn.to)!;
+    const { from, to } = endsOf(conn);
     return {
-      fromSide: chosenSide(conn.fromSide, inferredSide(conn, 'source') || defaultFromSide(from, to)),
-      toSide: chosenSide(conn.toSide, inferredSide(conn, 'target') || defaultToSide(from, to)),
+      fromSide: chosenSide(conn.fromSide, inferredSide(conn, 'source') ?? defaultFromSide(from, to)),
+      toSide: chosenSide(conn.toSide, inferredSide(conn, 'target') ?? defaultToSide(from, to)),
     };
   }
 
@@ -501,23 +509,24 @@ export function createRouter(components: ReadonlyMap<string, Box>, connections: 
   // the final side as well, so an arrow never lands on another one.
   function automaticEndpoint(conn: RouteEdge, endpoint: 'from' | 'to', rect: Box, side: Side, inferred: Side) {
     const initial = side === inferred ? automaticPorts.get(conn)?.[endpoint] : undefined;
-    const preferred = initial || anchor(rect, side);
+    const preferred = initial ?? anchor(rect, side);
     if (hasAuthoredRouteGeometry(conn) || conn.labelAt) return { point: preferred, spread: Boolean(initial) };
     const axis = side === 'left' || side === 'right' ? 1 : 0;
     const occupied: { value: number; spacing: number }[] = [];
     for (const { conn: other, field, sideField } of incidentEndpoints.get(rect.id) ?? []) {
       if (other === conn || hasAuthoredRouteGeometry(other) || other.labelAt) continue;
       const routed = pathCache.get(other);
-      const sides = ctx.selectedSides.get(other) || inferredConnectionSides(other);
+      const sides = ctx.selectedSides.get(other) ?? inferredConnectionSides(other);
       if (sides[sideField] !== side) continue;
       const point = routed
         ? (field === 'from' ? routed.points[0] : routed.points[routed.points.length - 1])
-        : automaticPorts.get(other)?.[field] || anchor(rect, side);
+        : automaticPorts.get(other)?.[field] ?? anchor(rect, side);
       occupied.push({ value: point[axis], spacing: portSpacing(conn, other) });
     }
     if (!occupied.length) return { point: preferred, spread: Boolean(initial) };
     // On an alternate side, equally close slots should approach the other node.
-    const counterpart = boxOf(endpoint === 'from' ? conn.to : conn.from)!;
+    const ends = endsOf(conn);
+    const counterpart = endpoint === 'from' ? ends.to : ends.from;
     const toward = side === inferred ? preferred[axis] : (axis === 1 ? counterpart.cy : counterpart.cx);
     const candidates = [preferred[axis], ...occupied.flatMap(({ value, spacing }) => [value - spacing, value + spacing])]
       .sort((a, b) => Math.abs(a - preferred[axis]) - Math.abs(b - preferred[axis]) || Math.abs(a - toward) - Math.abs(b - toward) || a - b);
@@ -532,14 +541,13 @@ export function createRouter(components: ReadonlyMap<string, Box>, connections: 
   }
 
   function connectionGeometry(conn: RouteEdge, sides = inferredConnectionSides(conn)): EndpointGeometry {
-    const from = boxOf(conn.from)!;
-    const to = boxOf(conn.to)!;
+    const { from, to } = endsOf(conn);
     const inferred = inferredConnectionSides(conn);
     const { fromSide, toSide } = sides;
     const source = automaticEndpoint(conn, 'from', from, fromSide, inferred.fromSide);
     const target = automaticEndpoint(conn, 'to', to, toSide, inferred.toSide);
     const { start, end } = alignFacingPorts(conn, from, to, source.point, target.point, fromSide, toSide, { from: source.spread, to: target.spread });
-    return { from, to, start, end, fromSide, toSide, crowded: source.crowded || target.crowded };
+    return { from, to, start, end, fromSide, toSide, crowded: source.crowded ?? target.crowded };
   }
 
   function routedForGeometry(conn: RouteEdge, resolvedRoutes: readonly Resolved[], geometry: EndpointGeometry): Routed {
@@ -625,7 +633,8 @@ export function createRouter(components: ReadonlyMap<string, Box>, connections: 
       }
       ctx.honourReservedLabels = true;
     }
-    const picked = chosen ?? firstFallback!;
+    const picked = chosen ?? firstFallback;
+    if (!picked) throw new Error('Every edge has a pair of sides to try.');
     return cachePath(conn, picked.routed, picked.sides);
   }
 
@@ -642,8 +651,7 @@ export function createRouter(components: ReadonlyMap<string, Box>, connections: 
       .filter(({ conn }) => boxOf(conn.from) && boxOf(conn.to));
     const explicit = indexed.filter(({ conn }) => hasAuthoredRouteGeometry(conn));
     const centreDistance = (conn: RouteEdge) => {
-      const from = boxOf(conn.from)!;
-      const to = boxOf(conn.to)!;
+      const { from, to } = endsOf(conn);
       return Math.abs(to.cx - from.cx) + Math.abs(to.cy - from.cy);
     };
     const automatic = indexed.filter(({ conn }) => !hasAuthoredRouteGeometry(conn))
@@ -675,7 +683,7 @@ export function createRouter(components: ReadonlyMap<string, Box>, connections: 
 
   function connectionSides(conn: RouteEdge): Sides {
     planRoutes();
-    return ctx.selectedSides.get(conn) || inferredConnectionSides(conn);
+    return ctx.selectedSides.get(conn) ?? inferredConnectionSides(conn);
   }
 
   return { pathFor, connectionSides };

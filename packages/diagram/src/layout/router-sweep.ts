@@ -27,7 +27,13 @@ export function improveRoutes(ctx: RouterContext, resolvedRoutes: Resolved[]) {
   const withinScene = ([x, y]: Point) => x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
   const jointlyImproved = new Set<RouteEdge>();
   const fixed = (conn: RouteEdge) => jointlyImproved.has(conn) || hasAuthoredRouteGeometry(conn) || hasAuthoredLabelPlacement(conn);
-  const sidesOf = (conn: RouteEdge, sides: Sides) => (candidate: RouteEdge) => (candidate === conn ? sides : ctx.selectedSides.get(candidate)!);
+  // Every routed edge has chosen its sides by the time the sweep runs.
+  const selectedSides = (candidate: RouteEdge) => {
+    const sides = ctx.selectedSides.get(candidate);
+    if (!sides) throw new Error(`Edge "${candidate.id}" has no chosen sides.`);
+    return sides;
+  };
+  const sidesOf = (conn: RouteEdge, sides: Sides) => (candidate: RouteEdge) => (candidate === conn ? sides : selectedSides(candidate));
   const overlapsNode = (rect: Rect | null) => Boolean(rect && [...components.values()].some((component) => rectsOverlap(rect, component, -2)));
   const labelFor = (conn: RouteEdge, points: Point[], routes: Point[][], labels: readonly ReservedLabel[]) => labelRectFor?.(conn, points, {
     routes,
@@ -107,7 +113,7 @@ export function improveRoutes(ctx: RouterContext, resolvedRoutes: Resolved[]) {
           return { points: [start, end], d: roundedPath([start, end], 8) };
         };
         const pairSides = (candidate: RouteEdge) => (candidate === conn ? firstSides
-          : candidate === second.conn ? secondSides : ctx.selectedSides.get(candidate)!);
+          : candidate === second.conn ? secondSides : selectedSides(candidate));
         let best: { firstRoute: Resolved & Routed; secondRoute: Resolved & Routed; firstRect: LabelRect | null; secondRect: LabelRect | null } | null = null;
         let bestCost = ctx.readabilityCost(conn, first, [...others, second]) + ctx.readabilityCost(second.conn, second, [...others, first]);
         for (const firstLane of lanes(firstGeometry)) {
@@ -166,7 +172,8 @@ export function improveRoutes(ctx: RouterContext, resolvedRoutes: Resolved[]) {
     if (hasAuthoredRouteGeometry(owner) || hasAuthoredLabelPlacement(owner)) return null;
     const labels = ctx.reservedLabels.filter((label) => label.conn !== conn && label.conn !== owner);
     const routes = [...others, { conn, points: routed.points }];
-    const moved = routes.find((entry) => entry.conn === owner)!;
+    const moved = routes.find((entry) => entry.conn === owner);
+    if (!moved) throw new Error(`The label of edge "${owner.id}" has no route.`);
     for (const entry of [moved, { conn, points: routed.points }]) {
       const rect = labelFor(entry.conn, entry.points, routes.map((route) => route.points), labels);
       if (!labelClears(rect, entry.conn, routes, labels) || overlapsNode(rect)) return null;
@@ -217,8 +224,7 @@ export function improveRoutes(ctx: RouterContext, resolvedRoutes: Resolved[]) {
     for (const entry of resolvedRoutes) {
       const { conn } = entry;
       if (entry.points.length < 4 || fixed(conn)) continue;
-      const from = ctx.boxOf(conn.from)!;
-      const to = ctx.boxOf(conn.to)!;
+      const { from, to } = ctx.endsOf(conn);
       const facing: Sides | null = from.x + from.width <= to.x ? { fromSide: 'right', toSide: 'left' }
         : to.x + to.width <= from.x ? { fromSide: 'left', toSide: 'right' }
           : from.y + from.height <= to.y ? { fromSide: 'bottom', toSide: 'top' }

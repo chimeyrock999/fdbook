@@ -343,7 +343,7 @@ export function automaticPortRhythmBridge(
     .map((points) => normalizeRoutePoints(points))
     .find((points) => routeHonorsEndpointSides(points, fromSide, toSide)
       && collectRouteRhythmIssues(points, interiorSegmentPx).length === 0
-      && accept(points)) || null;
+      && accept(points)) ?? null;
 }
 
 export function chosenSide(side: Side | undefined, fallback: Side): Side {
@@ -373,8 +373,8 @@ export function automaticPortSpread(
     const from = boxes.get(edge.from);
     const to = boxes.get(edge.to);
     if (!from || !to) continue;
-    const fromSide = chosenSide(edge.fromSide, sideFor?.(edge, 'source') || defaultFromSide(from, to));
-    const toSide = chosenSide(edge.toSide, sideFor?.(edge, 'target') || defaultToSide(from, to));
+    const fromSide = chosenSide(edge.fromSide, sideFor?.(edge, 'source') ?? defaultFromSide(from, to));
+    const toSide = chosenSide(edge.toSide, sideFor?.(edge, 'target') ?? defaultToSide(from, to));
     add({ edge, endpoint: 'from', rect: from, side: fromSide, counterpart: to });
     add({ edge, endpoint: 'to', rect: to, side: toSide, counterpart: from });
   }
@@ -386,8 +386,8 @@ export function automaticPortSpread(
       const aCoordinate = verticalSide ? a.counterpart.cy : a.counterpart.cx;
       const bCoordinate = verticalSide ? b.counterpart.cy : b.counterpart.cx;
       if (aCoordinate !== bCoordinate) return aCoordinate - bCoordinate;
-      const aKey = `${a.edge.id}\u0000${a.edge.from}\u0000${a.edge.to}\u0000${a.edge.label || ''}`;
-      const bKey = `${b.edge.id}\u0000${b.edge.from}\u0000${b.edge.to}\u0000${b.edge.label || ''}`;
+      const aKey = `${a.edge.id}\u0000${a.edge.from}\u0000${a.edge.to}\u0000${a.edge.label ?? ''}`;
+      const bKey = `${b.edge.id}\u0000${b.edge.from}\u0000${b.edge.to}\u0000${b.edge.label ?? ''}`;
       return aKey < bKey ? -1 : aKey > bKey ? 1 : 0;
     });
     const extent = verticalSide ? items[0].rect.height : items[0].rect.width;
@@ -419,13 +419,13 @@ export function automaticPortSpread(
 }
 
 export function polylinePath(points: readonly Point[]) {
-  return points.map(([x, y], index) => `${index === 0 ? 'M' : 'L'} ${x} ${y}`).join(' ');
+  return points.map(([x, y], index) => `${index === 0 ? 'M' : 'L'} ${String(x)} ${String(y)}`).join(' ');
 }
 
 // The route as an SVG path, its corners rounded to `radius`.
 export function roundedPath(points: readonly Point[], radius: number) {
   if (points.length < 3 || radius <= 0) return polylinePath(points);
-  const commands = [`M ${points[0][0]} ${points[0][1]}`];
+  const commands = [`M ${String(points[0][0])} ${String(points[0][1])}`];
   for (let i = 1; i < points.length - 1; i += 1) {
     const [px, py] = points[i - 1];
     const [cx, cy] = points[i];
@@ -434,16 +434,16 @@ export function roundedPath(points: readonly Point[], radius: number) {
     const nextLen = Math.hypot(nx - cx, ny - cy);
     const r = Math.min(radius, prevLen / 2, nextLen / 2);
     if (r < 1) {
-      commands.push(`L ${cx} ${cy}`);
+      commands.push(`L ${String(cx)} ${String(cy)}`);
       continue;
     }
     const before = [cx - ((cx - px) / prevLen) * r, cy - ((cy - py) / prevLen) * r];
     const after = [cx + ((nx - cx) / nextLen) * r, cy + ((ny - cy) / nextLen) * r];
-    commands.push(`L ${before[0]} ${before[1]}`);
-    commands.push(`Q ${cx} ${cy} ${after[0]} ${after[1]}`);
+    commands.push(`L ${String(before[0])} ${String(before[1])}`);
+    commands.push(`Q ${String(cx)} ${String(cy)} ${String(after[0])} ${String(after[1])}`);
   }
   const [endX, endY] = points[points.length - 1];
-  commands.push(`L ${endX} ${endY}`);
+  commands.push(`L ${String(endX)} ${String(endY)}`);
   return commands.join(' ');
 }
 
@@ -451,8 +451,8 @@ export function roundedPath(points: readonly Point[], radius: number) {
 // route, else above the middle of its second segment.
 export function labelPoint(edge: Pick<RouteEdge, 'labelAt' | 'labelDx' | 'labelDy'>, points: readonly Point[]): Point {
   if (edge.labelAt) return edge.labelAt;
-  const dx = edge.labelDx || 0;
-  const dy = edge.labelDy || 0;
+  const dx = edge.labelDx ?? 0;
+  const dy = edge.labelDy ?? 0;
   if (points.length === 2) return [(points[0][0] + points[1][0]) / 2 + dx, points[0][1] - 10 + dy];
   const segmentIndex = Math.min(points.length - 2, 1);
   const a = points[segmentIndex];
