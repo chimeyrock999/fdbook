@@ -2,7 +2,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { notesMetaSchema } from '@fdbook/mdx/notes-schema.ts';
+import { notesMetaSchema } from '@fdbook/shared/content/schema.ts';
 import { loadTree } from '#services/tree/build.ts';
 import { applyPlan, planMove, planVisibility } from '#services/tree/ops.ts';
 import type { TreeFolder, TreeNode } from '@fdbook/shared/tree.ts';

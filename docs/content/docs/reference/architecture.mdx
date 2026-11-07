@@ -95,9 +95,8 @@ Below, `server/…` is short for `packages/server/src/…` and `src/…` for
   - `features/`: the logic, hooks and smaller components of each feature.
     - `editor/` is the note editor: Visual and Source modes, save status,
       the conflict dialog, unsaved edits kept per tab, Source's asset
-      completion; with `frontmatter/` (the YAML frontmatter and its form),
-      `graph/` (graph markers and their ids) and `plugins/` (see
-      [Plugins](#plugins)).
+      completion; with `frontmatter/` (the YAML frontmatter and its form)
+      and `plugins/` (see [Plugins](#plugins)).
     - `tree/`, `assets/`, `diagrams/` (the diagram editor's canvases,
       panels and saving), `media/` (pasted and dropped images),
       `changes/` (the commit message, Preview, Pull request, Publish, the
@@ -116,14 +115,12 @@ Below, `server/…` is short for `packages/server/src/…` and `src/…` for
     clipboard, keys, session storage, and a note's paths.
 - `packages/shared/src/` (`@fdbook/shared`), read by both: the shapes the
   server and the UI exchange (`api/`), the project's areas and the path
-  policy (`paths/`), and the text algorithms both run: proposal hunks,
-  thread anchors, block alignment, frontmatter blocks, slugs (`text/`).
+  policy (`paths/`), the frontmatter schema and icon names (`content/`),
+  and the text algorithms both run: proposal hunks, thread anchors, block
+  alignment, frontmatter blocks, slugs (`text/`).
 - `packages/diagram/` (`@fdbook/diagram`): diagram files, shared with a
   site: the model, checks, edits, layout and routing, rendering, the
   Archify import, and Node-only (`node/`) and site-only (`site/`) parts.
-- `packages/mdx/` (`@fdbook/mdx`): the MDX the old site and the Studio
-  share: the frontmatter and `meta.yaml` schemas, directives, callout and
-  accordion components, and the notes theme.
 - `packages/testing/` (`@fdbook/testing`): a Studio over a throwaway
   worktree, and FdBook's docs as real content, for every package's tests.
 - Each package's `tests/` is laid out like its `src/`; `tests/support/`
@@ -603,8 +600,8 @@ the chats the Studio starts and your own agents in a terminal (see
 | `list_notes` | read | Every note: path, title, description, tags, keywords |
 | `read_note` | read | A note's text, its top-level blocks (index, line, first line) and the proposals waiting on it |
 | `search_notes` | read | Notes with every word of the query in their title, description, tags or text, with up to 3 matching lines each (20 notes by default, at most 50) |
-| `note_graph` | read | Links out and in, tags, keywords and graph keywords, notes that share a tag |
-| `note_vocabulary` | read | Every tag, keyword and graph keyword the notes use, with how many notes use each, most used first |
+| `note_graph` | read | Links out and in, tags and keywords, notes that share a tag |
+| `note_vocabulary` | read | Every tag and keyword the notes use, with how many notes use each, most used first |
 | `related_notes` | read | The notes most related to one (10 by default, at most 30), ranked by shared tags and keywords, links either way and title words; each with its href from the note, why, and whether the note already links there |
 | `propose_edit` | write | A proposal: the whole new text, or up to 100 find/replace edits; answers its hunks, lint issues, and `outsideSelection` when the message selected other lines. Nothing is written. A note that does not exist yet is created with `content`; the same turn's later edits to a note it created are written too (`written: true`), until someone else changes it. |
 | `propose_delete` | write | Proposes deleting a page (`x.mdx`) or folder (`x`); answers the dry run (`deleted`, `changes`, `linksLeft`). Nothing is deleted: a person accepts it with the delete dialog, or rejects it. One open proposal per path. Kept in `<STUDIO_HOME>/proposals/<slug>/deletes/`. |
@@ -716,41 +713,27 @@ request's go with it.
 
 ## The site's look
 
-The editor imports the site's look rather than copying it, so a change on
-the site shows here with no Studio edit:
+The Studio looks like a site made with create-fumadocs-app, and imports
+that look rather than copying it, so a fumadocs update shows here with no
+Studio edit:
 
-- colours and fonts: `styles/notes-theme.css` (`.notes-theme`), mapped
-  onto the editor's `--fde-*` tokens in `src/notes-theme.css`;
-- prose, callouts, title and description: `styles/notes-prose.css`
-  (`.notes-prose`, `.notes-title`, `.notes-description`). The editor's
-  stylesheet sits in a cascade layer so these rules win over it;
-  `src/notes-prose.css` keeps only what the editor needs on top, where its
-  markup differs from the page's. The site's prose is for the note's
-  content: what the editor draws and does not let you edit (a diagram
-  preview's labels, a control) keeps the editor's look;
-- components: the callout's icons and variables from
-  `components/notes-callout.tsx`, Keyword and Tag from the class names
-  `components/graph-objects.tsx` exports (Tailwind scans that file), the
-  accordion's icons and palette from `packages/mdx/src/notes-accordion.ts`, and the
-  directive names, callout types and accordion kinds from
-  `packages/mdx/src/notes-syntax.ts`;
+- colours: fumadocs-ui's `css/neutral.css`, mapped onto the editor's
+  `--fde-*` tokens in `src/site-theme.css` (on `body.site-theme`);
+- prose: fumadocs-ui's `css/preset.css`, whose typography plugin gives
+  `.prose`, set on the editor with `.studio-prose`. The editor's stylesheet
+  sits in a cascade layer so these rules win over it; `src/prose.css`
+  keeps only what the editor needs on top: the title and description as
+  fumadocs' DocsTitle and DocsDescription set them, the code block frame,
+  and where its markup differs from the page's. The prose is for the
+  note's content: what the editor draws and does not let you edit (a
+  diagram preview's labels, a control) keeps the editor's look;
+- components: fumadocs-ui's own, as `@fumadocs-editor/ui` draws them;
 - light and dark follow the system (`.dark` on `<html>`, as next-themes
-  sets it on the site);
-- Mermaid previews take the site's diagram palette: `NoteEditor` marks the
-  author's fills on each one as the site does (`packages/mdx/src/pele-author-fill.ts`),
-  so dark mode gets the right node ink, subgraph tint and title halos, and
-  the code block frame sets `--notes-diagram-bg`, the plate behind each
-  edge label;
-- `<Diagram>` cards and the diagram editor: `styles/diagram.css`, imported
-  by `src/features/editor/plugins/diagram/Diagram.tsx` (`src/features/diagrams/diagram-page.css`
-  adds only the editor's chrome).
-
-What the editor cannot import stays a copy in its plugin: the accordion
-card, the code block frame, `SvgDiagram`, `YouTube`, `HtmlEmbed` and the
-`<Diagram>` props. The site marks the parts each copy mirrors with
-`// studio-copy start: …` and `// studio-copy end`;
-`tests/src/site-copies.test.ts` pins their hash and fails when one of them
-changes, not on other edits to the file.
+  sets it on a site);
+- `<Diagram>` cards and the diagram editor: `styles/diagram.css` of
+  `@fdbook/diagram`, which reads fumadocs' `--color-fd-*` tokens, imported
+  by `src/features/editor/plugins/diagram/Diagram.tsx`
+  (`src/features/diagrams/diagram-page.css` adds only the editor's chrome).
 
 The editor's block drag handle is drawn as a grip
 (`src/features/editor/drag-handle.css`, found by its `aria-label`;
@@ -765,34 +748,34 @@ What the editor understands comes from plugins in `src/plugins/<name>/`.
 and merges them, so adding a plugin needs no change anywhere else.
 
 ```ts
-// src/features/editor/plugins/svg-diagram/index.ts, shortened
+// src/features/editor/plugins/diagram/index.ts, shortened
 import type { UiComponentSpec } from '@fumadocs-editor/ui';
-import { definePlugin } from '../plugin';
-import './svg-diagram.css'; // the plugin's own styles
-import { SvgDiagram } from './SvgDiagram'; // React components in their own file
+import { definePlugin } from '#features/editor/plugins/plugin.ts';
+import './embed.css'; // the plugin's own styles
+import { Diagram } from './Diagram'; // React components in their own file
 
-const svgDiagramSpec: UiComponentSpec = {
-  name: 'SvgDiagram', // the JSX tag
+const diagramSpec: UiComponentSpec = {
+  name: 'Diagram', // the JSX tag
   attributeRegions: [{ attribute: 'caption', region: 'caption' }],
-  props: [{ name: 'src', type: 'string' }, { name: 'label', type: 'string' }],
-  render: SvgDiagram,
+  props: [{ name: 'src', type: 'string' }, { name: 'title', type: 'string' }],
+  render: Diagram,
 };
 
-export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] });
+export default definePlugin({ id: 'diagram', components: [diagramSpec] });
 ```
 
 - `components` are `UiComponentSpec`s: how a component's attributes and
   children map to editable regions and props, how it renders, and what the
   slash menu inserts. Only add components the site renders
-  (`components/mdx.tsx`).
+  (`mdx-components.tsx` in a create-fumadocs-app site).
 - `syntax` turns on parse-level dialects such as `directives`; a dialect is
-  on when any plugin turns it on.
+  on when any plugin turns it on. The shipped plugins turn none on.
 - `decorate` draws over what the editor keeps as source (inline JSX tags,
   text directives, verbatim blocks) with ProseMirror decorations. It
   changes how the document looks, never the document.
   `src/features/editor/decorations.ts` puts every plugin's decorator on the live
   editor, as one of `MdxEditor.Root`'s `extensions` (the suggestion
-  layer, the graph tools and the agent panel's place come the same way,
+  layer and the agent panel's place come the same way,
   made with the root in `NoteEditor.tsx`). Cards share
   `src/features/editor/plugins/cards.css`; `.studio-hidden` hides the source a card covers.
 - A plugin must export a default; two plugins may not share an `id` or
@@ -804,50 +787,21 @@ export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] })
 
 The plugins:
 
-- `callout`: `<Callout>` and `:::type[title]` drawn with the classes, icons
-  and variables of `components/notes-callout.tsx`, with the site's types
-  and an icon menu to change them. The editor only parses the admonition
-  names in core's `ADMONITION_TYPES`, so the plugin adds the site's own
-  (`example`, `caution`, `important`, `error`, from `packages/mdx/src/notes-syntax.ts`)
-  to that object at load; `tests/features/editor/plugins/callout.test.ts` fails if a
-  new editor version stops reading it. A callout whose title has
-  formatting, or that holds an accordion group, stays source (the editor's
-  rule).
-- `graph-objects`: `<Keyword>`, `<Tag>`, `:keyword[…]` and `:tag[…]` with
-  the classes of `components/graph-objects.tsx`, `<GraphMeta/>` and
-  `:graph-meta{…}` as a small marker, all as decorations: with the caret
-  inside (or the atom selected) the source shows again. `<SectionTitle>` is
-  a component, drawn as the heading its `as` names.
-- `site-directives`: `::::accordions` groups as the site's accordion cards
-  and `::youtube` as a card. On an accordion card the icon picks the item's
-  `kind` (from `ACCORDION_KINDS`), the title is edited in place on the
-  head, and the body opens as MDX source. Each is written back as typing
-  pauses and rewrites only its own line or lines: a kind or title keeps its
-  quotes and its place, a title written as the `[label]` stays there, and
-  an empty title is not written. Titles show the text the site shows
-  (character references and label escapes decoded) and are written so they
-  read back the same. The MDX button shows the block's
-  source.
-- `site-inserts`: the `/` menu items for graph markers, directive blocks
-  and a Mermaid diagram. The menu lists components, so each is a spec named
-  `studio-insert-…` whose `insert` returns the site's syntax (or, for
-  Mermaid, the editor's code block) instead of a node of its own; no note
-  has such a tag, and `tests/features/editor/plugins/site-inserts.test.ts` checks that
-  none parses. The menu matches the query against labels only, hence the
-  label "Mermaid diagram".
+- `fumadocs-ui`: fumadocs-ui's Callout, Cards, Steps, Tabs and Accordions,
+  as `@fumadocs-editor/ui` draws them. Files, TypeTable, GithubInfo and
+  `<include>` are left out: the editor cannot draw them live.
 - `diagram`: `<Diagram>`, drawn with the site's renderer and the count of
   its checks' findings, its caption edited in place and `src` and `title`
   in the props panel.
-- `youtube`: `<YouTube>` as the same card as `::youtube`, its title edited
-  in place and its url or `videoId` in the props panel.
-- `fumadocs-ui`: Cards, Steps, Tabs and Accordions.
-- `html-embed` and `svg-diagram`: cards. `SvgDiagram` shows its inline
-  `svg` (as an image, so no script runs) or else a file under
-  `public/notes` through the file API, and reads its props like the site
-  (`packages/mdx/src/mdx-props.ts`); a bare JSX boolean (`plate`) reaches the editor
-  without a value, so write `plate="true"` to see it. `HtmlEmbed` shows no
-  live page, since the file API serves HTML assets sandboxed without
-  scripts.
+- `mermaid`: the `/` menu's Mermaid diagram. The menu lists components, so
+  it is a spec named `studio-insert-mermaid` whose `insert` returns the
+  editor's code block instead of a node of its own; no note has such a
+  tag, and `tests/features/editor/plugins/mermaid.test.ts` checks that none
+  parses. The menu matches the query against labels only, hence the label
+  "Mermaid diagram".
+
+A knowledge graph, site directives or a site's own components are not in
+core: they would come back as plugins.
 
 ### Next to the editor
 
@@ -859,15 +813,6 @@ single button that runs on the editor; the bubble shows only for a text
 selection (and at a caret on touch) and is not mounted when the editor is
 read-only. Hence (#174):
 
-- **Graph tools.** Keyword and Tag, which wrap a text selection and
-  toggle the marker around it, are `bubbleItems`
-  (`src/features/editor/graph/bubble-items.tsx`). Graph node is a widget button at the end
-  of a heading and a click on a keyword or tag opens its fields, both from
-  the graph plugin (`src/features/editor/graph/graph-plugin.ts`), since they also work at
-  a caret, which the bubble does not show for. The fields
-  (`GraphTools.tsx`) keep their own state and focus, so they stay a React
-  popup, placed at the marker (`src/features/editor/graph/place.ts`); Remove and the
-  frontmatter note are in them (#176).
 - **Suggestion decisions** stay custom. The cards and thread marks
   (`src/features/review/visual.ts`, `Suggestions.tsx`) are drawn at blocks,
   several at once, whatever the selection, and also in read-only review;

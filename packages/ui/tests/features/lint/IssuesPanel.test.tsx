@@ -10,7 +10,7 @@ afterEach(cleanup);
 const at = (line: number, offset: number) => ({ line, column: 1, offset });
 const ISSUES: LintIssue[] = [
   { rule: 'link-broken', severity: 'error', message: 'Link `./x` does not reach a page.', start: at(3, 10), end: at(3, 20) },
-  { rule: 'graph-meta-incomplete', severity: 'warning', message: 'GraphMeta has no displayName.', start: at(9, 80), end: at(9, 90) },
+  { rule: 'emphasis-marker', severity: 'warning', message: 'Emphasis uses `_`; use *text*, as the editor writes it.', start: at(9, 80), end: at(9, 90) },
 ];
 
 describe('IssuesPanel', () => {
@@ -22,7 +22,7 @@ describe('IssuesPanel', () => {
     const buttons = screen.getAllByRole('button');
     expect(buttons.map((button) => button.textContent)).toEqual([
       'Link ./x does not reach a page.Line 3link-broken',
-      'GraphMeta has no displayName.Line 9graph-meta-incomplete',
+      'Emphasis uses _; use *text*, as the editor writes it.Line 9emphasis-marker',
     ]);
     expect(buttons[0]?.querySelector('code')?.textContent).toBe('./x');
     await userEvent.click(buttons[1]);

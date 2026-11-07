@@ -1,19 +1,19 @@
 @import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
 /* The editor's rules carry :not(#\#) ×3, which outweighs any selector; in
    a layer they give way to the site's prose and the Studio's own rules, and
    still beat Tailwind's layers, declared first. */
 @import '@fumadocs-editor/ui/styles.css' layer(editor);
-@import './notes-theme.css';
+@import './site-theme.css';
 @import './scrollbars.css';
-@import '@fdbook/mdx/styles/notes-prose.css';
-@import './notes-prose.css';
+@import './prose.css';
 @import './features/assets/assets.css';
 @import './features/assets/asset-page.css';
 @import './features/diagrams/diagram-page.css';
 @import './features/changes/changes.css';
 @import './features/diff/diff.css';
 @import './features/history/history.css';
-@import './features/editor/graph/graph.css';
 @import './features/cr/cr.css';
 @import './app/sidebar.css';
 @import './features/session/session.css';
@@ -24,9 +24,6 @@
 @import './features/review/suggestions/suggestions.css';
 @import './features/review/review.css';
 @import './components/components.css';
-/* Site components whose classes the Studio draws with (src/features/editor/plugins). */
-@source '../../mdx/components/graph-objects.tsx';
-
 /* The Studio chrome uses the editor's --fde-* tokens, which follow the
    system light/dark preference, so both always match. */
 :root {
@@ -58,7 +55,7 @@
     color: var(--fde-background);
     border-color: var(--fde-foreground);
   }
-  /* A popup over the note: the graph fields (src/features/editor/graph). */
+  /* A popup over the note: toasts and notices. */
   .studio-popup {
     border: 1px solid var(--fde-border);
     border-radius: 9px;

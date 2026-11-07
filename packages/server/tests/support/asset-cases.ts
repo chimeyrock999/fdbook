@@ -6,7 +6,7 @@ import { docsRoot } from '@fdbook/testing/notes.ts';
 // public/docs and diagrams, so three files are used, each from one page:
 // - PANES, the docs' own studio-panes.svg, a Markdown image in using.mdx;
 // - SIGN_IN, a .webp with underscores in its name, added as an image in setup.mdx;
-// - REQUEST_PATH, an .svg, added as an <SvgDiagram src> in architecture.mdx.
+// - REQUEST_PATH, an .svg, added as an <img src> in architecture.mdx.
 export const PANES = {
   asset: 'public/docs/guide/using/studio-panes.svg',
   note: 'content/docs/guide/using.mdx',
@@ -20,7 +20,7 @@ export const SIGN_IN = {
 export const REQUEST_PATH = {
   asset: 'public/docs/reference/architecture/request-path.svg',
   note: 'content/docs/reference/architecture.mdx',
-  line: '<SvgDiagram src="/docs/reference/architecture/request-path.svg" label="A request through the checks" />',
+  line: '<img src="/docs/reference/architecture/request-path.svg" alt="A request through the checks" />',
 };
 
 export async function writeAssetCases(root: string) {

@@ -65,7 +65,7 @@ export function IssuesPanel({ state, onSelect }: { state: LintState; onSelect: (
         <div className="grid justify-items-center gap-1.5 px-2 py-7 text-center text-[12.5px] text-[var(--fde-muted-foreground)]">
           <SeverityIcon kind="ok" />
           <span className="font-semibold text-[var(--fde-foreground)]">No issues</span>
-          <span>This note follows the site&apos;s rules: directives, callouts, links, assets and graph ids.</span>
+          <span>This note follows the site&apos;s rules: links, assets and diagrams.</span>
         </div>
       ) : (
         <>

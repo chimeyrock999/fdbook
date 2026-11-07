@@ -1,4 +1,4 @@
-import { notesPageSchema, type NotesPageFrontmatter } from '@fdbook/mdx/notes-schema.ts';
+import { notesPageSchema, type NotesPageFrontmatter } from '@fdbook/shared/content/schema.ts';
 import { isMap, isScalar, isSeq, parseDocument, type Document, type Node } from 'yaml';
 import { findBlock } from '@fdbook/shared/frontmatter-block.ts';
 

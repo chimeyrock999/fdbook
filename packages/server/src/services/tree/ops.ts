@@ -126,7 +126,7 @@ export async function planCreate(root: string, tree: TreeFolder, request: Create
 
   const folder = inDir(parent.path, slug);
   const page: string | null = kind === 'page' ? inDir(parent.path, `${slug}.mdx`) : kind === 'folder-page' ? inDir(folder, 'index.mdx') : null;
-  const writes: Write[] = page === null ? [] : [{ path: page, content: pageTemplate(slug, title), baseMtime: null }];
+  const writes: Write[] = page === null ? [] : [{ path: page, content: pageTemplate(title), baseMtime: null }];
   if (kind !== 'page') {
     const name = await newMetaName(root);
     writes.push({ path: inDir(folder, name), content: metaEditor(name).metaTemplate(title, [], request.defaultOpen === true), baseMtime: null });

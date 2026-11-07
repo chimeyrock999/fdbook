@@ -29,10 +29,10 @@
     "#*": "./src/*"
   },
   "dependencies": {
-    "@fdbook/mdx": "*",
     "@expo-google-fonts/be-vietnam-pro": "^0.4.1",
     "@resvg/resvg-js": "^2.6.2",
     "elkjs": "^0.12.0",
+    "fumadocs-ui": "^16.18.0",
     "react": "^19.3.1",
     "zod": "^4.6.7"
   },

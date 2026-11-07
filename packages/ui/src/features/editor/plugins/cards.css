@@ -5,7 +5,7 @@
   display: none !important;
 }
 
-/* A card over a directive or embed the editor cannot draw live. */
+/* A card over an embed the editor cannot draw live. */
 .studio-card {
   position: relative;
   margin: 1rem 0;
@@ -20,7 +20,7 @@
   gap: 8px;
   padding: 6px 12px;
   border-bottom: 1px solid var(--fde-border);
-  background: var(--garden-surface-2);
+  background: var(--fde-muted);
   font-size: 12px;
   color: var(--fde-muted-foreground);
 }

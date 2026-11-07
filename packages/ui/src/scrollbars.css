@@ -3,9 +3,9 @@
    colour follows the theme. The editor's own menus and code blocks keep
    their fumadocs-editor scrollbars. */
 @layer base {
-  /* Again on .notes-theme, where the --fde-* tokens are the site's. */
+  /* Again on .site-theme, where the --fde-* tokens are the site's. */
   :root,
-  .notes-theme {
+  .site-theme {
     --studio-scroll-thumb: color-mix(in srgb, var(--fde-muted-foreground) 45%, transparent);
   }
 

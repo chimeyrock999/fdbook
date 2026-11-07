@@ -7,7 +7,7 @@ import { findBlock } from './frontmatter-block.ts';
 // (src/features/editor/plugins, buildEditorConfig). The server cannot load the plugins (they
 // are React), so a test keeps this equal to theirs. Only the dialects decide
 // where a block starts and ends; the components do not.
-export const NOTE_SYNTAX: SyntaxOptions = { directives: true };
+export const NOTE_SYNTAX: SyntaxOptions = {};
 
 const syntax = createSyntax([], NOTE_SYNTAX);
 

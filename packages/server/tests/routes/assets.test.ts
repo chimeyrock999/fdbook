@@ -35,7 +35,7 @@ class TextEditor implements DocumentEditor {
 
 const PANES_SVG = PANES.asset;
 const SIGN_IN_WEBP = SIGN_IN.asset;
-// An embedded HTML asset, and an unused one, each still named by a regen
+// A linked HTML asset, and an unused one, each still named by a regen
 // script of the retired Archify pipeline: the Studio no longer reads those.
 const MADE = { asset: 'public/docs/legacy/made.html', note: 'content/docs/legacy-made.mdx', script: 'diagrams/legacy/made.regen.sh' };
 const KEPT = { asset: 'public/docs/legacy/kept.html', script: 'diagrams/legacy/kept.regen.sh' };
@@ -70,7 +70,7 @@ describe('assets API', () => {
       await writeFile(file(asset), '<!doctype html><html><body>legacy</body></html>\n');
       await writeFile(file(script), `#!/bin/sh\nOUT="${asset}"\n`);
     }
-    await writeFile(file(MADE.note), '---\ntitle: made\n---\n\n<HtmlEmbed src="/docs/legacy/made.html?embed=1" title="made" />\n');
+    await writeFile(file(MADE.note), '---\ntitle: made\n---\n\n[made](/docs/legacy/made.html?embed=1)\n');
   });
 
   afterAll(async () => {
@@ -87,7 +87,7 @@ describe('assets API', () => {
     });
     expect(byPath(PANES_SVG)?.usages[0].text).toMatch(/^!\[The Studio: .*studio-panes\.svg\)$/);
     expect(byPath('public/docs/demo/pixel.png')?.usages).toEqual([]);
-    // The three images and the embed written above, and the six <Diagram>s of the docs.
+    // The three images and the link written above, and the six <Diagram>s of the docs.
     expect(assets.flatMap((asset) => asset.usages).length).toBeGreaterThanOrEqual(10);
     expect(await missingAssets()).toEqual([]);
   }, 20_000);
@@ -130,7 +130,7 @@ describe('assets API', () => {
       expect(await missingAssets()).toEqual([]);
     }, 20_000);
 
-    it('keeps the query of an embed, and lists no regen script', async () => {
+    it('keeps the query of a link, and lists no regen script', async () => {
       const before = await text(MADE.note);
       const response = await post({ op: 'rename', path: MADE.asset, name: 'made-layers', baseMtime: await mtime(MADE.asset) });
       expect(response.status).toBe(200);
@@ -204,7 +204,7 @@ describe('assets API', () => {
 
     it('counts a broken note only for a name it holds whole', async () => {
       await writeFile(file('public/docs/zz-escaped/ta.png'), 'x');
-      await writeFile(file('content/docs/zz-broken-name.mdx'), '<HtmlEmbed src="/docs/elsewhere/data.png"\n');
+      await writeFile(file('content/docs/zz-broken-name.mdx'), '<img src="/docs/elsewhere/data.png"\n');
       expect((await find('public/docs/zz-escaped/ta.png'))?.usages).toEqual([]);
       await rm(file('content/docs/zz-broken-name.mdx'));
     });
@@ -220,7 +220,7 @@ describe('assets API', () => {
 
     it('refuses while a note that does not parse may use it', async () => {
       const broken = 'content/docs/zz-broken.mdx';
-      await writeFile(file(broken), '<HtmlEmbed src="/docs/guide/using/studio-panes.svg"\n');
+      await writeFile(file(broken), '<img src="/docs/guide/using/studio-panes.svg"\n');
       expect((await find(PANES_SVG))?.usages.at(-1)).toMatchObject({ note: broken, line: 1, unsure: true });
       const response = await post({ op: 'rename', path: PANES_SVG, name: 'panes', baseMtime: await mtime(PANES_SVG) });
       expect(response.status).toBe(409);

@@ -90,7 +90,7 @@
     padding: 10px;
     border-radius: 8px;
     background: var(--fde-muted);
-    font-family: var(--font-garden-mono), ui-monospace, monospace;
+    font-family: var(--font-mono);
     font-size: 26px;
     font-weight: 500;
     letter-spacing: 0.12em;

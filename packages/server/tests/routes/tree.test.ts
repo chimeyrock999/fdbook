@@ -71,7 +71,7 @@ describe('tree API', () => {
       expect(response.status).toBe(200);
       expect((json(response) as Answer).open).toBe('reference/glossary.mdx');
       expect(await text('reference/glossary.mdx')).toBe(
-        '---\ntitle: "Glossary \\"Terms\\""\ndescription: ""\ngraph:\n  id: "glossary"\n  displayName: "Glossary \\"Terms\\""\n  keywords: []\n  sections: []\n---\n\n',
+        '---\ntitle: "Glossary \\"Terms\\""\ndescription: ""\n---\n\n',
       );
       expect(await text('reference/meta.yaml')).toBe(
         meta.replace('  - "architecture"\n', '  - "architecture"\n  - "glossary"\n'),

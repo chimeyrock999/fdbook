@@ -11,11 +11,11 @@ import { makeGitRepo, startCrStudio, type CrStudio, type GitRepo } from '#tests/
 import { json } from '#tests/support/http.ts';
 
 const NOTES: Record<string, string> = {
-  'content/docs/data/spark.mdx': '---\ntitle: Spark driver\ntags: [spark, compute]\nkeywords: [driver]\ngraph:\n  id: spark\n  displayName: Spark\n  keywords:\n    - id: dag\n      displayName: DAG\n---\n\nThe driver plans the DAG and hands tasks to executors. See [Photon](./photon.mdx).\n',
+  'content/docs/data/spark.mdx': '---\ntitle: Spark driver\ntags: [spark, compute]\nkeywords: [driver, dag]\n---\n\nThe driver plans the DAG and hands tasks to executors. See [Photon](./photon.mdx).\n',
   'content/docs/data/photon.mdx': '---\ntitle: Photon engine\ntags: [compute]\nkeywords: [driver]\n---\n\nPhoton runs SQL faster.\n',
   'content/docs/data/executors.mdx': '---\ntitle: Executors\ntags: [spark]\n---\n\nExecutors run tasks. Back to [the driver](./spark.mdx).\n',
   'content/docs/other/cooking.mdx': '---\ntitle: Cooking rice\n---\n\nRice and water.\n',
-  'content/docs/other/dag.mdx': '---\ntitle: Tasks and executors\ngraph:\n  id: dags\n  displayName: DAGs\n  sections:\n    - id: s\n      displayName: S\n      keywords:\n        - id: dag\n          displayName: DAG\n---\n\nA graph of tasks.\n',
+  'content/docs/other/dag.mdx': '---\ntitle: Tasks and executors\nkeywords: [dag]\n---\n\nA graph of tasks.\n',
 };
 
 // The tools for writing with an agent (#86): the notes' vocabulary, and
@@ -50,11 +50,11 @@ describe('writing tools', () => {
     await repo.remove();
   });
 
-  it('counts the tags, keywords and graph keywords the notes use, most used first', async () => {
+  it('counts the tags and keywords the notes use, most used first', async () => {
     const { value } = await call('note_vocabulary', {});
     expect(value?.tags).toEqual([{ tag: 'compute', notes: 2 }, { tag: 'spark', notes: 2 }]);
-    expect(value?.keywords).toEqual([{ keyword: 'driver', notes: 2 }]);
-    expect(value?.graphKeywords).toEqual([{ id: 'dag', displayName: 'DAG', notes: 2 }]);
+    expect(value?.keywords).toEqual([{ keyword: 'dag', notes: 2 }, { keyword: 'driver', notes: 2 }]);
+    expect(value).not.toHaveProperty('graphKeywords');
   });
 
   it('ranks the related notes with why, the href to write, and whether it already links there', async () => {

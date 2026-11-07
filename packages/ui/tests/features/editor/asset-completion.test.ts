@@ -25,20 +25,19 @@ function complete(text: string, explicit = false, note = NOTE) {
 
 describe('assetContext', () => {
   it('finds the src value being typed and the element that owns it', () => {
-    expect(assetContext('<SvgDiagram label="x" src="/docs/da')).toEqual({ from: 27, kind: 'svg' });
-    expect(assetContext('<HtmlEmbed\n  src="')).toEqual({ from: 18, kind: 'html' });
-    expect(assetContext("::html{src='/no")).toEqual({ from: 12, kind: 'html' });
+    expect(assetContext('<img alt="x" src="/docs/da')).toEqual({ from: 18, kind: 'image' });
+    expect(assetContext("<img src='/no")).toEqual({ from: 10, kind: 'image' });
+    expect(assetContext('<Video\n  src="')).toEqual({ from: 14, kind: 'any' });
     // A Diagram's src is a path under diagrams/, not an asset.
     expect(assetContext('<Diagram src="data-pla')).toBeNull();
-    expect(assetContext('::diagram{src="')).toEqual({ from: 15, kind: 'svg' });
     expect(assetContext('<img alt="" src="')).toEqual({ from: 17, kind: 'image' });
     expect(assetContext('<Model src="')).toEqual({ from: 12, kind: 'any' });
     expect(assetContext('See ![Bus matrix](/docs/')).toEqual({ from: 18, kind: 'image' });
   });
 
   it('stays out of anything else', () => {
-    expect(assetContext('<SvgDiagram src="/docs/a.svg" ')).toBeNull();
-    expect(assetContext('<SvgDiagram label="')).toBeNull();
+    expect(assetContext('<img src="/docs/a.svg" ')).toBeNull();
+    expect(assetContext('<img alt="')).toBeNull();
     expect(assetContext('A [link](/docs/')).toBeNull();
     expect(assetContext('srcset="')).toBeNull();
     expect(assetContext('src="')).toEqual({ from: 5, kind: 'any' });
@@ -47,23 +46,18 @@ describe('assetContext', () => {
 
 describe('assetCompletion', () => {
   it('offers site paths of the kind the element shows, this page first', () => {
-    const result = complete('<SvgDiagram src="|" />');
-    expect(result?.from).toBe(17);
-    // Extensions in any case, as the file API takes them.
-    expect(result?.labels).toEqual([
-      '/docs/data-platform/processing/apache-spark/narrow-vs-wide-transformations.svg',
-      '/docs/data-platform/processing/Diagram.SVG',
-    ]);
-    expect(complete('<HtmlEmbed src="|')?.labels).toEqual([
-      '/docs/data-platform/processing/apache-spark/mapreduce-execution-skeleton.html',
-    ]);
-    expect(complete('![x](|')?.labels).toEqual([
+    const images = [
       '/docs/data-modeling/data_warehouse_architecture.webp',
       '/docs/data-platform/processing/apache-spark/narrow-vs-wide-transformations.svg',
       '/docs/data-platform/stacks-integration/superset-trino-impersonate.jpg',
+      // Extensions in any case, as the file API takes them.
       '/docs/data-platform/processing/Diagram.SVG',
       '/docs/data-platform/processing/apache-spark/spark-programming-model/plan.png',
-    ]);
+    ];
+    const result = complete('<img src="|" />');
+    expect(result?.from).toBe(10);
+    expect(result?.labels).toEqual(images);
+    expect(complete('![x](|')?.labels).toEqual(images);
     const any = complete('<Model src="|');
     expect(any?.labels).toHaveLength(ASSETS.length);
     const here = any?.options.filter((option) => option.detail === 'this page').map((option) => option.label);
@@ -87,7 +81,7 @@ describe('assetCompletion', () => {
   });
 
   it('keeps what was typed for the editor to filter on', () => {
-    expect(complete('<SvgDiagram src="/docs/data|')?.from).toBe(17);
+    expect(complete('<img src="/docs/data|')?.from).toBe(10);
   });
 
   it('offers nothing outside a src value', () => {

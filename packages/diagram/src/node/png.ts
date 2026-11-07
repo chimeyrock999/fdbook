@@ -1,8 +1,9 @@
 // Draws a diagram as a self-contained SVG or a PNG, with no browser: the
 // scene and markup the site uses, coloured by paint.ts from
-// styles/diagram.css, rasterised by resvg in the notes font (Be Vietnam Pro,
-// OFL, from @expo-google-fonts/be-vietnam-pro). For the CLI and for agents
-// that need to look at their own result.
+// styles/diagram.css, rasterised by resvg in a bundled font (Be Vietnam Pro,
+// OFL, from @expo-google-fonts/be-vietnam-pro), as resvg reads font files and
+// loads no system fonts here. For the CLI and for agents that need to look at
+// their own result.
 
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -15,14 +16,14 @@ const require = createRequire(import.meta.url);
 const FONT_WEIGHTS = ['400Regular', '500Medium', '600SemiBold', '700Bold'];
 
 let fontFiles: string[] | null = null;
-let css: { diagram: string; notes: string } | null = null;
+let css: { diagram: string; fumadocs: string } | null = null;
 
 const fonts = () => (fontFiles ??= FONT_WEIGHTS.map((weight) => require.resolve(`@expo-google-fonts/be-vietnam-pro/${weight}/BeVietnamPro_${weight}.ttf`)));
-// diagram.css reads the notes theme's --garden-* tokens, so the PNG takes
-// them from @fdbook/mdx as the site's page does.
+// diagram.css reads fumadocs' --color-fd-* tokens, so the PNG takes them
+// from fumadocs-ui's stock colours as the site's page does.
 const styles = () => (css ??= {
   diagram: readFileSync(new URL('../../styles/diagram.css', import.meta.url), 'utf8'),
-  notes: readFileSync(require.resolve('@fdbook/mdx/styles/notes-theme.css'), 'utf8'),
+  fumadocs: readFileSync(require.resolve('fumadocs-ui/css/lib/default-colors.css'), 'utf8'),
 });
 
 export type DrawOptions = {
@@ -44,7 +45,7 @@ export function drawDiagramSvg(value: unknown, { theme = 'light', expanded = fal
   const { scene, issues } = validateDiagram(value);
   if (!scene) return { svg: null, width: 0, height: 0, issues };
   const markup = renderDiagramSvg(scene, 'dg');
-  const svg = paintDiagramSvg(markup, diagramPalette(styles().diagram, theme, styles().notes), { theme, expanded });
+  const svg = paintDiagramSvg(markup, diagramPalette(styles().diagram, theme, styles().fumadocs), { theme, expanded });
   return { svg, width: scene.width, height: scene.height, issues };
 }
 

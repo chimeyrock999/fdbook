@@ -19,20 +19,14 @@ See [the PDF](/docs/guide/spec.pdf#page=2) and [ref][spec].
 
 [spec]: </docs/guide/spec.pdf>
 
-<HtmlEmbed
-  title="Flow"
-  src="/docs/guide/flow.html?embed=1"
+<img
+  alt="Flow"
+  src="/docs/guide/flow.svg?v=1"
 />
-
-<SvgDiagram src="docs/guide/b.svg" />
 
 <img src="/docs/guide/a.png" alt="" />
 
-::html{src="/docs/guide/flow.html?embed=1" title="Flow"}
-
-::diagram{#d src=/docs/guide/b.svg}
-
-[A page](/docs/guide) · [Elsewhere](https://example.com/docs/guide/a.png) · <HtmlEmbed src={dynamic} />
+[A page](/docs/guide) · [Elsewhere](https://example.com/docs/guide/a.png) · <img src={dynamic} />
 `;
 
 const at = (source: string, line: number) => source.split('\n')[line - 1];
@@ -44,11 +38,8 @@ describe('findAssetRefs', () => {
       ['public/docs/guide/a.png', 'image', 6],
       ['public/docs/guide/spec.pdf', 'link', 10],
       ['public/docs/guide/spec.pdf', 'link', 12],
-      ['public/docs/guide/flow.html', 'jsx', 16],
-      ['public/docs/guide/b.svg', 'jsx', 19],
-      ['public/docs/guide/a.png', 'jsx', 21],
-      ['public/docs/guide/flow.html', 'directive', 23],
-      ['public/docs/guide/b.svg', 'directive', 25],
+      ['public/docs/guide/flow.svg', 'jsx', 16],
+      ['public/docs/guide/a.png', 'jsx', 19],
     ]);
   });
 
@@ -58,13 +49,10 @@ describe('findAssetRefs', () => {
       '/docs/guide/a.png',
       '/docs/guide/spec.pdf',
       '/docs/guide/spec.pdf',
-      '/docs/guide/flow.html',
-      'docs/guide/b.svg',
+      '/docs/guide/flow.svg',
       '/docs/guide/a.png',
-      '/docs/guide/flow.html',
-      '/docs/guide/b.svg',
     ]);
-    for (const ref of refs) expect(at(NOTE, ref.line).slice(ref.column - 1)).toMatch(/^\/?docs\//);
+    for (const ref of refs) expect(at(NOTE, ref.line).slice(ref.column - 1)).toMatch(/^\/docs\//);
   });
 
   it('resolves relative links against the page URL, as the site does', () => {
@@ -78,40 +66,40 @@ describe('findAssetRefs', () => {
     expect(findAssetRefs('[a](./a.png)\n', 'guide/index.mdx')?.map((ref) => ref.asset)).toEqual(['public/docs/a.png']);
   });
 
-  it('reads every way the site accepts a src: spaced directive attributes, string expressions, encoded images', () => {
+  it('reads every way the site accepts a src: string expressions, encoded images', () => {
     const source = [
-      '::html{src = "/docs/guide/flow.html"}',
+      '<img src={"/docs/guide/flow.svg?v=1"} />',
       '',
-      '<HtmlEmbed src={"/docs/guide/flow.html?embed=1"} />',
+      "<img src={ '/docs/guide/b.svg' } />",
       '',
-      "<SvgDiagram src={ '/docs/guide/b.svg' } />",
-      '',
-      '<HtmlEmbed src={`/docs/guide/${name}.html`} />',
+      '<img src={`/docs/guide/${name}.svg`} />',
       '',
       '![a](/docs/guide/my%20pic.png)',
       '',
     ].join('\n');
     const refs = findAssetRefs(source, 'guide/intro.mdx') ?? [];
     expect(refs.map(({ asset, kind, line }) => [asset, kind, line])).toEqual([
-      ['public/docs/guide/flow.html', 'directive', 1],
-      ['public/docs/guide/flow.html', 'jsx', 3],
-      ['public/docs/guide/b.svg', 'jsx', 5],
-      ['public/docs/guide/my pic.png', 'image', 9],
+      ['public/docs/guide/flow.svg', 'jsx', 1],
+      ['public/docs/guide/b.svg', 'jsx', 3],
+      ['public/docs/guide/my pic.png', 'image', 7],
     ]);
     expect(refs.map((ref) => source.slice(ref.start, ref.end))).toEqual([
-      '/docs/guide/flow.html',
-      '/docs/guide/flow.html',
+      '/docs/guide/flow.svg',
       '/docs/guide/b.svg',
       '/docs/guide/my%20pic.png',
     ]);
     const moved = (asset: string) => asset.replace(/\/(flow|b|my pic)\./, '/renamed.');
     expect(rewriteAssetRefs(source, 'guide/intro.mdx', moved)?.next).toBe(
       source
-        .replace('src = "/docs/guide/flow.html"', 'src = "/docs/guide/renamed.html"')
-        .replace('src={"/docs/guide/flow.html?embed=1"}', 'src={"/docs/guide/renamed.html?embed=1"}')
+        .replace('src={"/docs/guide/flow.svg?v=1"}', 'src={"/docs/guide/renamed.svg?v=1"}')
         .replace("src={ '/docs/guide/b.svg' }", "src={ '/docs/guide/renamed.svg' }")
         .replace('(/docs/guide/my%20pic.png)', '(/docs/guide/renamed.png)'),
     );
+  });
+
+  it('leaves components the site does not define alone', () => {
+    const source = '<HtmlEmbed src="/docs/guide/flow.html" />\n\n<SvgDiagram src="/docs/guide/b.svg" />\n\n::svg{src="/docs/guide/b.svg"}\n';
+    expect(findAssetRefs(source, 'guide/intro.mdx')).toEqual([]);
   });
 
   it('gives a linked image and its link their own ranges', () => {
@@ -134,23 +122,13 @@ describe('findAssetRefs', () => {
   });
 
   it('reads character references in a path', () => {
-    const source = '![a](/docs/x/a&#46;png)\n\n::svg{src="/docs/x/a&#x2E;png"}\n';
+    const source = '![a](/docs/x/a&#46;png)\n\n<img src="/docs/x/a&#x2E;png" />\n';
     const refs = findAssetRefs(source, 'a.mdx') ?? [];
     expect(refs.map((ref) => [ref.asset, ref.exact])).toEqual([
       ['public/docs/x/a.png', true],
       ['public/docs/x/a.png', true],
     ]);
-    expect(rewriteAssetRefs(source, 'a.mdx', () => 'public/docs/x/b.png')?.next).toBe('![a](/docs/x/b.png)\n\n::svg{src="/docs/x/b.png"}\n');
-  });
-
-  it('finds a directive src only where an attribute starts, after the label', () => {
-    const source = '::svg[a src=x]{src="/docs/x/a.png"}\n\n::svg{label="a src=/docs/x/b.png" src="/docs/x/a.png"}\n';
-    const refs = findAssetRefs(source, 'a.mdx') ?? [];
-    expect(refs.map((ref) => [ref.asset, source.slice(ref.start, ref.end), ref.exact])).toEqual([
-      ['public/docs/x/a.png', '/docs/x/a.png', true],
-      ['public/docs/x/a.png', '/docs/x/a.png', true],
-    ]);
-    expect(refs[1].start).toBe(source.lastIndexOf('/docs/x/a.png'));
+    expect(rewriteAssetRefs(source, 'a.mdx', () => 'public/docs/x/b.png')?.next).toBe('![a](/docs/x/b.png)\n\n<img src="/docs/x/b.png" />\n');
   });
 
   it('keeps a reference it cannot place as not exact, and never rewrites it', () => {
@@ -169,7 +147,7 @@ describe('findAssetRefs', () => {
   });
 
   it('returns null for a note that does not parse', () => {
-    expect(findAssetRefs('<HtmlEmbed src="/docs/a.html"\n', 'a.mdx')).toBeNull();
+    expect(findAssetRefs('<img src="/docs/a.png"\n', 'a.mdx')).toBeNull();
   });
 
   it('finds a <Diagram src> as its file under diagrams/, never to rewrite', () => {
@@ -209,9 +187,9 @@ describe('rewriteAssetRefs', () => {
   const rename = (from: string, to: string) => (asset: string) => (asset === from ? to : null);
 
   it('renames the file in every reference, keeping query, hash and how each was written', () => {
-    const result = rewriteAssetRefs(NOTE, 'guide/intro.mdx', rename('public/docs/guide/flow.html', 'public/docs/guide/data-flow.html'));
+    const result = rewriteAssetRefs(NOTE, 'guide/intro.mdx', rename('public/docs/guide/spec.pdf', 'public/docs/guide/data-spec.pdf'));
     expect(result?.count).toBe(2);
-    expect(result?.next).toBe(NOTE.replaceAll('/docs/guide/flow.html?embed=1', '/docs/guide/data-flow.html?embed=1'));
+    expect(result?.next).toBe(NOTE.replace('/docs/guide/spec.pdf#page=2', '/docs/guide/data-spec.pdf#page=2').replace('</docs/guide/spec.pdf>', '</docs/guide/data-spec.pdf>'));
   });
 
   it('keeps relative paths relative when only the name changes', () => {
@@ -221,10 +199,10 @@ describe('rewriteAssetRefs', () => {
   });
 
   it('writes the site path when the folder changes', () => {
-    const source = '[a](../b.png)\n\n<SvgDiagram src="docs/b.svg" />\n\n![x](/docs/b.png)\n';
+    const source = '[a](../b.png)\n\n<img src="/docs/b.svg" />\n\n![x](/docs/b.png)\n';
     const moved = (asset: string) => asset.replace('public/docs/', 'public/docs/moved/');
     expect(rewriteAssetRefs(source, 'guide/intro.mdx', moved)?.next).toBe(
-      '[a](/docs/moved/b.png)\n\n<SvgDiagram src="docs/moved/b.svg" />\n\n![x](/docs/moved/b.png)\n',
+      '[a](/docs/moved/b.png)\n\n<img src="/docs/moved/b.svg" />\n\n![x](/docs/moved/b.png)\n',
     );
   });
 

@@ -15,7 +15,7 @@ up is in [Setup](./setup.mdx); how each part is built is in
 - [Editor](#editor)
 - [Sidebar](#sidebar)
 - [Page tree](#page-tree)
-- [Graph markers](#graph-markers)
+- [Slash menu](#slash-menu)
 - [Images](#images)
 - [Assets](#assets)
 - [Diagrams](#diagrams)
@@ -169,9 +169,9 @@ list after a discard) shows nothing. How the page decides is in
 Pick a note in the page tree (or open `?path=content/notes/…mdx`). The
 editor is [fumadocs-editor](https://github.com/fuma-nama/fumadocs-editor):
 
-- **Visual** edits blocks in place and looks like the note page: the
-  frontmatter title and description on top, the site's prose, callouts,
-  code frames, keywords, accordions and diagrams (see
+- **Visual** edits blocks in place and looks like a fumadocs page: the
+  frontmatter title and description on top, fumadocs' prose, callouts,
+  code frames, cards, tabs, steps, accordions and diagrams (see
   [Plugins](../reference/architecture.mdx#plugins)). Type `/` for the block and component
   menu. Blocks you don't touch are written back byte for byte; syntax that
   no plugin understands shows as source and still round-trips.
@@ -180,13 +180,12 @@ editor is [fumadocs-editor](https://github.com/fuma-nama/fumadocs-editor):
   `](` suggests assets (see [Images](#images)).
 - **Frontmatter** is edited at the top of the note in Visual. The title and
   description are typed in place (Enter moves on to the next line, then the
-  body). The strip under them sums up the rest (icon, Hidden, graph id,
-  keyword and section counts, errors) and opens to edit it: the icon, from
-  the lucide names the site knows (`packages/mdx/src/notes-icons.ts`); whether the page
-  is shown in the site's sidebar (off writes `visible: false`); the graph's
-  id and displayName; keywords as chips; sections with their keywords.
-  Other keys show read only. Every change is checked against
-  `notesPageSchema` (`packages/mdx/src/notes-schema.ts`), written only when it passes,
+  body). The strip under them sums up the rest (icon, Hidden, errors) and
+  opens to edit it: the icon, from the lucide names the site knows
+  (`packages/shared/src/content/icons.ts`); whether the page is shown in
+  the site's sidebar (off writes `visible: false`). Other keys show read
+  only. Every change is checked against fumadocs' page schema plus
+  `visible` (`packages/shared/src/content/schema.ts`), written only when it passes,
   and the issues show next to the field. Only the edited values change;
   comments, key order, quoting and other keys stay. Visual hides the YAML
   block; Source shows it.
@@ -276,8 +275,7 @@ unsaved edits, a change that touches it waits.
   writes a page `slug.mdx`, a folder page `slug/index.mdx` plus
   `slug/meta.yaml`, or a plain folder with only `slug/meta.yaml` (no index
   page: it opens and closes on click). The slug is kebab-case and not
-  `index`. A page gets the frontmatter the notes use (title, description,
-  graph); a folder's `meta.yaml` gets its title, `pages: []` and
+  `index`. A page gets a title and an empty description; a folder's `meta.yaml` gets its title, `pages: []` and
   `defaultOpen: false`, or `true` when "Open by default on the site" is on.
   The slug is added to the parent's `pages` after the chosen entry, unless
   the parent has no `meta.yaml`, no `pages`, or `...`/`z...a`, which list
@@ -337,57 +335,14 @@ lists the folder as staying. New images go to the folder of the new path.
 The tree does not move a page to another folder, or edit a folder's title
 or icon.
 
-## Graph markers
+## Slash menu
 
-The graph markup of `components/graph-objects.tsx` is inserted and edited
-in Visual:
-
-- The `/` menu inserts a Keyword or Tag (`<Keyword id="" displayName="">`),
-  a Graph heading (`### Title :graph-meta{…}`) and the site's directive
-  blocks: accordions, tabs, steps and `::youtube`, next to the JSX
-  components (`<YouTube>`, `<Diagram>` among them). **Mermaid diagram**
-  (`/mermaid`; `/diagram` lists it next to SVG diagram and Diagram) inserts
-  a ` ```mermaid ` code block with a starter flowchart, drawn under the code
-  as you type, with the caret in the code.
-- Select text and the editor's format bar wraps it as a **Keyword**
-  (`Mod-Alt-K`) or **Tag** (`Mod-Alt-T`), the two green buttons at its
-  end. Like Bold they toggle: with the selection inside a keyword, Keyword
-  shows pressed and takes it off again (the same for a tag); the other one
-  is off there. A heading that can take a graph node gets a **Graph**
-  button at its end, shown while the pointer is over the heading or the
-  caret is in it (on touch, the caret only); it adds `:graph-meta{…}` from
-  the title, as `Mod-Alt-G` does with the caret in the heading. Some
-  systems take a shortcut before the page sees it (`Ctrl-Alt-T` opens a
-  terminal on GNOME, `Cmd-Opt-K` the Firefox console on macOS); the
-  buttons work everywhere.
-- The id is slugged from the text (Vietnamese marks dropped, `đ` → `d`)
-  and the displayName is the text. The fields open right after, and again
-  on a click on a keyword or tag (`<Keyword>` or `:keyword[…]`) or a graph
-  node marker, or with the marker's shortcut at its caret. Change the
-  text, id or displayName; Enter or a click elsewhere writes them, Escape
-  leaves the marker as it is. A marker without an id (just inserted from
-  `/`) opens them when the caret reaches it, and takes its id from the
-  text as you type it. They sit under the marker, or above it with no
-  room left.
-- **Remove keyword / tag / graph node** at the foot of the fields
-  (`Mod-Alt-X` at the caret), or a pressed Keyword or Tag in the format
-  bar, takes the marker off and keeps what it marked: a keyword's text
-  with its Markdown, a `:keyword[…]` label as the text it reads as, a
-  heading's title without the space its `:graph-meta` added. One undo
-  puts it back. When the note's `graph` frontmatter lists the marker's id
-  (`graph.keywords`, `graph.sections`, a section's `keywords`), the
-  shortcut and the format bar open the fields instead, which name those
-  entries; their Remove takes the marker off and leaves the entries.
-- Only the marker's own source changes. Keyword text with mixed formatting,
-  or a `:keyword[…]` label with Markdown in it, is kept as it is; the
-  fields then change only the id and displayName. A label typed in the
-  fields is written with its Markdown and MDX characters escaped (`\\`,
-  `\*`, `\_`, `` \` ``, `\[`, `\]`, `\{`, `\<`), so the site shows it as
-  typed. A value with both `"` and `'` is saved with its `"` turned into
-  `'`. The rest of the marker's paragraph is written the way the editor
-  writes Markdown, as for any edit in Visual; the notes use `*a*` and
-  `**b**`, the markers the editor writes, so that rewrite does not show in
-  a diff (lint's `emphasis-marker` keeps it so).
+Type `/` in Visual for the blocks and components the editor knows:
+fumadocs-ui's `<Callout>`, `<Cards>`, `<Tabs>`, `<Steps>` and
+`<Accordions>`, FdBook's `<Diagram>`, an image, and **Mermaid diagram**
+(`/mermaid`; `/diagram` lists it next to Diagram), which inserts a
+` ```mermaid ` code block with a starter flowchart, drawn under the code as
+you type, with the caret in the code.
 
 ## Images
 
@@ -412,9 +367,8 @@ nothing.
   status. The save makes a new file only, so a name taken meanwhile is
   refused, never overwritten.
 - In Source, typing `src="` or an image's `](` suggests the assets under
-  `public/notes`: `HtmlEmbed` and `::html` suggest `.html` files,
-  `SvgDiagram`, `::svg` and `::diagram` suggest `.svg`, images suggest
-  images, and `<Diagram src>` suggests nothing. The page's own folder ranks
+  the media folder: `<img>` and images suggest images, any other element
+  every asset, and `<Diagram src>` suggests nothing. The page's own folder ranks
   first, then the folder the note sits in.
 
 Renaming, replacing or deleting an asset is in the Assets view.
@@ -452,9 +406,8 @@ The row's menu opens the page, renames or deletes:
 - **Rename…** gives the file a new name in its folder, in the same
   kebab-case as uploads; the extension stays, and a name already taken is
   refused (a change of case alone is allowed). Every reference to it is
-  rewritten: `![…](/notes/…)` images, Markdown links and link definitions,
-  `src` on `HtmlEmbed`, `SvgDiagram` and `<img>`, and `::html`, `::svg`,
-  `::diagram`. Only the path changes: a query or hash (`?embed=1`) and the
+  rewritten: `![…](/docs/…)` images, Markdown links and link definitions,
+  and `src` on `<img>`. Only the path changes: a query or hash and the
   way the path was written stay. The dialog shows every file it writes.
 - **Delete…** removes a file no note uses, and the folders it leaves
   empty. Otherwise the dialog lists the uses instead and offers no delete.
