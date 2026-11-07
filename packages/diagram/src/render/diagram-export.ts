@@ -47,8 +47,8 @@ const PELE_VARIABLES = [
   ...Array.from({ length: 8 }, (_, index) => `series-${String(index + 1)}`),
 ].map((name) => `--pele-${name}`);
 const PELE_LABELS = '.pele-label, .pele-cluster-label';
-// What page rules restyle for an author's fill (@fdbook/mdx's styles/notes-theme.css): a
-// subgraph's strength, and the halo behind its lifted title.
+// What the site's page rules restyle for an author's fill: a subgraph's
+// strength, and the halo behind its lifted title.
 const PELE_AUTHOR_FILLS: [selector: string, property: string][] = [
   ['.pele-cluster[data-author-fill] > rect', 'fill-opacity'],
   ['.pele-cluster-title[data-author-fill] > text:not(.pele-cluster-label)', 'stroke'],
@@ -68,8 +68,8 @@ export async function exportSvgElement(
   }
 
   const { height, width } = intrinsicSize(svg);
-  // A Pele or notes diagram keeps the theme's ink, so a transparent image of
-  // it is unreadable on a viewer of the other theme; an .svg file has its own
+  // A Pele diagram or one of render.ts keeps the theme's ink, so a transparent
+  // image of it is unreadable on a viewer of the other theme; an .svg file has its own
   // colours and stays transparent where the format allows it.
   const painted = svg.matches('svg.pele, svg.dg-svg') || format === 'jpeg';
   const blob = await rasterize(markup, width, height, format, painted ? backgrounds(svg) : []);
@@ -126,18 +126,18 @@ function serializeSvg(svg: SVGSVGElement): string {
   return new XMLSerializer().serializeToString(clone);
 }
 
-// What styles/diagram.css sets on a notes diagram (render.ts).
+// What styles/diagram.css sets on a diagram (render.ts).
 const DIAGRAM_PAINT = [
   'fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-dasharray',
   'stroke-linecap', 'stroke-linejoin', 'opacity', 'filter', 'display',
 ];
 
 /**
- * A notes diagram is painted by classes and theme variables, which a file
- * on its own does not have. Lay the clone out in a hidden expanded viewer,
- * in the current theme and without hover or focus, and write each element's
- * computed paint into its own style; the corner radius of a CSS-rounded
- * rect becomes its `rx`.
+ * A diagram drawn by render.ts is painted by classes and theme variables,
+ * which a file on its own does not have. Lay the clone out in a hidden
+ * expanded viewer, in the current theme and without hover or focus, and
+ * write each element's computed paint into its own style; the corner radius
+ * of a CSS-rounded rect becomes its `rx`.
  */
 function inlineDiagramPaint(clone: SVGSVGElement) {
   for (const attribute of ['data-hover', 'data-focus']) clone.removeAttribute(attribute);
@@ -220,7 +220,7 @@ function rasterize(markup: string, width: number, height: number, format: Diagra
 
 /**
  * The page, then the surface the diagram sits on (`--pele-bg`: a callout
- * body, a tab panel; `--dg-bg` under a notes diagram), which may be
+ * body, a tab panel; `--dg-bg` under a diagram of render.ts), which may be
  * translucent. Both are resolved to a colour the canvas reads, as a surface
  * can be a `color-mix()`.
  */

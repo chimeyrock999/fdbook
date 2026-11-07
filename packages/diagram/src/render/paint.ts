@@ -2,8 +2,8 @@
 // a self-contained SVG with the colours written on each element: for an SVG
 // file opened outside the site, and for the PNG an agent looks at. The
 // tokens come from styles/diagram.css itself (`.dg` and `.dark .dg`) over
-// the notes theme's --garden-* (@fdbook/mdx's styles/notes-theme.css) they read; the
-// rules below mirror its drawing rules (`.dg-svg …`), which
+// the fumadocs theme's --color-fd-* (fumadocs-ui's css/lib/default-colors.css)
+// they read; the rules below mirror its drawing rules (`.dg-svg …`), which
 // tests/diagram-paint.test.ts keeps in step.
 
 export type Theme = 'light' | 'dark';
@@ -12,6 +12,21 @@ type Tokens = Map<string, string>;
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const RGB = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[/,]\s*([\d.]+%?))?\s*\)$/i;
+// fumadocs writes its colours as hsl() and hsla().
+const HSL = /^hsla?\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%\s*(?:[/,]\s*([\d.]+%?))?\s*\)$/i;
+
+// The alpha group is optional: undefined when the colour has none.
+const alphaOf = (text: string | undefined) => text === undefined ? 1 : text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text);
+
+// CSS Color 4's hsl-to-rgb, in 0-255 channels.
+function hslToRgb(hue: number, saturation: number, lightness: number): [number, number, number] {
+  const chroma = saturation * Math.min(lightness, 1 - lightness);
+  const channel = (n: number) => {
+    const k = (n + hue / 30) % 12;
+    return (lightness - chroma * Math.max(-1, Math.min(k - 3, 9 - k, 1))) * 255;
+  };
+  return [channel(0), channel(8), channel(4)];
+}
 
 function parseColor(value: string): Rgba {
   const text = value.trim();
@@ -22,12 +37,9 @@ function parseColor(value: string): Rgba {
     return [0, 2, 4].map((at) => parseInt(digits.slice(at, at + 2), 16)).concat(1) as Rgba;
   }
   const rgb = RGB.exec(text);
-  if (rgb) {
-    // The alpha group is optional: undefined when the colour has none.
-    const alphaText = rgb.at(4);
-    const alpha = alphaText === undefined ? 1 : alphaText.endsWith('%') ? Number(alphaText.slice(0, -1)) / 100 : Number(alphaText);
-    return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3]), alpha];
-  }
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3]), alphaOf(rgb.at(4))];
+  const hsl = HSL.exec(text);
+  if (hsl) return [...hslToRgb(Number(hsl[1]) % 360, Number(hsl[2]) / 100, Number(hsl[3]) / 100), alphaOf(hsl.at(4))];
   throw new Error(`diagram paint: cannot read the colour "${value}"`);
 }
 
@@ -45,26 +57,28 @@ const opacity = (color: Rgba) => Math.round(color[3] * 1000) / 1000;
 // The custom properties a rule block declares, in order.
 function declarations(css: string, selector: string): Tokens {
   const start = css.search(new RegExp(`(^|\\n)${selector.replace(/[.*():]/g, '\\$&')}\\s*\\{`));
-  if (start < 0) throw new Error(`diagram paint: styles/diagram.css has no "${selector}" block`);
+  if (start < 0) throw new Error(`diagram paint: the stylesheet has no "${selector}" block`);
   const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('}', start));
   const tokens: Tokens = new Map();
   for (const match of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) tokens.set(match[1], match[2].trim());
   return tokens;
 }
 
-const NOTES_LIGHT = ':root:has(.notes-theme), .notes-theme';
-const NOTES_DARK = '.dark:has(.notes-theme), .dark .notes-theme';
+// Where fumadocs-ui's default-colors.css declares its light and dark tokens.
+const FUMADOCS_LIGHT = '@theme';
+const FUMADOCS_DARK = '.dark';
 
-// The colour tokens of a theme, with var() resolved. Without the notes
-// theme, a --garden-* token takes the fallback diagram.css gives it.
-export function diagramPalette(css: string, theme: Theme, notesCss?: string) {
-  const blocks: [string, string][] = notesCss ? [[notesCss, NOTES_LIGHT]] : [];
-  if (notesCss && theme === 'dark') blocks.push([notesCss, NOTES_DARK]);
+// The colour tokens of a theme, with var() resolved. Without the fumadocs
+// theme, a --color-fd-* token takes the fallback diagram.css gives it.
+export function diagramPalette(css: string, theme: Theme, fumadocsCss?: string) {
+  const blocks: [string, string][] = fumadocsCss ? [[fumadocsCss, FUMADOCS_LIGHT]] : [];
+  if (fumadocsCss && theme === 'dark') blocks.push([fumadocsCss, FUMADOCS_DARK]);
   blocks.push([css, '.dg']);
   if (theme === 'dark') blocks.push([css, '.dark .dg']);
   const tokens: Tokens = new Map();
   for (const [source, selector] of blocks) for (const [name, value] of declarations(source, selector)) tokens.set(name, value);
-  const resolve = (value: string, depth = 0): string => value.replace(/var\((--[\w-]+)(?:\s*,\s*([^()]+))?\)/g, (_, name: string, fallback?: string) => {
+  // A fallback may be a colour function: hsl(0, 0%, 98%).
+  const resolve = (value: string, depth = 0): string => value.replace(/var\((--[\w-]+)(?:\s*,\s*((?:[^()]|\([^()]*\))+))?\)/g, (_, name: string, fallback?: string) => {
     const found = tokens.get(name);
     if (found !== undefined && depth < 8) return resolve(found, depth + 1);
     if (fallback !== undefined) return fallback.trim();
@@ -73,7 +87,7 @@ export function diagramPalette(css: string, theme: Theme, notesCss?: string) {
   const palette = new Map<string, Rgba>();
   for (const [name, value] of tokens) {
     const resolved = resolve(value);
-    if (/^(#|rgb|transparent)/.test(resolved)) palette.set(name, parseColor(resolved));
+    if (/^(#|rgb|hsl|transparent)/.test(resolved)) palette.set(name, parseColor(resolved));
   }
   return palette;
 }

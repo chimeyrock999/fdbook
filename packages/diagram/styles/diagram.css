@@ -1,24 +1,26 @@
-/* Diagrams drawn by src/render/render.ts, in the notes palette. The tokens
+/* Diagrams drawn by src/render/render.ts, in fumadocs' theme. The tokens
    sit on `.dg` (the inline figure and the expanded view), the drawing's
-   classes on `svg.dg-svg`. Each tone (src/model/schema.ts TONES) has a fill
-   and a stroke, the colours the Archify note style used; `tone-<name>` puts
-   them in --tone-fill / --tone-stroke for the classes that read them. Dark
-   nodes mix their stroke into the canvas colour instead of keeping a second
-   palette. */
+   classes on `svg.dg-svg`. Surfaces and text read fumadocs' --color-fd-*
+   tokens, with fumadocs neutral's own values as fallbacks so a diagram
+   draws on a page without the theme. Each tone (src/model/schema.ts TONES)
+   has a fill and a stroke, the colours the Archify note style used;
+   `tone-<name>` puts them in --tone-fill / --tone-stroke for the classes
+   that read them. Dark nodes mix their stroke into the canvas colour
+   instead of keeping a second palette. */
 
 .dg {
-  --dg-bg: var(--garden-code-bg, #fefdf8);
-  --dg-dot: #e6e0cc;
-  --text: var(--garden-ink, #24402a);
-  --text-muted: var(--garden-ink-soft, #6c7f67);
-  --text-dim: #a0a98f;
-  --panel: var(--garden-surface, #fbf8ee);
-  --panel-border: var(--garden-line, #ded8c3);
-  --lane-fill: rgb(237 232 214 / 0.58);
-  --lane-stroke: #ded8c3;
-  --arrow: #8d967c;
+  --dg-bg: var(--color-fd-card, hsl(0, 0%, 94.7%));
+  --dg-dot: #d9d9d9;
+  --text: var(--color-fd-foreground, hsl(0, 0%, 3.9%));
+  --text-muted: var(--color-fd-muted-foreground, hsl(0, 0%, 45.1%));
+  --text-dim: #a3a3a3;
+  --panel: var(--color-fd-popover, hsl(0, 0%, 98%));
+  --panel-border: var(--color-fd-border, hsla(0, 0%, 80%, 50%));
+  --lane-fill: rgb(229 229 229 / 0.58);
+  --lane-stroke: #d4d4d4;
+  --arrow: #8a8a8a;
   --arrow-emphasis: #6e9c4f;
-  --mask: #fbf8ee;
+  --mask: var(--color-fd-popover, hsl(0, 0%, 98%));
   --blue-fill: rgb(78 134 168 / 0.1);
   --blue-stroke: #4e86a8;
   --green-fill: rgb(94 162 62 / 0.12);
@@ -33,19 +35,24 @@
   --teal-stroke: #3f8c74;
   --slate-fill: rgb(122 140 116 / 0.1);
   --slate-stroke: #7a8c74;
-  --dg-hover: #fffdf6;
+  --dg-hover: var(--color-fd-accent, hsla(0, 0%, 82%, 50%));
   --dg-node-shadow: drop-shadow(0 1px 1px rgb(17 24 39 / 0.05)) drop-shadow(0 6px 12px rgb(17 24 39 / 0.06));
 }
 
+/* The fd tokens repeat here so their fallbacks are fumadocs' dark values. */
 .dark .dg {
-  --dg-bg: var(--garden-code-bg, #0a120d);
-  --dg-dot: rgb(147 168 141 / 0.14);
-  --text-dim: #6d8a63;
-  --lane-fill: rgb(34 48 33 / 0.48);
-  --lane-stroke: #2c3d2f;
-  --arrow: #6d8a63;
+  --dg-bg: var(--color-fd-card, hsl(0, 0%, 9.8%));
+  --dg-dot: rgb(255 255 255 / 0.08);
+  --text: var(--color-fd-foreground, hsl(0, 0%, 92%));
+  --text-muted: var(--color-fd-muted-foreground, hsla(0, 0%, 70%, 0.8));
+  --text-dim: #6b6b6b;
+  --panel: var(--color-fd-popover, hsl(0, 0%, 11.6%));
+  --panel-border: var(--color-fd-border, hsla(0, 0%, 40%, 20%));
+  --lane-fill: rgb(38 38 38 / 0.48);
+  --lane-stroke: #333333;
+  --arrow: #737373;
   --arrow-emphasis: #a9d07c;
-  --mask: #1b291f;
+  --mask: var(--color-fd-popover, hsl(0, 0%, 11.6%));
   --blue-fill: rgb(111 169 200 / 0.11);
   --blue-stroke: #6fa9c8;
   --green-fill: rgb(169 208 124 / 0.12);
@@ -60,11 +67,11 @@
   --teal-stroke: #57b79b;
   --slate-fill: rgb(195 212 188 / 0.08);
   --slate-stroke: #8ca286;
-  --dg-hover: #223021;
+  --dg-hover: var(--color-fd-accent, hsla(0, 0%, 40.9%, 30%));
   --dg-node-shadow: drop-shadow(0 8px 16px rgb(0 0 0 / 0.35));
 }
 
-/* The canvas: the note code-block surface with a dot grid. */
+/* The canvas: fumadocs' code-block surface with a dot grid. */
 .dg-canvas {
   background:
     radial-gradient(circle at 1px 1px, var(--dg-dot) 1px, transparent 1.4px) 0 0 / 20px 20px,
