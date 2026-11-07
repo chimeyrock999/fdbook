@@ -20,7 +20,6 @@ that the tests also run on.
 | `packages/ui` | The Studio UI |
 | `packages/shared` | What the server and the UI both read |
 | `packages/diagram` | Diagram files: schema, checks, layout, rendering |
-| `packages/mdx` | The MDX a site and the Studio share |
 | `packages/testing` | Test helpers |
 
 Before pushing: `npm test`, `npm run lint`, `npm run types:check`,

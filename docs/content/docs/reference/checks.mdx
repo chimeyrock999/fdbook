@@ -56,14 +56,11 @@ the server's `tests/lint/notes.test.ts` does. A test that renames, replaces or
 lints across a copy of the whole corpus takes `CORPUS_TIMEOUT_MS` (30
 seconds) from the server's `tests/support/timeouts.ts`.
 
-Tests that pin the site's code:
+Tests that pin what the notes are written in:
 
 - `tests/features/editor/plugins/round-trip.test.ts` parses and writes back every note,
   and each plugin's `fixtures/*.mdx`, with all plugins loaded, and fails if
   a byte changes.
-- `tests/src/site-copies.test.ts` pins the hash of each part of a site file
-  marked `// studio-copy start: …` (see
-  [Architecture](./architecture.mdx#the-sites-look)).
 - `tests/server/lint/notes.test.ts` keeps every note at zero lint issues.
 
 ## Agent tests
