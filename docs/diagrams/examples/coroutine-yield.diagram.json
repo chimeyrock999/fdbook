@@ -1,0 +1,70 @@
+{
+  "$schema": "../diagram.schema.json",
+  "version": 1,
+  "type": "sequence",
+  "title": "A coroutine yields its thread while it waits for I/O",
+  "kinds": [
+    { "id": "coroutine", "label": "Coroutine", "tone": "blue", "icon": "code" },
+    { "id": "scheduler", "label": "Runtime", "tone": "teal", "icon": "queue" },
+    { "id": "device", "label": "I/O", "tone": "gold", "icon": "cylinder" }
+  ],
+  "nodes": [
+    {
+      "id": "a",
+      "kind": "coroutine",
+      "label": "Coroutine A",
+      "sublabel": "handles a request",
+      "note": { "role": "A light execution flow. When it waits for I/O it pauses and hands its thread back to the runtime." }
+    },
+    {
+      "id": "runtime",
+      "kind": "scheduler",
+      "label": "Runtime",
+      "sublabel": "scheduler + thread",
+      "note": { "role": "Owns the OS thread and picks which coroutine runs on it next." }
+    },
+    {
+      "id": "b",
+      "kind": "coroutine",
+      "label": "Coroutine B",
+      "sublabel": "other work",
+      "note": { "role": "Runs on the very thread A just let go of." }
+    },
+    {
+      "id": "io",
+      "kind": "device",
+      "label": "I/O",
+      "sublabel": "database, network",
+      "note": { "role": "Completes on its own and tells the runtime through a callback." }
+    }
+  ],
+  "edges": [
+    { "id": "run-a", "from": "runtime", "to": "a", "label": "run A", "variant": "emphasis" },
+    {
+      "id": "query",
+      "from": "a",
+      "to": "io",
+      "label": "send query",
+      "detail": "registers a callback; no thread waits on it",
+      "variant": "dashed"
+    },
+    { "id": "pause", "from": "a", "to": "runtime", "label": "await: pause A" },
+    { "id": "run-b", "from": "runtime", "to": "b", "label": "run B", "variant": "emphasis" },
+    { "id": "done", "from": "io", "to": "runtime", "label": "A's I/O is done", "variant": "return" },
+    { "id": "resume", "from": "runtime", "to": "a", "label": "resume where it stopped", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "title": "Waiting holds no thread",
+      "items": ["A paused coroutine is a saved stack, not a blocked OS thread.", "One thread serves many coroutines in turn."]
+    }
+  ],
+  "segments": [
+    { "label": "A waits", "from": "pause", "to": "done" }
+  ],
+  "activations": [
+    { "node": "a", "from": "run-a", "to": "pause" },
+    { "node": "runtime", "from": "run-a", "to": "resume" },
+    { "node": "b", "from": "run-b", "to": "done" }
+  ]
+}

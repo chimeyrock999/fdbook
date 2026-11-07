@@ -1,0 +1,74 @@
+{
+  "$schema": "../diagram.schema.json",
+  "version": 1,
+  "title": "From a program to its tasks",
+  "kinds": [
+    { "id": "backend", "label": "Backend", "tone": "green", "icon": "code" },
+    { "id": "message-bus", "label": "Message bus", "tone": "teal", "icon": "queue" },
+    { "id": "external", "label": "External", "tone": "slate", "icon": "external" }
+  ],
+  "nodes": [
+    { "id": "logic", "kind": "external", "label": "Program", "sublabel": "the code a user writes" },
+    { "id": "ops", "kind": "backend", "label": "Transformations", "sublabel": "describe, do not run", "tag": "lazy" },
+    { "id": "plan", "kind": "backend", "label": "Logical plan", "sublabel": "or lineage" },
+    { "id": "physical", "kind": "backend", "label": "Physical plan", "sublabel": "after optimization", "tag": "DAG" },
+    { "id": "units", "kind": "message-bus", "label": "Jobs / stages / tasks", "sublabel": "execution units" },
+    { "id": "executors", "kind": "backend", "label": "Workers", "sublabel": "tasks on partitions" }
+  ],
+  "groups": [
+    {
+      "id": "application-runtime-boundary",
+      "label": "Application - runtime boundary from submit",
+      "members": ["ops", "plan", "physical", "units"]
+    }
+  ],
+  "edges": [
+    { "id": "submit", "from": "logic", "to": "ops", "label": "submit", "variant": "emphasis" },
+    { "id": "build", "from": "ops", "to": "plan", "label": "build", "variant": "emphasis" },
+    { "id": "optimize", "from": "plan", "to": "physical", "label": "optimize", "variant": "emphasis" },
+    { "id": "materialize", "from": "physical", "to": "units", "label": "on action", "variant": "emphasis" },
+    { "id": "schedule", "from": "units", "to": "executors", "label": "schedule tasks", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "title": "An engine keeps structure, not statement order",
+      "items": [
+        "Transformations only extend the description of the computation",
+        "A query goes through logical, optimized and physical plans",
+        "Lineage keeps the same idea between partitions"
+      ]
+    },
+    {
+      "title": "The application starts at submit",
+      "tone": "green",
+      "items": [
+        "The driver exists before any job runs",
+        "Jobs, stages and tasks appear only when an action needs a result",
+        "One application can run many jobs over its lifetime"
+      ]
+    },
+    {
+      "title": "Why the engine needs a plan",
+      "tone": "orange",
+      "items": [
+        "A known structure is what makes scheduling and shuffles possible",
+        "A failed task can be retried because its input follows from the plan",
+        "The same plan is what the engine shows for observation"
+      ]
+    }
+  ],
+  "layout": {
+    "nodes": {
+      "logic": { "x": 40, "y": 120, "w": 190, "h": 68 },
+      "ops": { "x": 300, "y": 120, "w": 190, "h": 68 },
+      "plan": { "x": 560, "y": 120, "w": 190, "h": 68 },
+      "physical": { "x": 820, "y": 120, "w": 190, "h": 68 },
+      "units": { "x": 820, "y": 300, "w": 190, "h": 68 },
+      "executors": { "x": 820, "y": 470, "w": 190, "h": 68 }
+    },
+    "edges": {
+      "materialize": { "fromSide": "bottom", "toSide": "top", "labelDy": 24 },
+      "schedule": { "fromSide": "bottom", "toSide": "top", "labelDy": 24 }
+    }
+  }
+}

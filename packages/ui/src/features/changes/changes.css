@@ -1,0 +1,447 @@
+/* The Changes view (src/views/ChangesView.tsx) and the change marks in the page tree. */
+@layer components {
+  /* M / A / D / R, as VS Code colors them. */
+  .studio-change-mark {
+    flex: none;
+    width: 14px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    text-align: center;
+  }
+  [data-change='M'] { --change: var(--fde-warning); }
+  [data-change='A'] { --change: var(--fde-success); }
+  [data-change='D'] { --change: var(--fde-error); }
+  [data-change='R'] { --change: var(--fde-info); }
+  .studio-change-mark[data-change] {
+    color: var(--change);
+  }
+  .studio-tree-label[data-change] > .truncate {
+    color: var(--change);
+  }
+  .studio-tree-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    margin: 0 4px;
+    border-radius: 50%;
+    background: var(--fde-warning);
+  }
+  .studio-activity-count[data-info] {
+    background: var(--fde-info);
+  }
+
+  .studio-changes {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .studio-changes-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .studio-changes-branch {
+    max-width: 60%;
+    margin-left: auto;
+    padding: 1px 6px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--fde-muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-overflow: ellipsis;
+    text-transform: none;
+    white-space: nowrap;
+  }
+  .studio-changes-note {
+    padding: 12px;
+    font-size: 12.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-error {
+    color: var(--fde-error);
+  }
+  .studio-changes-note code,
+  .studio-changes-banner code,
+  .studio-leave-notice code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .studio-changes-banner {
+    margin: 10px 12px 0;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--fde-warning) 35%, transparent);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--fde-warning) 12%, transparent);
+    font-size: 12px;
+  }
+  .studio-changes-commit-box {
+    display: grid;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    border-bottom: 1px solid var(--fde-border);
+  }
+  .studio-changes-input {
+    min-height: 58px;
+    resize: vertical;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .studio-changes-input[aria-invalid='true'] {
+    border-color: var(--fde-error);
+  }
+  .studio-changes-hint {
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-link {
+    color: var(--fde-info);
+    font-size: 11.5px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .studio-changes-link[data-quiet] {
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-submit {
+    justify-content: center;
+    padding-block: 6px;
+  }
+  .studio-changes-submit:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .studio-changes-why {
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-note + .studio-changes-why {
+    padding: 0 12px;
+  }
+  .studio-changes-why[data-tone='error'] {
+    color: var(--fde-error);
+  }
+  .studio-changes-why[data-tone='ok'] {
+    color: var(--fde-success);
+  }
+  .studio-changes-group,
+  .studio-changes-history-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .studio-changes input[type='checkbox'] {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    accent-color: var(--fde-primary);
+  }
+  .studio-changes-files {
+    display: grid;
+    padding: 0 6px 4px;
+  }
+  .studio-changes-file {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 4px 6px;
+    border-radius: 6px;
+  }
+  .studio-changes-file:hover,
+  .studio-changes-file[aria-current='true'] {
+    background: var(--fde-accent);
+  }
+  /* The file whose diff is open. */
+  .studio-changes-file[aria-current='true'] {
+    box-shadow: inset 2px 0 0 var(--fde-primary);
+  }
+  .studio-changes-what {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    line-height: 1.25;
+  }
+  .studio-changes-name {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-changes-name:hover {
+    text-decoration: underline;
+  }
+  .studio-changes-file[data-change='D'] .studio-changes-name {
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--fde-error) 60%, transparent);
+  }
+  .studio-changes-what small {
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fde-muted-foreground);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-changes-history {
+    margin-top: 6px;
+    border-top: 1px solid var(--fde-border);
+  }
+  .studio-changes-history-toggle {
+    width: 100%;
+    padding-bottom: 6px;
+  }
+  .studio-changes-history-toggle .studio-changes-count {
+    margin-left: auto;
+  }
+  .studio-changes-chevron {
+    flex: none;
+    transition: transform 0.12s;
+  }
+  .studio-changes-chevron[data-open] {
+    transform: rotate(90deg);
+  }
+  .studio-changes-commits {
+    display: grid;
+    gap: 2px;
+    padding: 0 6px 16px;
+  }
+  .studio-changes-commit > button {
+    display: grid;
+    grid-template-columns: 16px 1fr;
+    gap: 0 6px;
+    width: 100%;
+    padding: 6px;
+    border-radius: 6px;
+    text-align: left;
+  }
+  .studio-changes-commit > button:hover {
+    background: var(--fde-accent);
+  }
+  .studio-changes-commit .studio-changes-chevron {
+    margin-top: 2px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-message {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .studio-changes-sub {
+    display: flex;
+    grid-column: 2;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-changes-commit-files {
+    display: grid;
+    gap: 1px;
+    padding: 0 6px 6px 22px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+    overflow-wrap: anywhere;
+  }
+  .studio-changes-commit-files button,
+  .studio-changes-commit-files span {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    padding: 1px 6px;
+    border-radius: 5px;
+    text-align: left;
+  }
+  .studio-changes-commit-files button:hover {
+    background: var(--fde-accent);
+    color: var(--fde-foreground);
+  }
+  .studio-changes-unpushed {
+    color: var(--fde-warning);
+  }
+
+  /* The Preview section (src/features/changes/PreviewSection.tsx) and the
+     header's Open preview: a build state as a chip or a dot, in callout
+     colors as the change request badges are. */
+  .studio-preview {
+    margin-top: 6px;
+    padding-bottom: 12px;
+    border-top: 1px solid var(--fde-border);
+  }
+  .studio-preview + .studio-changes-history {
+    margin-top: 0;
+  }
+  .studio-preview-head {
+    padding-bottom: 6px;
+  }
+  [data-build] {
+    --build: var(--fde-muted-foreground);
+  }
+  [data-build='waiting'],
+  [data-build='building'] { --build: var(--fde-info); }
+  [data-build='ready'] { --build: var(--fde-success); }
+  [data-build='failed'] { --build: var(--fde-error); }
+  .studio-preview-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    padding: 3px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1;
+    text-transform: none;
+    white-space: nowrap;
+    color: var(--build);
+    background: color-mix(in srgb, var(--build) 12%, transparent);
+  }
+  .studio-preview-chip::before,
+  .studio-preview-dot {
+    content: '';
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--build);
+  }
+  .studio-preview-dot {
+    width: 7px;
+    height: 7px;
+  }
+  .studio-preview-chip:is([data-build='waiting'], [data-build='building'])::before,
+  :is([data-build='waiting'], [data-build='building']) > .studio-preview-dot {
+    animation: studio-preview-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes studio-preview-pulse {
+    50% { opacity: 0.3; }
+  }
+  .studio-preview-body {
+    display: grid;
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .studio-preview-url {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+  .studio-preview-url code {
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-preview-url small {
+    font-size: 11px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-preview-note {
+    padding: 7px 9px;
+    border-radius: 7px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .studio-preview-note[data-tone='warn'] {
+    border: 1px solid color-mix(in srgb, var(--fde-warning) 35%, transparent);
+    background: color-mix(in srgb, var(--fde-warning) 12%, transparent);
+  }
+  .studio-preview-note[data-tone='error'] {
+    border: 1px solid color-mix(in srgb, var(--fde-error) 35%, transparent);
+    background: color-mix(in srgb, var(--fde-error) 10%, transparent);
+  }
+  .studio-preview-note[data-tone='quiet'] {
+    padding: 0;
+    font-size: 11.5px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-preview-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .studio-preview-actions .studio-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .studio-preview-log {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  /* The Pull request section (src/features/changes/PullRequestSection.tsx)
+     and the Publish dialog (PublishDialog.tsx). */
+  .studio-preview-head .studio-cr-badge {
+    margin-left: auto;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .studio-pr-title {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+  .studio-pr-title a {
+    overflow: hidden;
+    font-size: 12.5px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .studio-pr-title a:hover {
+    text-decoration: underline;
+  }
+  .studio-pr-title small {
+    overflow-wrap: anywhere;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fde-muted-foreground);
+  }
+  .studio-publish-body {
+    resize: vertical;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  header .studio-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .studio-leave-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .studio-changes-chevron {
+      transition: none;
+    }
+    .studio-preview-chip::before,
+    .studio-preview-dot {
+      animation: none !important;
+    }
+  }
+}

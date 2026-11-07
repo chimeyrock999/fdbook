@@ -1,0 +1,26 @@
+/* The editor's block handle (fumadocs-editor's DragHandle, in the block
+   gutter and the bubble menu) is drawn as a red joystick ball. Its classes
+   are generated, so it is found by its label; tests/features/editor/
+   drag-handle.test.ts fails if the editor changes it. Only the drawing
+   changes: lucide's GripVertical as a mask, so drag-to-move and
+   click-to-select stay the editor's. The editor's stylesheet sits in a
+   cascade layer (src/index.css), so these unlayered rules win over its
+   high-specificity StyleX rules without !important. */
+button[aria-label='Drag to move, click to select'] {
+  border-radius: 5px;
+  color: var(--fde-muted-foreground);
+}
+button[aria-label='Drag to move, click to select']:is(:hover, [data-dragging]) {
+  background: var(--fde-muted);
+  color: var(--fde-foreground);
+}
+button[aria-label='Drag to move, click to select'] > span {
+  display: none;
+}
+button[aria-label='Drag to move, click to select']::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><circle cx='9' cy='12' r='1'/><circle cx='9' cy='5' r='1'/><circle cx='9' cy='19' r='1'/><circle cx='15' cy='12' r='1'/><circle cx='15' cy='5' r='1'/><circle cx='15' cy='19' r='1'/></svg>") center / contain no-repeat;
+}

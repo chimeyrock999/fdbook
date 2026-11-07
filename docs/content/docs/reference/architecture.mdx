@@ -1,0 +1,907 @@
+---
+title: How the Studio is built
+---
+
+Read this to change the Studio: where each part lives, the checks every
+request goes through, the HTTP API, how change requests sit on git, and how
+agents, the MCP server and the editor plugins are wired. What each feature
+does for the person using it is in [Using the Studio](../guide/using.mdx).
+
+- [Layout](#layout)
+- [Request checks](#request-checks)
+- [Sign-in and sessions](#sign-in-and-sessions)
+- [HTTP API](#http-api)
+- [Saving files](#saving-files)
+- [Notes sync](#notes-sync)
+- [Connection watch](#connection-watch)
+- [Change requests and git](#change-requests-and-git)
+- [Page tree and asset changes](#page-tree-and-asset-changes)
+- [Agents](#agents)
+- [MCP server](#mcp-server)
+- [Proposals](#proposals)
+- [The site's look](#the-sites-look)
+- [Plugins](#plugins)
+- [Write actions](#write-actions)
+
+## Layout
+
+One Node process on one origin serves the API, the notes sync socket and
+the React app through Vite. The code is in `packages/`, one npm workspace
+per package; inside a package a module imports another as
+`#folder/module.ts`, and across packages as `@fdbook/<package>/<module>.ts`,
+where each package's `exports` lists the modules it offers.
+Below, `server/…` is short for `packages/server/src/…` and `src/…` for
+`packages/ui/src/…`.
+
+- `packages/server/src/` (`@fdbook/server`), in layers: `routes` call
+  `services`, both use `infra`, and `app` puts them together; a service
+  never imports a route, and `infra` imports nothing of the server.
+  - `bin/`: `index.ts` is the entry point; it checks the dependencies are
+    installed and loads the project before anything else loads. `lint.ts`
+    is the lint's CLI (see [Lint](./lint.mdx)).
+  - `app/`: `studio-server.ts` puts the pieces together: it binds the port,
+    mounts Vite, the MCP server and the routes, and serves each change
+    request's workspace under `/cr/<slug>/`. `workspace.ts` holds the
+    routes of one worktree. `routing.ts` runs the guard on every request
+    and upgrade, then hands the request to a route.
+  - `routes/`: every way in, one module per domain: the HTTP API (files,
+    file events, tree, assets, lint, icons, git, page history, cr, preview,
+    agents and their context, proposals, review), the notes sync socket
+    (`notes-sync.ts`), and the MCP server in `mcp/`: its HTTP endpoint, the
+    stdio bridge, and the note, writing, review and diagram tools.
+  - `services/`: the logic, by domain.
+    - `auth/` is sign-in with GitHub: settings, the device and web flows
+      and their endpoints, the roles read with gh, the sessions, and the
+      role each request needs (`access.ts`).
+    - `files/` is the file store; `tree/` builds the page tree and creates,
+      renames, reorders, hides and shows pages; `assets/` finds where notes
+      use the files in the media folder, and renames, replaces and deletes
+      them; `icons/` lists the lucide names a note's `icon` can take.
+    - `lint/` checks a note against the site's rules (`rules/`);
+      `destination.ts` parses link destinations for the tree and asset
+      rewrites.
+    - `cr/` has the change requests: branches, worktrees, statuses, drift
+      from main, discard. `git/` reads `git status` and the change
+      request's commits, commits picked files, reads a file as main holds
+      it, and reads, compares and restores a file's versions and deleted
+      pages. `preview/` pushes a change request, reads its build check and
+      its pull request, builds its preview URL, and publishes it.
+    - `agents/` runs chats with agents over ACP in a change request:
+      `acp/` (connections, sessions, the agent profiles, file policy, the
+      MCP run grants, main's read-only copy), `chat/` (conversations,
+      transcripts, per-turn changes, watching the worktree) and `context/`
+      (what a message carries along).
+    - `proposals/` keeps the edits agents propose, and `review/` the review
+      threads (#87), per change request.
+  - `infra/`: what has no domain: `config/` (the `STUDIO_*` settings, see
+    [Setup](../guide/setup.mdx#other-settings); `fdbook.config.ts`, see
+    [Configuration](../guide/configuration.mdx); the install check),
+    `security/` (the Host/Origin guard, and where an editable path is on
+    disk), `http.ts` (small HTTP helpers) and `command.ts` (git and gh
+    without a shell).
+- `packages/ui/src/` (`@fdbook/ui`), in layers: `app` shows `views`,
+  views compose `features`, and every layer may use `components`, `api`
+  and `lib`; a feature never imports a view.
+  - `main.tsx` mounts `app/App.tsx`; the global stylesheets sit next to it.
+  - `app/` is the shell: the page shown and its URL (`route.ts`), the
+    sign-in gate, the banner when the server goes away, the sidebar and
+    activity bar, the check that a note can be opened, and the header's
+    Open preview button.
+  - `views/`: one component per page or view: the note page
+    (`NoteEditor.tsx`), the page tree, the Assets view and an asset's page,
+    the diagram page, the Changes view, a diff, a history and the deleted
+    pages, the change request list, the Review view, the agent panel and
+    the sign-in page.
+  - `features/`: the logic, hooks and smaller components of each feature.
+    - `editor/` is the note editor: Visual and Source modes, save status,
+      the conflict dialog, unsaved edits kept per tab, Source's asset
+      completion; with `frontmatter/` (the YAML frontmatter and its form),
+      `graph/` (graph markers and their ids) and `plugins/` (see
+      [Plugins](#plugins)).
+    - `tree/`, `assets/`, `diagrams/` (the diagram editor's canvases,
+      panels and saving), `media/` (pasted and dropped images),
+      `changes/` (the commit message, Preview, Pull request, Publish, the
+      header's main action, the reminder on leaving), `cr/`, `diff/`,
+      `history/`, `lint/` (the Issues panel and count), `session/` (who is
+      signed in, the user menu), `agents/` (the header's agent control,
+      the chat, actions, the Connect an agent dialog; `logos/` holds each
+      agent's mark with its source), `review/` (thread marks and cards,
+      Comment on the format bubble; `suggestions/` shows agents'
+      proposals in the editor).
+  - `components/` holds what every feature uses: the dialog, the popup
+    menu, and what every button that writes to the server uses (see
+    [Write actions](#write-actions)).
+  - `api/` holds the clients for the server; `workspace.ts` says which
+    worktree the page edits (`?cr=`). `lib/` holds small helpers: the
+    clipboard, keys, session storage, and a note's paths.
+- `packages/shared/src/` (`@fdbook/shared`), read by both: the shapes the
+  server and the UI exchange (`api/`), the project's areas and the path
+  policy (`paths/`), and the text algorithms both run: proposal hunks,
+  thread anchors, block alignment, frontmatter blocks, slugs (`text/`).
+- `packages/diagram/` (`@fdbook/diagram`): diagram files, shared with a
+  site: the model, checks, edits, layout and routing, rendering, the
+  Archify import, and Node-only (`node/`) and site-only (`site/`) parts.
+- `packages/mdx/` (`@fdbook/mdx`): the MDX the old site and the Studio
+  share: the frontmatter and `meta.yaml` schemas, directives, callout and
+  accordion components, and the notes theme.
+- `packages/testing/` (`@fdbook/testing`): a Studio over a throwaway
+  worktree, and FdBook's docs as real content, for every package's tests.
+- Each package's `tests/` is laid out like its `src/`; `tests/support/`
+  holds its fixtures, and `packages/ui/tests/setup/` the jsdom setup (see
+  [Checks](./checks.mdx)).
+
+## Request checks
+
+Everything the server touches goes through these checks.
+
+- **Origin guard** (`packages/server/src/infra/security/guard.ts`). Every request and every
+  websocket upgrade must carry `Host: 127.0.0.1:<port>` or
+  `localhost:<port>` (with `STUDIO_HOST`, `<that address>:<port>`), which
+  stops DNS rebinding. If it sends `Origin`, it must be this origin, and
+  `Sec-Fetch-Site` must be `same-origin` or `none`. Requests without them
+  (curl, agents) pass on Host alone. A websocket upgrade that is neither
+  Vite HMR nor the notes sync is closed. The web sign-in's callback is the
+  one cross-site page load let through: a `GET` with
+  `Sec-Fetch-Mode: navigate` on that path.
+- **Path policy** (`server/infra/security/paths.ts`). Paths are relative to the
+  worktree, in posix form. Only `content/notes/**/*.mdx`,
+  `content/notes/**/meta.json` and `meta.yaml`, assets under `public/notes/` (png, jpg,
+  jpeg, gif, webp, avif, svg, html, glb, pdf) and diagrams,
+  `diagrams/**/*.diagram.json` (not `diagrams/diagram.schema.json`), are
+  allowed. `..`, empty segments and hidden segments such as `.obsidian` are
+  refused, and so is any symlink on the path, even one that points inside:
+  a save replaces the file, so it would turn a linked note into a copy. The
+  file API, the file events, the notes sync and the MCP tools all use this
+  check.
+- **Role** (`server/services/auth/access.ts`, `requiredRole`), when sign-in is
+  on. After the guard, every `/api` request and the notes sync need a
+  session with enough access, decided from the method and path alone, so a
+  new write endpoint is closed until it is listed there:
+  - `/api/session*` and `/api/mcp` need none (the MCP server checks its own
+    bearer token);
+  - `GET`, `HEAD`, `POST /api/lint` and `/api/mcp/tokens` need a reader;
+  - a turn's `…/changes` (Keep/Revert) needs a writer;
+  - everything else under `/api/agents/` needs an admin;
+  - every other request needs a writer.
+
+  Writes also carry the session's token in `X-Studio-Csrf`
+  (`src/api/session.ts`, `studioFetch`), on top of the cookie and the
+  origin guard.
+
+## Sign-in and sessions
+
+Settings and roles are in [Setup](../guide/setup.mdx#sign-in); this is how they
+are enforced (`server/services/auth/`).
+
+- The session is a random id in an `HttpOnly`, `SameSite=Strict` cookie
+  named after the port (browsers share cookies between the ports of one
+  host). The server keeps only its hash, with the GitHub user, in
+  `<STUDIO_HOME>/sessions-<port>.json` (mode `0600`). The web flow's state
+  sits in a separate `studio_oauth_<port>` cookie (`SameSite=Lax`, path
+  `/api/session`, 10 minutes), and the callback signs in only with the
+  `state` the Studio set in this browser.
+- The role is read with `gh api repos/<owner>/<repo>/collaborators/<login>/permission`
+  and cached for five minutes; requests that need it together share one gh
+  call. While gh cannot answer, requests answer `503`; the page and Vite's
+  modules need no role and never wait for gh. That also means anyone who
+  reaches the address can read the Studio's own code and what Vite serves
+  from the repository (`lib/`, `components/`, `styles/`) before signing
+  in; the notes and assets stay behind the gate.
+- Once GitHub confirms a device code, a failure after it (gh down for the
+  role) is retried on the next poll without a new code. At most 200
+  sign-ins may be pending at once (`429` beyond).
+- The notes sync checks on every document it opens and every write that
+  its session still exists and its role allows it. Its connection is
+  closed when the session signs out, and within 15 seconds once the
+  session expired or the role fell below reader, or below writer for a
+  connection let in as a writer (while gh cannot answer, the last role
+  read stands). The client reconnects: a reader comes back with the note
+  read only, and the editor locks on `writable: false`. The file events
+  stream ends at its next event or
+  heartbeat (every 25 seconds) once the session is gone.
+- The page asks `GET /api/session` before it loads the Studio
+  (`src/app/SessionGate.tsx`). Before each sync connection, reconnects
+  included, it reads the session the browser holds now (`checkSeat` in
+  `src/api/session.ts`) and refuses it unless it is the person the Studio
+  runs for, so a sign-in in another tab never saves under another account.
+
+## HTTP API
+
+`npm run studio` serves main read only and each change request's worktree
+under `/cr/<slug>/`. `startStudioServer({ root })` without
+`changeRequests`, as the tests start it, edits the one worktree at `root`
+instead and runs no agent.
+
+JSON bodies need `Content-Type: application/json` (`415` otherwise) and are
+capped (`413`):
+
+- 5 MB for a file or a lint, 4 MB for an MCP request, 1 MB for a commit;
+- 512 KB for anything sent to `/api/agents/conversations`;
+- 64 KB for tree and asset operations;
+- 16 KB for change requests, history restores and proposal decisions;
+- 1 KB for sign-in, a push and `/api/mcp/tokens`;
+- 6 × 60,000 + 4,096 bytes for a publish, room for a description at its
+  limit however JSON escapes it.
+
+Raw bodies are capped too: 25 MB for an asset, 10 MB for an attachment.
+
+### Files, lint, tree, assets
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /api/files` | Lists the editable files: `{ files: [{ path, kind, mtimeMs, size }] }` |
+| `GET /api/file?path=…` | Notes, `meta.yaml` and diagrams come back as `{ path, content, mtimeMs }`. Assets come back as bytes with an `X-Mtime` header and `Content-Security-Policy: sandbox`. |
+| `PUT /api/file?path=…` | Notes, `meta.yaml` and diagrams take a JSON body `{ content, baseMtime }`. Assets take the raw bytes plus `X-Studio-Write: 1` and `X-Base-Mtime` (empty: a new file). Answers `{ path, mtimeMs }`; see [Saving files](#saving-files). |
+| `GET /api/events` | Server-sent events: `{ type: "add" \| "change" \| "unlink", path, mtimeMs }` |
+| `POST /api/lint` | Takes `{ path, content }` for a note and returns `{ path, issues }` (see [Lint](./lint.mdx)). Writes nothing. |
+| `GET /api/icons` | The lucide names a note's `icon` can take: `{ names }` |
+| `GET /api/tree` | The page tree: `{ tree }` |
+| `POST /api/tree` | Takes `{ op: "create" \| "rename" \| "move" \| "set-open" \| "visibility", dryRun?, … }`, changes the tree and returns `{ changes, open, created? }`. With `dryRun` it writes nothing. `{ op: "delete", path, base?, dryRun? }` deletes a page, folder page or folder (`server/services/tree/delete.ts`): its dry run also answers `{ base, links, deleted }`, and the delete must send that `base` back (`400` without, `409` when anything it read changed since). |
+| `GET /api/assets` | Every file under `public/notes`, then every `diagrams/**/*.diagram.json`, with where notes use it (a diagram: the `<Diagram src>` that draw it): `{ assets: [{ path, mtimeMs, size, usages: [{ note, line, column, length, text, unsure }] }] }` |
+| `POST /api/assets` | Takes `{ op: "rename" \| "delete" \| "replace", path, name?, extension?, baseMtime, dryRun? }`, changes the asset and the notes that use it, and returns `{ changes, usages }`. A replace is a dry run only here. |
+| `PUT /api/assets?path=…&extension=…&baseMtime=…` | Replaces the asset's content with the raw bytes (`X-Studio-Write: 1`, up to 25 MB), at its path or, with another extension, at its name with that one, and returns `{ changes, usages, mtimeMs }` |
+
+### Changes, diff, history
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /api/changes` | What `git status` says changed under `content/notes`, `public/notes` and `diagrams`, only files the path policy allows: `{ branch, files: [{ path, status: "M" \| "A" \| "D" \| "R", from? }] }` |
+| `POST /api/changes` | Takes `{ message, paths }` and commits those files, and only them, on the worktree's branch; answers `{ sha, date, message, files: [{ status, path }] }`. Refuses an empty message, a path with no change, a merge in progress, and a branch named `main` or a detached HEAD; read-only main answers `403` first. |
+| `GET /api/changes/history` | The change request's commits, newest first, no merges, up to 200: `{ base, commits }`, `base` being `origin/main`, else `main`, else `null` (no commits) |
+| `GET /api/changes/diff?path=…[&from=…]` | The file against main: `{ path, from?, base, status: "same" \| "M" \| "A" \| "D" \| "R", before, after }`, each side `{ kind: "text", text, size }`, `{ kind: "binary", size }` (an asset that is not SVG or HTML, or text over 2 MB) or `null` where the file is missing. `base` is the merge base of `origin/main` (else `main`) and `HEAD`, or `null`; `from` reads main under a renamed file's old name. |
+| `GET /api/changes/blob?path=…[&base=<sha>]` | The file's bytes as commit `base` (else the merge base now) holds it, for an image's before side in the diff and an older version's image in history; `404` when it has none. Served like an asset. |
+| `GET /api/history?path=…` | `{ path, mtimeMs, deleted, versions }`: `deleted` names the commit that deleted a file the worktree no longer has |
+| `GET /api/history/compare?path=&to=[&from=]` | Each a full sha or `now`; without `from`, nothing is before |
+| `POST /api/history/restore` | `{ path, sha, mtimeMs }`, answers `{ path, mtimeMs }`, `path` being where the file is now; `409` when the file changed since its mtime |
+| `GET /api/history/deleted` | `{ pages: [{ path, title, sha, date, author, message, folderGone, committed }] }`, the latest 200; deletes not committed yet first (`committed: false`, `sha` the last commit with the page) |
+| `POST /api/history/restore-deleted` | `{ path, sha, dryRun? }`, answers `{ path, open, changes }`; `409` for a path the worktree has |
+
+A sha must be one of the file's versions, and the path read at it comes
+from git. History reads `git log --follow --cc --topo-order` on `HEAD`;
+deleted pages read `git log -M --diff-filter=D` under `content/notes`, and
+the deletes not committed yet from `git diff --cached -M --diff-filter=D
+HEAD` in a scratch index (`GIT_INDEX_FILE`) holding the worktree's notes,
+so a page the Studio renamed (a delete plus an untracked file to git
+status) is no delete, and the real index is never touched.
+Restores write under the notes lock; main and a reader answer `403`.
+
+### Preview and publish
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /api/preview` | `{ branch, blocked, pushed, unpushed, uncommitted, url, build, pr, prError }`, `build` being `{ state, logUrl, deploymentUrl, aliasUrl, at, error }` once pushed, `pr` the branch's pull request `{ number, url, state, title }` or null, `prError` why gh could not read it; main answers that it is read only |
+| `POST /api/preview` | Takes `{}`, pushes the branch to origin and answers the preview. `409` when nothing was committed yet, when everything committed is pushed, when the worktree is blocked (main, a branch outside `cr/`), or when the remote branch has commits the change request has not (with git's reason); `502` when the push fails, `504` after 120 s; main answers `403` first. |
+| `GET /api/publish` | The pull request's draft, `{ title, body }`: the branch's description (the change request's name), and its commits oldest first with the branch's preview link; `409` on main |
+| `POST /api/publish` | Takes `{ title, body }`, pushes what is not pushed, opens the pull request and answers the preview. `400` for a title that is empty or over 256 characters or a description over 60,000; `409` with nothing committed or when the branch already has a pull request; `502` when gh cannot read the pull request or open one (a push already made stays); main answers `403` first. |
+
+The push is `git push origin <HEAD>:refs/heads/cr/<slug>`
+(`server/services/preview/preview.ts`), never forced; after it the server moves
+`origin/cr/<slug>` itself with `git update-ref`. The build is the
+`Cloudflare Pages` check run on the pushed commit, read with `gh api` from
+origin's GitHub repository (`server/services/preview/check-runs.ts`) at most every 10
+seconds per commit, and a finished one every minute (Cloudflare can retry a
+build on the same commit). The 3 minutes before "No build" count from when
+`origin/cr/<slug>` last moved in this clone (its reflog: the push, or the
+fetch that saw a push made elsewhere). The fallback preview link is
+`https://<alias>.<STUDIO_PAGES_PROJECT>.pages.dev`, the alias being the
+branch slugged as Cloudflare does (`cr-<slug>`) and cut to 28 characters.
+
+The pull request is read with `gh pr list --repo <origin> --head
+cr/<slug> --state all` (`server/services/preview/pull-request.ts`; `--repo` only
+when origin is on GitHub), the newest of this repository's winning, forks
+left out (`gh pr view <branch>` would take a fork's pull request from a
+branch of the same name). It is read at most every 15 seconds while there
+is none or it is open, every minute once merged or closed, and again after
+each push or publish. Publish runs `gh pr create --repo <origin> --base
+main --head cr/<slug>` (`create` in `server/services/preview/pull-request.ts`,
+called from `server/services/preview/publish.ts`).
+
+### Change requests
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /api/crs` | `{ enabled, crs: [{ slug, name, branch, status, pushed, worktree, changedPages, uncommitted, updatedMs, previewUrl, pr, stale, drift }], taken, prError, fetchError }`, `taken` being the slugs a new one cannot take and `drift` `{ behind, conflicts }` or null; `?fresh=1` fetches origin, checks main out again and reads the pull requests again |
+| `POST /api/crs` | Takes `{ name }` (at most 80 characters, with a letter or digit), fetches origin, adds the branch and its worktree, and returns `{ cr }`; `502` when the fetch fails |
+| `POST /api/crs/<slug>/discard` | Takes `{ dryRun?, seen? }` and returns `{ discard: { slug, branch, worktree, status, commits, unpushed, uncommitted, pushed, pr, closesPr, prError } }`. With `dryRun` it removes nothing; `seen` is what the dry run said about origin, and `409` answers when origin changed since. With sign-in on, removing what is on origin needs an admin (`403`). `404` for an unknown slug, `502` when gh or the remote delete fails. |
+
+### Sign-in
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /api/session` | `{ auth: "github" \| "off", flows, repo, user: { login, name, avatarUrl } \| null, role, csrf }`, or `503` when the role cannot be read. Sign-in off answers `auth: "off"` with every right. |
+| `POST /api/session/device`, `POST /api/session/device/poll` | The device flow: `{}` answers `{ flow, userCode, verificationUri, expiresIn, interval }`; `{ flow }` answers `{ state: "pending", interval }` or `{ state: "done", session }` with the cookie, `410` once the code expired, `403` when GitHub cancelled it or the person has no access |
+| `GET /api/session/web`, `GET /api/session/callback` | The web flow: a redirect to GitHub, and GitHub's redirect back, which signs in and goes on to `/` (or `/?signin_error=…`) |
+| `POST /api/session/logout` | Takes `{}` and the csrf header, ends the session |
+
+A flow that is not enabled answers `404`.
+
+### Agents, proposals, MCP
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /api/agents` | The agents this Studio knows and whether each can run: `{ agents }` |
+| `GET /api/agents/totals` | Each change request's chats and cost (main's under `_main`): `{ totals }` |
+| `GET`, `POST /api/agents/conversations` | Every chat, last active first; `POST { agent, role, prompt, context? }` starts one |
+| `GET`, `DELETE /api/agents/conversations/<id>` | Its summary and events; deletes it (not during a turn) |
+| `POST /api/agents/conversations/<id>/messages` | `{ prompt, context? }`: its next turn |
+| `POST /api/agents/conversations/<id>/cancel` | `{}`: stops the turn going on |
+| `POST /api/agents/conversations/<id>/permissions/<ask>` | `{ optionId }` answers a question (`null` rejects) |
+| `GET`, `POST /api/agents/conversations/<id>/turns/<n>/changes` | The files turn n changed: `{ changes: [{ path, existed, decided, reason }] }`; `POST { path, op: "keep" \| "revert" }` decides one. A file changed since the turn ended is not reverted (`409`). |
+| `GET /api/agents/conversations/<id>/turns/<n>/changes/before?path=…` | What the file held before the turn: `{ path, content }`, `null` when it did not exist |
+| `GET /api/agents/events` | Server-sent events of every chat, numbered per chat (see [Agents](#agents)) |
+| `GET /api/agents/mentions?q=…` | Notes, assets and other files of the worktree to mention (`git ls-files`, reused for 5 s; up to 50) |
+| `POST /api/agents/attachments` | A document as the body, its name in `X-File-Name` (URI-encoded), up to 10 MB |
+| `GET /api/proposals[?path=…]` | A change request's proposals (of one note), oldest first: `{ proposals }`, each `{ id, path, by, summary, createdMs, mtimeMs, stale, done, hunks: [{ id, removed, added, state, from, to }] }` |
+| `GET /api/proposals/<id>` | `{ proposal }` |
+| `POST /api/proposals/<id>` | `{ op: "accept" \| "reject" \| "rebase" \| "drop", hunks? }` (all undecided hunks by default), answers `{ proposal }`. A stale hunk is not accepted (`409`) until rebased. |
+| `GET /api/proposals/events` | Server-sent events: each proposal when it is made or changes, `thread` events (each review thread whole, when it opens, changes or its anchor moves), and `delete-proposal` events |
+| `GET /api/delete-proposals` | The delete proposals (`propose_delete`): `{ proposals }`, each `{ id, path, by, summary, createdMs, decided, state }`, `state` being `open`, `accepted`, `rejected` or `gone` (still open, but the page or folder is not there) |
+| `POST /api/delete-proposals/<id>` | `{ op: "accept" \| "reject", base? }`: accept runs the tree's delete with the `base` of the dry run shown; answers `{ proposal }`. A decided one answers `409`. |
+| `GET /api/threads[?path=…]` | The review threads, oldest first: `{ threads }`, each `{ id, path, anchor: { index, text, before, after, seen } \| null, orphaned, severity, rule, state, suggestion, comments: [{ id, body, by, createdMs, state? }], createdMs, updatedMs }` (see [Review threads](#review-threads)) |
+| `POST /api/threads` | `{ path, anchor, body, severity?, rule? }` opens one as the person signed in; `anchor` (from `anchorAt` on the text the editor holds) or null for the whole note. Answers `{ thread }`. |
+| `GET /api/threads/<id>` | `{ thread }` |
+| `POST /api/threads/<id>/comments` | `{ body }`: a reply; answers `{ thread }` |
+| `POST /api/threads/<id>/state` | `{ state, body? }`: a move; `rejected` needs a body, a move the table does not allow answers `409` |
+| `POST /api/mcp` | The MCP server, Streamable HTTP, stateless (see [MCP server](#mcp-server)). `GET` and `DELETE` answer `405`. |
+| `POST`, `DELETE /api/mcp/tokens` | With sign-in on, makes an agent token for the signed-in person (`{ token }`), or ends all of theirs; any role, with the csrf header. Sign-in off answers `409`. |
+
+Proposals and review threads answer `409` on main to reads and event streams,
+and their writes never get there: main answers `403` to every write but
+`POST /api/lint` and the agent routes first. Agent chats work on main, read
+only (see [Agents](#agents)); their Keep/Revert routes answer `409` to a
+read and `403` to a decision.
+
+### Under a change request
+
+`/cr/<slug>/api/…` and `/cr/<slug>/__fde_sync` serve the workspace
+endpoints above for the change request's worktree, so a page can only write
+to the change request it shows (`server/app/workspace.ts`); `/api/crs`,
+`/api/session*`, `/api/mcp` and `/api/mcp/tokens` are served only at the
+root. An unknown slug answers `404`, and so does any other path under
+`/cr/<slug>/`. Any other `/api/…` answers `404` with a JSON `{ error }`,
+never the app's page, so a client that reaches an endpoint a running server
+does not have yet says to restart it (`src/api/json.ts`).
+
+## Saving files
+
+A save names the mtime it was edited from; `null` means a new file. If the
+file changed on disk since then (another editor, an agent), the server
+writes nothing and answers `409` with the disk version `{ content, mtimeMs
+}` (`null` if the file was deleted; always `null` content for an asset).
+Retry with that `mtimeMs` to keep your version. Writes are atomic: the
+server writes a hidden temp file and renames it over the target, keeping
+the file's mode.
+
+`src/api/files.ts` is the UI client. `writeFile` throws a
+`FileConflictError` that holds the disk version. `subscribeFileEvents`
+follows `/api/events`. A changed asset gets `&v=<mtime>` in its file API
+URL (`src/api/asset-versions.ts`), from a write's answer or from the file
+events, so images reload without a page reload.
+
+## Notes sync
+
+`/__fde_sync` (websocket) is the fumadocs-editor sync server for
+`content/notes` (`server/routes/notes-sync.ts`). It reads `.mdx` only, writes
+only notes that already exist (no page or folder creation; that goes
+through the file API), and merges changes made on disk into open documents.
+Page tree and asset changes never go through it, since it cannot update
+`meta.yaml`.
+
+Its tree `delete` command is refused by the storage the Studio gives it
+(`delete denied: <path>`): `SyncScope` has no rule for tree commands
+(fuma-nama/fumadocs-editor#24 was closed by a fix for `mkdir` only,
+fuma-nama/fumadocs-editor#25), and in core 0.5.0 `storage.delete` is
+called by that command alone. Pages and folders are deleted through
+`POST /api/tree` (`op: "delete"`), which updates `meta.yaml`, checks every
+mtime and takes the notes lock; the editor's tree delete stays unwired.
+Each note a connection saves (`sync.onChange`) counts as a person's save
+for an agent turn going on, as a save through the file API does.
+
+## Connection watch
+
+The page's event streams (`/api/events`, `/api/proposals/events`,
+`/api/agents/events`) and the notes sync are under one connection watch
+(`src/api/connection.ts`), so a stopped server ends in one clear state
+instead of every stream retrying forever.
+
+- A dropped stream opens again after a second. One that fails 3 times in a
+  row without staying open for 10 seconds, or is not open again 10 seconds
+  after it dropped, means the server is gone.
+- A stream the server refuses is asked again with a plain request to learn
+  why. `401` (or `403`) is the sign-in, and the stream waits for it: it
+  opens again once signed in, and meanwhile tries from 5 seconds, doubling
+  up to a minute. `409` or `404` means the change request is closing or
+  closed. A `5xx` counts as a failure (gh may be down only a moment), any
+  other answer is shown as the server gave it, and no answer within 5
+  seconds is a server that is gone.
+- The notes sync counts as gone once it was offline for 10 seconds and
+  the Studio does not answer `GET /api/session` either. A 2xx or an error
+  of the Studio's own (`{ error }` in JSON, as the `503` while gh cannot
+  read the role) is an answer, and the sync is checked again after another
+  10 seconds; a network failure, or a proxy's or gateway's error for a
+  Studio that stopped, is not.
+- Then every stream and the sync are closed for good, so the page sends no
+  more requests, and `src/app/ServerDisconnected.tsx` covers the page.
+  A page leaving for another one shows nothing; one still there 10 seconds
+  later, or back from the browser's back-forward cache, is watched again.
+
+## Change requests and git
+
+`server/services/cr/` keeps no state of its own: git holds everything.
+
+- Main is a worktree of `origin/main` at `<STUDIO_HOME>/worktrees/_main`,
+  checked out again at startup, on a fresh list and when a change request
+  is created. Both fetch `main` and every `cr/*` branch from origin first,
+  dropping the remote refs of branches deleted there; offline, startup
+  reads the `origin/main` the clone has.
+- A change request is branch `cr/<slug>` from `origin/main`, not tracking
+  main so a push cannot land there, with its worktree at
+  `<STUDIO_HOME>/worktrees/<slug>`. Its name is the branch description and
+  its creation time a `studiocreated` key in the branch's config. A
+  worktree removed by hand is pruned at startup (`git worktree prune`) and
+  added again from the branch when the change request opens.
+- The pull request statuses come from `gh pr list` (the newest 1000; one
+  older shows as Previewing), read at most every 30 seconds.
+- Drift from main is read with `git merge-tree`, in memory, so no worktree
+  is touched (`server/services/cr/drift.ts`).
+- Discard removes origin's side first (`gh pr close` with a comment, `git
+  push origin --delete`). Then `beforeDiscard` (set from `onDiscard` in
+  `server/app/studio-server.ts`) closes the change request's agents, watchers
+  and sync and removes its transcripts, proposals and review threads under
+  `STUDIO_HOME`; then the worktree and the local branch go
+  (`server/services/cr/manager.ts`).
+- A commit (`server/services/git/commit.ts`) adds and commits the picked paths alone
+  with `git commit --cleanup=whitespace`, rolling the index back
+  (`write-tree`/`read-tree`) when it fails. It is authored by the signed-in
+  person, `Name <id+login@users.noreply.github.com>`.
+- Git takes no optional locks for the Studio's reads, so a git command in
+  a terminal never meets the Studio's `index.lock`.
+
+## Page tree and asset changes
+
+The page tree runs the same fumadocs `loader()` as `lib/source.ts` over
+`content/notes` (`server/services/tree/build.ts`), so it comes out as the site's
+sidebar does; hidden pages come from `lib/visible-page-tree.ts`.
+
+Tree changes go through `POST /api/tree`, asset changes through `POST
+/api/assets` and a replace through `PUT /api/assets`. They share the worktree's notes
+lock (`server/app/workspace.ts`), which commits, pushes, restores, proposals and
+agent writes take too, so one runs at a time. Each
+change is planned against the disk, then applied: every file it writes must
+still have the mtime it was planned from, checked before anything is
+written and again just before each write; otherwise the answer is `409`. A
+dry run plans without the lock.
+
+- A tree rename moves the page or folder first, so a move that fails writes
+  nothing. Reorders swap the text of the `meta.yaml` entry lines
+  (`server/services/tree/meta-edit.ts`), or of the `meta.json` entries
+  (`server/services/tree/meta-json.ts`, which keeps the file's key order,
+  indentation and final newline); `server/services/tree/meta-file.ts` picks
+  one by the file's name, and says which format a new meta file takes. Hide
+  and show edit one line (`server/services/tree/visible-edit.ts`).
+- An asset rename moves the asset first, then writes each note
+  atomically; if the first note cannot be written, the asset moves back. A
+  replace that changes the extension writes the new file, rewrites the
+  notes, and removes the old one only once the notes are written; if the
+  first note cannot be written, the new file is removed instead.
+  References are read on the parsed note (`server/services/assets/refs.ts`), the
+  same reading as lint's `asset-missing`; rewritten Markdown destinations
+  are percent-encoded.
+
+## Agents
+
+The Studio is an ACP client (`server/services/agents/`). A chat is one ACP session
+over many turns: its agent is a process the Studio starts for the first
+message and keeps between turns (`connection.ts`, `conversations.ts`). The
+agent is started in the change request's worktree without the Studio's own
+`STUDIO_*`, `GH_*` and `GITHUB_*` variables (`profiles.ts`).
+
+| Agent | Started with | Fenced in by |
+| --- | --- | --- |
+| Claude Code | `@agentclientprotocol/claude-agent-acp`, pinned in `package.json` | the `default` mode (it asks before edits and commands, whatever your `permissions.defaultMode`); bypass mode off; `git push` and `gh` denied to an author, best effort (`git -C . push` does not match: the question in the chat is the fence); edits, `NotebookEdit` and the shell denied to a reviewer; its own file tools denied on notes (`Edit(content/notes/**/*.mdx)`), so it proposes and creates notes through `propose_edit` |
+| Codex | `@agentclientprotocol/codex-acp`, pinned | the `workspace-write` sandbox (worktree only, no network) for an author, `read-only` for a reviewer, set through `INITIAL_AGENT_MODE` |
+| omp | `omp acp` | its own permission prompts |
+| Hermes Agent | `hermes acp` | the toolsets in your `~/.hermes/config.yaml` |
+
+- **On main** (`main-only.ts`). Only agents whose own tools can be held
+  to reading (`fencesReviewer`: Claude Code, Codex) chat on main; omp and
+  Hermes are refused (`409`), and the picker shows them unavailable there.
+  Their tools could write anywhere the Studio's user can and move branches
+  through git, whatever folder they start in. A chat on main may pick
+  either role, but every agent runs fenced as a reviewer (its tools, ACP
+  writes, the questions it asks, its MCP token), whatever it was told. It
+  starts in `worktrees/_main-agents`, scratch space: a detached worktree
+  that `cr/manager.ts` checks out at `_main`'s commit and cleans (`git
+  clean -dfx`) before a turn starts while no other turn on main runs (the
+  chats share it). A message's context is checked against `_main` itself. A turn on main lists no changed
+  files and has nothing to keep or revert. After each message the Studio
+  adds one line saying the chat is on main and how to hand work on: an
+  agent there gets `create_cr { name, brief }` (`server/routes/mcp/handoff.ts`),
+  once per message, which opens a change request and starts an author chat
+  there with the same agent, for the person who sent the message, its
+  brief as the first message (`from` on that turn names the chat on main).
+  The chat on main records a `handoff` event with the slug and the link
+  (`/?cr=<slug>&chat=<id>`; `?chat=` opens a chat in the panel), also when
+  the chat there could not start (then `chat` is null and the link opens
+  the change request). Only the routes of a chat write on main (start,
+  message, cancel, answer, delete, attachment): `server/app/workspace.ts`
+  lists them.
+- **Roles.** A reviewer only reads: whatever it asks for beyond reading
+  (`read`, `search`, `fetch`, `think` tool calls), the Studio refuses
+  without asking, whichever the agent. omp and Hermes cannot be held to
+  reading from outside, so their own tools may still change a file they do
+  not ask about; the chat lists it.
+- **Files** (`fs-policy.ts`). `fs/read_text_file` reads any file of the
+  worktree except hidden ones (`.git`, `.env`) and none a symlink leads out
+  to; `fs/write_text_file` writes only text the Studio itself edits (notes,
+  `meta.yaml`, diagrams, SVG and HTML assets), for an author, under the
+  notes lock, up to 2 MB each. A write to a note that exists becomes a
+  proposal, and the agent is answered that it did, so it does not read the
+  note back expecting its text. A note the chat created stays its own
+  draft, written directly, until anyone else changes it (a save, a revert,
+  the live editor, any edit on disk). Between turns the Studio takes no
+  write from the agent: nobody would follow it.
+- **What a turn changed** (`watch.ts`, `worktree.ts`, `turn-changes.ts`).
+  Codex, omp and Hermes write with their own tools; the Studio sees those
+  edits in their tool calls and, at the end of each turn, in `git status`
+  against the turn's start plus the files of any commit made during the
+  turn, so a file edited by hand meanwhile is listed too. When a turn
+  begins, the Studio keeps what each file that differs from `HEAD` holds;
+  the turn's changes are kept in `<chat>.t<n>.changes.json` next to the
+  transcript. A revert made while a later turn runs counts as a person's
+  save for that turn; other pages read the list again after each decision
+  (`decided` on the event stream).
+- **Context** (`context.ts`, `attachment-blocks.ts`). The server checks
+  every path against the worktree (no `..`, `.git` or symlinks), keeps the
+  context on the turn, and adds it below the message: the note, the lines
+  and the selected MDX (up to 40,000 characters), the mentions (up to 20)
+  and the attachments by name (up to 5). The attachments follow as ACP
+  content blocks: an image when the agent takes images, else an embedded
+  resource when it takes embedded context, else a `file://` link. They are
+  kept in `<STUDIO_HOME>/agents/<slug>/attachments/`; those no message sent
+  are swept after an hour.
+- **Tools.** Every session gets the Studio's MCP server, on a resume or a
+  load too, over HTTP when the agent says it can (`mcpCapabilities.http`),
+  else through the stdio bridge, with a token for the chat's agent process
+  (see [MCP server](#mcp-server)).
+- **Permission.** `session/request_permission` asks in the chat with the
+  agent's own options less `allow_always`, which would outlive the chat;
+  the server rejects when nobody answers within 5 minutes.
+- **Processes** (`sessions.ts`). At most three agent processes per change
+  request; one idle for 10 minutes stops; a fourth chat stops the one idle
+  longest, never one answering (all three answering: `409`). Cancel sends
+  `session/cancel` and stops the process 10 seconds later if the agent has
+  not ended its turn. Discarding the change request or stopping the Studio
+  stops them all. A stopped chat starts again with `session/resume` when
+  the agent offers it, else `session/load` (its replay of the history is
+  dropped: the transcript has it), else a new session.
+- **Transcripts** (`transcripts.ts`). Every event goes to `GET
+  /api/agents/events` (numbered per chat; on connecting it sends a snapshot
+  of each chat whose agent is answering; the page's stream is under the
+  [connection watch](#connection-watch)) and to
+  `<STUDIO_HOME>/agents/<slug>/<chat>.jsonl`, with the summary (agent,
+  model, role, status, turns, session, cost from `usage_update`, files
+  written, who started it) in `<chat>.json`: next to the worktrees, never
+  in the branch. A run kept from before chats reads as a one-turn chat,
+  with its changes from `<id>.changes.json`. For Claude Code's "default"
+  model, the summary's model is the one it stands for (`connection.ts`).
+- **Live test.** `STUDIO_AGENT_LIVE=1` runs a real chat with each installed
+  agent (see [Checks](./checks.mdx#agent-tests)); the other tests use a
+  stand-in ACP agent.
+
+## MCP server
+
+The tools every agent gets, at `POST /api/mcp` (Streamable HTTP,
+stateless; `server/routes/mcp/http.ts`, body up to 4 MB). The same server serves
+the chats the Studio starts and your own agents in a terminal (see
+[Setup](../guide/setup.mdx#connect-an-agent-from-a-terminal)).
+
+| Tool | Access | What it does |
+| --- | --- | --- |
+| `list_crs` | read | The change requests (a person's agent only: a chat's agent works in its own) |
+| `create_cr` | write | A new change request (a person's agent). A chat's agent on main gets it with a `brief`: it opens the change request and starts an author chat there, answering `{ slug, name, branch, url, conversationId }`, once per message (see [Agents](#agents)) |
+| `list_notes` | read | Every note: path, title, description, tags, keywords |
+| `read_note` | read | A note's text, its top-level blocks (index, line, first line) and the proposals waiting on it |
+| `search_notes` | read | Notes with every word of the query in their title, description, tags or text, with up to 3 matching lines each (20 notes by default, at most 50) |
+| `note_graph` | read | Links out and in, tags, keywords and graph keywords, notes that share a tag |
+| `note_vocabulary` | read | Every tag, keyword and graph keyword the notes use, with how many notes use each, most used first |
+| `related_notes` | read | The notes most related to one (10 by default, at most 30), ranked by shared tags and keywords, links either way and title words; each with its href from the note, why, and whether the note already links there |
+| `propose_edit` | write | A proposal: the whole new text, or up to 100 find/replace edits; answers its hunks, lint issues, and `outsideSelection` when the message selected other lines. Nothing is written. A note that does not exist yet is created with `content`; the same turn's later edits to a note it created are written too (`written: true`), until someone else changes it. |
+| `propose_delete` | write | Proposes deleting a page (`x.mdx`) or folder (`x`); answers the dry run (`deleted`, `changes`, `linksLeft`). Nothing is deleted: a person accepts it with the delete dialog, or rejects it. One open proposal per path. Kept in `<STUDIO_HOME>/proposals/<slug>/deletes/`. |
+| `add_comment` | read, but a person needs write access | Opens a review thread on a note or one of its blocks, with `severity` (`blocking` or `nit`), `rule` (a style guide code) and a `suggestion` (`content` or `edits`, made a proposal); kept in `<STUDIO_HOME>/comments/<slug>.jsonl` |
+| `reply_to_thread` | read, but a person needs write access | A reply that leaves the state as it is |
+| `set_thread_state` | read, but a person needs write access | A move, with a comment and the `suggestion` (proposal id) that fixes it; held to the caller's part (see [Review threads](#review-threads)) |
+| `list_threads` | read | The threads (of a note, by state and severity; without `state` the ones not resolved) with every comment |
+| `cr_changes` | read | Every file changed against main at the merge base, committed or not; for each note its hunks (as proposals split them) and lint issues, up to 200 000 characters of hunks |
+| `list_assets` | read | The assets under `public/notes` and the notes that use them |
+| `diagram_list`, `diagram_read`, `diagram_validate`, `diagram_render_png` | read | The diagrams; one as JSON with its checks; the checks alone; a PNG the agent can look at |
+| `diagram_create` | write | A new diagram file (refused when one exists) |
+| `diagram_add_node`, `diagram_connect`, `diagram_move`, `diagram_set_note` | write | Add a node, connect two, move one (not in a sequence or a lifecycle, which lay themselves out), set a node's note |
+| `diagram_update` | write | A node's, an edge's or a group's fields (an edge's label pin and end sides included), a sequence's segments and activations, or a lifecycle's `mainPath` |
+| `diagram_reorder` | write | A sequence's participant or message to a new place (a lifecycle's order is its `mainPath`) |
+| `diagram_remove_edge`, `diagram_remove_node` | write | Remove an edge, or a node with its edges |
+| `diagram_layout` | write | Lay out what has no position, or with `all` the whole diagram again (hand-placed positions, route pins and canvas size dropped); a sequence or a lifecycle lays itself out |
+
+- **Change request.** Every note and diagram tool takes `cr`, the change
+  request's slug; a chat's token holds it to its own. `main` and `_main`
+  are refused, as is a change request that does not exist. Paths go
+  through the path policy (`server/services/files/studio-files.ts`).
+- **Access.** A `write` tool is refused to a reviewer chat and to a reader,
+  and `tools/list` leaves out the tools a caller may not use; the others
+  are open to anyone who may read. A reviewer comments instead of
+  proposing; a suggestion it gives with a comment is a proposal a person
+  still accepts, so it writes nothing.
+- **Who.** From the bearer token: a chat's (`server/services/agents/acp/grants.ts`, made
+  when its agent process starts, dropped when it stops, refused between
+  turns; the grant's `runId` is the chat's id), or with sign-in on, a
+  person's agent token from `POST /api/mcp/tokens`, acting with their role
+  until they clear it or their session ends. With sign-in off a request
+  without a token acts for the one person of this machine.
+- **Diagram writes** (`server/routes/mcp/diagram-tools.ts`) go through `ctx.files`
+  with the mtime they read, so a save made meanwhile is refused, not
+  overwritten. Each write lays out what has no position
+  (`packages/diagram/src/edit/auto-layout.ts`) and answers with the checks; elkjs and
+  resvg load on first use, from the repository root's packages. The edits
+  are shared with the site's CLI in `packages/diagram/src/edit/ops.ts`.
+- **More tools.** A tool is a `StudioTool` (`server/routes/mcp/tool.ts`): a name,
+  a zod input, `read` or `write`, and `run(args, ctx)` with the change
+  request's worktree and its files. `writing-tools.ts`, `note-tools.ts` and
+  `diagram-tools.ts` hold the tools; `studio-server.ts` mounts them
+  together. `list_crs` and `create_cr` are the exception: they take no
+  change request, so they are `crTools` in `server/routes/mcp/http.ts`, left out
+  of a chat's `tools/list` and refused to it, but for `create_cr` with a
+  brief to a chat on main. A chat on main reads main with the read tools;
+  every write tool tells it to call `create_cr`.
+
+
+## Review threads
+
+One comment system for people and agents (#87), kept per change request
+in `<STUDIO_HOME>/comments/<slug>.jsonl` (one thread per line, the file
+written whole through a temp file), outside `content/`. A comment of #85
+(one line with `block`) is read as an open thread of one comment.
+
+- **Anchor.** A thread on a block keeps the block's text, the blocks
+  before and after it, and a hash of every block the note had
+  (`@fdbook/shared` `text/anchors.ts`). `locate` finds it again: the same text,
+  nearest where it was (a copy edited away is told apart by the count of
+  copies); else, among the blocks new since, the one still between both
+  old neighbours, or the one most like it (words shared, Dice ≥ 0.6, or
+  0.4 next to an old neighbour). A block that was there all along is never
+  taken for the one edited, so a deleted block orphans its thread instead
+  of moving it to a sibling that reads alike. The server moves the stored
+  anchor each time the note changes on disk (the file watcher, whoever
+  wrote it, and once when the workspace opens), so edits one after
+  another keep it; the editor places threads with the same `locate` on
+  the text being typed.
+- **Orphaned.** No block found: the thread keeps its anchor and state and
+  is listed over the note with what the block said. From then on only
+  that block coming back word for word finds it, so a sibling edited
+  later is never taken for it. A deleted note orphans its threads; a
+  tree rename or move takes them to the new path and places them there,
+  even when the watcher saw the rename first.
+- **States.** `open`, `addressed`, `rejected` (with a reason),
+  `resolved`, `needs-decision`. The author agent answers an open thread
+  (addressed, rejected); the reviewer agent judges the answer (resolved,
+  open again, or needs-decision when it keeps a finding the author
+  rejected); the reviewer resolves an open thread only when an agent
+  opened it (withdrawing its own finding), never a person's; only a
+  person decides a needs-decision thread or reopens a resolved one, and a
+  person may make any other move too
+  (`@fdbook/shared` `api/review.ts`). Each move is a comment in the thread's
+  history.
+- **Who.** `by` is a person (their login) or an agent run with its agent,
+  model and role.
+- **Review this CR.** The Review view starts a reviewer chat with a fixed
+  message (`src/features/review/texts.ts`): `cr_changes`, `read_note`, the style
+  guide when the repository has one (#90), `list_threads`, then
+  `add_comment` per finding.
+
+## Proposals
+
+Proposals live in `server/services/proposals/`, stored in
+`<STUDIO_HOME>/proposals/<slug>/`, outside the branch; a discarded change
+request's go with it.
+
+- **Hunks** (`hunks.ts`). The note is split into blocks as the editor
+  splits them (the frontmatter first), the proposed text too, and the two
+  are aligned with `@fdbook/shared` `text/diff/align.ts`, shared with the diff view. Each
+  stretch between two unchanged blocks that differs is a hunk: what it
+  removes, spacing included, and what it adds.
+- **Placement.** A hunk applies where its own blocks still are, word for
+  word; its neighbours only break a tie. Once its own blocks changed it is
+  stale. The page runs the same placement on the text in the editor
+  (`src/features/review/suggestions/`), so typing never waits for a save.
+- **Accept** writes under the notes lock, from the mtime it read.
+
+## The site's look
+
+The editor imports the site's look rather than copying it, so a change on
+the site shows here with no Studio edit:
+
+- colours and fonts: `styles/notes-theme.css` (`.notes-theme`), mapped
+  onto the editor's `--fde-*` tokens in `src/notes-theme.css`;
+- prose, callouts, title and description: `styles/notes-prose.css`
+  (`.notes-prose`, `.notes-title`, `.notes-description`). The editor's
+  stylesheet sits in a cascade layer so these rules win over it;
+  `src/notes-prose.css` keeps only what the editor needs on top, where its
+  markup differs from the page's. The site's prose is for the note's
+  content: what the editor draws and does not let you edit (a diagram
+  preview's labels, a control) keeps the editor's look;
+- components: the callout's icons and variables from
+  `components/notes-callout.tsx`, Keyword and Tag from the class names
+  `components/graph-objects.tsx` exports (Tailwind scans that file), the
+  accordion's icons and palette from `packages/mdx/src/notes-accordion.ts`, and the
+  directive names, callout types and accordion kinds from
+  `packages/mdx/src/notes-syntax.ts`;
+- light and dark follow the system (`.dark` on `<html>`, as next-themes
+  sets it on the site);
+- Mermaid previews take the site's diagram palette: `NoteEditor` marks the
+  author's fills on each one as the site does (`packages/mdx/src/pele-author-fill.ts`),
+  so dark mode gets the right node ink, subgraph tint and title halos, and
+  the code block frame sets `--notes-diagram-bg`, the plate behind each
+  edge label;
+- `<Diagram>` cards and the diagram editor: `styles/diagram.css`, imported
+  by `src/features/editor/plugins/diagram/Diagram.tsx` (`src/features/diagrams/diagram-page.css`
+  adds only the editor's chrome).
+
+What the editor cannot import stays a copy in its plugin: the accordion
+card, the code block frame, `SvgDiagram`, `YouTube`, `HtmlEmbed` and the
+`<Diagram>` props. The site marks the parts each copy mirrors with
+`// studio-copy start: …` and `// studio-copy end`;
+`tests/src/site-copies.test.ts` pins their hash and fails when one of them
+changes, not on other edits to the file.
+
+The editor's block drag handle is drawn as a grip
+(`src/features/editor/drag-handle.css`, found by its `aria-label`;
+`tests/features/editor/drag-handle.test.ts` fails if a new editor version
+changes it).
+
+## Plugins
+
+What the editor understands comes from plugins in `src/plugins/<name>/`.
+`src/features/editor/plugins/index.ts` finds every `index.ts` or `index.tsx` there
+(`import.meta.glob`), and the registry (`src/features/editor/plugins/registry.ts`) checks
+and merges them, so adding a plugin needs no change anywhere else.
+
+```ts
+// src/features/editor/plugins/svg-diagram/index.ts, shortened
+import type { UiComponentSpec } from '@fumadocs-editor/ui';
+import { definePlugin } from '../plugin';
+import './svg-diagram.css'; // the plugin's own styles
+import { SvgDiagram } from './SvgDiagram'; // React components in their own file
+
+const svgDiagramSpec: UiComponentSpec = {
+  name: 'SvgDiagram', // the JSX tag
+  attributeRegions: [{ attribute: 'caption', region: 'caption' }],
+  props: [{ name: 'src', type: 'string' }, { name: 'label', type: 'string' }],
+  render: SvgDiagram,
+};
+
+export default definePlugin({ id: 'svg-diagram', components: [svgDiagramSpec] });
+```
+
+- `components` are `UiComponentSpec`s: how a component's attributes and
+  children map to editable regions and props, how it renders, and what the
+  slash menu inserts. Only add components the site renders
+  (`components/mdx.tsx`).
+- `syntax` turns on parse-level dialects such as `directives`; a dialect is
+  on when any plugin turns it on.
+- `decorate` draws over what the editor keeps as source (inline JSX tags,
+  text directives, verbatim blocks) with ProseMirror decorations. It
+  changes how the document looks, never the document.
+  `src/features/editor/decorations.ts` puts every plugin's decorator on the live
+  editor, as one of `MdxEditor.Root`'s `extensions` (the suggestion
+  layer, the graph tools and the agent panel's place come the same way,
+  made with the root in `NoteEditor.tsx`). Cards share
+  `src/features/editor/plugins/cards.css`; `.studio-hidden` hides the source a card covers.
+- A plugin must export a default; two plugins may not share an `id` or
+  define the same component.
+- `tests/features/editor/plugins/round-trip.test.ts` parses and writes back every note
+  with all plugins loaded, one test per note, and fails if a byte changes.
+  Put sample MDX for a new component in `src/plugins/<name>/fixtures/*.mdx`
+  to add it to that test.
+
+The plugins:
+
+- `callout`: `<Callout>` and `:::type[title]` drawn with the classes, icons
+  and variables of `components/notes-callout.tsx`, with the site's types
+  and an icon menu to change them. The editor only parses the admonition
+  names in core's `ADMONITION_TYPES`, so the plugin adds the site's own
+  (`example`, `caution`, `important`, `error`, from `packages/mdx/src/notes-syntax.ts`)
+  to that object at load; `tests/features/editor/plugins/callout.test.ts` fails if a
+  new editor version stops reading it. A callout whose title has
+  formatting, or that holds an accordion group, stays source (the editor's
+  rule).
+- `graph-objects`: `<Keyword>`, `<Tag>`, `:keyword[…]` and `:tag[…]` with
+  the classes of `components/graph-objects.tsx`, `<GraphMeta/>` and
+  `:graph-meta{…}` as a small marker, all as decorations: with the caret
+  inside (or the atom selected) the source shows again. `<SectionTitle>` is
+  a component, drawn as the heading its `as` names.
+- `site-directives`: `::::accordions` groups as the site's accordion cards
+  and `::youtube` as a card. On an accordion card the icon picks the item's
+  `kind` (from `ACCORDION_KINDS`), the title is edited in place on the
+  head, and the body opens as MDX source. Each is written back as typing
+  pauses and rewrites only its own line or lines: a kind or title keeps its
+  quotes and its place, a title written as the `[label]` stays there, and
+  an empty title is not written. Titles show the text the site shows
+  (character references and label escapes decoded) and are written so they
+  read back the same. The MDX button shows the block's
+  source.
+- `site-inserts`: the `/` menu items for graph markers, directive blocks
+  and a Mermaid diagram. The menu lists components, so each is a spec named
+  `studio-insert-…` whose `insert` returns the site's syntax (or, for
+  Mermaid, the editor's code block) instead of a node of its own; no note
+  has such a tag, and `tests/features/editor/plugins/site-inserts.test.ts` checks that
+  none parses. The menu matches the query against labels only, hence the
+  label "Mermaid diagram".
+- `diagram`: `<Diagram>`, drawn with the site's renderer and the count of
+  its checks' findings, its caption edited in place and `src` and `title`
+  in the props panel.
+- `youtube`: `<YouTube>` as the same card as `::youtube`, its title edited
+  in place and its url or `videoId` in the props panel.
+- `fumadocs-ui`: Cards, Steps, Tabs and Accordions.
+- `html-embed` and `svg-diagram`: cards. `SvgDiagram` shows its inline
+  `svg` (as an image, so no script runs) or else a file under
+  `public/notes` through the file API, and reads its props like the site
+  (`packages/mdx/src/mdx-props.ts`); a bare JSX boolean (`plate`) reaches the editor
+  without a value, so write `plate="true"` to see it. `HtmlEmbed` shows no
+  live page, since the file API serves HTML assets sandboxed without
+  scripts.
+
+### Next to the editor
+
+ProseMirror plugins reach the live editor through `MdxEditor.Root`'s
+`extensions`. What the Studio draws next to it is either one of the
+root's `bubbleItems`, a button in the editor's own format bubble, or a
+React overlay fed by a relay from such a plugin. A `BubbleItem` is a
+single button that runs on the editor; the bubble shows only for a text
+selection (and at a caret on touch) and is not mounted when the editor is
+read-only. Hence (#174):
+
+- **Graph tools.** Keyword and Tag, which wrap a text selection and
+  toggle the marker around it, are `bubbleItems`
+  (`src/features/editor/graph/bubble-items.tsx`). Graph node is a widget button at the end
+  of a heading and a click on a keyword or tag opens its fields, both from
+  the graph plugin (`src/features/editor/graph/graph-plugin.ts`), since they also work at
+  a caret, which the bubble does not show for. The fields
+  (`GraphTools.tsx`) keep their own state and focus, so they stay a React
+  popup, placed at the marker (`src/features/editor/graph/place.ts`); Remove and the
+  frontmatter note are in them (#176).
+- **Suggestion decisions** stay custom. The cards and thread marks
+  (`src/features/review/visual.ts`, `Suggestions.tsx`) are drawn at blocks,
+  several at once, whatever the selection, and also in read-only review;
+  `SuggestionBar` is a fixed bar over the editor with counts and
+  Accept all / Reject all. None of them is tied to the selection.
+- **Place reporting** (`src/features/editor/report-place.ts`) draws nothing: it
+  tells the agent panel where the selection is. It stays a plugin in
+  `extensions`.
+
+## Write actions
+
+Every button or dialog that writes to the server follows one pattern
+(`src/components/`), so nothing goes twice and nothing looks stuck:
+
+- **One at a time.** `useBusy()` runs a component's write: a second click,
+  Enter pressed again or Escape while it is out does nothing. Its `run`
+  holds a ref, so even two clicks before React renders send one request.
+  Actions that touch the same thing share one `useBusy` (the bar and the
+  cards of a note's suggestions, Keep and Revert of a file).
+- **It shows.** `PendingButton` is disabled at once, `aria-busy`, and after
+  150 ms shows a spinner and what it is doing; a request quicker than that
+  never flashes. An icon button's icon becomes the spinner.
+- **Dialogs wait.** `Dialog` takes `busy`: while the request is out it
+  neither closes (Escape, the backdrop, Cancel) nor sends again. It stays
+  open when the request fails.
+- **Errors are toasts.** A failed action says why in the toast stack at the
+  top right (`toast.error`, `role="alert"`; `toast.warning`,
+  `role="status"`; `ToastStack`): gone after 8 seconds or on Dismiss, one
+  copy of a message while it is shown (a repeat restarts its timer). The
+  stack sits on `<body>`, over a dialog, and a dialog leaves it out of what
+  it makes inert. What fails to load stays where the content would be.
+- **Done already is not an error.** A repeat the server refuses as done
+  (`409` on an answer or a cancel another click or page sent first) shows
+  nothing.
+- **The chat shows a message at once.** The composer empties as it sends;
+  the message shows in the thread, marked Sending, until the stream brings
+  it, and comes back to the box if it did not go.

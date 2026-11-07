@@ -1,0 +1,298 @@
+/* Diagrams drawn by src/render/render.ts, in the notes palette. The tokens
+   sit on `.dg` (the inline figure and the expanded view), the drawing's
+   classes on `svg.dg-svg`. Each tone (src/model/schema.ts TONES) has a fill
+   and a stroke, the colours the Archify note style used; `tone-<name>` puts
+   them in --tone-fill / --tone-stroke for the classes that read them. Dark
+   nodes mix their stroke into the canvas colour instead of keeping a second
+   palette. */
+
+.dg {
+  --dg-bg: var(--garden-code-bg, #fefdf8);
+  --dg-dot: #e6e0cc;
+  --text: var(--garden-ink, #24402a);
+  --text-muted: var(--garden-ink-soft, #6c7f67);
+  --text-dim: #a0a98f;
+  --panel: var(--garden-surface, #fbf8ee);
+  --panel-border: var(--garden-line, #ded8c3);
+  --lane-fill: rgb(237 232 214 / 0.58);
+  --lane-stroke: #ded8c3;
+  --arrow: #8d967c;
+  --arrow-emphasis: #6e9c4f;
+  --mask: #fbf8ee;
+  --blue-fill: rgb(78 134 168 / 0.1);
+  --blue-stroke: #4e86a8;
+  --green-fill: rgb(94 162 62 / 0.12);
+  --green-stroke: #5ea23e;
+  --gold-fill: rgb(176 138 46 / 0.12);
+  --gold-stroke: #b08a2e;
+  --orange-fill: rgb(194 118 47 / 0.11);
+  --orange-stroke: #c2762f;
+  --red-fill: rgb(176 60 78 / 0.1);
+  --red-stroke: #b03c4e;
+  --teal-fill: rgb(63 140 116 / 0.1);
+  --teal-stroke: #3f8c74;
+  --slate-fill: rgb(122 140 116 / 0.1);
+  --slate-stroke: #7a8c74;
+  --dg-hover: #fffdf6;
+  --dg-node-shadow: drop-shadow(0 1px 1px rgb(17 24 39 / 0.05)) drop-shadow(0 6px 12px rgb(17 24 39 / 0.06));
+}
+
+.dark .dg {
+  --dg-bg: var(--garden-code-bg, #0a120d);
+  --dg-dot: rgb(147 168 141 / 0.14);
+  --text-dim: #6d8a63;
+  --lane-fill: rgb(34 48 33 / 0.48);
+  --lane-stroke: #2c3d2f;
+  --arrow: #6d8a63;
+  --arrow-emphasis: #a9d07c;
+  --mask: #1b291f;
+  --blue-fill: rgb(111 169 200 / 0.11);
+  --blue-stroke: #6fa9c8;
+  --green-fill: rgb(169 208 124 / 0.12);
+  --green-stroke: #a9d07c;
+  --gold-fill: rgb(210 178 94 / 0.12);
+  --gold-stroke: #d2b25e;
+  --orange-fill: rgb(217 143 79 / 0.11);
+  --orange-stroke: #d98f4f;
+  --red-fill: rgb(207 101 121 / 0.11);
+  --red-stroke: #cf6579;
+  --teal-fill: rgb(87 183 155 / 0.11);
+  --teal-stroke: #57b79b;
+  --slate-fill: rgb(195 212 188 / 0.08);
+  --slate-stroke: #8ca286;
+  --dg-hover: #223021;
+  --dg-node-shadow: drop-shadow(0 8px 16px rgb(0 0 0 / 0.35));
+}
+
+/* The canvas: the note code-block surface with a dot grid. */
+.dg-canvas {
+  background:
+    radial-gradient(circle at 1px 1px, var(--dg-dot) 1px, transparent 1.4px) 0 0 / 20px 20px,
+    var(--dg-bg);
+}
+
+svg.dg-svg {
+  font-family: var(--font-sans, 'Be Vietnam Pro', system-ui, sans-serif);
+}
+
+.dg-svg .c-mask { fill: var(--mask); stroke: none; }
+.dg .tone-blue { --tone-fill: var(--blue-fill); --tone-stroke: var(--blue-stroke); }
+.dg .tone-green { --tone-fill: var(--green-fill); --tone-stroke: var(--green-stroke); }
+.dg .tone-gold { --tone-fill: var(--gold-fill); --tone-stroke: var(--gold-stroke); }
+.dg .tone-orange { --tone-fill: var(--orange-fill); --tone-stroke: var(--orange-stroke); }
+.dg .tone-red { --tone-fill: var(--red-fill); --tone-stroke: var(--red-stroke); }
+.dg .tone-teal { --tone-fill: var(--teal-fill); --tone-stroke: var(--teal-stroke); }
+.dg .tone-slate { --tone-fill: var(--slate-fill); --tone-stroke: var(--slate-stroke); }
+
+.dg-svg .c-node { fill: var(--tone-fill); stroke: var(--tone-stroke); }
+.dg-svg [data-node-id] > rect.c-node { stroke-width: 1.25px; filter: var(--dg-node-shadow); }
+.dark .dg-svg [data-node-id] > rect.c-node { fill: color-mix(in srgb, var(--tone-stroke) 13%, var(--mask)); stroke: color-mix(in srgb, var(--tone-stroke) 72%, var(--mask)); }
+
+.dg-svg .c-frame { fill: color-mix(in srgb, var(--tone-stroke) 3%, transparent); stroke: color-mix(in srgb, var(--tone-stroke) 42%, var(--lane-stroke)); }
+.dg-svg .c-frame.frame-dashed { fill: transparent; stroke: color-mix(in srgb, var(--tone-stroke) 58%, var(--lane-stroke)); stroke-dasharray: 4 3; }
+.dg-svg .c-lane { fill: var(--lane-fill); stroke: var(--lane-stroke); stroke-dasharray: 6 6; }
+.dg-svg [data-graph-role="structural-frame-label-mask"] { rx: 5px; fill: color-mix(in srgb, var(--tone-stroke) 10%, var(--mask)); stroke: color-mix(in srgb, var(--tone-stroke) 38%, var(--mask)); stroke-width: 0.8px; }
+.dg-svg [data-edge-label] > rect.c-mask { rx: 7px; stroke: var(--lane-stroke); stroke-width: 0.75px; }
+
+.dg-svg .t-primary { fill: var(--text); }
+.dg-svg .t-muted { fill: var(--text-muted); }
+.dg-svg .t-dim { fill: var(--text-dim); }
+.dg-svg .t-tone { fill: var(--tone-stroke); }
+.dg-svg .t-edge-default { fill: var(--arrow); }
+.dg-svg .t-edge-emphasis { fill: var(--arrow-emphasis); }
+.dg-svg .t-edge-alert { fill: var(--red-stroke); }
+.dg-svg .t-edge-dashed { fill: var(--gold-stroke); }
+
+.dg-svg .a-default { stroke: var(--arrow); fill: none; }
+.dg-svg .a-emphasis { stroke: var(--arrow-emphasis); fill: none; }
+.dg-svg .a-alert { stroke: var(--red-stroke); fill: none; stroke-dasharray: 5 5; }
+.dg-svg .a-dashed { stroke: var(--gold-stroke); fill: none; stroke-dasharray: 4 4; }
+.dg-svg .m-default { fill: var(--arrow); }
+.dg-svg .m-emphasis { fill: var(--arrow-emphasis); }
+.dg-svg .m-alert { fill: var(--red-stroke); }
+.dg-svg .m-dashed { fill: var(--gold-stroke); }
+/* A reply: a quiet dashed line with an open head. */
+.dg-svg .a-return { stroke: var(--arrow); fill: none; stroke-dasharray: 3 5; }
+.dg-svg .m-return { fill: none; stroke: var(--arrow); stroke-width: 1.1; }
+
+/* A sequence: dotted lifelines, activation bars in the participant's tone,
+   and segment frames with a pill title, as Archify draws them. */
+.dg-svg .c-lifeline { stroke: var(--arrow); fill: none; stroke-dasharray: 3 7; }
+.dg-svg .c-activation { fill: color-mix(in srgb, var(--tone-stroke) 16%, var(--mask)); stroke: var(--tone-stroke); }
+.dg-svg .c-segment { fill: var(--lane-fill); stroke: var(--lane-stroke); stroke-dasharray: 4 3; }
+.dg-svg .c-segment-pill { fill: var(--mask); stroke: var(--lane-stroke); stroke-width: 0.75px; }
+.dg-svg .t-segment { fill: var(--text-muted); }
+
+/* A lifecycle: the initial marker, a final state's inner border, a composite
+   phase's dotted frame and a shared exit's junction dots, as Archify draws them. */
+.dg-svg .c-initial { fill: var(--arrow-emphasis); stroke: none; }
+.dg-svg .c-final { fill: none; stroke: var(--tone-stroke); }
+.dg-svg .c-composite { fill: none; stroke: var(--arrow); stroke-opacity: 0.55; stroke-dasharray: 1.5 3.5; stroke-linecap: round; }
+.dg-svg .c-junction { fill: var(--arrow); stroke: none; }
+
+.dg-svg .semantic-sigil { color: var(--tone-stroke); fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; opacity: 0.76; pointer-events: none; }
+.dg-svg .semantic-sigil > * { vector-effect: non-scaling-stroke; }
+.dg-svg .semantic-sigil .sigil-fill { fill: currentColor; stroke: none; }
+
+/* Fine detail reads only at the expanded size, as in Archify. */
+.dg-svg [data-detail="fine"] { display: none; }
+.dg-expanded .dg-svg [data-detail="fine"] { display: inline; }
+
+/* Hover lifts a node's neighbourhood; a focused node dims everything else. */
+.dg-svg [data-node-id] { cursor: pointer; outline: none; transition: opacity 0.18s ease, filter 0.18s ease; }
+.dg-svg [data-edge-group], .dg-svg [data-edge-label] { transition: opacity 0.18s ease; }
+.dg-svg [data-node-id]:hover, .dg-svg [data-node-id]:focus-visible { filter: drop-shadow(0 0 7px var(--blue-stroke)); }
+.dg-svg[data-hover] [data-node-id]:not([data-near]),
+.dg-svg[data-hover] [data-edge-group]:not([data-near]),
+.dg-svg[data-hover] [data-edge-label]:not([data-near]) { opacity: 0.38; }
+.dg-svg[data-focus] [data-node-id]:not([data-related]),
+.dg-svg[data-focus] [data-edge-group]:not([data-related]),
+.dg-svg[data-focus] [data-edge-label]:not([data-related]) { opacity: 0.13; }
+.dg-svg[data-focus] [data-node-id][aria-pressed="true"] { filter: drop-shadow(0 0 10px var(--blue-stroke)); }
+
+/* The lens: a picked legend entry keeps what it names lit and dims the
+   rest as focus does; the node in focus stays lit. Both can dim at once. */
+.dg-svg [data-legend-kind][role="button"], .dg-svg [data-legend-variant][role="button"] { cursor: pointer; outline: none; transition: opacity 0.18s ease; }
+.dg-svg [role="button"]:is([data-legend-kind], [data-legend-variant]):is(:hover, :focus-visible) > :is(rect, path) { filter: drop-shadow(0 0 4px var(--blue-stroke)); }
+.dg-svg [role="button"]:is([data-legend-kind], [data-legend-variant]):focus-visible > text { text-decoration: underline; }
+.dg-svg[data-lens] :is([data-legend-kind], [data-legend-variant])[aria-pressed="false"] { opacity: 0.42; }
+.dg-svg[data-lens] [data-legend-kind][aria-pressed="true"] > rect { stroke-width: 2px; }
+.dg-svg[data-lens] :is([data-legend-kind], [data-legend-variant])[aria-pressed="true"] > text { fill: var(--text); font-weight: 650; }
+.dg-svg[data-lens] [data-node-id]:not([data-lens-lit]):not([aria-pressed="true"]),
+.dg-svg[data-lens] [data-edge-group]:not([data-lens-lit]),
+.dg-svg[data-lens] [data-edge-label]:not([data-lens-lit]) { opacity: 0.13; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dg-svg [data-node-id], .dg-svg [data-edge-group], .dg-svg [data-edge-label], .dg-svg [data-legend-kind], .dg-svg [data-legend-variant] { transition: none; }
+}
+
+
+/* A node's note: a meta line (badge · group), the node, its role, its
+   points. It sits in the note prose when inline, so these name every
+   property the prose heading, paragraph and list rules set. A badge's tone
+   colours the meta square and the point marks. */
+.dg .dg-note { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.625rem; color: var(--text); }
+.dg .dg-note-meta {
+  grid-column: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 0.125rem 0.5rem; min-height: 1.375rem;
+  font: 600 0.625rem/1.4 var(--font-mono, monospace); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-muted);
+}
+.dg .dg-note-badge { display: inline-flex; align-items: center; gap: 0.375rem; color: var(--tone-stroke); }
+.dg .dg-note-badge::before { content: ''; width: 7px; height: 7px; border-radius: 2px; background: var(--tone-stroke); }
+.dg .dg-note-context { font: 500 0.69rem/1.4 var(--font-sans, sans-serif); letter-spacing: 0; text-transform: none; }
+.dg .dg-note-badge:has(+ .dg-note-context)::after { content: '·'; margin-left: 0.125rem; color: var(--text-dim); }
+.dg .dg-note-close {
+  grid-column: 2; grid-row: 1; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; margin: -0.125rem -0.25rem 0 0;
+  border: 0; border-radius: 0.375rem; background: transparent; color: var(--text-muted); cursor: pointer;
+}
+.dg .dg-note-close:hover { background: var(--dg-hover); color: var(--text); }
+.dg .dg-note-close:focus-visible { outline: 2px solid var(--color-fd-ring, var(--blue-stroke)); outline-offset: 1px; }
+.dg .dg-note-title {
+  grid-column: 1 / -1; display: block; width: auto; margin: 0.25rem 0 0; padding: 0;
+  font-size: 0.95rem; font-weight: 650; line-height: 1.3; color: var(--text);
+}
+.dg .dg-note-sub { grid-column: 1 / -1; display: block; margin-top: 1px; font: 0.69rem/1.5 var(--font-mono, monospace); color: var(--text-muted); }
+.dg .dg-note-role { grid-column: 1 / -1; margin: 0.5rem 0 0; font-size: 0.81rem; line-height: 1.6; color: var(--text); }
+/* The role is MDX: paragraphs and lists keep the note's size and rhythm. */
+.dg .dg-note-role :is(p, ul, ol, li, blockquote) { margin: 0; font-size: inherit; line-height: inherit; }
+.dg .dg-note-role > * + * { margin-top: 0.5rem; }
+.dg .dg-note-role :is(ul, ol) { padding-inline-start: 1.1rem; }
+.dg .dg-note-role ul { list-style: disc; }
+.dg .dg-note-role ul > li { padding: 0; }
+.dg .dg-note-role ul > li::before { content: none; }
+.dg :is(.dg-note, .dg-cards) code { padding: 0 0.25rem; border-radius: 0.25rem; background: color-mix(in srgb, var(--text) 7%, transparent); font-family: var(--font-mono, monospace); font-size: 0.92em; }
+.dg :is(.dg-note, .dg-cards) a { color: var(--blue-stroke); text-decoration: underline; text-underline-offset: 2px; }
+.dg .dg-note-points {
+  grid-column: 1 / -1; display: grid; gap: 0.3rem; margin: 0.625rem 0 0; padding: 0.55rem 0 0;
+  border-top: 1px solid var(--panel-border); list-style: none;
+  font-size: 0.78rem; line-height: 1.55; color: var(--text-muted);
+}
+.dg .dg-note-points > li { position: relative; margin: 0; padding: 0 0 0 0.875rem; font-size: inherit; }
+.dg .dg-note-points > li::before {
+  content: ''; position: absolute; inset-inline-start: 1px; top: 0.72em;
+  width: 7px; height: 1.5px; border-radius: 1px; background: var(--tone-stroke, var(--text-muted));
+}
+
+/* Inline, the note is a drawer over the diagram: full height, on the side
+   away from the focused node, so the frame keeps its size and the page below
+   never moves. On a phone it covers the frame. */
+.dg .dg-drawer { position: absolute; inset-block: 0; right: 0; z-index: 20; display: flex; width: min(340px, 42%); pointer-events: none; }
+.dg .dg-drawer[data-edge="left"] { right: auto; left: 0; }
+.dg .dg-drawer-panel {
+  flex: 1; min-width: 0; overflow: auto; padding: 0.875rem 1rem 1rem; pointer-events: auto;
+  border-left: 1px solid var(--panel-border); background: var(--panel); box-shadow: -10px 0 28px rgb(0 0 0 / 0.08);
+  opacity: 0; visibility: hidden; transform: translateX(100%);
+  transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease, visibility 0s linear 0.26s;
+}
+.dg .dg-drawer[data-edge="left"] .dg-drawer-panel { border-left: 0; border-right: 1px solid var(--panel-border); box-shadow: 10px 0 28px rgb(0 0 0 / 0.08); transform: translateX(-100%); }
+.dg .dg-drawer[data-open] .dg-drawer-panel { opacity: 1; visibility: visible; transform: none; transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease, visibility 0s; }
+.dg .dg-drawer-panel > .dg-note { transition: opacity 0.12s ease; }
+.dg .dg-drawer[data-swapping] .dg-note { opacity: 0; }
+/* The expand control moves out of a drawer's way, to the other top corner. */
+.dg .dg-canvas:has(> .dg-drawer[data-open][data-edge="right"]) > .dg-toolbar { right: auto; left: 0.5rem; }
+@media (max-width: 640px) {
+  .dg .dg-drawer, .dg .dg-drawer[data-edge="left"] { left: 0; right: 0; width: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dg .dg-drawer-panel, .dg .dg-drawer-panel > .dg-note { transition: none; }
+}
+
+/* Expanded, the note floats over the canvas's top left; a bottom sheet on a phone. */
+.dg .dg-note-card {
+  position: absolute; left: 0.75rem; top: 0.75rem; z-index: 20; overflow: auto;
+  width: min(22rem, calc(100% - 1.5rem)); max-height: calc(100% - 5rem); padding: 0.75rem 0.875rem 0.875rem;
+  border: 1px solid var(--panel-border); border-radius: 0.75rem; background: var(--panel);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 16px 40px rgb(0 0 0 / 0.14);
+}
+@media (max-width: 640px) {
+  .dg .dg-note-card { inset: auto 0 0 0; width: auto; max-height: 55%; border-radius: 0.875rem 0.875rem 0 0; }
+}
+
+/* How to read the expanded view, until a node is picked. */
+.dg .dg-hint {
+  position: absolute; left: 0.75rem; top: 0.75rem; z-index: 10; pointer-events: none;
+  padding: 0.125rem 0.5rem; border: 1px solid var(--panel-border); border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+  font-family: var(--font-mono, monospace); font-size: 0.65rem; color: var(--text-muted);
+}
+
+/* The picked lens, at the top centre of the canvas: clear of the note card
+   and hint (top left), the inline drawer's edges and the expand and close
+   buttons. */
+.dg .dg-lens-chip {
+  position: absolute; left: 50%; top: 0.75rem; transform: translateX(-50%); white-space: nowrap; z-index: 11; display: inline-flex; align-items: center; gap: 0.375rem;
+  padding: 0.125rem 0.25rem 0.125rem 0.625rem; border: 1px solid var(--panel-border); border-radius: 999px; background: var(--panel);
+  font-family: var(--font-mono, monospace); font-size: 0.7rem; color: var(--text-muted);
+}
+.dg .dg-lens-chip button {
+  display: grid; place-items: center; width: 1.25rem; height: 1.25rem; border: 0; border-radius: 999px;
+  background: transparent; color: var(--text-muted); cursor: pointer;
+}
+.dg .dg-lens-chip button:hover { background: var(--dg-hover); color: var(--text); }
+.dg .dg-lens-chip button:focus-visible { outline: 2px solid var(--color-fd-ring, var(--blue-stroke)); outline-offset: 1px; }
+
+/* The expanded view's overview map: the drawing in the bottom right corner,
+   above the toolbar, with the shown part framed. It fades out while the
+   whole drawing is in view, and a phone has no room for it. */
+.dg .dg-minimap {
+  position: absolute; right: 0.75rem; bottom: 3.6rem; z-index: 12; padding: 4px;
+  border: 1px solid var(--panel-border); border-radius: 0.5rem; background: color-mix(in srgb, var(--panel) 94%, transparent);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 20px rgb(0 0 0 / 0.1);
+  transition: opacity 0.18s ease, visibility 0s;
+}
+.dg .dg-minimap[data-hidden] { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.18s ease, visibility 0s linear 0.18s; }
+.dg .dg-minimap-map { position: relative; overflow: hidden; border-radius: 0.3rem; background: var(--dg-bg); cursor: pointer; touch-action: none; }
+.dg .dg-minimap-drawing { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.dg .dg-minimap-drawing > svg { display: block; width: 100%; height: 100%; }
+.dg .dg-minimap-drawing [data-legend] { display: none; }
+.dg .dg-minimap-view {
+  position: absolute; border: 1.5px solid var(--blue-stroke); border-radius: 3px; cursor: grab; outline: none;
+  background: color-mix(in srgb, var(--blue-stroke) 12%, transparent);
+  box-shadow: 0 0 0 999px color-mix(in srgb, var(--panel) 38%, transparent);
+}
+.dg .dg-minimap-view:focus-visible { outline: 2px solid var(--color-fd-ring, var(--blue-stroke)); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .dg .dg-minimap { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dg .dg-minimap, .dg .dg-minimap[data-hidden] { transition: none; }
+}

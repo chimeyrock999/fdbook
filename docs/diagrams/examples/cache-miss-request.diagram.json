@@ -1,0 +1,79 @@
+{
+  "$schema": "../diagram.schema.json",
+  "version": 1,
+  "type": "sequence",
+  "title": "Cache Miss Request Sequence",
+  "kinds": [
+    { "id": "frontend", "label": "Frontend", "tone": "blue", "icon": "window" },
+    { "id": "backend", "label": "Backend", "tone": "green", "icon": "code" },
+    { "id": "database", "label": "Database", "tone": "gold", "icon": "cylinder" },
+    { "id": "security", "label": "Security", "tone": "red", "icon": "shield" },
+    { "id": "message-bus", "label": "Message bus", "tone": "teal", "icon": "queue" },
+    { "id": "external", "label": "External", "tone": "slate", "icon": "external" }
+  ],
+  "nodes": [
+    { "id": "user", "kind": "external", "label": "User", "sublabel": "browser session" },
+    { "id": "web", "kind": "frontend", "label": "Web App", "sublabel": "React UI" },
+    { "id": "api", "kind": "backend", "label": "API", "sublabel": "request handler" },
+    { "id": "auth", "kind": "security", "label": "Auth", "sublabel": "JWT verify" },
+    { "id": "redis", "kind": "database", "label": "Redis", "sublabel": "cache" },
+    { "id": "db", "kind": "database", "label": "Postgres", "sublabel": "source of truth" },
+    { "id": "trace", "kind": "message-bus", "label": "Trace", "sublabel": "async event" }
+  ],
+  "edges": [
+    { "id": "open-page", "from": "user", "to": "web", "label": "open page" },
+    { "id": "dashboard-request", "from": "web", "to": "api", "label": "GET /dashboard", "variant": "emphasis" },
+    { "id": "verify-jwt", "from": "api", "to": "auth", "label": "verify JWT", "variant": "alert" },
+    { "id": "auth-claims", "from": "auth", "to": "api", "label": "claims ok", "variant": "return" },
+    { "id": "cache-read", "from": "api", "to": "redis", "label": "read cache" },
+    { "id": "cache-miss", "from": "redis", "to": "api", "label": "miss", "variant": "return" },
+    { "id": "profile-query", "from": "api", "to": "db", "label": "query profile + metrics", "variant": "emphasis" },
+    { "id": "profile-rows", "from": "db", "to": "api", "label": "rows", "variant": "return" },
+    { "id": "cache-write", "from": "api", "to": "redis", "label": "set cache", "variant": "dashed" },
+    { "id": "trace-emit", "from": "api", "to": "trace", "label": "emit trace", "variant": "dashed" },
+    { "id": "dashboard-response", "from": "api", "to": "web", "label": "200 JSON", "variant": "return" },
+    { "id": "page-render", "from": "web", "to": "user", "label": "render", "variant": "return" }
+  ],
+  "segments": [
+    { "label": "Request", "from": "open-page", "to": "auth-claims" },
+    { "label": "Fallback", "from": "cache-read", "to": "profile-rows" },
+    { "label": "Response + trace", "from": "cache-write", "to": "page-render" }
+  ],
+  "activations": [
+    { "node": "web", "from": "dashboard-request", "to": "page-render" },
+    { "node": "api", "from": "dashboard-request", "to": "dashboard-response" },
+    { "node": "auth", "from": "verify-jwt", "to": "auth-claims" },
+    { "node": "redis", "from": "cache-read", "to": "cache-miss" },
+    { "node": "db", "from": "profile-query", "to": "profile-rows" },
+    { "node": "trace", "from": "trace-emit", "to": "trace-emit" }
+  ],
+  "cards": [
+    {
+      "title": "Happy Path",
+      "tone": "green",
+      "items": [
+        "The main request is Web App -> API -> data source -> response",
+        "Return messages are quieter than forward calls",
+        "Activation bars make ownership duration visible"
+      ]
+    },
+    {
+      "title": "Policy + Fallback",
+      "tone": "red",
+      "items": [
+        "JWT verification is colored as a security interaction",
+        "Cache miss is visible without overpowering the main path",
+        "Database access only appears after cache fallback"
+      ]
+    },
+    {
+      "title": "Async Trace",
+      "tone": "teal",
+      "items": [
+        "Trace emission is dashed and secondary",
+        "It does not block the response path",
+        "The diagram separates user-facing latency from observability"
+      ]
+    }
+  ]
+}

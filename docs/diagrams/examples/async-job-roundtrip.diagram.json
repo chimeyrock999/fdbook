@@ -1,0 +1,92 @@
+{
+  "$schema": "../diagram.schema.json",
+  "version": 1,
+  "type": "sequence",
+  "title": "Async Job Roundtrip",
+  "kinds": [
+    { "id": "backend", "label": "Backend", "tone": "green", "icon": "code" },
+    { "id": "database", "label": "Database", "tone": "gold", "icon": "cylinder" },
+    { "id": "cloud", "label": "Cloud", "tone": "orange", "icon": "cloud" },
+    { "id": "message-bus", "label": "Message bus", "tone": "teal", "icon": "queue" },
+    { "id": "external", "label": "External", "tone": "slate", "icon": "external" }
+  ],
+  "nodes": [
+    { "id": "client", "kind": "external", "label": "Client", "sublabel": "mobile app" },
+    { "id": "api", "kind": "backend", "label": "Jobs API", "sublabel": "request edge" },
+    { "id": "queue", "kind": "message-bus", "label": "Queue", "sublabel": "durable work" },
+    { "id": "worker", "kind": "backend", "label": "Worker", "sublabel": "background" },
+    { "id": "provider", "kind": "cloud", "label": "Provider", "sublabel": "external API" },
+    { "id": "store", "kind": "database", "label": "Job Store", "sublabel": "source of truth" },
+    { "id": "notify", "kind": "message-bus", "label": "Notifier", "sublabel": "webhook" }
+  ],
+  "edges": [
+    { "id": "post-jobs", "from": "client", "to": "api", "label": "POST /jobs", "variant": "emphasis" },
+    { "id": "enqueue-job", "from": "api", "to": "queue", "label": "enqueue job", "variant": "emphasis" },
+    { "id": "message-202-job-id", "from": "api", "to": "client", "label": "202 + job id", "variant": "return" },
+    { "id": "deliver", "from": "queue", "to": "worker", "label": "deliver", "variant": "emphasis" },
+    { "id": "perform-work", "from": "worker", "to": "provider", "label": "perform work" },
+    { "id": "result-timeout", "from": "provider", "to": "worker", "label": "result / timeout", "variant": "return" },
+    { "id": "retry-if-timeout", "from": "worker", "to": "queue", "label": "retry if timeout", "variant": "dashed" },
+    {
+      "id": "persist-final-state",
+      "from": "worker",
+      "to": "store",
+      "label": "persist final state",
+      "variant": "emphasis"
+    },
+    { "id": "job-completed", "from": "worker", "to": "notify", "label": "job.completed", "variant": "dashed" },
+    { "id": "signed-webhook", "from": "notify", "to": "client", "label": "signed webhook", "variant": "dashed" },
+    { "id": "get-jobs-id", "from": "client", "to": "api", "label": "GET /jobs/:id" },
+    { "id": "read-status", "from": "api", "to": "store", "label": "read status" },
+    { "id": "completed", "from": "store", "to": "api", "label": "completed", "variant": "return" },
+    {
+      "id": "message-200-final-result",
+      "from": "api",
+      "to": "client",
+      "label": "200 final result",
+      "variant": "return"
+    }
+  ],
+  "segments": [
+    { "label": "Accept", "from": "post-jobs", "to": "message-202-job-id" },
+    { "label": "Background work", "from": "deliver", "to": "persist-final-state" },
+    { "label": "Notify + reconcile", "from": "job-completed", "to": "message-200-final-result" }
+  ],
+  "activations": [
+    { "node": "api", "from": "post-jobs", "to": "message-202-job-id" },
+    { "node": "queue", "from": "enqueue-job", "to": "deliver" },
+    { "node": "worker", "from": "deliver", "to": "job-completed" },
+    { "node": "provider", "from": "perform-work", "to": "result-timeout" },
+    { "node": "store", "from": "persist-final-state", "to": "completed" },
+    { "node": "notify", "from": "job-completed", "to": "signed-webhook" },
+    { "node": "api", "from": "get-jobs-id", "to": "message-200-final-result" }
+  ],
+  "cards": [
+    {
+      "title": "Fast Acknowledgement",
+      "items": [
+        "The caller receives a durable job id before work begins",
+        "Queue ownership is visible in the acceptance contract",
+        "The original connection does not wait for provider latency"
+      ]
+    },
+    {
+      "title": "Bounded Recovery",
+      "tone": "teal",
+      "items": [
+        "Timeouts re-enter the queue with a retry policy",
+        "Final state is persisted before notification",
+        "The job store remains the source of truth"
+      ]
+    },
+    {
+      "title": "Two Observation Paths",
+      "tone": "green",
+      "items": [
+        "A signed webhook announces completion",
+        "Status polling is a fallback, not a second workflow",
+        "Both paths converge on the same final state"
+      ]
+    }
+  ]
+}

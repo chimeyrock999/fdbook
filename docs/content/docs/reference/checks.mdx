@@ -1,0 +1,87 @@
+---
+title: Checks
+---
+
+Read this before pushing a Studio change: what to run, how the tests are
+set up, and which tests are known to flake.
+
+## What to run
+
+There is no CI in this repository yet: nothing runs these checks on a push
+or a pull request. Run them by hand before pushing, from the repo root:
+
+```sh
+npm test               # vitest run, one project per package
+npm run lint           # typescript-eslint (strict for server, ui, shared, testing)
+npm run types:check    # tsc --noEmit over every package
+npm run docs:lint      # every page of these docs through the Studio's lint
+```
+
+One package's tests: `npx vitest run --project server --maxWorkers=2`
+(`ui`, `server`, `diagram`, `mdx`). `--maxWorkers=2` keeps the suite from
+starving the slow tests on a busy machine (see
+[Known flakes](#known-flakes)).
+
+## How the tests are set up
+
+- The root `vitest.config.ts` has one project per package, run from its
+  folder, and sets no environment, pool or timeout of its own: tests run
+  in node with vitest's 5-second default. `ui`, `server` and `mdx` use the
+  UI's Vite config (React, Tailwind, one copy of React).
+- `@fdbook/testing`'s `global-setup.ts` stops the whole run, with the
+  reinstall command, when the installed packages differ from the lockfile
+  (as the server does at start; see [Setup](../guide/setup.mdx#after-a-pull)).
+- Tests that render the editor run in jsdom (`// @vitest-environment
+  jsdom` at the top of the file). The UI's `tests/setup/jsdom.ts` runs before every
+  test file: it gives the window the `matchMedia` jsdom lacks, which the
+  live editor asks once it replaces the first paint
+  (`tests/jsdom-setup.test.ts` checks it), and clears the toasts after
+  every test. `stubLayout` in `tests/support/visual-editor.tsx` adds the
+  layout stubs the editor's menus need.
+- `@fdbook/testing` holds what several packages' tests use: a throwaway
+  worktree and a Studio on a free port (`studio.ts`), a git repository on a
+  change request branch (`git.ts`), and FdBook's docs as the real content
+  (`notes.ts`). The server's `tests/support/` holds git repositories for
+  change requests (`git-repo.ts`), raw HTTP, event stream and sync helpers
+  (`http.ts`, `events.ts`, `sync.ts`), sign-in (`auth.ts`) and a stand-in
+  ACP agent (`fake-agent.mjs`); the UI's holds the editor harnesses.
+
+## Tests over every note
+
+A test over every real page grows with the docs while the default
+timeout stays at 5 seconds, so a busy machine times it out. Where the check
+is per note, write it as one `it.each` test per note (`realNotes()` in
+`@fdbook/testing`'s `notes.ts`), with a separate test for the count, as
+the server's `tests/lint/notes.test.ts` does. A test that renames, replaces or
+lints across a copy of the whole corpus takes `CORPUS_TIMEOUT_MS` (30
+seconds) from the server's `tests/support/timeouts.ts`.
+
+Tests that pin the site's code:
+
+- `tests/features/editor/plugins/round-trip.test.ts` parses and writes back every note,
+  and each plugin's `fixtures/*.mdx`, with all plugins loaded, and fails if
+  a byte changes.
+- `tests/src/site-copies.test.ts` pins the hash of each part of a site file
+  marked `// studio-copy start: …` (see
+  [Architecture](./architecture.mdx#the-sites-look)).
+- `tests/server/lint/notes.test.ts` keeps every note at zero lint issues.
+
+## Agent tests
+
+The agent tests use a stand-in ACP agent (`tests/support/fake-agent.mjs`).
+
+```sh
+STUDIO_AGENT_LIVE=1 npx vitest run --project server tests/agents/live.test.ts
+```
+
+drives a two-turn chat with each installed agent as a reviewer, restarting
+in between to take the session up again. It calls the chats' own module
+(`createAgentConversations`) rather than the HTTP server, signs in with
+your logins and costs two model calls per agent, so it is skipped unless
+`STUDIO_AGENT_LIVE` is exactly `1`.
+
+## Known flakes
+
+- The `DiagramPage` JSON view tests can time out under full-suite load
+  (#149). Re-run them alone, or the suite with `--maxWorkers=2`, before
+  blaming a change.

@@ -1,0 +1,52 @@
+{
+  "name": "@fdbook/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Studio server: one Node process for the API, the notes sync, the UI, change requests, agents and the MCP server.",
+  "type": "module",
+  "exports": {
+    "./config": "./src/infra/config/project.ts",
+    "./config.ts": "./src/infra/config/config.ts",
+    "./deps.ts": "./src/infra/config/deps.ts",
+    "./lint/lint.ts": "./src/services/lint/lint.ts",
+    "./studio-server.ts": "./src/app/studio-server.ts"
+  },
+  "imports": {
+    "#tests/*": "./tests/*",
+    "#*": "./src/*"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/bin/index.ts",
+    "lint:notes": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/bin/lint.ts"
+  },
+  "dependencies": {
+    "@fdbook/diagram": "*",
+    "@fdbook/mdx": "*",
+    "@fdbook/shared": "*",
+    "@fdbook/ui": "*",
+    "@agentclientprotocol/claude-agent-acp": "0.88.0",
+    "@agentclientprotocol/codex-acp": "2.2.2",
+    "@agentclientprotocol/sdk": "1.7.0",
+    "@fumadocs-editor/core": "0.5.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "fumadocs-core": "^16.17.7",
+    "mdast-util-directive": "^3.1.1",
+    "mdast-util-mdx-jsx": "^3.2.0",
+    "remark-directive": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-mdx": "^3.1.1",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.1.0",
+    "vite": "^8.3.5",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@fdbook/testing": "*",
+    "@fdbook/ui": "*"
+  }
+}

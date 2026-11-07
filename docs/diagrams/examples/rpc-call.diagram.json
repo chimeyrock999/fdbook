@@ -1,0 +1,46 @@
+{
+  "$schema": "../diagram.schema.json",
+  "version": 1,
+  "type": "sequence",
+  "title": "A remote procedure call through its stub",
+  "kinds": [
+    { "id": "local", "label": "Caller", "tone": "blue", "icon": "code" },
+    { "id": "proxy", "label": "Stub", "tone": "green", "icon": "queue" },
+    { "id": "remote", "label": "Server", "tone": "orange", "icon": "cloud" }
+  ],
+  "nodes": [
+    { "id": "caller", "kind": "local", "label": "Caller", "sublabel": "local code" },
+    {
+      "id": "stub",
+      "kind": "proxy",
+      "label": "Client stub",
+      "sublabel": "marshals arguments",
+      "note": { "role": "Makes the remote call look local: it turns the arguments into bytes and the reply back into a value." }
+    },
+    { "id": "server", "kind": "remote", "label": "Server", "sublabel": "handler thread" }
+  ],
+  "edges": [
+    { "id": "call", "from": "caller", "to": "stub", "label": "add(2, 3)", "variant": "emphasis" },
+    {
+      "id": "request",
+      "from": "stub",
+      "to": "server",
+      "label": "request bytes",
+      "detail": "procedure id + marshalled arguments over TCP; the calling thread blocks until the reply or a timeout",
+      "variant": "emphasis"
+    },
+    {
+      "id": "reply",
+      "from": "server",
+      "to": "stub",
+      "label": "reply bytes",
+      "detail": "the result, or the error the handler raised",
+      "variant": "return"
+    },
+    { "id": "result", "from": "stub", "to": "caller", "label": "returns 5", "variant": "return" }
+  ],
+  "activations": [
+    { "node": "stub", "from": "call", "to": "result" },
+    { "node": "server", "from": "request", "to": "reply" }
+  ]
+}

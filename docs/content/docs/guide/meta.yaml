@@ -1,0 +1,6 @@
+title: "Guide"
+defaultOpen: true
+pages:
+  - "setup"
+  - "configuration"
+  - "using"

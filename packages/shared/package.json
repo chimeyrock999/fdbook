@@ -1,0 +1,31 @@
+{
+  "name": "@fdbook/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "What the Studio server and UI both read: path policy, project areas, and the shapes of the API.",
+  "type": "module",
+  "exports": {
+    "./agents.ts": "./src/api/agents.ts",
+    "./anchors.ts": "./src/text/anchors.ts",
+    "./asset-types.ts": "./src/paths/policy.ts",
+    "./auth.ts": "./src/api/auth.ts",
+    "./branch.ts": "./src/api/branch.ts",
+    "./cr-slug.ts": "./src/api/cr-slug.ts",
+    "./diff/align.ts": "./src/text/diff/align.ts",
+    "./diff/block-spans.ts": "./src/text/diff/block-spans.ts",
+    "./frontmatter-block.ts": "./src/text/frontmatter-block.ts",
+    "./hunks.ts": "./src/text/hunks.ts",
+    "./proposals.ts": "./src/api/proposals.ts",
+    "./review.ts": "./src/api/review.ts",
+    "./slug.ts": "./src/text/slug.ts",
+    "./tree.ts": "./src/api/tree.ts"
+  },
+  "imports": {
+    "#*": "./src/*"
+  },
+  "dependencies": {
+    "@fdbook/diagram": "*",
+    "@agentclientprotocol/sdk": "1.7.0",
+    "@fumadocs-editor/core": "0.5.0"
+  }
+}

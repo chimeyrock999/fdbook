@@ -1,0 +1,94 @@
+{
+  "$schema": "../diagram.schema.json",
+  "version": 1,
+  "title": "The Studio: one Node process",
+  "kinds": [
+    { "id": "external", "label": "Outside the Studio", "tone": "slate", "icon": "external" },
+    { "id": "server", "label": "Server", "tone": "green", "icon": "code" },
+    { "id": "files", "label": "Files", "tone": "gold", "icon": "cylinder" },
+    { "id": "agent", "label": "Agent", "tone": "blue", "icon": "person" }
+  ],
+  "nodes": [
+    {
+      "id": "browser",
+      "kind": "external",
+      "label": "Browser",
+      "sublabel": "the UI from src/",
+      "note": { "role": "The React UI: editor, page tree, changes, review and the agent panel." }
+    },
+    {
+      "id": "guard",
+      "kind": "server",
+      "label": "Host/Origin guard",
+      "sublabel": "every request",
+      "note": { "role": "Refuses a request whose Host or Origin is not the Studio's own, then checks the role it needs." }
+    },
+    { "id": "vite", "kind": "server", "label": "Vite", "sublabel": "serves the UI" },
+    { "id": "api", "kind": "server", "label": "HTTP API", "sublabel": "/api/…" },
+    { "id": "sync", "kind": "server", "label": "Notes sync", "sublabel": "live documents" },
+    { "id": "mcp", "kind": "server", "label": "MCP server", "sublabel": "/api/mcp" },
+    { "id": "crs", "kind": "server", "label": "Change requests", "sublabel": "cr/<slug> branches" },
+    {
+      "id": "worktree",
+      "kind": "files",
+      "label": "Worktree",
+      "sublabel": "pages, files, diagrams",
+      "note": { "role": "One per change request; main is read only." }
+    },
+    { "id": "agents", "kind": "agent", "label": "Agents", "sublabel": "over ACP" },
+    { "id": "github", "kind": "external", "label": "GitHub", "sublabel": "sign-in, pull requests" }
+  ],
+  "groups": [
+    {
+      "id": "studio-process",
+      "label": "The Studio - one Node process",
+      "members": ["guard", "vite", "api", "sync", "mcp", "crs"]
+    },
+    {
+      "id": "behind-the-guard",
+      "label": "Behind the guard",
+      "tone": "green",
+      "dashed": true,
+      "members": ["vite", "api", "sync", "mcp"]
+    }
+  ],
+  "edges": [
+    { "id": "request", "from": "browser", "to": "guard", "label": "HTTP, websocket", "variant": "emphasis" },
+    { "id": "ui", "from": "guard", "to": "vite" },
+    { "id": "calls", "from": "guard", "to": "api" },
+    { "id": "edits", "from": "guard", "to": "sync" },
+    { "id": "tools", "from": "agents", "to": "mcp", "label": "tools" },
+    { "id": "saves", "from": "sync", "to": "worktree", "label": "saves" },
+    { "id": "reads", "from": "api", "to": "worktree" },
+    { "id": "branches", "from": "crs", "to": "worktree", "label": "worktree add" },
+    { "id": "publish", "from": "crs", "to": "github", "label": "push, pull request", "variant": "dashed" }
+  ],
+  "cards": [
+    {
+      "title": "One origin",
+      "items": ["The UI, the files, the sync and the MCP server share one host and port, behind one guard."]
+    },
+    {
+      "title": "Edits go through a change request",
+      "tone": "green",
+      "items": ["Main is read only; each change request is a branch with its own worktree."]
+    }
+  ],
+  "layout": {
+    "nodes": {
+      "browser": { "x": 40, "y": 140, "w": 170, "h": 68 },
+      "agents": { "x": 40, "y": 440, "w": 170, "h": 68 },
+      "guard": { "x": 300, "y": 140, "w": 170, "h": 68 },
+      "crs": { "x": 300, "y": 560, "w": 170, "h": 68 },
+      "api": { "x": 560, "y": 40, "w": 170, "h": 68 },
+      "vite": { "x": 560, "y": 140, "w": 170, "h": 68 },
+      "sync": { "x": 560, "y": 240, "w": 170, "h": 68 },
+      "mcp": { "x": 560, "y": 440, "w": 170, "h": 68 },
+      "worktree": { "x": 840, "y": 240, "w": 170, "h": 68 },
+      "github": { "x": 840, "y": 560, "w": 170, "h": 68 }
+    },
+    "edges": {
+      "tools": { "fromSide": "right", "toSide": "left" }
+    }
+  }
+}

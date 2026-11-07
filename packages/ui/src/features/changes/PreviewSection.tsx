@@ -1,0 +1,128 @@
+import { ArrowUp, ExternalLink, ScrollText } from 'lucide-react';
+import { PendingButton } from '#components/PendingButton.tsx';
+import type { BuildState, Preview } from '#api/preview.ts';
+import { plural } from '#features/assets/asset-changes.ts';
+import { timeAgo } from './labels';
+import { BUILD_LABELS } from './preview-labels';
+import { keyOf, type Pusher } from './usePush';
+
+const VERBS: Record<BuildState, string> = {
+  waiting: 'Pushed',
+  building: 'Building',
+  ready: 'Built',
+  failed: 'Build failed for',
+  skipped: 'Pushed',
+  none: 'Pushed',
+  unknown: 'Pushed',
+};
+
+// The preview's address without the scheme, as the Changes view shows it.
+const hostOf = (url: string) => url.replace(/^https?:\/\//, '');
+
+// Why the push button is off, or what it will do.
+function whyOf(preview: Preview, unsaved: string | null) {
+  const count = preview.unpushed.length;
+  if (unsaved !== null) return `Saving ${unsaved}…`;
+  if (count === 0) return preview.pushed === null ? 'Commit a change to preview it.' : 'Everything committed is pushed.';
+  if (preview.pr?.state === 'OPEN') return `Pushes to the open pull request #${String(preview.pr.number)}; no new pull request.`;
+  if (preview.pushed === null) return `Pushes ${plural(count, 'commit')} to origin; Cloudflare builds the preview. No pull request is opened.`;
+  return null;
+}
+
+// The Preview section of the Changes view (#19): pushes the change request's
+// branch (no pull request) so Cloudflare Pages builds it, follows the build
+// and opens the preview on `route`, the page being edited. It says when the
+// preview is behind the commits, and what is not committed. A push waits
+// while the open note has edits not saved yet, as a commit does. Once a pull
+// request is open, the push is Update PR: it goes to that pull request.
+export function PreviewSection({ pusher, preview, error, unsaved, route }: {
+  // The push, shared with the header's main action (usePush).
+  pusher: Pusher;
+  preview: Preview | null;
+  error: string | null;
+  unsaved: string | null;
+  // The site route of what is open (siteRoute).
+  route: string;
+}) {
+  const { busy, result } = pusher;
+
+  const failed = error === null ? null : <p role="alert" className="studio-changes-note studio-changes-error">Could not read the preview: {error}</p>;
+  if (preview === null) return failed;
+  const head = (state: BuildState | 'unpushed') => (
+    <div className="studio-changes-group studio-preview-head">
+      Preview <span className="studio-preview-chip" data-build={state} data-testid="preview-state">{BUILD_LABELS[state]}</span>
+    </div>
+  );
+  if (preview.blocked !== null) {
+    return (
+      <section className="studio-preview" aria-label="Preview">
+        {head('unpushed')}
+        <p className="studio-preview-body studio-changes-why">{preview.blocked}</p>
+      </section>
+    );
+  }
+
+  const { build, pushed, url } = preview;
+  const count = preview.unpushed.length;
+  const state = build?.state ?? 'unpushed';
+  const disabled = busy || unsaved !== null || count === 0;
+  const updates = preview.pr?.state === 'OPEN' && count > 0;
+  const label = updates ? `Update PR (${plural(count, 'commit')})` : pushed !== null && count > 0 ? `Push ${plural(count, 'commit')}` : 'Preview';
+  const push = () => { void pusher.push(preview); };
+
+  const shown = result?.key === keyOf(preview) && unsaved === null ? result : null;
+  const why = shown?.text ?? whyOf(preview, unsaved);
+  return (
+    <section className="studio-preview" aria-label="Preview">
+      {head(state)}
+      {failed}
+      <div className="studio-preview-body">
+        {pushed === null || build === null ? (
+          <p className="studio-preview-note" data-tone="quiet">Not on origin yet. Preview pushes the branch; Cloudflare Pages builds it in about 2 minutes.</p>
+        ) : (
+          <div className="studio-preview-url">
+            {url !== null && <code title={url}>{hostOf(url)}</code>}
+            <small>
+              {VERBS[build.state]} <span className="font-mono">{pushed.sha.slice(0, 7)}</span>
+              {build.at !== null && <> · <time dateTime={build.at} title={new Date(build.at).toLocaleString()}>{timeAgo(build.at)}</time></>}
+            </small>
+          </div>
+        )}
+        {pushed !== null && count > 0 && <p className="studio-preview-note" data-tone="warn">The preview is behind: {plural(count, 'commit')} not pushed.</p>}
+        {build?.state === 'failed' && <p className="studio-preview-note" data-tone="error">The build failed. The preview still shows the last successful build. See the log.</p>}
+        {build?.state === 'skipped' && (
+          <p className="studio-preview-note" data-tone="quiet">Cloudflare finished this push without building it. The preview still shows the last successful build. See the log.</p>
+        )}
+        {build?.state === 'none' && (
+          <p className="studio-preview-note" data-tone="quiet">Cloudflare has not built this push after 3 minutes. It skips pushes that change only files outside the site (tools/…).</p>
+        )}
+        {build?.state === 'unknown' && (
+          <p className="studio-preview-note" data-tone="quiet">Could not read the build ({build.error}). The preview link still works once Cloudflare has built it.</p>
+        )}
+        {preview.uncommitted > 0 && (
+          <p className="studio-preview-note" data-tone="quiet">
+            {preview.uncommitted === 1 ? '1 file not committed: it will not be in the preview.' : `${String(preview.uncommitted)} files not committed: they will not be in the preview.`}
+          </p>
+        )}
+        <div className="studio-preview-actions">
+          <PendingButton className={`studio-button gap-1.5 ${disabled ? '' : 'studio-button-primary'}`} pending={busy} pendingLabel="Pushing…" disabled={disabled} onClick={push}>
+            <ArrowUp size={14} aria-hidden />{label}
+          </PendingButton>
+          {pushed !== null && url !== null && (
+            <a className="studio-button gap-1.5" href={`${url}${route}`} target="_blank" rel="noreferrer">
+              <ExternalLink size={14} aria-hidden />Open preview
+            </a>
+          )}
+          {build?.logUrl != null && (
+            <a className="studio-changes-link studio-preview-log" href={build.logUrl} target="_blank" rel="noreferrer">
+              <ScrollText size={12} aria-hidden />View log
+            </a>
+          )}
+        </div>
+        {why !== null && (
+          <p role="status" className="studio-changes-why" data-tone={shown === null ? undefined : 'ok'}>{why}</p>
+        )}
+      </div>
+    </section>
+  );
+}
