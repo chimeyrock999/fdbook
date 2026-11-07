@@ -1,0 +1,30 @@
+/* fumadocs' stock theme (fumadocs-ui's neutral colours, imported in
+   index.css with its preset), mapped onto the editor's --fde-* tokens, so
+   the editor and the Studio chrome look like a page of a site made with
+   create-fumadocs-app. No value is copied here. */
+
+/* On the element that holds the site tokens, so they resolve there and win
+   over the editor's own :root and .dark values. */
+.site-theme {
+  --fde-background: var(--color-fd-background);
+  --fde-foreground: var(--color-fd-foreground);
+  --fde-muted: var(--color-fd-muted);
+  --fde-muted-foreground: var(--color-fd-muted-foreground);
+  --fde-popover: var(--color-fd-popover);
+  --fde-popover-foreground: var(--color-fd-popover-foreground);
+  --fde-card: var(--color-fd-card);
+  --fde-card-foreground: var(--color-fd-card-foreground);
+  --fde-border: var(--color-fd-border);
+  --fde-primary: var(--color-fd-primary);
+  --fde-primary-foreground: var(--color-fd-primary-foreground);
+  --fde-secondary: var(--color-fd-secondary);
+  --fde-secondary-foreground: var(--color-fd-secondary-foreground);
+  --fde-accent: var(--color-fd-accent);
+  --fde-accent-foreground: var(--color-fd-accent-foreground);
+  --fde-ring: var(--color-fd-ring);
+  --fde-info: var(--color-fd-info);
+  --fde-idea: var(--color-fd-idea);
+  --fde-warning: var(--color-fd-warning);
+  --fde-error: var(--color-fd-error);
+  --fde-success: var(--color-fd-success);
+}

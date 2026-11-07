@@ -7,9 +7,9 @@ import { editorSyntax } from '#features/editor/plugins/index.ts';
 
 const read = (path: string) => readFileSync(join(docsRoot, 'content/docs', path), 'utf8');
 const CONFIG = read('guide/configuration.mdx');
-// No docs page has a graph block or an accordion group: a note of its own
-// with both, the group at the end.
-const GRAPH = readFileSync(join(import.meta.dirname, 'fixtures/graph-and-accordions.mdx'), 'utf8');
+// No docs page has nested frontmatter or an accordion group: a note of its
+// own with both, the group at the end.
+const ACCORDIONS = readFileSync(join(import.meta.dirname, 'fixtures/accordions.mdx'), 'utf8');
 
 // The segments without their text: kind and block count.
 const shape = (segments: Run[]) => segments.map((segment) => `${segment.kind}:${String(segment.blocks)}`);
@@ -40,13 +40,13 @@ describe('diffNote', () => {
 
   it('marks an inserted callout as added, and a removed accordion as removed', () => {
     const anchor = '## Opening a project\n';
-    const inserted = CONFIG.replace(anchor, `${anchor}\n:::tip\nRun it from the repository root.\n:::\n`);
+    const inserted = CONFIG.replace(anchor, `${anchor}\n<Callout type="info">\n  Run it from the repository root.\n</Callout>\n`);
     expect(shape(diff(CONFIG, inserted).body.filter((segment) => segment.kind !== 'same'))).toEqual(['added:1']);
-    const start = GRAPH.indexOf('::::accordions');
-    const removed = GRAPH.slice(0, start).trimEnd() + '\n';
-    const changed = diff(GRAPH, removed).body.filter((segment) => segment.kind !== 'same');
+    const start = ACCORDIONS.indexOf('<Accordions');
+    const removed = ACCORDIONS.slice(0, start).trimEnd() + '\n';
+    const changed = diff(ACCORDIONS, removed).body.filter((segment) => segment.kind !== 'same');
     expect(shape(changed)).toEqual(['removed:1']);
-    expect(changed[0].source).toContain(':::accordion{kind="question"');
+    expect(changed[0].source).toContain('<Accordion title="How late is too late?">');
   });
 
   it('keeps a removed run and an added run each as the source it came from', () => {
@@ -67,9 +67,9 @@ describe('diffNote', () => {
     expect(shape(diff(before, after).body)).toEqual(['removed:1', 'same:1', 'added:1', 'same:1']);
   });
 
-  it('leaves a block with graph markup alone when only another block changed', () => {
-    const before = 'See :keyword[watermark]{id="watermark"} here.\n\nPlain.\n';
-    const after = 'See :keyword[watermark]{id="watermark"} here.\n\nPlain, edited.\n';
+  it('leaves a block with JSX alone when only another block changed', () => {
+    const before = 'See <Badge kind="new">watermark</Badge> here.\n\nPlain.\n';
+    const after = 'See <Badge kind="new">watermark</Badge> here.\n\nPlain, edited.\n';
     expect(shape(diff(before, after).body)).toEqual(['same:1', 'removed:1', 'added:1']);
   });
 
@@ -86,10 +86,10 @@ describe('diffNote', () => {
 
 describe('diffFrontmatter', () => {
   it('lists the keys that changed, old and new', () => {
-    const after = GRAPH.replace('title: "Watermark and Late Events"', 'title: "Watermarks"').replace('  keywords: []\n', '  keywords: [lateness]\n');
-    expect(diffFrontmatter(GRAPH, after)).toEqual([
+    const after = ACCORDIONS.replace('title: "Watermark and Late Events"', 'title: "Watermarks"').replace('  tags: []\n', '  tags: [lateness]\n');
+    expect(diffFrontmatter(ACCORDIONS, after)).toEqual([
       { key: 'title', before: 'Watermark and Late Events', after: 'Watermarks' },
-      { key: 'graph.keywords', before: '[]', after: '[ lateness ]' },
+      { key: 'sidebar.tags', before: '[]', after: '[ lateness ]' },
     ]);
   });
 

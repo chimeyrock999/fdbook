@@ -52,7 +52,7 @@ describe('files client', () => {
     await expect(client.readFile('package.json')).rejects.toThrow(/not an editable path/);
   });
 
-  // How the SvgDiagram plugin shows a site path such as /docs/….svg.
+  // How the editor's media shows a site path such as /docs/….png.
   it('serves a site path under public/', async () => {
     const url = publicAssetUrl('/docs/demo/pixel.png?v=1#x', studio.origin);
     expect(url).toBe(`${studio.origin}/api/file?path=public%2Fdocs%2Fdemo%2Fpixel.png`);

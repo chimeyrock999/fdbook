@@ -4,8 +4,8 @@ import { useLayoutEffect, type RefObject } from 'react';
 const GAP = 6;
 
 // Keeps `floating` (fixed, on document.body: a block of the note is its
-// own stacking context and would paint the next block over it, see
-// src/features/editor/plugins/picker-menu.ts) under its mark in the margin,
+// own stacking context and would paint the next block over it) under its
+// mark in the margin,
 // or over it with no room below, and hidden while the mark is scrolled
 // away. Calls `close` on a press outside both, or on Escape.
 export function useFloatBy(anchor: HTMLElement | null, floating: RefObject<HTMLElement | null>, close: () => void) {

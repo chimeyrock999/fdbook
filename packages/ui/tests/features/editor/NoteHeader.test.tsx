@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NOTE_ICON_NAMES } from '@fdbook/mdx/notes-icons.ts';
+import { NOTE_ICON_NAMES } from '@fdbook/shared/content/icons.ts';
 import { NoteHeader } from '#features/editor/NoteHeader.tsx';
 import { useFrontmatter } from '#features/editor/frontmatter/useFrontmatter.ts';
 import type { FieldReveal } from '#features/editor/frontmatter/MetadataStrip.tsx';
@@ -11,11 +11,8 @@ import { readDoc } from '#tests/support/docs.ts';
 
 const note = `---
 title: "Streaming"
-# graph for the knowledge map
-graph:
-  id: streaming
-  displayName: Streaming
-  keywords: []
+# laid out without the table of contents
+full: true
 ---
 
 # Streaming
@@ -81,7 +78,7 @@ describe('NoteHeader', () => {
     expect(screen.getByLabelText<HTMLTextAreaElement>('Title').value).toBe('Streaming');
     expect(screen.getByLabelText<HTMLTextAreaElement>('Description').value).toBe('Kafka.');
     await userEvent.type(screen.getByLabelText('Title'), ' notes');
-    expect(writes.at(-1)).toContain('title: "Streaming notes"\ndescription: Kafka.\n# graph for the knowledge map\n');
+    expect(writes.at(-1)).toContain('title: "Streaming notes"\ndescription: Kafka.\n# laid out without the table of contents\n');
     await userEvent.clear(screen.getByLabelText('Description'));
     expect(writes.at(-1)).not.toContain('description');
   });
@@ -102,11 +99,11 @@ describe('NoteHeader', () => {
 
   it('sums up the rest collapsed, and edits it once opened', async () => {
     const writes: string[] = [];
-    render(<Harness initial={note.replace('graph:', 'visible: false\ngraph:')} onWrite={(s) => writes.push(s)} />);
+    render(<Harness initial={note.replace('full: true', 'visible: false\nfull: true')} onWrite={(s) => writes.push(s)} />);
     const strip = screen.getByRole('button', { name: /Edit details/ });
     expect(strip.getAttribute('aria-expanded')).toBe('false');
-    expect(strip.textContent).toMatch(/Hiddenstreaming0 keywords· 0 sections/);
-    expect(screen.queryByLabelText('id')).toBeNull();
+    expect(strip.textContent).toBe('HiddenEdit details');
+    expect(screen.queryByRole('switch')).toBeNull();
     await details();
     await userEvent.click(screen.getByRole('switch', { name: 'Shown on the site' }));
     expect(writes.at(-1)).not.toContain('visible');
@@ -142,54 +139,15 @@ describe('NoteHeader', () => {
     expect(onLeave).not.toHaveBeenCalled();
   });
 
-  it('keeps an invalid draft off the source and shows the issue next to the field', async () => {
+  it('shows an invalid value next to its field until it is replaced', async () => {
     const writes: string[] = [];
-    render(<Harness initial={note} onWrite={(s) => writes.push(s)} />);
-    await details();
-    const [graphId] = screen.getAllByLabelText('id');
-    await userEvent.clear(graphId);
-    expect(writes).toEqual([]);
-    expect(screen.getByText(/at least 1|too small/i)).toBeTruthy();
+    render(<Harness initial={note.replace('full: true', 'visible: maybe\nfull: true')} onWrite={(s) => writes.push(s)} />);
     expect(screen.getByRole('button', { name: /1 error/ })).toBeTruthy();
-    await userEvent.type(graphId, 'stream');
-    expect(writes.at(-1)).toContain('  id: stream\n');
-  });
-
-  it('adds, edits and removes keyword chips', async () => {
-    const writes: string[] = [];
-    render(<Harness initial={note} onWrite={(s) => writes.push(s)} />);
     await details();
-    await userEvent.click(screen.getByRole('button', { name: '+ Keyword' }));
-    // An empty keyword breaks the schema until both fields are filled.
-    expect(writes).toEqual([]);
-    const ids = screen.getAllByLabelText('id');
-    const names = screen.getAllByLabelText('displayName');
-    await userEvent.type(ids[1], 'dag');
-    await userEvent.type(names[1], 'DAG');
-    expect(writes.at(-1)).toContain('  keywords:\n    - id: dag\n      displayName: DAG\n');
-    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
-    expect(screen.getAllByLabelText('id')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: /^DAG/ }).textContent).toBe('DAGdag');
-    await userEvent.click(screen.getByRole('button', { name: 'Remove keyword DAG' }));
-    expect(writes.at(-1)).toContain('  keywords: []\n');
-  });
-
-  it('adds a section with its own keywords and removes the graph', async () => {
-    const writes: string[] = [];
-    render(<Harness initial={note} onWrite={(s) => writes.push(s)} />);
-    await details();
-    await userEvent.click(screen.getByRole('button', { name: '+ Section' }));
-    const ids = screen.getAllByLabelText('id');
-    await userEvent.type(ids[1], 'consumers');
-    await userEvent.type(screen.getAllByLabelText('displayName')[1], 'Consumers');
-    expect(writes.at(-1)).toContain('  sections:\n    - id: consumers\n      displayName: Consumers\n');
-    await userEvent.click(screen.getAllByRole('button', { name: '+ Keyword' })[1]);
-    await userEvent.type(screen.getAllByLabelText('id')[2], 'offset');
-    await userEvent.type(screen.getAllByLabelText('displayName')[2], 'Offset');
-    expect(writes.at(-1)).toContain('      keywords:\n        - id: offset\n          displayName: Offset\n');
-    await userEvent.click(screen.getByRole('button', { name: 'Remove graph' }));
-    // The comment above the key goes with it.
-    expect(writes.at(-1)).toBe(note.replace(/# graph[\s\S]*?---/, '---'));
+    expect(screen.getByText(/expected boolean/i)).toBeTruthy();
+    await userEvent.click(screen.getByRole('switch', { name: 'Shown on the site' }));
+    expect(writes.at(-1)).toContain('visible: false\n');
+    expect(screen.queryByText(/expected boolean/i)).toBeNull();
   });
 
   it('picks, shows and removes the icon', async () => {
@@ -200,7 +158,7 @@ describe('NoteHeader', () => {
     await userEvent.type(await screen.findByPlaceholderText(/Search \d+ lucide icons/), 'brain');
     await userEvent.click(screen.getByRole('option', { name: 'Brain' }));
     // A new key goes last.
-    expect(writes.at(-1)).toBe(note.replace('  keywords: []\n', '  keywords: []\nicon: Brain\n'));
+    expect(writes.at(-1)).toBe(note.replace('full: true\n', 'full: true\nicon: Brain\n'));
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(screen.getByRole('button', { name: /Done/ }).querySelector('[title="icon: Brain"] svg')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Remove icon' }));
@@ -218,7 +176,7 @@ describe('NoteHeader', () => {
       const frontmatter = freshFrontmatter(initial, vi.fn());
       return <Fresh frontmatter={frontmatter} readOnly={false} onOpenSource={vi.fn()} onLeave={vi.fn()} reveal={null} />;
     }
-    render(<Harness initial={note.replace('graph:', 'icon: BrainOff\ngraph:')} onWrite={vi.fn()} />);
+    render(<Harness initial={note.replace('full: true', 'icon: BrainOff\nfull: true')} onWrite={vi.fn()} />);
     await details();
     expect(await screen.findByText('The site has no lucide icon named BrainOff.')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: /BrainOff/ }));
@@ -229,7 +187,7 @@ describe('NoteHeader', () => {
   });
 
   it('shows keys it does not edit read-only and their issues', async () => {
-    render(<Harness initial={note.replace('graph:', 'full: true\nicon: 5\ngraph:')} onWrite={vi.fn()} />);
+    render(<Harness initial={note.replace('full: true', 'full: true\nicon: 5')} onWrite={vi.fn()} />);
     await details();
     expect(screen.getByText('full:').nextElementSibling?.textContent).toBe('true');
     expect(screen.getByText(/^icon: /).textContent).toMatch(/expected string/i);
@@ -293,33 +251,32 @@ describe('NoteHeader', () => {
     expect(screen.getByLabelText<HTMLTextAreaElement>('Title').readOnly).toBe(true);
     expect(screen.getByRole('button', { name: /Read-only/ })).toBeTruthy();
     await details();
-    expect(screen.getAllByLabelText('id')[0].matches(':disabled')).toBe(true);
-    expect(screen.queryByRole('button', { name: '+ Keyword' })).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Shown on the site' }).matches(':disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Choose an icon' }).matches(':disabled')).toBe(true);
   });
 
   it('starts empty for a note without frontmatter and writes a block', async () => {
     const writes: string[] = [];
     render(<Harness initial={'Body only.\n'} onWrite={(s) => writes.push(s)} />);
     expect(screen.getByLabelText<HTMLTextAreaElement>('Title').placeholder).toBe('Untitled');
-    expect(screen.getByRole('button', { name: /No graph/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Edit details/ }).textContent).toBe('Edit details');
     await userEvent.type(screen.getByLabelText('Title'), 'X');
     expect(writes.at(-1)).toBe('---\ntitle: X\n---\n\nBody only.\n');
   });
 
   it('reveals the field at a frontmatter path', async () => {
-    const source = note.replace('keywords: []', 'keywords:\n    - id: lag\n      displayName: Lag');
-    const { rerender } = render(<Harness initial={source} onWrite={vi.fn()} />);
-    rerender(<Harness initial={source} onWrite={vi.fn()} reveal={{ path: 'graph.keywords.0.displayName', seq: 1 }} />);
-    await waitFor(() => { expect(document.activeElement).toBe(screen.getAllByLabelText('displayName')[1]); });
-    rerender(<Harness initial={source} onWrite={vi.fn()} reveal={{ path: 'title', seq: 2 }} />);
+    const { rerender } = render(<Harness initial={note} onWrite={vi.fn()} />);
+    rerender(<Harness initial={note} onWrite={vi.fn()} reveal={{ path: 'icon', seq: 1 }} />);
+    await waitFor(() => { expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Choose an icon' })); });
+    rerender(<Harness initial={note} onWrite={vi.fn()} reveal={{ path: 'title', seq: 2 }} />);
     expect(document.activeElement).toBe(screen.getByLabelText('Title'));
     // A path no field edits focuses its closest parent's.
-    rerender(<Harness initial={source} onWrite={vi.fn()} reveal={{ path: 'graph.keywords', seq: 3 }} />);
-    await waitFor(() => { expect(document.activeElement).toBe(screen.getAllByLabelText('id')[0]); });
+    rerender(<Harness initial={note} onWrite={vi.fn()} reveal={{ path: 'visible.0', seq: 3 }} />);
+    await waitFor(() => { expect(document.activeElement).toBe(screen.getByRole('switch', { name: 'Shown on the site' })); });
   });
 
   it('keeps line breaks in the description', async () => {
-    const source = note.replace('graph:', 'description: |-\n  One.\n  Two.\ngraph:');
+    const source = note.replace('full: true', 'description: |-\n  One.\n  Two.\nfull: true');
     const writes: string[] = [];
     render(<Harness initial={source} onWrite={(s) => writes.push(s)} />);
     await userEvent.type(screen.getByLabelText('Description'), '{Shift>}{Enter}{/Shift}Three.');
@@ -327,7 +284,7 @@ describe('NoteHeader', () => {
   });
 
   it('reveals a key whose name needs escaping without throwing', async () => {
-    const source = note.replace('graph:', '\'a"b\': 1\ngraph:');
+    const source = note.replace('full: true', '\'a"b\': 1\nfull: true');
     const { rerender } = render(<Harness initial={source} onWrite={vi.fn()} />);
     rerender(<Harness initial={source} onWrite={vi.fn()} reveal={{ path: 'a"b', seq: 1 }} />);
     await waitFor(() => { expect(document.activeElement?.closest('.studio-strip')).toBeTruthy(); });

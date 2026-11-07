@@ -9,15 +9,15 @@ const note = `---
 title: 'Spark execution model'
 description: "From code to tasks"
 icon: Cpu
-graph:
+sources:
   id: spark
-  displayName: Spark
-  keywords:
+  label: Spark
+  links:
     - id: lineage # RDD side
-      displayName: Lineage
+      label: Lineage
 ---
 
-## Body <GraphMeta id="body" displayName="Body" />
+## Body <Badge>new</Badge>
 
 Text.
 `;
@@ -28,7 +28,7 @@ describe('readFrontmatter', () => {
     expect(read.status).toBe('ok');
     if (read.status !== 'ok') return;
     expect(read.data.title).toBe('Spark execution model');
-    expect(read.data.graph?.keywords).toEqual([{ id: 'lineage', displayName: 'Lineage' }]);
+    expect(read.data.sources).toEqual({ id: 'spark', label: 'Spark', links: [{ id: 'lineage', label: 'Lineage' }] });
     expect(read.issues).toEqual([]);
   });
 
@@ -67,19 +67,19 @@ describe('writeFrontmatter', () => {
     expect(edit(note, (data) => data).source).toBe(note);
   });
 
-  it('adds and removes keys, keywords and sections', () => {
+  it('adds and removes keys and nested entries', () => {
     const result = edit(note, (data) => ({
       ...data,
       description: undefined,
       visible: false,
-      graph: {
+      sources: {
         id: 'spark',
-        displayName: 'Spark',
-        keywords: [
-          { id: 'lineage', displayName: 'Lineage' },
-          { id: 'dag', displayName: 'DAG' },
+        label: 'Spark',
+        links: [
+          { id: 'lineage', label: 'Lineage' },
+          { id: 'dag', label: 'DAG' },
         ],
-        sections: [{ id: 'body', displayName: 'Body' }],
+        pages: [{ id: 'body', label: 'Body' }],
       },
     }));
     expect(result.issues).toEqual([]);
@@ -90,29 +90,29 @@ describe('writeFrontmatter', () => {
       title: 'Spark execution model',
       icon: 'Cpu',
       visible: false,
-      graph: {
+      sources: {
         id: 'spark',
-        displayName: 'Spark',
-        keywords: [
-          { id: 'lineage', displayName: 'Lineage' },
-          { id: 'dag', displayName: 'DAG' },
+        label: 'Spark',
+        links: [
+          { id: 'lineage', label: 'Lineage' },
+          { id: 'dag', label: 'DAG' },
         ],
-        sections: [{ id: 'body', displayName: 'Body' }],
+        pages: [{ id: 'body', label: 'Body' }],
       },
     });
-    expect(result.source.endsWith('---\n\n## Body <GraphMeta id="body" displayName="Body" />\n\nText.\n')).toBe(true);
+    expect(result.source.endsWith('---\n\n## Body <Badge>new</Badge>\n\nText.\n')).toBe(true);
   });
 
   it('writes nothing when the result breaks the schema', () => {
-    const result = edit(note, (data) => ({ ...data, visible: 'yes', graph: { id: '', displayName: 'Spark' } }));
+    const result = edit(note, (data) => ({ ...data, visible: 'yes', full: 'yes' }));
     expect(result.source).toBe(note);
-    expect(result.issues.map((issue) => issue.path).sort()).toEqual(['graph.id', 'visible']);
+    expect(result.issues.map((issue) => issue.path).sort()).toEqual(['full', 'visible']);
   });
 
   it('writes an empty flow list that gains entries as a block list', () => {
-    const source = '---\ntitle: X\ngraph:\n  id: x\n  displayName: X\n  keywords: []\n---\n';
-    const result = edit(source, (data) => ({ ...data, graph: { id: 'x', displayName: 'X', keywords: [{ id: 'a', displayName: 'A' }] } }));
-    expect(result.source).toBe('---\ntitle: X\ngraph:\n  id: x\n  displayName: X\n  keywords:\n    - id: a\n      displayName: A\n---\n');
+    const source = '---\ntitle: X\nsources:\n  id: x\n  links: []\n---\n';
+    const result = edit(source, (data) => ({ ...data, sources: { id: 'x', links: [{ id: 'a', label: 'A' }] } }));
+    expect(result.source).toBe('---\ntitle: X\nsources:\n  id: x\n  links:\n    - id: a\n      label: A\n---\n');
   });
 
   it('matches keys that YAML does not read as strings', () => {
@@ -164,9 +164,9 @@ describe('frontmatterPathAt', () => {
   it('names the value under an offset as the schema names paths', () => {
     expect(at("'Spark execution model'")).toBe('title');
     expect(at('Cpu')).toBe('icon');
-    expect(at('id: spark')).toBe('graph.id');
-    expect(at('lineage')).toBe('graph.keywords.0.id');
-    expect(at('Lineage')).toBe('graph.keywords.0.displayName');
+    expect(at('id: spark')).toBe('sources.id');
+    expect(at('lineage')).toBe('sources.links.0.id');
+    expect(at('Lineage')).toBe('sources.links.0.label');
   });
 
   // An mdx-parse issue without a position comes back at offset 0.
@@ -179,8 +179,8 @@ describe('frontmatterPathAt', () => {
   });
 
   it('follows CRLF and broken YAML', () => {
-    const crlf = '---\r\ntitle: X\r\ngraph:\r\n  id: x\r\n---\r\n';
-    expect(frontmatterPathAt(crlf, crlf.indexOf('x\r\n---'))).toBe('graph.id');
+    const crlf = '---\r\ntitle: X\r\nsources:\r\n  id: x\r\n---\r\n';
+    expect(frontmatterPathAt(crlf, crlf.indexOf('x\r\n---'))).toBe('sources.id');
     expect(frontmatterPathAt('---\ntitle: [x\n---\n', 5)).toBeNull();
   });
 });

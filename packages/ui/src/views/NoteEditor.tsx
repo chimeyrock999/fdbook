@@ -1,6 +1,5 @@
 import type { DocumentStatus } from '@fumadocs-editor/core/sync';
 import { MdxEditor, useEditorMode, useSourceText, useSyncStatus } from '@fumadocs-editor/ui';
-import { observeAuthorFills } from '@fdbook/mdx/pele-author-fill.ts';
 import { History } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -18,9 +17,6 @@ import { useAssetUploads } from '#features/media/useAssetUploads.tsx';
 import { NOTES_PREFIX } from '#lib/note-paths.ts';
 import { useSession } from '#features/session/session.ts';
 import { assetCompletion } from '#features/editor/asset-completion.ts';
-import { createGraphSource } from '#features/editor/graph/graph-plugin.ts';
-import { graphBubbleItems } from '#features/editor/graph/bubble-items.tsx';
-import { GraphTools } from '#features/editor/graph/GraphTools.tsx';
 import { editorConfig } from '#features/editor/plugins/index.ts';
 import { decorationsExtension } from '#features/editor/decorations.ts';
 import { pluginsExtension } from '#features/editor/extensions.ts';
@@ -107,7 +103,7 @@ export function NoteEditor({ path, assets, onStatus, place = null, review = null
       syntax={editorConfig.syntax}
       media={uploads.media}
       extensions={parts.extensions}
-      bubbleItems={review === null ? graphBubbleItems : REVIEW_BUBBLE_ITEMS}
+      bubbleItems={review === null ? undefined : REVIEW_BUBBLE_ITEMS}
       editable={!locked}
     >
       <EditorLayout
@@ -131,19 +127,18 @@ export function NoteEditor({ path, assets, onStatus, place = null, review = null
 }
 
 // In a change request, Comment opens a review thread on the selection's block.
-const REVIEW_BUBBLE_ITEMS = [...graphBubbleItems, commentBubbleItem];
+const REVIEW_BUBBLE_ITEMS = [commentBubbleItem];
 
 // The plugins' decorations, one ProseMirror plugin for every editor.
 const decorations = decorationsExtension(editorConfig.decorators);
 
 // What the Studio adds to one note's live editors, made with its root (which
-// takes `extensions` once): the decorations, agent suggestions (#85), the
-// graph tools, and where the person is, for the agent panel (#86).
+// takes `extensions` once): the decorations, agent suggestions (#85) and
+// where the person is, for the agent panel (#86).
 function createParts() {
   const layer = createSuggestionLayer();
-  const graph = createGraphSource();
   const place = createPlaceSource();
-  return { layer, graph, place, extensions: [decorations, pluginsExtension('studioNote', [layer.plugin, graph.plugin, place.plugin])] };
+  return { layer, place, extensions: [decorations, pluginsExtension('studioNote', [layer.plugin, place.plugin])] };
 }
 
 type Parts = ReturnType<typeof createParts>;
@@ -205,9 +200,6 @@ function EditorLayout({ parts, path, notePath, disk, assets, uploads, opened, st
   // A thread picked in the Review panel shows in Visual, where its block is marked.
   const focusSeq = opened ? threadFocus?.seq : undefined;
   useEffect(() => { if (focusSeq !== undefined && canShowVisual) setMode('visual'); }, [focusSeq, canShowVisual, setMode]);
-  // The editor draws mermaid previews itself; mark the author's fills on
-  // each one for the dark theme's label ink, as the site does.
-  useEffect(() => (editor.current ? observeAuthorFills(editor.current) : undefined), []);
   const completion = useMemo(() => assetCompletion(assets, notePath), [assets, notePath]);
   // Only once the server sent the note: before that (still opening, denied,
   // offline) the text is empty, and an empty note would pass as clean.
@@ -287,9 +279,8 @@ function EditorLayout({ parts, path, notePath, disk, assets, uploads, opened, st
                 onLeave={() => { focusBody(editor.current); }}
                 reveal={field}
               />
-              <MdxEditor.Visual className="studio-prose notes-prose" />
+              <MdxEditor.Visual className="studio-prose prose" />
               {threadActions !== null && <VisualSuggestions layer={layer} placement={suggestions.placement} focus={suggestions.focus} readOnly={!canDecide} decisions={suggestions.decisions} text={source.value} threads={threadActions} threadFocus={threadFocus} />}
-              <GraphTools source={parts.graph} graph={frontmatter.status === 'ok' ? frontmatter.data.graph : undefined} />
             </div>
           </div>
         ) : (

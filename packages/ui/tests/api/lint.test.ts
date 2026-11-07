@@ -16,8 +16,8 @@ describe('lint client', () => {
   });
 
   it('returns the issues of the text it sends', async () => {
-    const issues = await client.lintNote('content/docs/index.mdx', ':::nope\nx\n:::\n');
-    expect(issues).toMatchObject([{ rule: 'directive-unknown', severity: 'error', start: { line: 1, offset: 0 } }]);
+    const issues = await client.lintNote('content/docs/index.mdx', '[x](/docs/nope)\n');
+    expect(issues).toMatchObject([{ rule: 'link-broken', severity: 'error', start: { line: 1, offset: 0 } }]);
   });
 
   it('throws the server error', async () => {

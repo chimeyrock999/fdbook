@@ -1,7 +1,7 @@
 import { emptyComponent, type UiComponentSpec } from '@fumadocs-editor/ui';
 import { definePlugin } from '#features/editor/plugins/plugin.ts';
 import '#features/editor/plugins/cards.css';
-import '#features/editor/plugins/html-embed/embed.css';
+import './embed.css';
 import { Diagram } from './Diagram';
 
 // <Diagram src="…/name" caption="…" /> from components/mdx/diagram.tsx: a

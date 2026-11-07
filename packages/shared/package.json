@@ -10,6 +10,8 @@
     "./asset-types.ts": "./src/paths/policy.ts",
     "./auth.ts": "./src/api/auth.ts",
     "./branch.ts": "./src/api/branch.ts",
+    "./content/icons.ts": "./src/content/icons.ts",
+    "./content/schema.ts": "./src/content/schema.ts",
     "./cr-slug.ts": "./src/api/cr-slug.ts",
     "./diff/align.ts": "./src/text/diff/align.ts",
     "./diff/block-spans.ts": "./src/text/diff/block-spans.ts",
@@ -26,6 +28,9 @@
   "dependencies": {
     "@fdbook/diagram": "*",
     "@agentclientprotocol/sdk": "1.7.0",
-    "@fumadocs-editor/core": "0.5.0"
+    "@fumadocs-editor/core": "0.5.0",
+    "fumadocs-core": "^16.17.7",
+    "lucide-react": "^1.61.0",
+    "zod": "^4.6.7"
   }
 }

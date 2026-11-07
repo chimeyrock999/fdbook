@@ -2,23 +2,16 @@ import type { Completion, CompletionContext, CompletionResult, CompletionSource 
 import { ASSETS_PREFIX, assetDirFor, sitePath } from '#features/media/asset-names.ts';
 import { NOTES_PREFIX } from '#lib/note-paths.ts';
 
-type AssetKind = 'html' | 'svg' | 'image' | 'any';
+type AssetKind = 'image' | 'any';
 
-// Which assets an element shows: the embeds take one type, an image any image.
+// Which assets an element shows: an image any image.
 const KIND_OF: Partial<Record<string, AssetKind>> = {
-  HtmlEmbed: 'html',
-  html: 'html',
-  SvgDiagram: 'svg',
-  svg: 'svg',
-  diagram: 'svg',
   img: 'image',
 };
 // Elements whose `src` is no public asset: a `<Diagram>` names a file under
 // diagrams/ (components/mdx/diagram.tsx).
 const NOT_ASSETS = new Set(['Diagram']);
 const EXTENSIONS: Record<Exclude<AssetKind, 'any'>, RegExp> = {
-  html: /\.html$/i,
-  svg: /\.svg$/i,
   image: /\.(avif|gif|jpe?g|png|svg|webp)$/i,
 };
 
@@ -26,22 +19,21 @@ const EXTENSIONS: Record<Exclude<AssetKind, 'any'>, RegExp> = {
 const LOOK_BACK = 2000;
 
 // The value being typed in `text` (the source up to the caret): a `src="…"`
-// attribute of a JSX element or directive, or a Markdown image's `](…`.
+// attribute of a JSX element, or a Markdown image's `](…`.
 // `from` is where the value starts; `kind` filters the assets.
 export function assetContext(text: string): { from: number; kind: AssetKind } | null {
   const image = /!\[[^\]\n]*\]\(([^)\s]*)$/.exec(text);
   if (image) return { from: text.length - image[1].length, kind: 'image' };
   const src = /(?:^|[\s{])src=(["'])([^"'\n]*)$/.exec(text);
   if (!src) return null;
-  // Up to and including the character before `src`, which may be a directive's `{`.
   const head = text.slice(0, src.index + 1);
-  const owner = /<([A-Za-z][\w.]*)[^<>]*$/.exec(head)?.[1] ?? /::(\w+)\{[^{}]*$/.exec(head)?.[1];
+  const owner = /<([A-Za-z][\w.]*)[^<>]*$/.exec(head)?.[1];
   if (owner !== undefined && NOT_ASSETS.has(owner)) return null;
   return { from: text.length - src[2].length, kind: (owner === undefined ? undefined : KIND_OF[owner]) ?? 'any' };
 }
 
-// Completes asset paths under public/notes as the site writes them
-// (`/notes/…`) while a `src` or an image link is typed. `assets` are
+// Completes asset paths under the media folder as the site writes them
+// (`/docs/…` by default) while a `src` or an image link is typed. `assets` are
 // worktree paths. The open page's own folder comes first, then the folder
 // the note sits in, where many notes keep their assets.
 export function assetCompletion(assets: readonly string[], notePath: string): CompletionSource {

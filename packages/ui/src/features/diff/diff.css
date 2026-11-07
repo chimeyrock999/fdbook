@@ -217,7 +217,7 @@
 }
 
 /* Each part of a rendered diff is a whole editor: none of its page height
-   and padding. Outside the layers, like notes-prose.css, since the editor's
+   and padding. Outside the layers, like prose.css, since the editor's
    layer comes after Tailwind's (src/index.css). */
 .studio-diff-block .ProseMirror {
   min-height: 0;

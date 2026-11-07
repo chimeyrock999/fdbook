@@ -10,7 +10,7 @@ const extensions = [decorationsExtension(editorConfig.decorators)];
 export function NotePart({ source }: { source: string }) {
   return (
     <MdxEditor.Root defaultValue={source} components={editorConfig.components} syntax={editorConfig.syntax} extensions={extensions} editable={false}>
-      <MdxEditor.Visual className="studio-prose notes-prose" />
+      <MdxEditor.Visual className="studio-prose prose" />
     </MdxEditor.Root>
   );
 }

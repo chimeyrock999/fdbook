@@ -13,7 +13,7 @@ export default defineConfig({
       { extends: ui, root: './packages/ui', test: { name: 'ui', ...setup, setupFiles: ['./tests/setup/jsdom.ts'] } },
       { extends: ui, root: './packages/server', test: { name: 'server', ...setup } },
       { root: './packages/diagram', test: { name: 'diagram', ...setup } },
-      { extends: ui, root: './packages/mdx', test: { name: 'mdx', ...setup } },
+      { root: './packages/shared', test: { name: 'shared', ...setup } },
     ],
   },
 });
