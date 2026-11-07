@@ -1,18 +1,15 @@
 import type { Root } from 'mdast';
-import remarkDirective from 'remark-directive';
 import remarkGfm from 'remark-gfm';
 import remarkMdx from 'remark-mdx';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
-import { checkAccordions } from './rules/accordions.ts';
 import { checkComponents } from './rules/components.ts';
-import { checkDirectives } from './rules/directives.ts';
 import { checkEmphasis } from './rules/emphasis.ts';
 import { checkLinks } from './rules/links.ts';
 import { pointOf, type LintContext, type LintIssue } from './types.ts';
 
-// The site's syntax: fumadocs-mdx (MDX + GFM) plus remark-directive.
-const processor = unified().use(remarkParse).use(remarkMdx).use(remarkGfm).use(remarkDirective);
+// The site's syntax: fumadocs-mdx (MDX + GFM).
+const processor = unified().use(remarkParse).use(remarkMdx).use(remarkGfm);
 
 const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/;
 
@@ -57,9 +54,7 @@ export function lintNote(source: string, context: LintContext): LintIssue[] {
   const report = (issue: LintIssue) => {
     issues.push(issue);
   };
-  checkDirectives(tree, source, report);
   checkComponents(tree, source, context, report);
-  checkAccordions(tree, source, report);
   checkLinks(tree, context, report);
   checkEmphasis(tree, source, report);
   return issues.sort((a, b) => a.start.offset - b.start.offset);

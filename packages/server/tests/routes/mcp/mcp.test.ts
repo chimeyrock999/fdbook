@@ -122,7 +122,7 @@ describe('Studio MCP server', () => {
     expect(note.value).toMatchObject({ path: NOTE, content: '---\ntitle: First look\n---\n\nA first look.\n', blocks: [{ index: 0, line: 1 }, { index: 1, line: 5, preview: 'A first look.' }] });
   });
 
-  it('searches, draws the graph and lists assets', async () => {
+  it('searches, maps a note\'s links and lists assets', async () => {
     const found = await call(client, 'search_notes', { cr: cr.slug, query: 'first look' });
     expect((found.value?.results as { path: string }[]).map((result) => result.path)).toEqual(expect.arrayContaining([NOTE, 'content/docs/guide/index.mdx']));
     const graph = await call(client, 'note_graph', { cr: cr.slug, path: NOTE });

@@ -14,9 +14,9 @@ Shuffle moves records between executors when a step needs every record of a key 
 
 Each stage ends at a shuffle boundary. The next stage reads the files the last one wrote.
 
-:::note
+<Callout>
 Raise spark.sql.shuffle.partitions when a partition outgrows executor memory.
-:::
+</Callout>
 
 ## Reading the Spark UI
 
@@ -130,7 +130,7 @@ describe('locate on every note', async () => {
       const block = note.blocks[index];
       // A word before the block's last newline (inside its fence or frontmatter, if any).
       const end = block.text.trimEnd().length;
-      const cut = block.text.lastIndexOf('\n', end - 1) > 0 && /^(?:```|~~~|:::|---)/.test(block.text.slice(block.text.lastIndexOf('\n', end - 1) + 1)) ? block.text.lastIndexOf('\n', end - 1) : end;
+      const cut = block.text.lastIndexOf('\n', end - 1) > 0 && /^(?:```|~~~|---)/.test(block.text.slice(block.text.lastIndexOf('\n', end - 1) + 1)) ? block.text.lastIndexOf('\n', end - 1) : end;
       const edited = note.source.slice(0, block.start + cut) + ' extra' + note.source.slice(block.start + cut);
       let after;
       try {

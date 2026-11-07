@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { HttpError } from '#infra/http.ts';
 import { pageUrl } from '#services/lint/rules/links.ts';
 import { NOTES_DIR } from '#infra/security/paths.ts';
-import { graphKeywordEntriesOf, graphKeywordsOf, json, linksOf, notePath, notesOf, strings, text } from './note-tools.ts';
+import { json, linksOf, notePath, notesOf, strings, text } from './note-tools.ts';
 import type { StudioTool } from './tool.ts';
 
 // Tools for writing with an agent (#86): the words the notes already use,
@@ -42,8 +42,8 @@ export function relation(self: Note, other: Note, words: Set<string>, links: { t
   let score = 0;
   const tags = strings(self.data.tags);
   for (const tag of new Set(strings(other.data.tags))) if (tags.includes(tag)) { score += 3; reasons.push(`tag ${tag}`); }
-  const keywords = [...strings(self.data.keywords), ...graphKeywordsOf(self.data)];
-  for (const keyword of new Set([...strings(other.data.keywords), ...graphKeywordsOf(other.data)])) if (keywords.includes(keyword)) { score += 2; reasons.push(`keyword ${keyword}`); }
+  const keywords = strings(self.data.keywords);
+  for (const keyword of new Set(strings(other.data.keywords))) if (keywords.includes(keyword)) { score += 2; reasons.push(`keyword ${keyword}`); }
   if (links.to) { score += 2; reasons.push('this note links to it'); }
   if (links.from) { score += 2; reasons.push('it links to this note'); }
   const shared = [...wordsOf(text(other.data.title) ?? '')].filter((word) => words.has(word));
@@ -56,18 +56,15 @@ const path = z.string().min(1).describe(`The note: ${NOTES_DIR}/<path>.mdx, or <
 export const writingTools: StudioTool[] = [
   {
     name: 'note_vocabulary',
-    description: 'The words the notes already use, to fill a note\'s frontmatter with: every tag, keyword and graph keyword (id and display name), each with how many notes use it, most used first. Reuse these before making up new ones.',
+    description: 'The words the notes already use, to fill a note\'s frontmatter with: every tag and keyword, each with how many notes use it, most used first. Reuse these before making up new ones.',
     input: z.object({}),
     access: 'read',
     async run(_args, ctx) {
       const notes = await notesOf(ctx.root);
-      const names = new Map<string, string>();
-      for (const note of notes) for (const { id, displayName } of graphKeywordEntriesOf(note.data)) if (!names.has(id)) names.set(id, displayName);
       return json({
         notes: notes.length,
         tags: counted(notes.map((note) => strings(note.data.tags))).map(({ value, notes: used }) => ({ tag: value, notes: used })),
         keywords: counted(notes.map((note) => strings(note.data.keywords))).map(({ value, notes: used }) => ({ keyword: value, notes: used })),
-        graphKeywords: counted(notes.map((note) => graphKeywordsOf(note.data))).map(({ value, notes: used }) => ({ id: value, displayName: names.get(value) ?? value, notes: used })),
       });
     },
   } satisfies StudioTool<z.ZodObject<Record<string, never>>>,

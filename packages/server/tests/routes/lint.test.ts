@@ -22,12 +22,12 @@ function postLint(body: unknown, headers: Record<string, string> = {}) {
 
 describe('POST /api/lint', () => {
   it('lints the text it is sent, against the worktree', async () => {
-    const content = '# T\n\n[a](./missing.mdx)\n\n<HtmlEmbed src="/docs/demo/pixel.png" />\n\n:::exmaple\nx\n:::\n';
+    const content = '# T\n\n[a](./missing.mdx)\n\n![p](/docs/demo/pixel.png)\n\n<Callout type="exmaple">x</Callout>\n';
     const response = await postLint({ path: 'content/docs/index.mdx', content });
     expect(response.status).toBe(200);
     const body = json(response) as { path: string; issues: { rule: string; start: { line: number } }[] };
     expect(body.path).toBe('content/docs/index.mdx');
-    expect(body.issues.map((issue) => `${issue.rule}@${String(issue.start.line)}`)).toEqual(['link-broken@3', 'directive-unknown@7']);
+    expect(body.issues.map((issue) => `${issue.rule}@${String(issue.start.line)}`)).toEqual(['link-broken@3', 'callout-type@7']);
   });
 
   it('refuses paths that are not notes', async () => {

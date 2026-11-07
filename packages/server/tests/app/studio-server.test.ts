@@ -31,7 +31,7 @@ describe('studio server', () => {
   });
 
   it('serves shared site code but not the rest of the repo', async () => {
-    const shared = await fetch(new URL(`/@fs${installRoot}packages/mdx/src/notes-schema.ts`, studio.url));
+    const shared = await fetch(new URL(`/@fs${installRoot}packages/shared/src/content/schema.ts`, studio.url));
     expect(shared.status).toBe(200);
     const other = await fetch(new URL(`/@fs${installRoot}package.json`, studio.url));
     expect(other.status).toBe(403);

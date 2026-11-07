@@ -2,18 +2,11 @@ import type { Node } from 'unist';
 
 export type LintRule =
   | 'mdx-parse'
-  | 'directive-unknown'
-  | 'directive-unclosed'
-  | 'directive-nesting'
   | 'callout-type'
   | 'callout-style'
-  | 'accordion-kind'
-  | 'accordion-group'
   | 'link-broken'
   | 'asset-missing'
   | 'diagram-invalid'
-  | 'graph-id-duplicate'
-  | 'graph-meta-incomplete'
   | 'emphasis-marker';
 
 export type LintSeverity = 'error' | 'warning';

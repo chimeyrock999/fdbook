@@ -112,23 +112,6 @@ export function linksOf(source: string, from: string, pages: ReadonlySet<string>
   return [...found].sort();
 }
 
-// A graph's keywords (frontmatter `graph.keywords`, a section's `keywords`).
-const keywordEntriesOf = (value: unknown) => (Array.isArray(value)
-  ? value.flatMap((item: unknown) => {
-    const { id, displayName } = (typeof item === 'object' && item !== null ? item : {}) as { id?: unknown; displayName?: unknown };
-    return typeof id === 'string' ? [{ id, displayName: typeof displayName === 'string' ? displayName : id }] : [];
-  })
-  : []);
-
-// Every graph keyword of a note's frontmatter, its sections' too.
-export function graphKeywordEntriesOf(data: Record<string, unknown>) {
-  const graph = (data.graph ?? {}) as { keywords?: unknown; sections?: unknown };
-  const sections = Array.isArray(graph.sections) ? graph.sections : [];
-  return [...keywordEntriesOf(graph.keywords), ...sections.flatMap((section: unknown) => keywordEntriesOf((section as { keywords?: unknown }).keywords))];
-}
-
-export const graphKeywordsOf = (data: Record<string, unknown>) => graphKeywordEntriesOf(data).map((keyword) => keyword.id);
-
 const authorOf = (ctx: StudioToolContext, deps: NoteToolDeps): ProposalAuthor =>
   ctx.caller.kind === 'run'
     ? { kind: 'run', runId: ctx.caller.runId, agent: ctx.caller.agent, model: deps.modelOf(ctx.slug, ctx.caller.runId) }
@@ -212,7 +195,7 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
 
   const noteGraph = {
     name: 'note_graph',
-    description: 'A note in the notes graph: the notes it links to, the notes that link to it, its tags and keywords (frontmatter and graph keywords), and the notes that share a tag.',
+    description: 'A note among the others: the notes it links to, the notes that link to it, its frontmatter tags and keywords, and the notes that share a tag.',
     input: z.object({ path }),
     access: 'read',
     async run({ path: given }, ctx) {
@@ -234,7 +217,6 @@ export function createNoteTools(deps: NoteToolDeps): StudioTool[] {
         linkedFrom: notes.filter((note) => note.path !== page && (links.get(note.path) ?? []).includes(page)).map((note) => full(note.path)),
         tags,
         keywords: strings(self.data.keywords),
-        graphKeywords: graphKeywordsOf(self.data),
         sharesTags: notes.filter((note) => note.path !== page && strings(note.data.tags).some((tag) => tags.includes(tag))).map((note) => full(note.path)),
       });
     },

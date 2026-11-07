@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { notesMetaSchema } from '@fdbook/mdx/notes-schema.ts';
+import { notesMetaSchema } from '@fdbook/shared/content/schema.ts';
 import { git } from '@fdbook/testing/git.ts';
 import { startTestStudio, type TestStudio } from '@fdbook/testing/studio.ts';
 import { json, rawRequest } from '#tests/support/http.ts';

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { NOTE_ICON_NAMES } from '@fdbook/mdx/notes-icons.ts';
+import { NOTE_ICON_NAMES } from '@fdbook/shared/content/icons.ts';
 import { json, rawRequest } from '#tests/support/http.ts';
 import { startTestStudio, type TestStudio } from '@fdbook/testing/studio.ts';
 
